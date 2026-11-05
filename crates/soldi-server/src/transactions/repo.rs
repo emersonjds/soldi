@@ -17,6 +17,7 @@ struct Row {
     category_kind: CategoryKind,
     category_icon: String,
     category_color: String,
+    category_parent_id: Option<Uuid>,
 }
 
 impl From<Row> for Transaction {
@@ -34,6 +35,7 @@ impl From<Row> for Transaction {
                 kind: row.category_kind,
                 icon: row.category_icon,
                 color: row.category_color,
+                parent_id: row.category_parent_id,
             },
         }
     }
@@ -54,7 +56,7 @@ pub async fn list(
                   t.recurring_bill_id,
                   c.id AS category_id, c.name AS category_name,
                   c.kind AS "category_kind: CategoryKind", c.icon AS category_icon,
-                  c.color AS category_color
+                  c.color AS category_color, c.parent_id AS category_parent_id
            FROM transactions t JOIN categories c ON c.user_id = t.user_id AND c.id = t.category_id
            WHERE t.user_id = $1 AND t.date BETWEEN $2 AND $3
              AND ($4::uuid IS NULL OR t.category_id = $4)
@@ -80,7 +82,7 @@ pub async fn find(
                   t.recurring_bill_id,
                   c.id AS category_id, c.name AS category_name,
                   c.kind AS "category_kind: CategoryKind", c.icon AS category_icon,
-                  c.color AS category_color
+                  c.color AS category_color, c.parent_id AS category_parent_id
            FROM transactions t JOIN categories c ON c.user_id = t.user_id AND c.id = t.category_id
            WHERE t.user_id = $1 AND t.id = $2"#,
         user_id,

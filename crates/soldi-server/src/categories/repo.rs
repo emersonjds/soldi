@@ -27,13 +27,17 @@ pub async fn seed(
     Ok(())
 }
 
-/// Active categories: income, then bills, then daily; by name within a kind.
+/// Active categories: income, then bills, then daily; within a kind by parent name, each parent
+/// followed by its subcategories by name.
 pub async fn list(conn: &mut PgConnection, user_id: Uuid) -> Result<Vec<Category>, sqlx::Error> {
     sqlx::query_as!(
         Category,
-        r#"SELECT id, name, kind AS "kind: CategoryKind", icon, color FROM categories
-           WHERE user_id = $1 AND archived_at IS NULL
-           ORDER BY array_position(ARRAY['income', 'bill', 'daily'], kind), lower(name), id"#,
+        r#"SELECT c.id, c.name, c.kind AS "kind: CategoryKind", c.icon, c.color, c.parent_id
+           FROM categories c LEFT JOIN categories p ON p.user_id = c.user_id AND p.id = c.parent_id
+           WHERE c.user_id = $1 AND c.archived_at IS NULL AND p.archived_at IS NULL
+           ORDER BY array_position(ARRAY['income', 'bill', 'daily'], c.kind),
+                    lower(COALESCE(p.name, c.name)), COALESCE(p.id, c.id),
+                    c.parent_id IS NOT NULL, lower(c.name), c.id"#,
         user_id
     )
     .fetch_all(&mut *conn)
@@ -47,12 +51,27 @@ pub async fn find_active(
 ) -> Result<Option<Category>, sqlx::Error> {
     sqlx::query_as!(
         Category,
-        r#"SELECT id, name, kind AS "kind: CategoryKind", icon, color FROM categories
+        r#"SELECT id, name, kind AS "kind: CategoryKind", icon, color, parent_id FROM categories
            WHERE user_id = $1 AND id = $2 AND archived_at IS NULL"#,
         user_id,
         id
     )
     .fetch_optional(&mut *conn)
+    .await
+}
+
+pub async fn has_children(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    id: Uuid,
+) -> Result<bool, sqlx::Error> {
+    sqlx::query_scalar!(
+        r#"SELECT EXISTS (SELECT 1 FROM categories
+           WHERE user_id = $1 AND parent_id = $2 AND archived_at IS NULL) AS "exists!""#,
+        user_id,
+        id
+    )
+    .fetch_one(&mut *conn)
     .await
 }
 
@@ -78,16 +97,19 @@ pub async fn insert(
     kind: CategoryKind,
     icon: &str,
     color: &str,
+    parent_id: Option<Uuid>,
 ) -> Result<Category, sqlx::Error> {
     sqlx::query_as!(
         Category,
-        r#"INSERT INTO categories (user_id, name, kind, icon, color) VALUES ($1, $2, $3, $4, $5)
-           RETURNING id, name, kind AS "kind: CategoryKind", icon, color"#,
+        r#"INSERT INTO categories (user_id, name, kind, icon, color, parent_id)
+           VALUES ($1, $2, $3, $4, $5, $6)
+           RETURNING id, name, kind AS "kind: CategoryKind", icon, color, parent_id"#,
         user_id,
         name,
         kind.as_str(),
         icon,
-        color
+        color,
+        parent_id
     )
     .fetch_one(&mut *conn)
     .await
@@ -125,37 +147,46 @@ pub async fn update(
     name: Option<&str>,
     icon: Option<&str>,
     color: Option<&str>,
+    parent_id: Option<Option<Uuid>>,
 ) -> Result<Option<Category>, sqlx::Error> {
     sqlx::query_as!(
         Category,
         r#"UPDATE categories
            SET name = COALESCE($3, name), icon = COALESCE($4, icon), color = COALESCE($5, color),
-               updated_at = now()
+               parent_id = CASE WHEN $6 THEN $7 ELSE parent_id END, updated_at = now()
            WHERE user_id = $1 AND id = $2 AND archived_at IS NULL
-           RETURNING id, name, kind AS "kind: CategoryKind", icon, color"#,
+           RETURNING id, name, kind AS "kind: CategoryKind", icon, color, parent_id"#,
         user_id,
         id,
         name,
         icon,
-        color
+        color,
+        parent_id.is_some(),
+        parent_id.flatten()
     )
     .fetch_optional(&mut *conn)
     .await
 }
 
-/// Returns false when no active category of the user has this id.
+/// Archives the category with its subcategories in one statement; false when no active category
+/// of the user has this id.
 pub async fn archive(
     conn: &mut PgConnection,
     user_id: Uuid,
     id: Uuid,
 ) -> Result<bool, sqlx::Error> {
-    let result = sqlx::query!(
-        "UPDATE categories SET archived_at = now(), updated_at = now()
-         WHERE user_id = $1 AND id = $2 AND archived_at IS NULL",
+    sqlx::query_scalar!(
+        r#"WITH parent AS (
+               UPDATE categories SET archived_at = now(), updated_at = now()
+               WHERE user_id = $1 AND id = $2 AND archived_at IS NULL
+               RETURNING id),
+           children AS (
+               UPDATE categories SET archived_at = now(), updated_at = now()
+               WHERE user_id = $1 AND parent_id IN (SELECT id FROM parent) AND archived_at IS NULL)
+           SELECT EXISTS (SELECT 1 FROM parent) AS "archived!""#,
         user_id,
         id
     )
-    .execute(&mut *conn)
-    .await?;
-    Ok(result.rows_affected() == 1)
+    .fetch_one(&mut *conn)
+    .await
 }

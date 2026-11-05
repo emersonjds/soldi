@@ -3,10 +3,11 @@ use std::collections::HashMap;
 use chrono::NaiveDate;
 use rust_decimal::{Decimal, RoundingStrategy};
 use soldi_types::categories::CategoryKind;
-use soldi_types::reports::{CategoryReport, CategoryShare};
+use soldi_types::reports::{CategoryGroup, CategoryReport, CategoryShare};
 use uuid::Uuid;
 
-/// A category's total in one month; `month` is its first day.
+/// A category's total in one month; `month` is its first day. `group_*` describe its top-level
+/// category: its parent, or itself.
 pub struct CategorySum {
     pub category_id: Uuid,
     pub name: String,
@@ -15,6 +16,16 @@ pub struct CategorySum {
     pub kind: CategoryKind,
     pub month: NaiveDate,
     pub amount: Decimal,
+    pub parent_id: Option<Uuid>,
+    pub group_name: String,
+    pub group_icon: String,
+    pub group_color: String,
+}
+
+impl CategorySum {
+    fn group_id(&self) -> Uuid {
+        self.parent_id.unwrap_or(self.category_id)
+    }
 }
 
 /// `part` as a percentage of `whole` with one decimal, half to even; none when `whole` is 0.
@@ -32,6 +43,10 @@ pub fn percent(part: Decimal, whole: Decimal) -> Option<Decimal> {
 pub fn report(month: NaiveDate, sums: Vec<CategorySum>) -> CategoryReport {
     let (mut current, previous): (Vec<CategorySum>, Vec<CategorySum>) =
         sums.into_iter().partition(|sum| sum.month == month);
+    let mut previous_group: HashMap<Uuid, Decimal> = HashMap::new();
+    for sum in &previous {
+        *previous_group.entry(sum.group_id()).or_default() += sum.amount;
+    }
     let previous: HashMap<Uuid, Decimal> = previous
         .into_iter()
         .map(|sum| (sum.category_id, sum.amount))
@@ -40,9 +55,48 @@ pub fn report(month: NaiveDate, sums: Vec<CategorySum>) -> CategoryReport {
     let (income, outflow): (Vec<CategorySum>, Vec<CategorySum>) = current
         .into_iter()
         .partition(|sum| sum.kind == CategoryKind::Income);
-    let shares = |group: Vec<CategorySum>| {
-        let total: Decimal = group.iter().map(|sum| sum.amount).sum();
-        let shares = group
+    let mut groups = Vec::new();
+    let mut shares = |section: Vec<CategorySum>| {
+        let total: Decimal = section.iter().map(|sum| sum.amount).sum();
+        let mut section_groups: Vec<CategoryGroup> = Vec::new();
+        for sum in &section {
+            let group_id = sum.group_id();
+            let index = match section_groups
+                .iter()
+                .position(|g| g.category_id == group_id)
+            {
+                Some(index) => index,
+                None => {
+                    let previous_amount =
+                        previous_group.get(&group_id).copied().unwrap_or_default();
+                    section_groups.push(CategoryGroup {
+                        category_id: group_id,
+                        name: sum.group_name.clone(),
+                        icon: sum.group_icon.clone(),
+                        color: sum.group_color.clone(),
+                        kind: sum.kind,
+                        amount: Decimal::ZERO,
+                        pct: Decimal::ZERO,
+                        previous_amount,
+                        delta_pct: None,
+                        children: Vec::new(),
+                    });
+                    section_groups.len() - 1
+                }
+            };
+            let group = &mut section_groups[index];
+            group.amount += sum.amount;
+            if sum.parent_id.is_some() {
+                group.children.push(sum.category_id);
+            }
+        }
+        for group in &mut section_groups {
+            group.pct = percent(group.amount, total).unwrap_or_default();
+            group.delta_pct = percent(group.amount - group.previous_amount, group.previous_amount);
+        }
+        section_groups.sort_by(|a, b| b.amount.cmp(&a.amount).then_with(|| a.name.cmp(&b.name)));
+        groups.extend(section_groups);
+        let shares = section
             .into_iter()
             .map(|sum| {
                 let previous_amount = previous.get(&sum.category_id).copied().unwrap_or_default();
@@ -55,6 +109,7 @@ pub fn report(month: NaiveDate, sums: Vec<CategorySum>) -> CategoryReport {
                     icon: sum.icon,
                     color: sum.color,
                     kind: sum.kind,
+                    parent_id: sum.parent_id,
                     amount: sum.amount,
                 }
             })
@@ -69,6 +124,7 @@ pub fn report(month: NaiveDate, sums: Vec<CategorySum>) -> CategoryReport {
         income_total,
         outflow,
         income,
+        groups,
     }
 }
 
@@ -94,6 +150,20 @@ mod tests {
             kind,
             month: date(&format!("{month}-01")),
             amount: money(amount),
+            parent_id: None,
+            group_name: name.into(),
+            group_icon: "circle".into(),
+            group_color: "cat-1".into(),
+        }
+    }
+
+    fn child(id: u128, name: &str, parent: (u128, &str), month: &str, amount: &str) -> CategorySum {
+        CategorySum {
+            parent_id: Some(Uuid::from_u128(parent.0)),
+            group_name: parent.1.into(),
+            group_icon: "gamepad-2".into(),
+            group_color: "cat-5".into(),
+            ..sum(id, name, Daily, month, amount)
         }
     }
 
@@ -190,6 +260,105 @@ mod tests {
             [Some("-15.6".into()), Some("0.0".into())]
         );
         assert_eq!(percent(money("5"), money("0")), None);
+    }
+
+    #[test]
+    fn subcategories_roll_into_their_parents_group() {
+        let report = report(
+            date("2026-11-01"),
+            vec![
+                sum(1, "Casa", Daily, "2026-11", "100"),
+                child(2, "Luz", (1, "Casa"), "2026-11", "60"),
+                child(3, "Água", (1, "Casa"), "2026-11", "40"),
+                sum(4, "Mercado", Daily, "2026-11", "250"),
+                child(10, "Cinema", (9, "Lazer"), "2026-11", "50"),
+                sum(5, "Salário", Income, "2026-11", "1000"),
+                child(2, "Luz", (1, "Casa"), "2026-10", "50"),
+                child(6, "Gás", (1, "Casa"), "2026-10", "25"),
+            ],
+        );
+
+        assert_eq!(report.outflow_total, money("500"));
+        assert_eq!(
+            rows(&report.outflow),
+            [
+                ("Mercado", "250".into(), "50.0".into(), "0".into(), None),
+                ("Casa", "100".into(), "20.0".into(), "0".into(), None),
+                (
+                    "Luz",
+                    "60".into(),
+                    "12.0".into(),
+                    "50".into(),
+                    Some("20.0".into())
+                ),
+                ("Cinema", "50".into(), "10.0".into(), "0".into(), None),
+                ("Água", "40".into(), "8.0".into(), "0".into(), None),
+            ]
+        );
+        assert_eq!(report.outflow[2].parent_id, Some(Uuid::from_u128(1)));
+        assert_eq!(report.outflow[1].parent_id, None);
+        let groups: Vec<_> = report
+            .groups
+            .iter()
+            .map(|group| {
+                (
+                    group.name.as_str(),
+                    group.amount.to_string(),
+                    group.pct.to_string(),
+                    group.previous_amount.to_string(),
+                    group.delta_pct.map(|delta| delta.to_string()),
+                    group.children.clone(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            groups,
+            [
+                (
+                    "Mercado",
+                    "250".into(),
+                    "50.0".into(),
+                    "0".into(),
+                    None,
+                    vec![]
+                ),
+                (
+                    "Casa",
+                    "200".into(),
+                    "40.0".into(),
+                    "75".into(),
+                    Some("166.7".into()),
+                    vec![Uuid::from_u128(2), Uuid::from_u128(3)]
+                ),
+                (
+                    "Lazer",
+                    "50".into(),
+                    "10.0".into(),
+                    "0".into(),
+                    None,
+                    vec![Uuid::from_u128(10)]
+                ),
+                (
+                    "Salário",
+                    "1000".into(),
+                    "100.0".into(),
+                    "0".into(),
+                    None,
+                    vec![]
+                ),
+            ]
+        );
+        let lazer = &report.groups[2];
+        assert_eq!(
+            (
+                lazer.category_id,
+                lazer.icon.as_str(),
+                lazer.color.as_str(),
+                lazer.kind
+            ),
+            (Uuid::from_u128(9), "gamepad-2", "cat-5", Daily)
+        );
+        assert_eq!(report.groups[3].kind, Income);
     }
 
     #[test]

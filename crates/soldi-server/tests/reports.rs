@@ -49,7 +49,7 @@ async fn rule_1_the_month_by_category_against_the_previous_month(pool: PgPool) {
         outflow[1],
         json!({
             "category_id": market, "name": "Mercado", "icon": "shopping-cart", "color": "cat-1",
-            "kind": "daily", "amount": "900.00", "pct": "26.0", "previous_amount": "760.00",
+            "kind": "daily", "parent_id": null, "amount": "900.00", "pct": "26.0", "previous_amount": "760.00",
             "delta_pct": "18.4"
         })
     );
@@ -73,7 +73,7 @@ async fn an_empty_month_has_empty_groups(pool: PgPool) {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(
         report,
-        json!({ "month": "2030-01", "outflow_total": "0.00", "income_total": "0.00", "outflow": [], "income": [] })
+        json!({ "month": "2030-01", "outflow_total": "0.00", "income_total": "0.00", "outflow": [], "income": [], "groups": [] })
     );
 }
 
@@ -95,4 +95,45 @@ async fn a_bad_month_is_422_none_is_400_and_no_session_401(pool: PgPool) {
             .0,
         StatusCode::UNAUTHORIZED
     );
+}
+
+#[sqlx::test]
+async fn subcategories_add_up_in_their_parents_group(pool: PgPool) {
+    let ana = TestApp::signed_in(pool, "ana@example.com").await;
+    ana.open_at("0", "2026-10-01").await;
+    let casa = ana.category_id("Casa").await;
+    for name in ["Móveis", "Decoração"] {
+        let (status, _) = ana
+            .post(
+                "/api/categories",
+                json!({ "name": name, "kind": "daily", "parent_id": casa }),
+            )
+            .await;
+        assert_eq!(status, StatusCode::CREATED);
+    }
+    log(&ana, "2026-11-02", "daily", "100", "Casa").await;
+    log(&ana, "2026-11-03", "daily", "60", "Móveis").await;
+    log(&ana, "2026-11-04", "daily", "40", "Decoração").await;
+    log(&ana, "2026-11-05", "daily", "200", "Mercado").await;
+    log(&ana, "2026-10-05", "daily", "50", "Móveis").await;
+    let moveis = ana.category_id("Móveis").await;
+    let decoracao = ana.category_id("Decoração").await;
+
+    let (status, report) = ana.get("/api/reports/categories?month=2026-11").await;
+
+    assert_eq!(status, StatusCode::OK, "{report}");
+    assert_eq!(report["outflow"][2]["name"], "Móveis");
+    assert_eq!(report["outflow"][2]["parent_id"], casa.as_str());
+    assert_eq!(report["outflow"][2]["pct"], "15.0");
+    assert_eq!(
+        report["groups"][0],
+        json!({
+            "category_id": casa, "name": "Casa", "icon": "sofa", "color": "cat-12",
+            "kind": "daily", "amount": "200.00", "pct": "50.0", "previous_amount": "50.00",
+            "delta_pct": "300.0", "children": [moveis, decoracao]
+        })
+    );
+    assert_eq!(report["groups"][1]["name"], "Mercado");
+    assert_eq!(report["groups"][1]["children"], json!([]));
+    assert_eq!(report["groups"].as_array().unwrap().len(), 2);
 }

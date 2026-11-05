@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH parent AS (\n               UPDATE categories SET archived_at = now(), updated_at = now()\n               WHERE user_id = $1 AND id = $2 AND archived_at IS NULL\n               RETURNING id),\n           children AS (\n               UPDATE categories SET archived_at = now(), updated_at = now()\n               WHERE user_id = $1 AND parent_id IN (SELECT id FROM parent) AND archived_at IS NULL)\n           SELECT EXISTS (SELECT 1 FROM parent) AS \"archived!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "archived!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "69929cbe96fdd8064dc6932060a733735b6254f5cd73a73e84658a0291722b09"
+}

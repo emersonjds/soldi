@@ -7,7 +7,7 @@
       "name": "AGPL-3.0-only",
       "identifier": "AGPL-3.0-only"
     },
-    "version": "0.4.0"
+    "version": "0.6.0"
   },
   "paths": {
     "/api/auth/me": {
@@ -561,7 +561,7 @@
         "operationId": "list_categories",
         "responses": {
           "200": {
-            "description": "Active categories: income, bills, then daily; by name within a kind",
+            "description": "Active categories, flat: income, bills, then daily; within a kind by parent name, each parent followed by its subcategories by name",
             "content": {
               "application/json": {
                 "schema": {
@@ -618,6 +618,16 @@
               }
             }
           },
+          "404": {
+            "description": "`parent_id` is missing, archived or another user's",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
           "409": {
             "description": "An active category of the same kind has this name",
             "content": {
@@ -629,6 +639,7 @@
             }
           },
           "422": {
+            "description": "A bad field, a parent of another kind, or `nested-subcategory` when the parent is a subcategory",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -660,7 +671,7 @@
         ],
         "responses": {
           "204": {
-            "description": "Archived: it leaves the list, its entries keep it"
+            "description": "Archived with its subcategories: they leave the list, their entries keep them"
           },
           "401": {
             "content": {
@@ -731,7 +742,7 @@
             }
           },
           "404": {
-            "description": "Missing, archived or another user's",
+            "description": "The category or `parent_id` is missing, archived or another user's",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -750,6 +761,7 @@
             }
           },
           "422": {
+            "description": "A bad field, a parent of another kind or itself, or `nested-subcategory` when the parent is a subcategory or this category has subcategories",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -1633,7 +1645,7 @@
       },
       "Category": {
         "type": "object",
-        "description": "`icon` is a lucide icon name; `color` a palette token, `cat-1` to `cat-12`.",
+        "description": "`icon` is a lucide icon name; `color` a palette token, `cat-1` to `cat-12`; `parent_id` the\ncategory this one is a subcategory of, null for a top-level one.",
         "required": [
           "id",
           "name",
@@ -1657,6 +1669,70 @@
           },
           "name": {
             "type": "string"
+          },
+          "parent_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          }
+        }
+      },
+      "CategoryGroup": {
+        "type": "object",
+        "description": "A top-level category with its subcategories' amounts rolled in: `amount` and `previous_amount`\nadd its own entries and its subcategories'; `pct` is its share of the outflow or income total.\n`children` are the subcategories with entries in the month, largest first.",
+        "required": [
+          "category_id",
+          "name",
+          "icon",
+          "color",
+          "kind",
+          "amount",
+          "pct",
+          "previous_amount",
+          "children"
+        ],
+        "properties": {
+          "amount": {
+            "type": "string"
+          },
+          "category_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "children": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "color": {
+            "type": "string"
+          },
+          "delta_pct": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "example": "166.7"
+          },
+          "icon": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/CategoryKind"
+          },
+          "name": {
+            "type": "string"
+          },
+          "pct": {
+            "type": "string",
+            "example": "40.0"
+          },
+          "previous_amount": {
+            "type": "string"
           }
         }
       },
@@ -1670,15 +1746,22 @@
       },
       "CategoryReport": {
         "type": "object",
-        "description": "`outflow` (bills and daily) and `income`, each by amount, largest first.",
+        "description": "`outflow` (bills and daily) and `income`, each by amount, largest first; `groups` the same\nmonth by top-level category, outflow groups then income groups, each by amount.",
         "required": [
           "month",
           "outflow_total",
           "income_total",
           "outflow",
-          "income"
+          "income",
+          "groups"
         ],
         "properties": {
+          "groups": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CategoryGroup"
+            }
+          },
           "income": {
             "type": "array",
             "items": {
@@ -1704,7 +1787,7 @@
       },
       "CategoryShare": {
         "type": "object",
-        "description": "A category's spending or income in the month. `pct` is its share of the group's total and\n`delta_pct` its change against the previous month, both percentages with one decimal;\n`delta_pct` is null when the previous month had nothing.",
+        "description": "A category's spending or income in the month. `pct` is its share of the group's total and\n`delta_pct` its change against the previous month, both percentages with one decimal;\n`delta_pct` is null when the previous month had nothing. `parent_id` is the parent of a subcategory.",
         "required": [
           "category_id",
           "name",
@@ -1741,6 +1824,13 @@
           },
           "name": {
             "type": "string"
+          },
+          "parent_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
           },
           "pct": {
             "type": "string",
@@ -1815,7 +1905,7 @@
       },
       "CreateCategory": {
         "type": "object",
-        "description": "`icon` defaults to `circle-dashed`; `color` to the next token for the kind.",
+        "description": "`icon` defaults to `circle-dashed`; `color` to the next token for the kind. `parent_id` makes\nit a subcategory of one of the caller's active top-level categories of the same kind.",
         "required": [
           "name",
           "kind"
@@ -1838,6 +1928,13 @@
           },
           "name": {
             "type": "string"
+          },
+          "parent_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
           }
         },
         "additionalProperties": false
@@ -2556,7 +2653,7 @@
       },
       "UpdateCategory": {
         "type": "object",
-        "description": "Absent fields stay as they are; the kind never changes.",
+        "description": "Absent fields stay as they are; the kind never changes; `\"parent_id\": null` makes it top-level.",
         "properties": {
           "color": {
             "type": [
@@ -2575,6 +2672,13 @@
               "string",
               "null"
             ]
+          },
+          "parent_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
           }
         },
         "additionalProperties": false

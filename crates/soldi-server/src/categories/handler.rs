@@ -20,7 +20,7 @@ pub fn router() -> OpenApiRouter<AppState> {
 
 #[utoipa::path(get, path = "/api/categories", tag = "categories",
     responses(
-        (status = 200, body = Vec<Category>, description = "Active categories: income, bills, then daily; by name within a kind"),
+        (status = 200, body = Vec<Category>, description = "Active categories, flat: income, bills, then daily; within a kind by parent name, each parent followed by its subcategories by name"),
         (status = 401, body = Problem, content_type = "application/problem+json")))]
 pub async fn list_categories(
     State(state): State<AppState>,
@@ -33,8 +33,9 @@ pub async fn list_categories(
     responses(
         (status = 201, body = Category),
         (status = 401, body = Problem, content_type = "application/problem+json"),
+        (status = 404, body = Problem, content_type = "application/problem+json", description = "`parent_id` is missing, archived or another user's"),
         (status = 409, body = Problem, content_type = "application/problem+json", description = "An active category of the same kind has this name"),
-        (status = 422, body = Problem, content_type = "application/problem+json")))]
+        (status = 422, body = Problem, content_type = "application/problem+json", description = "A bad field, a parent of another kind, or `nested-subcategory` when the parent is a subcategory")))]
 pub async fn create_category(
     State(state): State<AppState>,
     user: CurrentUser,
@@ -49,9 +50,9 @@ pub async fn create_category(
     responses(
         (status = 200, body = Category, description = "The category after the change; absent fields stay as they are"),
         (status = 401, body = Problem, content_type = "application/problem+json"),
-        (status = 404, body = Problem, content_type = "application/problem+json", description = "Missing, archived or another user's"),
+        (status = 404, body = Problem, content_type = "application/problem+json", description = "The category or `parent_id` is missing, archived or another user's"),
         (status = 409, body = Problem, content_type = "application/problem+json"),
-        (status = 422, body = Problem, content_type = "application/problem+json")))]
+        (status = 422, body = Problem, content_type = "application/problem+json", description = "A bad field, a parent of another kind or itself, or `nested-subcategory` when the parent is a subcategory or this category has subcategories")))]
 pub async fn update_category(
     State(state): State<AppState>,
     user: CurrentUser,
@@ -64,7 +65,7 @@ pub async fn update_category(
 #[utoipa::path(delete, path = "/api/categories/{id}", tag = "categories",
     params(("id" = Uuid, Path, description = "Category id")),
     responses(
-        (status = 204, description = "Archived: it leaves the list, its entries keep it"),
+        (status = 204, description = "Archived with its subcategories: they leave the list, their entries keep them"),
         (status = 401, body = Problem, content_type = "application/problem+json"),
         (status = 404, body = Problem, content_type = "application/problem+json", description = "Missing, archived or another user's")))]
 pub async fn archive_category(
