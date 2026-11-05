@@ -857,7 +857,7 @@
         },
         "responses": {
           "200": {
-            "description": "Opening balance and date saved, the preview's rows and saved months written under the `Importado` categories with note `Planilha {year}`, replacing an earlier import of the same years; the user is onboarded",
+            "description": "Opening balance and date saved, the preview's rows and saved months written under the `Importado` categories with note `Planilha {year}`, replacing an earlier import of the same years; the user is onboarded; with `skip_errors`, the cells the preview listed are left out and returned in `skipped`",
             "content": {
               "application/json": {
                 "schema": {
@@ -896,7 +896,7 @@
             }
           },
           "422": {
-            "description": "`import-has-errors` when the preview listed errors; `opening_date` after the earliest imported date; `opening_balance` with more than two places",
+            "description": "`import-has-errors` when the preview listed errors and `skip_errors` is not true; `opening_date` after the earliest imported date; `opening_balance` with more than two places",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -1769,6 +1769,10 @@
             "format": "date",
             "description": "On or before the earliest imported date."
           },
+          "skip_errors": {
+            "type": "boolean",
+            "description": "Confirms a preview with errors, leaving out the cells it lists."
+          },
           "token": {
             "type": "string",
             "format": "uuid",
@@ -1997,13 +2001,20 @@
         "required": [
           "transactions",
           "savings_months",
-          "years"
+          "years",
+          "skipped"
         ],
         "properties": {
           "savings_months": {
             "type": "integer",
             "format": "int32",
             "minimum": 0
+          },
+          "skipped": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SkippedCell"
+            }
           },
           "transactions": {
             "type": "integer",
@@ -2402,6 +2413,22 @@
           }
         },
         "additionalProperties": false
+      },
+      "SkippedCell": {
+        "type": "object",
+        "description": "A cell left out because the preview could not read it.",
+        "required": [
+          "sheet",
+          "cell"
+        ],
+        "properties": {
+          "cell": {
+            "type": "string"
+          },
+          "sheet": {
+            "type": "string"
+          }
+        }
       },
       "Tier": {
         "type": "string",

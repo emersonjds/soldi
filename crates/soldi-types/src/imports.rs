@@ -57,6 +57,16 @@ pub struct ConfirmImport {
     pub opening_balance: Decimal,
     /// On or before the earliest imported date.
     pub opening_date: NaiveDate,
+    /// Confirms a preview with errors, leaving out the cells it lists.
+    #[serde(default)]
+    pub skip_errors: bool,
+}
+
+/// A cell left out because the preview could not read it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+pub struct SkippedCell {
+    pub sheet: String,
+    pub cell: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
@@ -64,4 +74,5 @@ pub struct ImportResult {
     pub transactions: u32,
     pub savings_months: u32,
     pub years: Vec<i16>,
+    pub skipped: Vec<SkippedCell>,
 }

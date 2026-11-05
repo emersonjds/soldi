@@ -1,4 +1,4 @@
-use soldi_types::imports::{ConfirmImport, ImportPreview, ImportResult};
+use soldi_types::imports::{ConfirmImport, ImportPreview, ImportResult, SkippedCell};
 use soldi_types::settings::UpdateSettings;
 use sqlx::PgPool;
 
@@ -42,7 +42,7 @@ pub async fn confirm(
         });
     }
     let parsed = preview.payload.0;
-    if !parsed.errors.is_empty() {
+    if !parsed.errors.is_empty() && !input.skip_errors {
         return Err(AppError::rule(
             "import-has-errors",
             "Fix the cells listed in the preview and upload the workbook again.",
@@ -87,5 +87,13 @@ pub async fn confirm(
         transactions: transactions as u32,
         savings_months: savings_months as u32,
         years,
+        skipped: parsed
+            .errors
+            .into_iter()
+            .map(|error| SkippedCell {
+                sheet: error.sheet,
+                cell: error.cell,
+            })
+            .collect(),
     })
 }

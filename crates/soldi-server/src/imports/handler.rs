@@ -57,11 +57,11 @@ pub async fn preview_xlsx(
 
 #[utoipa::path(post, path = "/api/imports/xlsx/confirm", tag = "imports", request_body = ConfirmImport,
     responses(
-        (status = 200, body = ImportResult, description = "Opening balance and date saved, the preview's rows and saved months written under the `Importado` categories with note `Planilha {year}`, replacing an earlier import of the same years; the user is onboarded"),
+        (status = 200, body = ImportResult, description = "Opening balance and date saved, the preview's rows and saved months written under the `Importado` categories with note `Planilha {year}`, replacing an earlier import of the same years; the user is onboarded; with `skip_errors`, the cells the preview listed are left out and returned in `skipped`"),
         (status = 401, body = Problem, content_type = "application/problem+json"),
         (status = 404, body = Problem, content_type = "application/problem+json", description = "No preview of the caller with this token, or it was confirmed already"),
         (status = 410, body = Problem, content_type = "application/problem+json", description = "`import-expired`: the preview is older than 15 minutes"),
-        (status = 422, body = Problem, content_type = "application/problem+json", description = "`import-has-errors` when the preview listed errors; `opening_date` after the earliest imported date; `opening_balance` with more than two places")))]
+        (status = 422, body = Problem, content_type = "application/problem+json", description = "`import-has-errors` when the preview listed errors and `skip_errors` is not true; `opening_date` after the earliest imported date; `opening_balance` with more than two places")))]
 pub async fn confirm_xlsx(
     State(state): State<AppState>,
     user: CurrentUser,

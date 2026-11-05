@@ -189,7 +189,7 @@ async fn confirming_writes_the_rows_and_a_second_import_of_the_year_replaces_the
 
     assert_eq!(
         result,
-        json!({ "transactions": 12, "savings_months": 2, "years": [2025, 2026] })
+        json!({ "transactions": 12, "savings_months": 2, "years": [2025, 2026], "skipped": [] })
     );
     // 1000 + 2025 (6383 - 368 - 133.44) + January (715 - 94.88 - 210) - 10 by hand.
     let expected = (json!("7281.68"), json!("220.00"));
@@ -266,14 +266,38 @@ async fn a_token_confirms_once_for_its_owner_within_15_minutes(pool: PgPool) {
 }
 
 #[sqlx::test]
-async fn a_preview_with_errors_cannot_be_confirmed(pool: PgPool) {
+async fn a_preview_with_errors_is_confirmed_only_when_skipping_them(pool: PgPool) {
     let ana = TestApp::signed_in(pool, "ana@example.com").await;
     let token = token_of(&ana, BAD).await;
+    let confirm_skipping = |skip: bool| {
+        let ana = ana.clone();
+        let token = token.clone();
+        async move {
+            ana.post(
+                "/api/imports/xlsx/confirm",
+                json!({ "token": token, "opening_balance": "0", "opening_date": "2026-01-01",
+                        "skip_errors": skip }),
+            )
+            .await
+        }
+    };
 
     let (status, problem) = confirm(&ana, &token, "2026-01-01").await;
-
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
     assert_eq!(problem["type"], "urn:soldi:error:import-has-errors");
+    let (status, _) = confirm_skipping(false).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
     let (_, entries) = ana.get("/api/transactions?month=2026-01").await;
     assert_eq!(entries, json!([]));
+
+    let (status, result) = confirm_skipping(true).await;
+
+    assert_eq!(status, StatusCode::OK, "{result}");
+    assert_eq!(
+        result,
+        json!({ "transactions": 1, "savings_months": 1, "years": [2026],
+                "skipped": [{ "sheet": "2026", "cell": "C5" }] })
+    );
+    let (_, entries) = ana.get("/api/transactions?month=2026-01").await;
+    assert_eq!(entries.as_array().unwrap().len(), 1, "{entries}");
 }
