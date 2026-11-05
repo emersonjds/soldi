@@ -1679,6 +1679,63 @@
           }
         }
       },
+      "CategoryGroup": {
+        "type": "object",
+        "description": "A top-level category with its subcategories' amounts rolled in: `amount` and `previous_amount`\nadd its own entries and its subcategories'; `pct` is its share of the outflow or income total.\n`children` are the subcategories with entries in the month, largest first.",
+        "required": [
+          "category_id",
+          "name",
+          "icon",
+          "color",
+          "kind",
+          "amount",
+          "pct",
+          "previous_amount",
+          "children"
+        ],
+        "properties": {
+          "amount": {
+            "type": "string"
+          },
+          "category_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "children": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "color": {
+            "type": "string"
+          },
+          "delta_pct": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "example": "166.7"
+          },
+          "icon": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/CategoryKind"
+          },
+          "name": {
+            "type": "string"
+          },
+          "pct": {
+            "type": "string",
+            "example": "40.0"
+          },
+          "previous_amount": {
+            "type": "string"
+          }
+        }
+      },
       "CategoryKind": {
         "type": "string",
         "enum": [
@@ -1689,15 +1746,22 @@
       },
       "CategoryReport": {
         "type": "object",
-        "description": "`outflow` (bills and daily) and `income`, each by amount, largest first.",
+        "description": "`outflow` (bills and daily) and `income`, each by amount, largest first; `groups` the same\nmonth by top-level category, outflow groups then income groups, each by amount.",
         "required": [
           "month",
           "outflow_total",
           "income_total",
           "outflow",
-          "income"
+          "income",
+          "groups"
         ],
         "properties": {
+          "groups": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CategoryGroup"
+            }
+          },
           "income": {
             "type": "array",
             "items": {
@@ -1723,7 +1787,7 @@
       },
       "CategoryShare": {
         "type": "object",
-        "description": "A category's spending or income in the month. `pct` is its share of the group's total and\n`delta_pct` its change against the previous month, both percentages with one decimal;\n`delta_pct` is null when the previous month had nothing.",
+        "description": "A category's spending or income in the month. `pct` is its share of the group's total and\n`delta_pct` its change against the previous month, both percentages with one decimal;\n`delta_pct` is null when the previous month had nothing. `parent_id` is the parent of a subcategory.",
         "required": [
           "category_id",
           "name",
@@ -1760,6 +1824,13 @@
           },
           "name": {
             "type": "string"
+          },
+          "parent_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
           },
           "pct": {
             "type": "string",

@@ -16,10 +16,13 @@ pub async fn category_sums(
         CategorySum,
         r#"SELECT c.id AS category_id, c.name, c.icon, c.color, c.kind AS "kind: CategoryKind",
                   date_trunc('month', t.date::timestamp)::date AS "month!",
-                  SUM(t.amount) AS "amount!"
+                  SUM(t.amount) AS "amount!", c.parent_id,
+                  COALESCE(p.name, c.name) AS "group_name!", COALESCE(p.icon, c.icon) AS "group_icon!",
+                  COALESCE(p.color, c.color) AS "group_color!"
            FROM transactions t JOIN categories c ON c.user_id = t.user_id AND c.id = t.category_id
+           LEFT JOIN categories p ON p.user_id = c.user_id AND p.id = c.parent_id
            WHERE t.user_id = $1 AND t.date BETWEEN $2 AND $3
-           GROUP BY c.id, date_trunc('month', t.date::timestamp)"#,
+           GROUP BY c.id, p.id, date_trunc('month', t.date::timestamp)"#,
         user_id,
         from,
         to
