@@ -28,6 +28,11 @@ const stub = (replies = {}) =>
     NEW_USER,
   );
 
+const renderOnboarding = async () => {
+  renderWithQuery(<OnboardingPage />);
+  await userEvent.click(screen.getByRole("button", { name: "Continuar" }));
+};
+
 const typeBalance = async (value: string) => {
   await userEvent.type(screen.getByLabelText("Saldo de hoje"), value);
   await userEvent.click(screen.getByRole("button", { name: "Continuar" }));
@@ -38,11 +43,18 @@ describe("Onboarding", () => {
     router.replace.mockClear();
   });
 
-  it("walks the three steps and saves the balance and a bill", async () => {
+  it("walks the four steps and saves the currency, the balance and a bill", async () => {
     const requests = stub();
     renderWithQuery(<OnboardingPage />);
 
-    expect(screen.getByText("Passo 1 de 3")).toBeInTheDocument();
+    expect(screen.getByText("Passo 1 de 4")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Qual moeda você usa?" })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "Real BRL" })).toBeChecked();
+    for (const name of ["Dólar USD", "Libra GBP"]) expect(screen.getByRole("radio", { name })).not.toBeChecked();
+    await userEvent.click(screen.getByRole("radio", { name: "Euro EUR" }));
+    await userEvent.click(screen.getByRole("button", { name: "Continuar" }));
+
+    expect(screen.getByText("Passo 2 de 4")).toBeInTheDocument();
     expect(screen.getByLabelText("Data")).toHaveValue(new Date().toLocaleDateString("sv"));
     await userEvent.clear(screen.getByLabelText("Data"));
     await userEvent.type(screen.getByLabelText("Data"), "2026-11-05");
@@ -57,12 +69,13 @@ describe("Onboarding", () => {
     await userEvent.click(screen.getByRole("button", { name: "Continuar" }));
 
     expect(await screen.findByRole("heading", { name: "Tudo pronto" })).toBeInTheDocument();
-    expect(screen.getByText("R$ 1.842,10")).toBeInTheDocument();
+    expect(screen.getByText("€ 1.842,10")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Ver meu mês" }));
 
     await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/mes"));
     const onboarding = requests.find((request) => request.method === "POST");
     expect(await onboarding?.json()).toEqual({
+      currency: "EUR",
       opening_balance: "1842.10",
       opening_date: "2026-11-05",
       bills: [{ name: "Aluguel do apê", amount: "2259.56", due_day: 5, category_id: CATEGORIES[0].id }],
@@ -71,7 +84,7 @@ describe("Onboarding", () => {
 
   it("lets the user skip the bills, add and remove rows, and go back", async () => {
     const requests = stub();
-    renderWithQuery(<OnboardingPage />);
+    await renderOnboarding();
 
     await typeBalance("-20000");
     await userEvent.click(await screen.findByRole("button", { name: "Adicionar outra" }));
@@ -90,12 +103,12 @@ describe("Onboarding", () => {
 
     await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/mes"));
     const onboarding = requests.find((request) => request.method === "POST");
-    expect(await onboarding?.json()).toMatchObject({ opening_balance: "-200.00", bills: [] });
+    expect(await onboarding?.json()).toMatchObject({ currency: "BRL", opening_balance: "-200.00", bills: [] });
   });
 
   it("checks the balance and every half-filled bill", async () => {
     stub();
-    renderWithQuery(<OnboardingPage />);
+    await renderOnboarding();
 
     await typeBalance("muito");
     expect(await screen.findByText("Informe um valor, como 1.250,00.")).toBeInTheDocument();
@@ -112,9 +125,20 @@ describe("Onboarding", () => {
     expect(screen.getByText("Escolha uma categoria.")).toBeInTheDocument();
   });
 
-  it("asks for a name and a date and counts the bills", async () => {
+  it("goes back to the currency and keeps the choice", async () => {
     stub();
     renderWithQuery(<OnboardingPage />);
+
+    await userEvent.click(screen.getByRole("radio", { name: "Libra GBP" }));
+    await userEvent.click(screen.getByRole("button", { name: "Continuar" }));
+    await userEvent.click(screen.getByRole("button", { name: "Voltar" }));
+
+    expect(screen.getByRole("radio", { name: "Libra GBP" })).toBeChecked();
+  });
+
+  it("asks for a name and a date and counts the bills", async () => {
+    stub();
+    await renderOnboarding();
 
     await userEvent.clear(screen.getByLabelText("Data"));
     await typeBalance("100");
@@ -142,7 +166,7 @@ describe("Onboarding", () => {
 
   it("says when there is no bill category", async () => {
     stub({ "GET /api/categories": { status: 200, body: [CATEGORIES[2]] } });
-    renderWithQuery(<OnboardingPage />);
+    await renderOnboarding();
 
     await typeBalance("100");
 
@@ -151,7 +175,7 @@ describe("Onboarding", () => {
 
   it("offers a retry when the categories fail to load", async () => {
     const requests = stub({ "GET /api/categories": { status: 500, body: problem(500, "Falhou.") } });
-    renderWithQuery(<OnboardingPage />);
+    await renderOnboarding();
 
     await typeBalance("100");
     await userEvent.click(await screen.findByRole("button", { name: "Tentar de novo" }));
@@ -161,7 +185,7 @@ describe("Onboarding", () => {
 
   it("explains when saving fails and keeps the user on the last step", async () => {
     stub({ "POST /api/onboarding": { status: 500, body: problem(500, "Falhou.") } });
-    renderWithQuery(<OnboardingPage />);
+    await renderOnboarding();
 
     await typeBalance("100");
     await userEvent.click(await screen.findByRole("button", { name: "Pular por agora" }));
@@ -173,7 +197,7 @@ describe("Onboarding", () => {
 
   it("goes to the month when onboarding was already done", async () => {
     stub({ "POST /api/onboarding": { status: 409, body: problem(409, "Já feito.") } });
-    renderWithQuery(<OnboardingPage />);
+    await renderOnboarding();
 
     await typeBalance("100");
     await userEvent.click(await screen.findByRole("button", { name: "Pular por agora" }));

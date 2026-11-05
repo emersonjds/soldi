@@ -4,6 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
 
+import { Button } from "@/components/ui/button";
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { parseBRL } from "@/shared/lib/money";
@@ -20,9 +21,11 @@ export type Opening = z.infer<typeof schema>;
 export const BalanceStep = ({
   defaultValues,
   onNext,
+  onBack,
 }: {
   defaultValues: Opening;
   onNext: (values: Opening) => void;
+  onBack: (values: Opening) => void;
 }) => {
   const form = useForm<Opening>({ resolver: zodResolver(schema), defaultValues });
   const { errors } = form.formState;
@@ -66,7 +69,17 @@ export const BalanceStep = ({
           {errors.date && <FieldError errors={[errors.date]} />}
         </Field>
       </FieldGroup>
-      <BrandButton type="submit">Continuar</BrandButton>
+      <div className="flex flex-col gap-2">
+        <BrandButton type="submit">Continuar</BrandButton>
+        <Button
+          type="button"
+          variant="ghost"
+          className="min-h-11 text-base text-muted-foreground"
+          onClick={() => onBack(form.getValues())}
+        >
+          Voltar
+        </Button>
+      </div>
     </form>
   );
 };
