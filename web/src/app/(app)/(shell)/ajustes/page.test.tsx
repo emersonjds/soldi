@@ -26,6 +26,8 @@ describe("Ajustes", () => {
       expect(screen.getByRole("link", { name: new RegExp(`^${name}`) })).toHaveAttribute("href", href);
     expect(screen.getAllByRole("link")).toHaveLength(5);
     expect(screen.getByText("Traga seu Termômetro.xlsx")).toBeInTheDocument();
+    expect(screen.getByText("Grupos e subcategorias")).toBeInTheDocument();
+    expect(screen.queryByText(/em breve/i)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Sair" })).toHaveClass("text-destructive");
   });
 
