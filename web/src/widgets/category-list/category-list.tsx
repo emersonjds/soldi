@@ -120,7 +120,10 @@ export const CategoryList = ({ kind, onKindChange }: { kind: Kind; onKindChange:
                 </Button>
               </div>
               {children.length > 0 && (
-                <ul aria-label={`Subcategorias de ${parent.name}`} className="mb-1 ml-7 flex flex-col border-l pl-2">
+                <ul
+                  aria-label={`Subcategorias de ${parent.name}`}
+                  className="mr-12 mb-1 ml-7 flex flex-col border-l pl-2"
+                >
                   {children.map((child) => (
                     <li key={child.id}>
                       <button
@@ -131,7 +134,7 @@ export const CategoryList = ({ kind, onKindChange }: { kind: Kind; onKindChange:
                       >
                         <CategoryIcon icon={child.icon} color={child.color} className="size-8" />
                         <span className="min-w-0 flex-1 truncate text-base">{child.name}</span>
-                        <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+                        <ChevronRight className="size-5 shrink-0 text-muted-foreground" aria-hidden />
                       </button>
                     </li>
                   ))}

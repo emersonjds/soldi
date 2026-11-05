@@ -59,13 +59,15 @@ type FormProps = {
 
 const CategoryForm = ({ kind, category, parentId: presetParent, onSaved, onArchive }: FormProps) => {
   const [name, setName] = useState(category?.name ?? "");
-  const [icon, setIcon] = useState(category?.icon ?? "circle-dashed");
+  const [icon, setIcon] = useState(category?.icon);
   const [parentId, setParentId] = useState(category?.parent_id ?? presetParent ?? "");
   const [submitted, setSubmitted] = useState(false);
   const categories = useCategories(kind);
   const list = categories.data ?? [];
   const [color, setColor] = useState(category?.color);
-  const chosenColor = color ?? nextColor(list);
+  const parent = list.find((each) => each.id === parentId);
+  const chosenIcon = icon ?? parent?.icon ?? "circle-dashed";
+  const chosenColor = color ?? parent?.color ?? nextColor(list);
   const parents = list.filter((each) => !each.parent_id && each.id !== category?.id);
   const hasChildren = Boolean(category) && list.some((each) => each.parent_id === category?.id);
   const create = useCreateCategory();
@@ -83,11 +85,11 @@ const CategoryForm = ({ kind, category, parentId: presetParent, onSaved, onArchi
     if (!trimmed) return;
     if (category)
       return update.mutate(
-        { id: category.id, name: trimmed, icon, color: chosenColor, parent_id: parentId || null },
+        { id: category.id, name: trimmed, icon: chosenIcon, color: chosenColor, parent_id: parentId || null },
         { onSuccess: onSaved },
       );
     create.mutate(
-      { name: trimmed, kind, icon, color: chosenColor, ...(parentId ? { parent_id: parentId } : {}) },
+      { name: trimmed, kind, icon: chosenIcon, color: chosenColor, ...(parentId ? { parent_id: parentId } : {}) },
       { onSuccess: onSaved },
     );
   };
@@ -111,24 +113,22 @@ const CategoryForm = ({ kind, category, parentId: presetParent, onSaved, onArchi
       {!hasChildren && (
         <Field className="gap-1.5">
           <FieldLabel htmlFor="category-parent">Subcategoria de</FieldLabel>
-          <NativeSelect className="w-full">
-            <select
-              id="category-parent"
-              value={parentId}
-              onChange={(event) => setParentId(event.target.value)}
-              className="h-12 w-full appearance-none rounded-xl border border-input bg-transparent pr-8 pl-3 text-base"
-            >
-              <NativeSelectOption value="">Nenhuma</NativeSelectOption>
-              {parents.map((parent) => (
-                <NativeSelectOption key={parent.id} value={parent.id}>
-                  {parent.name}
-                </NativeSelectOption>
-              ))}
-            </select>
+          <NativeSelect
+            id="category-parent"
+            value={parentId}
+            onChange={(event) => setParentId(event.target.value)}
+            className="w-full [&>select]:h-12 [&>select]:rounded-xl [&>select]:pl-3 [&>select]:text-base"
+          >
+            <NativeSelectOption value="">Nenhuma</NativeSelectOption>
+            {parents.map((parent) => (
+              <NativeSelectOption key={parent.id} value={parent.id}>
+                {parent.name}
+              </NativeSelectOption>
+            ))}
           </NativeSelect>
         </Field>
       )}
-      <IconPicker value={icon} color={chosenColor} onChange={setIcon} />
+      <IconPicker value={chosenIcon} color={chosenColor} onChange={setIcon} />
       <fieldset className="flex flex-col gap-2">
         <legend className="mb-2 font-semibold text-sm">Cor</legend>
         <div className="flex flex-wrap gap-2">

@@ -65,6 +65,8 @@ describe("CategorySheet", () => {
     expect(within(sheet).getByRole("radio", { name: "Cor Roxo" })).toBeChecked();
     await waitFor(() => expect(options(sheet)).toEqual(["Nenhuma", "Comida fora", "Mercado", "Pets"]));
     expect(within(sheet).getByLabelText("Subcategoria de")).toHaveValue(PETS.id);
+    // A select nested in another renders empty in browsers.
+    expect(within(sheet).getByLabelText("Subcategoria de").parentElement?.closest("select")).toBeNull();
     expect(within(sheet).queryByRole("button", { name: "Criar" })).not.toBeInTheDocument();
 
     await userEvent.clear(within(sheet).getByLabelText("Nome"));
@@ -119,6 +121,8 @@ describe("CategorySheet", () => {
 
     const sheet = await screen.findByRole("dialog", { name: "Nova categoria" });
     await waitFor(() => expect(within(sheet).getByLabelText("Subcategoria de")).toHaveValue(PETS.id));
+    expect(within(sheet).getByRole("radio", { name: "Ícone paw-print" })).toBeChecked();
+    expect(within(sheet).getByRole("radio", { name: "Cor Roxo" })).toBeChecked();
     expect(within(sheet).queryByRole("button", { name: "Arquivar" })).not.toBeInTheDocument();
     await userEvent.type(within(sheet).getByLabelText("Nome"), "Pet shop{Enter}");
 

@@ -7,6 +7,19 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.8.0
+
+> Headline: manage categories and subcategories
+
+### Web
+- `Ajustes › Categorias` replaces the placeholder: `Entrada / Saída / Diário` (kept in `?k=`, Diário by default), one card per kind with each category and its subcategories indented under it. `+` in the header creates a category of the open kind; `+` on a category creates a subcategory in it.
+- A row opens `Editar categoria`: name, parent (never itself or another subcategory; hidden for a category that has subcategories), icon and color, saved at once on the list and rolled back if the server refuses. `Arquivar` hides the category and its subcategories behind `Desfazer` for 5 s before archiving; the toast counts the subcategories that go with it.
+- A new subcategory starts with its parent's icon and color.
+- `Ajustes` links `Categorias` without the "em breve" caption.
+
+### Fixed
+- The `Subcategoria de` field rendered empty in browsers (a select nested in another); it now shows and changes the parent.
+
 ## 0.7.0
 
 > Headline: subcategories
