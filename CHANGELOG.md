@@ -26,6 +26,14 @@ versions. This file covers the server and the web app together.
 
 - Migration `0011_category_parent` adds the nullable `categories.parent_id`, a foreign key on `(user_id, parent_id)` to the same user's category with `ON DELETE RESTRICT`, a check that a category is not its own parent and an index on `(user_id, parent_id)`. Every existing category stays top-level. It runs on start-up with the others; no manual step.
 
+### Web
+- Category picker on phones is a select-like field with a searchable sheet, grouped by parent, with a `+` to create a category or subcategory.
+- New categories take any lucide icon (searchable, loaded on demand) and one of the twelve palette colors.
+- Subcategories read `Pai › Filho` on Mês, Para onde vai and Contas fixas.
+
+### Tooling
+- `.editorconfig`, VS Code settings and extensions (Biome, rust-analyzer), `rustfmt.toml`, `.gitattributes` and a `.githooks/pre-commit` (`git config core.hooksPath .githooks`).
+
 ## 0.6.0
 
 > Headline: bank-style amount entry and categories created from the picker

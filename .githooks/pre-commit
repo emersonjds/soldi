@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Runs the fast part of the gate on what is staged. Enable once per clone:
+#   git config core.hooksPath .githooks
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+
+staged=$(git diff --cached --name-only --diff-filter=ACMR)
+
+if grep -qE '^(crates/|Cargo\.toml)' <<<"$staged"; then
+  cargo fmt --all --check
+fi
+
+web=$(grep -E '^web/' <<<"$staged" | grep -vE '^web/(openapi\.json|pnpm-lock\.yaml|out/)' | sed 's#^web/##' || true)
+if [[ -n "$web" ]]; then
+  (cd web && pnpm exec biome check $web)
+fi
