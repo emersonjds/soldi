@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/sidebar";
 import { useMe } from "@/entities/user/session";
 import { TransactionSheet } from "@/features/add-transaction/transaction-sheet";
+import { SignOutButton } from "@/features/sign-out/sign-out-button";
 import { cn, getInitials } from "@/lib/utils";
 import { Wordmark } from "@/shared/ui/wordmark";
 
@@ -99,6 +100,7 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
                 <span className="truncate font-medium">{name}</span>
                 <span className="truncate text-muted-foreground text-xs">{email}</span>
               </div>
+              <SignOutButton compact />
             </div>
           </SidebarFooter>
         </Sidebar>

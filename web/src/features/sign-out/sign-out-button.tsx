@@ -9,7 +9,8 @@ import { Button } from "@/components/ui/button";
 import { meQuery } from "@/entities/user/session";
 import { api, okOrThrow } from "@/shared/api/client";
 
-export const SignOutButton = () => {
+/** `compact`: an icon-only button for the sidebar user card. */
+export const SignOutButton = ({ compact = false }: { compact?: boolean }) => {
   const router = useRouter();
   const queryClient = useQueryClient();
   const signOut = useMutation({
@@ -20,6 +21,21 @@ export const SignOutButton = () => {
       router.replace("/entrar");
     },
   });
+
+  if (compact)
+    return (
+      <Button
+        variant="ghost"
+        size="icon"
+        aria-label="Sair"
+        title="Sair"
+        className="size-11 shrink-0 rounded-full text-muted-foreground hover:text-destructive"
+        disabled={signOut.isPending}
+        onClick={() => signOut.mutate()}
+      >
+        <LogOut className="size-5" />
+      </Button>
+    );
 
   return (
     <div className="flex flex-col">
