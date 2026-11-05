@@ -61,8 +61,9 @@ const Footer = ({ bills }: { bills: BillOfMonth[] }) => {
   );
 };
 
+// The pill draws 32px tall like the design; the ::after stretches the touch target to 44px.
 const pill =
-  "inline-flex h-11 shrink-0 items-center gap-1 rounded-full px-4 font-semibold text-sm transition-colors focus-visible:outline-2 focus-visible:outline-ring";
+  "relative inline-flex h-8 shrink-0 items-center gap-1 rounded-full px-3 font-semibold text-sm transition-colors after:absolute after:inset-x-0 after:-inset-y-1.5 focus-visible:outline-2 focus-visible:outline-ring lg:h-10 lg:px-4 lg:text-base";
 
 const Pill = ({ bill, onPay, onUnpay }: { bill: BillOfMonth; onPay: () => void; onUnpay: () => void }) => {
   if (bill.paid)
@@ -85,7 +86,7 @@ const Pill = ({ bill, onPay, onUnpay }: { bill: BillOfMonth; onPay: () => void; 
         onClick={onPay}
         className={cn(pill, "bg-expense/15 text-expense")}
       >
-        <TriangleAlert className="size-4" aria-hidden />
+        <TriangleAlert className="hidden size-4 sm:block" aria-hidden />
         Vencido
       </button>
     );
@@ -113,19 +114,25 @@ const Row = ({
   onAdjust: () => void;
 }) => {
   const amount = (
-    <Money amount={bill.amount} className={cn("font-bold text-base lg:text-lg", bill.overdue && "text-expense")} />
+    <Money
+      amount={bill.amount}
+      className={cn("font-bold text-sm sm:text-base lg:text-lg", bill.overdue && "text-expense")}
+    />
   );
   return (
     <li
       aria-label={bill.name}
-      className={cn("flex min-h-16 items-center gap-3 rounded-xl px-2 py-2", bill.overdue && "bg-expense-soft")}
+      className={cn(
+        "-mx-2 flex min-h-16 items-center gap-2 rounded-xl px-2 py-2 sm:gap-3",
+        bill.overdue && "bg-expense/10",
+      )}
     >
       <CategoryIcon icon={bill.icon} color={bill.color} />
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="truncate font-medium text-base">{bill.name}</span>
         {bill.overdue ? (
-          <span className="flex items-center gap-1 text-expense text-xs">
-            <Clock className="size-3.5 shrink-0" aria-hidden />
+          <span className="flex items-start gap-1 text-expense text-xs">
+            <Clock className="mt-px size-3.5 shrink-0" aria-hidden />
             Venceu dia {dayMonth(bill.due_date)}
           </span>
         ) : (
@@ -139,7 +146,7 @@ const Row = ({
           type="button"
           aria-label={`${formatBRL(bill.amount)}: ajustar pagamento de ${bill.name}`}
           onClick={onAdjust}
-          className="-mx-1 min-h-11 rounded-lg px-1 transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"
+          className="min-h-11 shrink-0 rounded-lg transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"
         >
           {amount}
         </button>

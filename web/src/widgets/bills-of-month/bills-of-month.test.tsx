@@ -76,7 +76,7 @@ describe("Contas do Mês", () => {
 
     const power = rowOf("Luz (Enel)");
     expect(power).toHaveTextContent("Venceu dia 02/11");
-    expect(power).toHaveClass("bg-expense-soft");
+    expect(power).toHaveClass("bg-expense/10");
     expect(within(power).getByRole("button", { name: "Pagar Luz (Enel), vencida" })).toHaveTextContent("Vencido");
 
     expect(card()).toHaveTextContent("Próximo vencimento: Aluguel Residencial em 5 dias");

@@ -96,7 +96,7 @@ const BillForm = ({
           {errors.amount && <FieldError>{errors.amount}</FieldError>}
         </Field>
         <Field className="gap-1.5" data-invalid={Boolean(errors.day)}>
-          <FieldLabel htmlFor="bill-day">Dia do vencimento</FieldLabel>
+          <FieldLabel htmlFor="bill-day">Vence dia</FieldLabel>
           <Input
             id="bill-day"
             inputMode="numeric"

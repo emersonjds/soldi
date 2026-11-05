@@ -29,7 +29,7 @@ export const SignOutButton = () => {
         disabled={signOut.isPending}
         onClick={() => signOut.mutate()}
       >
-        <span className="flex size-10 items-center justify-center rounded-full bg-expense-soft">
+        <span className="flex size-10 items-center justify-center rounded-full bg-expense/10">
           <LogOut className="size-5" />
         </span>
         Sair

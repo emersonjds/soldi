@@ -85,14 +85,14 @@ describe("Ajustes › Contas fixas", () => {
 
     await userEvent.type(within(sheet).getByLabelText("Nome"), " Luz (Enel) ");
     await userEvent.type(within(sheet).getByLabelText("Valor"), "284,10");
-    await userEvent.type(within(sheet).getByLabelText("Dia do vencimento"), "32");
+    await userEvent.type(within(sheet).getByLabelText("Vence dia"), "32");
     expect(within(sheet).getByRole("radio", { name: "Aluguel" })).toBeChecked();
     await userEvent.click(within(sheet).getByRole("radio", { name: "Luz" }));
     await userEvent.click(within(sheet).getByRole("button", { name: "Salvar" }));
     expect(within(sheet).getByText("Escolha um dia de 1 a 31.")).toBeInTheDocument();
 
-    await userEvent.clear(within(sheet).getByLabelText("Dia do vencimento"));
-    await userEvent.type(within(sheet).getByLabelText("Dia do vencimento"), "2");
+    await userEvent.clear(within(sheet).getByLabelText("Vence dia"));
+    await userEvent.type(within(sheet).getByLabelText("Vence dia"), "2");
     await userEvent.click(within(sheet).getByRole("button", { name: "Salvar" }));
 
     expect(await screen.findByText("Conta salva")).toBeInTheDocument();
