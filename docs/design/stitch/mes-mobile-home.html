@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+
+<html lang="pt-BR"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"/><meta content="mobile_tab" name="shell-type"/><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config = { darkMode: "class", theme: { extend: { colors: { "on-tertiary-container": "#e1ffdf", "on-error": "#ffffff", "on-primary-fixed-variant": "#4029ba", "tertiary-container": "#008338", "on-error-container": "#93000a", "surface-variant": "#dfe0ff", "secondary-container": "#c7c3fe", "on-background": "#151935", "primary-fixed": "#e4dfff", "on-secondary-fixed-variant": "#444173", "on-primary": "#ffffff", "primary-fixed-dim": "#c6bfff", "surface-container-low": "#f4f2ff", "secondary": "#5b598c", "primary": "#5341cd", "surface-dim": "#d5d7fd", "outline": "#787586", "surface-container-highest": "#dfe0ff", "tertiary": "#00672a", "surface-container-high": "#e6e6ff", "on-surface": "#151935", "background": "#fbf8ff", "surface-container-lowest": "#ffffff", "inverse-surface": "#2a2e4b", "inverse-on-surface": "#f0efff", "on-secondary-container": "#514f81", "surface-container": "#edecff", "error-container": "#ffdad6", "primary-container": "#6c5ce7", "outline-variant": "#c8c4d7", "on-tertiary-fixed": "#002109", "error": "#ba1a1a", "on-surface-variant": "#474554", "tertiary-fixed": "#7ffc97", "secondary-fixed-dim": "#c4c1fb", "surface": "#fbf8ff", "tertiary-fixed-dim": "#62df7d", "on-tertiary": "#ffffff", "on-primary-container": "#faf6ff", "surface-tint": "#5847d2", "on-secondary-fixed": "#181445", "on-tertiary-fixed-variant": "#005320", "surface-bright": "#fbf8ff", "on-secondary": "#ffffff", "inverse-primary": "#c6bfff", "on-primary-fixed": "#160066", "secondary-fixed": "#e3dfff" }, borderRadius: { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px" }, spacing: { "margin-desktop": "2rem", "space-xs": "0.25rem", "space-lg": "1.5rem", "space-sm": "0.5rem", "gutter-desktop": "1.5rem", "space-xl": "2rem", "margin": "1rem", "space-md": "1rem", "gutter": "1rem" }, fontFamily: { "body-md": ["Inter"], "body-lg": ["Inter"], "currency-hero": ["Inter"], "display-hero": ["Inter"], "headline-lg": ["Inter"], "caption-md": ["Inter"], "currency-md": ["Inter"], "headline-sm": ["Inter"], "currency-lg": ["Inter"], "body-md-medium": ["Inter"], "headline-md": ["Inter"], "caption-sm": ["Inter"] }, fontSize: { "body-md": ["14px", { lineHeight: "20px", letterSpacing: "0em", fontWeight: "400" }], "body-lg": ["16px", { lineHeight: "24px", letterSpacing: "0em", fontWeight: "400" }], "currency-hero": ["34px", { lineHeight: "40px", letterSpacing: "-0.02em", fontWeight: "700" }], "display-hero": ["34px", { lineHeight: "40px", letterSpacing: "-0.02em", fontWeight: "700" }], "headline-lg": ["24px", { lineHeight: "32px", letterSpacing: "-0.015em", fontWeight: "700" }], "caption-md": ["12px", { lineHeight: "16px", letterSpacing: "0.01em", fontWeight: "500" }], "currency-md": ["15px", { lineHeight: "20px", letterSpacing: "0em", fontWeight: "700" }], "headline-sm": ["16px", { lineHeight: "24px", letterSpacing: "0em", fontWeight: "600" }], "currency-lg": ["20px", { lineHeight: "28px", letterSpacing: "-0.01em", fontWeight: "700" }], "body-md-medium": ["14px", { lineHeight: "20px", letterSpacing: "0em", fontWeight: "500" }], "headline-md": ["20px", { lineHeight: "28px", letterSpacing: "-0.01em", fontWeight: "600" }], "caption-sm": ["11px", { lineHeight: "14px", letterSpacing: "0.02em", fontWeight: "500" }] } } } };</script><style>@layer base{html,body{width:100%;margin:0;padding:0;}body{overscroll-behavior:none;-webkit-tap-highlight-color:transparent;}.pb-safe{padding-bottom:env(safe-area-inset-bottom,0px);}.pt-safe{padding-top:env(safe-area-inset-top,0px);}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head><body class="bg-surface font-body-md text-on-surface antialiased flex flex-col min-h-screen"><header class="fixed top-0 inset-x-0 z-50 bg-surface/85 backdrop-blur-xl shadow-[0_1px_8px_rgba(30,27,75,0.04)] pt-safe"><div class="h-14 px-margin flex items-center justify-between"><div class="flex items-center gap-space-sm"><div class="w-2.5 h-2.5 rounded-full bg-primary-container"></div><span class="font-headline-md text-headline-md tracking-tight text-on-surface">Soldi</span></div><h1 class="font-headline-sm text-headline-sm text-on-surface text-center line-clamp-1 max-w-[140px]">Mês</h1><div class="flex items-center justify-end min-w-[44px] min-h-[44px]"><div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center"><span class="material-symbols-outlined text-on-primary text-[18px]">person</span></div></div></div></header><main class="flex-1 flex flex-col relative w-full pt-14 pb-28 bg-surface"><div class="flex flex-col w-full">
+<div class="w-full bg-gradient-to-b from-[#1E1B4B] to-[#312E81] text-on-primary px-margin pt-4 pb-12 flex flex-col gap-5 shadow-[0_8px_24px_rgba(30,27,75,0.25)] relative overflow-hidden">
+<div class="absolute -right-10 -top-10 w-44 h-44 rounded-full bg-primary-container/20 blur-2xl pointer-events-none"></div>
+<div class="absolute -left-12 bottom-0 w-36 h-36 rounded-full bg-secondary-container/15 blur-xl pointer-events-none"></div>
+<div class="flex items-center justify-between z-10">
+<div class="flex items-center gap-space-sm">
+<div class="w-10 h-10 rounded-full bg-surface-container-lowest/15 flex items-center justify-center font-headline-sm text-headline-sm text-on-primary shadow-sm ring-0">
+          E
+        </div>
+<div class="flex flex-col">
+<span class="font-headline-sm text-headline-sm text-on-primary tracking-tight leading-tight">Olá, Emerson</span>
+<div class="flex items-center gap-1">
+<span class="w-1.5 h-1.5 rounded-full bg-tertiary-fixed"></span>
+<span class="font-caption-sm text-caption-sm text-surface-variant font-medium">Plano Pro</span>
+</div>
+</div>
+</div>
+<button aria-label="Notificações" class="relative w-11 h-11 flex items-center justify-center rounded-full bg-surface-container-lowest/10 text-on-primary hover:bg-surface-container-lowest/20 active:scale-95 transition-all" type="button">
+<span class="material-symbols-outlined text-[22px]">notifications</span>
+<span class="absolute top-2.5 right-2.5 w-2 h-2 rounded-full bg-error ring-2 ring-[#1E1B4B]"></span>
+</button>
+</div>
+<div class="flex items-center justify-center z-10">
+<div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-surface-container-lowest/10 backdrop-blur-md">
+<button aria-label="Mês anterior" class="w-7 h-7 flex items-center justify-center text-surface-variant hover:text-on-primary transition-colors" type="button">
+<span class="material-symbols-outlined text-[18px]">chevron_left</span>
+</button>
+<span class="font-body-md-medium text-body-md-medium text-on-primary px-1">Novembro 2026</span>
+<button aria-label="Próximo mês" class="w-7 h-7 flex items-center justify-center text-surface-variant hover:text-on-primary transition-colors" type="button">
+<span class="material-symbols-outlined text-[18px]">chevron_right</span>
+</button>
+</div>
+</div>
+<div class="flex flex-col items-center justify-center text-center z-10 mt-1 mb-2">
+<span class="font-caption-md text-caption-md text-surface-variant uppercase tracking-wider mb-1">Saldo hoje</span>
+<span class="font-display-hero text-display-hero text-on-primary tracking-tight tabular-nums">R$ 1.842,10</span>
+<div class="mt-2.5 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#DCFCE7] text-[#16A34A] shadow-sm">
+<span class="w-2 h-2 rounded-full bg-[#16A34A] animate-pulse"></span>
+<span class="font-caption-md text-caption-md font-bold tracking-tight">Confortável</span>
+</div>
+</div>
+</div>
+<div class="px-margin flex flex-col gap-space-lg -mt-8 z-20">
+<div class="w-full bg-surface-container-lowest rounded-xl shadow-[0_4px_16px_rgba(30,27,75,0.08)] p-space-md grid grid-cols-3 gap-2">
+<div class="flex flex-col items-center text-center px-1">
+<div class="w-8 h-8 rounded-full bg-[#DCFCE7] text-[#16A34A] flex items-center justify-center mb-1.5">
+<span class="material-symbols-outlined text-[18px]">arrow_upward</span>
+</div>
+<span class="font-caption-sm text-caption-sm text-on-surface-variant font-medium">Entradas</span>
+<span class="font-currency-md text-currency-md text-[#16A34A] tabular-nums mt-0.5 truncate w-full">R$ 6.361,60</span>
+</div>
+<div class="flex flex-col items-center text-center px-1">
+<div class="w-8 h-8 rounded-full bg-surface-container text-on-surface flex items-center justify-center mb-1.5">
+<span class="material-symbols-outlined text-[18px]">arrow_downward</span>
+</div>
+<span class="font-caption-sm text-caption-sm text-on-surface-variant font-medium">Saídas</span>
+<span class="font-currency-md text-currency-md text-[#1B1F3B] tabular-nums mt-0.5 truncate w-full">R$ 4.256,50</span>
+</div>
+<div class="flex flex-col items-center text-center px-1">
+<div class="w-8 h-8 rounded-full bg-[#FEE2E2] text-[#DC2626] flex items-center justify-center mb-1.5">
+<span class="material-symbols-outlined text-[18px]">trending_down</span>
+</div>
+<span class="font-caption-sm text-caption-sm text-on-surface-variant font-medium">Projetado</span>
+<span class="font-currency-md text-currency-md text-[#DC2626] tabular-nums mt-0.5 truncate w-full">R$ -312,40</span>
+<span class="mt-1 px-1.5 py-0.5 rounded-full bg-[#FEE2E2] text-[#DC2626] font-caption-sm text-[10px] font-bold">Atenção</span>
+</div>
+</div>
+<div class="w-full bg-surface-container-lowest rounded-xl shadow-[0_4px_16px_rgba(30,27,75,0.08)] p-space-md flex flex-col gap-space-md">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<div class="w-2 h-4 rounded-full bg-primary-container"></div>
+<div class="flex flex-col">
+<h2 class="font-headline-sm text-headline-sm text-on-surface tracking-tight">Contas do Mês</h2>
+<span class="font-caption-sm text-caption-sm text-on-surface-variant">5 obrigações cadastradas</span>
+</div>
+</div>
+<button class="text-primary-container font-caption-md text-caption-md font-semibold hover:underline" type="button">
+          Ver todas
+        </button>
+</div>
+<div class="flex flex-col gap-2.5">
+<div class="flex items-center justify-between min-h-[58px] p-2 rounded-lg hover:bg-surface-container-low transition-colors">
+<div class="flex items-center gap-3 min-w-0">
+<div class="w-10 h-10 rounded-full bg-[#6366F1] text-on-primary flex items-center justify-center shrink-0 shadow-sm">
+<span class="material-symbols-outlined text-[20px]">home</span>
+</div>
+<div class="flex flex-col min-w-0">
+<span class="font-body-md-medium text-body-md-medium text-[#1B1F3B] truncate">Aluguel Residencial</span>
+<span class="font-caption-sm text-caption-sm text-on-surface-variant">Vence dia 05/11</span>
+</div>
+</div>
+<div class="flex items-center gap-2.5 shrink-0 pl-2">
+<span class="font-currency-md text-currency-md text-on-surface tabular-nums">R$ 2.259,56</span>
+<span class="min-h-[32px] px-2.5 inline-flex items-center justify-center rounded-full bg-[#DCFCE7] text-[#16A34A] font-caption-sm text-caption-sm font-semibold">
+              ✓ Pago
+            </span>
+</div>
+</div>
+<div class="flex items-center justify-between min-h-[58px] p-2 rounded-lg hover:bg-surface-container-low transition-colors">
+<div class="flex items-center gap-3 min-w-0">
+<div class="w-10 h-10 rounded-full bg-[#EAB308] text-on-primary flex items-center justify-center shrink-0 shadow-sm">
+<span class="material-symbols-outlined text-[20px]">bolt</span>
+</div>
+<div class="flex flex-col min-w-0">
+<span class="font-body-md-medium text-body-md-medium text-[#1B1F3B] truncate">Luz (Enel)</span>
+<span class="font-caption-sm text-caption-sm text-on-surface-variant">Vence dia 10/11</span>
+</div>
+</div>
+<div class="flex items-center gap-2.5 shrink-0 pl-2">
+<span class="font-currency-md text-currency-md text-on-surface tabular-nums">R$ 284,10</span>
+<button class="min-h-[32px] min-w-[62px] px-3 inline-flex items-center justify-center rounded-full bg-surface-container-high text-primary-container hover:bg-primary-container hover:text-on-primary font-caption-sm text-caption-sm font-semibold transition-all active:scale-95" type="button">
+              Pagar
+            </button>
+</div>
+</div>
+<div class="flex items-center justify-between min-h-[58px] p-2 rounded-lg hover:bg-surface-container-low transition-colors">
+<div class="flex items-center gap-3 min-w-0">
+<div class="w-10 h-10 rounded-full bg-[#06B6D4] text-on-primary flex items-center justify-center shrink-0 shadow-sm">
+<span class="material-symbols-outlined text-[20px]">wifi</span>
+</div>
+<div class="flex flex-col min-w-0">
+<span class="font-body-md-medium text-body-md-medium text-[#1B1F3B] truncate">Internet Fibra</span>
+<span class="font-caption-sm text-caption-sm text-on-surface-variant">Vence dia 12/11</span>
+</div>
+</div>
+<div class="flex items-center gap-2.5 shrink-0 pl-2">
+<span class="font-currency-md text-currency-md text-on-surface tabular-nums">R$ 149,90</span>
+<button class="min-h-[32px] min-w-[62px] px-3 inline-flex items-center justify-center rounded-full bg-surface-container-high text-primary-container hover:bg-primary-container hover:text-on-primary font-caption-sm text-caption-sm font-semibold transition-all active:scale-95" type="button">
+              Pagar
+            </button>
+</div>
+</div>
+<div class="flex items-center justify-between min-h-[58px] p-2 rounded-lg hover:bg-surface-container-low transition-colors">
+<div class="flex items-center gap-3 min-w-0">
+<div class="w-10 h-10 rounded-full bg-[#EC4899] text-on-primary flex items-center justify-center shrink-0 shadow-sm">
+<span class="material-symbols-outlined text-[20px]">credit_card</span>
+</div>
+<div class="flex flex-col min-w-0">
+<span class="font-body-md-medium text-body-md-medium text-[#1B1F3B] truncate">Cartão Nubank</span>
+<span class="font-caption-sm text-caption-sm text-on-surface-variant">Vence dia 15/11</span>
+</div>
+</div>
+<div class="flex items-center gap-2.5 shrink-0 pl-2">
+<span class="font-currency-md text-currency-md text-on-surface tabular-nums">R$ 1.562,94</span>
+<button class="min-h-[32px] min-w-[62px] px-3 inline-flex items-center justify-center rounded-full bg-surface-container-high text-primary-container hover:bg-primary-container hover:text-on-primary font-caption-sm text-caption-sm font-semibold transition-all active:scale-95" type="button">
+              Pagar
+            </button>
+</div>
+</div>
+<div class="flex items-center justify-between min-h-[58px] p-2 rounded-lg bg-[#FFDAD6]/30">
+<div class="flex items-center gap-3 min-w-0">
+<div class="w-10 h-10 rounded-full bg-[#EF4444] text-on-primary flex items-center justify-center shrink-0 shadow-sm">
+<span class="material-symbols-outlined text-[20px]">directions_car</span>
+</div>
+<div class="flex flex-col min-w-0">
+<span class="font-body-md-medium text-body-md-medium text-[#1B1F3B] truncate">Seguro Auto</span>
+<div class="flex items-center gap-1 text-[#DC2626]">
+<span class="material-symbols-outlined text-[14px]">schedule</span>
+<span class="font-caption-sm text-caption-sm font-semibold">Venceu dia 02/11</span>
+</div>
+</div>
+</div>
+<div class="flex items-center gap-2.5 shrink-0 pl-2">
+<span class="font-currency-md text-currency-md text-[#DC2626] tabular-nums">R$ 380,00</span>
+<span class="min-h-[32px] px-2.5 inline-flex items-center justify-center rounded-full bg-[#FEE2E2] text-[#DC2626] font-caption-sm text-caption-sm font-bold">
+              Vencido
+            </span>
+</div>
+</div>
+</div>
+</div>
+<div class="w-full bg-surface-container-lowest rounded-xl shadow-[0_4px_16px_rgba(30,27,75,0.08)] p-space-md flex flex-col gap-3.5 mb-2">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<div class="w-8 h-8 rounded-full bg-secondary-container text-on-secondary-container flex items-center justify-center">
+<span class="material-symbols-outlined text-[18px]">speed</span>
+</div>
+<h3 class="font-headline-sm text-headline-sm text-on-surface">Termômetro do Mês</h3>
+</div>
+<span class="font-caption-sm text-caption-sm text-[#16A34A] font-bold bg-[#DCFCE7] px-2 py-0.5 rounded-full">
+          67% Comprometido
+        </span>
+</div>
+<div class="flex flex-col gap-1.5">
+<div class="h-2.5 w-full rounded-full bg-surface-container-high overflow-hidden flex gap-0.5 p-0.5">
+<div class="h-full w-[20%] rounded-l-full bg-[#DC2626] opacity-35"></div>
+<div class="h-full w-[20%] bg-[#F87171] opacity-35"></div>
+<div class="h-full w-[20%] bg-[#F59E0B] opacity-35"></div>
+<div class="h-full w-[20%] bg-[#4ADE80] shadow-[0_0_8px_rgba(74,222,128,0.8)] ring-1 ring-white"></div>
+<div class="h-full w-[20%] rounded-r-full bg-[#16A34A] opacity-35"></div>
+</div>
+<div class="flex items-center justify-between text-center font-caption-sm text-[10px] text-on-surface-variant font-medium pt-0.5">
+<span class="w-[20%] text-[#DC2626]">Crítico</span>
+<span class="w-[20%] text-[#F87171]">Atenção</span>
+<span class="w-[20%] text-[#F59E0B]">Apertado</span>
+<span class="w-[20%] text-[#16A34A] font-bold">Confortável</span>
+<span class="w-[20%] text-[#16A34A]">Folga</span>
+</div>
+</div>
+<div class="flex items-start gap-2.5 p-3 rounded-lg bg-surface-container-low text-on-surface">
+<span class="material-symbols-outlined text-[#16A34A] text-[20px] shrink-0 mt-0.5">check_circle</span>
+<p class="font-body-md text-body-md text-on-surface-variant leading-snug">
+          Você comprometeu <strong class="text-on-surface">67%</strong> da renda líquida. Mantendo este ritmo, seu caixa terminará no <strong class="text-[#16A34A]">verde</strong>.
+        </p>
+</div>
+</div>
+</div>
+<script>
+    document.querySelectorAll('button').forEach((btn) => {
+      btn.addEventListener('click', function(e) {
+        if (this.textContent.trim() === 'Pagar') {
+          e.preventDefault();
+          this.textContent = '✓ Pago';
+          this.className = 'min-h-[32px] px-2.5 inline-flex items-center justify-center rounded-full bg-[#DCFCE7] text-[#16A34A] font-caption-sm text-caption-sm font-semibold transition-all scale-105';
+        }
+      });
+    });
+  </script>
+</div></main><nav class="fixed bottom-0 inset-x-0 z-50 bg-surface-container-lowest/95 backdrop-blur-xl shadow-[0_-4px_20px_rgba(30,27,75,0.06)] pb-safe" data-active-classes="text-primary-container font-headline-sm"><div class="relative flex items-center justify-around h-16 px-space-xs"><a class="flex flex-col items-center justify-center min-w-[56px] min-h-[44px] gap-0.5 text-on-surface-variant transition-colors hover:text-on-surface" data-path="mes" href="#"><span class="material-symbols-outlined text-[22px]">calendar_today</span><span class="font-caption-sm text-caption-sm">Mês</span></a><a class="flex flex-col items-center justify-center min-w-[56px] min-h-[44px] gap-0.5 text-on-surface-variant transition-colors hover:text-on-surface" data-path="para-onde-vai" href="#"><span class="material-symbols-outlined text-[22px]">pie_chart</span><span class="font-caption-sm text-caption-sm">Para onde vai</span></a><div class="relative flex items-center justify-center min-w-[56px] min-h-[44px]"><a aria-label="Lançar despesa ou receita" class="absolute -top-5 flex items-center justify-center w-14 h-14 rounded-full bg-primary-container text-on-primary shadow-[0_8px_20px_rgba(108,92,231,0.35)] transition-transform active:scale-95" data-path="lancar" href="#"><span class="material-symbols-outlined text-[28px]">add</span></a></div><a class="flex flex-col items-center justify-center min-w-[56px] min-h-[44px] gap-0.5 text-on-surface-variant transition-colors hover:text-on-surface" data-path="economia" href="#"><span class="material-symbols-outlined text-[22px]">savings</span><span class="font-caption-sm text-caption-sm">Economia</span></a><a class="flex flex-col items-center justify-center min-w-[56px] min-h-[44px] gap-0.5 text-on-surface-variant transition-colors hover:text-on-surface" data-path="ajustes" href="#"><span class="material-symbols-outlined text-[22px]">settings</span><span class="font-caption-sm text-caption-sm">Ajustes</span></a></div></nav></body></html>

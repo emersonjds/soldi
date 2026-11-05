@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+
+<html lang="pt-BR"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0" name="viewport"/><meta content="web_dashboard" name="shell-type"/><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><style>@layer base{html,body{margin:0;padding:0;}body{overscroll-behavior:none;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config = { darkMode: "class", theme: { extend: { "colors": { "secondary-container": "#c7c3fe", "surface-container-highest": "#dfe0ff", "tertiary-fixed": "#7ffc97", "surface-bright": "#fbf8ff", "on-tertiary-fixed": "#002109", "primary-fixed-dim": "#c6bfff", "on-primary-fixed-variant": "#4029ba", "primary": "#5341cd", "tertiary-fixed-dim": "#62df7d", "surface-variant": "#dfe0ff", "surface-container-high": "#e6e6ff", "primary-container": "#6c5ce7", "on-tertiary": "#ffffff", "error": "#ba1a1a", "primary-fixed": "#e4dfff", "outline": "#787586", "secondary": "#5b598c", "surface-container-lowest": "#ffffff", "on-tertiary-fixed-variant": "#005320", "tertiary": "#00672a", "on-surface": "#151935", "error-container": "#ffdad6", "on-tertiary-container": "#e1ffdf", "on-primary": "#ffffff", "on-secondary-container": "#514f81", "on-secondary-fixed-variant": "#444173", "secondary-fixed-dim": "#c4c1fb", "on-primary-container": "#faf6ff", "on-primary-fixed": "#160066", "tertiary-container": "#008338", "inverse-on-surface": "#f0efff", "surface-dim": "#d5d7fd", "inverse-surface": "#2a2e4b", "surface-tint": "#5847d2", "on-error": "#ffffff", "on-background": "#151935", "surface-container-low": "#f4f2ff", "on-surface-variant": "#474554", "on-secondary": "#ffffff", "on-secondary-fixed": "#181445", "background": "#fbf8ff", "secondary-fixed": "#e3dfff", "surface": "#fbf8ff", "outline-variant": "#c8c4d7", "surface-container": "#edecff", "inverse-primary": "#c6bfff", "on-error-container": "#93000a" }, "borderRadius": { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px" }, "spacing": { "gutter": "1rem", "space-xs": "0.25rem", "margin": "1rem", "space-lg": "1.5rem", "gutter-desktop": "1.5rem", "space-md": "1rem", "space-xl": "2rem", "margin-desktop": "2rem", "space-sm": "0.5rem" }, "fontFamily": { "display-hero": ["Inter"], "currency-lg": ["Inter"], "caption-md": ["Inter"], "currency-hero": ["Inter"], "body-md-medium": ["Inter"], "caption-sm": ["Inter"], "headline-lg": ["Inter"], "currency-md": ["Inter"], "headline-sm": ["Inter"], "headline-md": ["Inter"], "body-lg": ["Inter"], "body-md": ["Inter"] }, "fontSize": { "display-hero": ["34px", {"lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700"}], "currency-lg": ["20px", {"lineHeight": "28px", "letterSpacing": "-0.01em", "fontWeight": "700"}], "caption-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.01em", "fontWeight": "500"}], "currency-hero": ["34px", {"lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700"}], "body-md-medium": ["14px", {"lineHeight": "20px", "letterSpacing": "0em", "fontWeight": "500"}], "caption-sm": ["11px", {"lineHeight": "14px", "letterSpacing": "0.02em", "fontWeight": "500"}], "headline-lg": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.015em", "fontWeight": "700"}], "currency-md": ["15px", {"lineHeight": "20px", "letterSpacing": "0em", "fontWeight": "700"}], "headline-sm": ["16px", {"lineHeight": "24px", "letterSpacing": "0em", "fontWeight": "600"}], "headline-md": ["20px", {"lineHeight": "28px", "letterSpacing": "-0.01em", "fontWeight": "600"}], "body-lg": ["16px", {"lineHeight": "24px", "letterSpacing": "0em", "fontWeight": "400"}], "body-md": ["14px", {"lineHeight": "20px", "letterSpacing": "0em", "fontWeight": "400"}] } } } };</script></head><body class="bg-surface-container-low font-body-md text-on-surface antialiased"><aside class="fixed left-0 top-0 h-screen w-60 bg-surface-container-lowest shadow-[0_1px_8px_rgba(0,0,0,0.04)] z-50 flex flex-col justify-between p-space-md"><div class="flex flex-col gap-space-lg"><div class="px-space-xs pt-space-xs"><div class="flex items-center gap-1.5"><span class="font-headline-lg text-headline-lg text-on-surface tracking-tight">Soldi</span><span class="h-2 w-2 rounded-full bg-primary-container mb-1"></span></div><p class="font-caption-sm text-caption-sm text-on-surface-variant">Seu mês no verde.</p></div><div><button class="w-full h-12 bg-primary-container hover:bg-primary text-on-primary font-body-md-medium text-body-md-medium rounded-xl flex items-center justify-center gap-space-sm shadow-[0_8px_20px_rgba(108,92,231,0.25)] transition-all cursor-pointer" type="button"><span class="material-symbols-outlined text-[20px]">add</span><span>Lançar</span></button></div><nav class="flex flex-col gap-1.5" data-active-classes="bg-surface-container text-primary font-bold"><a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors font-body-md-medium text-body-md-medium" data-path="mes" href="#"><span class="material-symbols-outlined text-[20px]">calendar_today</span><span>Mês</span></a><a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors font-body-md-medium text-body-md-medium" data-path="para-onde-vai" href="#"><span class="material-symbols-outlined text-[20px]">pie_chart</span><span>Para onde vai</span></a><a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors font-body-md-medium text-body-md-medium" data-path="economia" href="#"><span class="material-symbols-outlined text-[20px]">savings</span><span>Economia</span></a><a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors font-body-md-medium text-body-md-medium" data-path="ajustes" href="#"><span class="material-symbols-outlined text-[20px]">settings</span><span>Ajustes</span></a></nav></div><div class="flex items-center justify-between p-2 rounded-xl bg-surface-container-low"><div class="flex items-center gap-2.5 min-w-0"><div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center shrink-0"><span class="material-symbols-outlined text-on-primary text-[18px]">person</span></div><div class="flex flex-col min-w-0"><span class="font-body-md-medium text-body-md-medium text-on-surface truncate">Emerson</span><span class="font-caption-sm text-caption-sm text-on-surface-variant truncate">Plano Pro</span></div></div><button aria-label="Notificações" class="w-8 h-8 rounded-lg flex items-center justify-center text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors" type="button"><span class="material-symbols-outlined text-[20px]">notifications</span></button></div></aside><div class="pl-60 min-h-screen flex flex-col"><header class="fixed top-0 left-60 right-0 h-16 bg-surface-container-lowest/80 backdrop-blur-xl shadow-[0_1px_8px_rgba(0,0,0,0.04)] z-40 flex items-center justify-between px-space-xl"><div class="flex items-center gap-space-sm"><span class="font-headline-sm text-headline-sm text-on-surface">Visão Geral</span><span class="text-outline-variant">/</span><span class="font-caption-md text-caption-md text-on-surface-variant uppercase tracking-wider">Outubro 2024</span></div><div class="flex items-center gap-space-md"><div class="relative flex items-center"><span class="material-symbols-outlined text-on-surface-variant absolute left-3 text-[18px]">search</span><input class="h-9 pl-9 pr-4 rounded-lg bg-surface-container-low text-on-surface placeholder:text-on-surface-variant font-body-md text-body-md focus:outline-none focus:ring-2 focus:ring-primary-container w-64 transition-all" placeholder="Buscar transações..." type="text"/></div><div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center"><span class="material-symbols-outlined text-on-primary text-[18px]">person</span></div></div></header><main class="w-full pt-16 bg-surface-container-low flex-1 max-w-[1200px] mx-auto p-margin-desktop"><div class="flex flex-col w-full relative">
+<!-- DASHBOARD BACKGROUND (MÊS VIEW UNDER DIALOG) -->
+<div class="w-full grid grid-cols-12 gap-space-lg select-none pointer-events-none filter blur-[2px] opacity-40">
+<!-- Top KPI Cards -->
+<div class="col-span-4 bg-surface-container-lowest p-space-lg rounded-xl shadow-sm flex flex-col justify-between">
+<div class="flex items-center justify-between">
+<span class="font-caption-md text-caption-md text-on-surface-variant uppercase tracking-wider">Disponível no Mês</span>
+<span class="material-symbols-outlined text-tertiary text-[20px]">account_balance_wallet</span>
+</div>
+<div class="my-space-md">
+<div class="font-currency-hero text-currency-hero text-on-surface">R$ 4.280,50</div>
+<p class="font-caption-sm text-caption-sm text-tertiary mt-1 flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">trending_up</span> +12% em relação a Setembro
+        </p>
+</div>
+<!-- Budget Thermometer -->
+<div class="flex flex-col gap-1.5 pt-2">
+<div class="flex justify-between font-caption-sm text-caption-sm text-on-surface-variant">
+<span>Ritmo de gastos</span>
+<span class="text-tertiary font-bold">Folga (68%)</span>
+</div>
+<div class="w-full h-2 rounded-full bg-surface-container overflow-hidden">
+<div class="h-full bg-tertiary-container w-[68%] rounded-full"></div>
+</div>
+</div>
+</div>
+<div class="col-span-4 bg-surface-container-lowest p-space-lg rounded-xl shadow-sm flex flex-col justify-between">
+<div class="flex items-center justify-between">
+<span class="font-caption-md text-caption-md text-on-surface-variant uppercase tracking-wider">Entradas Previstas</span>
+<span class="material-symbols-outlined text-tertiary text-[20px]">arrow_downward</span>
+</div>
+<div class="my-space-md">
+<div class="font-currency-hero text-currency-hero text-tertiary">R$ 11.450,00</div>
+<p class="font-caption-sm text-caption-sm text-on-surface-variant mt-1">Salário + Dividendos creditados</p>
+</div>
+<div class="flex items-center gap-2">
+<span class="px-2 py-0.5 rounded-full bg-surface-container text-caption-sm font-caption-sm text-on-surface-variant">100% recebido</span>
+</div>
+</div>
+<div class="col-span-4 bg-surface-container-lowest p-space-lg rounded-xl shadow-sm flex flex-col justify-between">
+<div class="flex items-center justify-between">
+<span class="font-caption-md text-caption-md text-on-surface-variant uppercase tracking-wider">Saídas &amp; Fixas</span>
+<span class="material-symbols-outlined text-error text-[20px]">arrow_upward</span>
+</div>
+<div class="my-space-md">
+<div class="font-currency-hero text-currency-hero text-error">R$ 7.169,50</div>
+<p class="font-caption-sm text-caption-sm text-on-surface-variant mt-1">Faltam 3 contas fixas vencerem</p>
+</div>
+<div class="flex items-center gap-2">
+<span class="px-2 py-0.5 rounded-full bg-error-container text-caption-sm font-caption-sm text-on-error-container">Previsão sob controle</span>
+</div>
+</div>
+<!-- Category Breakdown Chart Preview -->
+<div class="col-span-8 bg-surface-container-lowest p-space-lg rounded-xl shadow-sm flex flex-col gap-space-md">
+<div class="flex justify-between items-center">
+<div>
+<h3 class="font-headline-sm text-headline-sm text-on-surface">Despesas por Categoria</h3>
+<p class="font-caption-sm text-caption-sm text-on-surface-variant">Acompanhamento consolidado de Outubro</p>
+</div>
+<span class="font-caption-md text-caption-md text-primary font-bold">Ver Detalhes</span>
+</div>
+<div class="grid grid-cols-4 gap-space-sm pt-2">
+<div class="p-3 bg-surface-container-low rounded-xl">
+<span class="font-caption-sm text-caption-sm text-on-surface-variant">Alimentação</span>
+<div class="font-headline-sm text-headline-sm text-on-surface mt-1">R$ 1.420</div>
+<div class="w-full h-1.5 bg-surface-container rounded-full mt-2">
+<div class="h-full bg-primary-container rounded-full w-3/4"></div>
+</div>
+</div>
+<div class="p-3 bg-surface-container-low rounded-xl">
+<span class="font-caption-sm text-caption-sm text-on-surface-variant">Moradia</span>
+<div class="font-headline-sm text-headline-sm text-on-surface mt-1">R$ 3.100</div>
+<div class="w-full h-1.5 bg-surface-container rounded-full mt-2">
+<div class="h-full bg-secondary rounded-full w-full"></div>
+</div>
+</div>
+<div class="p-3 bg-surface-container-low rounded-xl">
+<span class="font-caption-sm text-caption-sm text-on-surface-variant">Transporte</span>
+<div class="font-headline-sm text-headline-sm text-on-surface mt-1">R$ 480</div>
+<div class="w-full h-1.5 bg-surface-container rounded-full mt-2">
+<div class="h-full bg-tertiary rounded-full w-1/3"></div>
+</div>
+</div>
+<div class="p-3 bg-surface-container-low rounded-xl">
+<span class="font-caption-sm text-caption-sm text-on-surface-variant">Lazer &amp; Outros</span>
+<div class="font-headline-sm text-headline-sm text-on-surface mt-1">R$ 620</div>
+<div class="w-full h-1.5 bg-surface-container rounded-full mt-2">
+<div class="h-full bg-primary rounded-full w-1/2"></div>
+</div>
+</div>
+</div>
+</div>
+<!-- Recent Activity Column -->
+<div class="col-span-4 bg-surface-container-lowest p-space-lg rounded-xl shadow-sm flex flex-col gap-space-sm">
+<h3 class="font-headline-sm text-headline-sm text-on-surface">Últimos Lançamentos</h3>
+<div class="flex items-center justify-between py-2">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center">
+<span class="material-symbols-outlined text-[20px] text-on-surface">local_cafe</span>
+</div>
+<div>
+<p class="font-body-md-medium text-body-md-medium text-on-surface">Cafeteria Santo Grão</p>
+<span class="font-caption-sm text-caption-sm text-on-surface-variant">Hoje, 09:42 • Débito</span>
+</div>
+</div>
+<span class="font-currency-md text-currency-md text-error">- R$ 24,50</span>
+</div>
+<div class="flex items-center justify-between py-2">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center">
+<span class="material-symbols-outlined text-[20px] text-on-surface">local_gas_station</span>
+</div>
+<div>
+<p class="font-body-md-medium text-body-md-medium text-on-surface">Posto Ipiranga</p>
+<span class="font-caption-sm text-caption-sm text-on-surface-variant">Ontem • Cartão XP</span>
+</div>
+</div>
+<span class="font-currency-md text-currency-md text-error">- R$ 220,00</span>
+</div>
+</div>
+</div>
+<!-- MODAL BACKDROP OVERLAY -->
+<div class="fixed inset-0 z-50 flex items-center justify-center bg-on-surface/40 backdrop-blur-sm p-4">
+<!-- MODAL DIALOG CONTAINER (~560px, rounded-2xl, shadow-2xl, crisp white) -->
+<div class="relative w-full max-w-[560px] bg-surface-container-lowest rounded-2xl shadow-[0_24px_50px_-12px_rgba(21,25,53,0.28)] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+<!-- Modal Header -->
+<div class="flex items-center justify-between px-6 pt-6 pb-4">
+<div class="flex items-center gap-2.5">
+<div class="w-2.5 h-2.5 rounded-full bg-primary-container"></div>
+<h2 class="font-headline-lg text-headline-lg text-on-surface tracking-tight">Novo Lançamento</h2>
+</div>
+<button aria-label="Fechar" class="w-8 h-8 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors cursor-pointer" type="button">
+<span class="material-symbols-outlined text-[20px]">close</span>
+</button>
+</div>
+<!-- Segmented Control Tabs -->
+<div class="px-6 py-2">
+<div class="grid grid-cols-3 p-1 rounded-xl bg-surface-container gap-1">
+<!-- Entrada Tab -->
+<button class="group flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg font-body-md-medium text-body-md-medium text-on-surface-variant hover:text-tertiary transition-all" type="button">
+<span class="w-2 h-2 rounded-full bg-tertiary transition-transform group-hover:scale-125"></span>
+<span>Entrada</span>
+</button>
+<!-- Conta Tab -->
+<button class="group flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg font-body-md-medium text-body-md-medium text-on-surface-variant hover:text-secondary transition-all" type="button">
+<span class="w-2 h-2 rounded-full bg-secondary transition-transform group-hover:scale-125"></span>
+<span>Conta</span>
+</button>
+<!-- Diário Tab (SELECTED) -->
+<button class="flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg font-body-md-medium text-body-md-medium bg-surface-container-lowest text-primary-container shadow-sm transition-all" type="button">
+<span class="w-2 h-2 rounded-full bg-primary-container"></span>
+<span class="font-bold">Diário</span>
+</button>
+</div>
+</div>
+<!-- Centered Hero Amount Display / Input -->
+<div class="px-6 py-5 flex flex-col items-center justify-center">
+<span class="font-caption-sm text-caption-sm text-on-surface-variant uppercase tracking-widest font-semibold mb-1">Valor do Gasto</span>
+<div class="flex items-baseline justify-center gap-1.5 text-on-surface">
+<span class="font-currency-hero text-currency-hero text-on-surface-variant select-none">R$</span>
+<input autofocus="" class="font-currency-hero text-currency-hero text-on-surface bg-transparent text-center focus:outline-none w-48 tracking-tight font-bold cursor-text selection:bg-primary-fixed" type="text" value="184,31"/>
+</div>
+<div class="h-0.5 w-16 bg-primary-container/30 rounded-full mt-1"></div>
+</div>
+<!-- Category Selector with Visual Circular Icons -->
+<div class="px-6 py-2 flex flex-col gap-2.5">
+<div class="flex items-center justify-between">
+<span class="font-caption-md text-caption-md text-on-surface-variant font-semibold">Categoria</span>
+<span class="font-caption-sm text-caption-sm text-primary font-medium cursor-pointer hover:underline">Ver todas</span>
+</div>
+<div class="grid grid-cols-6 gap-2 pt-1 pb-2">
+<!-- Mercado (CHOSEN) -->
+<button class="flex flex-col items-center gap-1.5 p-1 rounded-xl transition-all cursor-pointer" type="button">
+<div class="relative w-12 h-12 rounded-full bg-secondary flex items-center justify-center shadow-md">
+<span class="material-symbols-outlined text-on-secondary text-[22px]" style="font-variation-settings: 'FILL' 1;">shopping_cart</span>
+<!-- Violet Selection Indicator Ring Badge -->
+<span class="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-primary-container flex items-center justify-center shadow-sm">
+<span class="material-symbols-outlined text-on-primary text-[12px]">check</span>
+</span>
+</div>
+<span class="font-caption-sm text-caption-sm font-bold text-primary-container truncate w-full text-center">Mercado</span>
+</button>
+<!-- Comida fora -->
+<button class="group flex flex-col items-center gap-1.5 p-1 rounded-xl transition-all cursor-pointer opacity-80 hover:opacity-100" type="button">
+<div class="w-12 h-12 rounded-full bg-surface-container-highest group-hover:bg-secondary-container flex items-center justify-center transition-colors">
+<span class="material-symbols-outlined text-primary text-[22px]">restaurant</span>
+</div>
+<span class="font-caption-sm text-caption-sm text-on-surface-variant group-hover:text-on-surface truncate w-full text-center">Comida fora</span>
+</button>
+<!-- Transporte -->
+<button class="group flex flex-col items-center gap-1.5 p-1 rounded-xl transition-all cursor-pointer opacity-80 hover:opacity-100" type="button">
+<div class="w-12 h-12 rounded-full bg-surface-container flex items-center justify-center transition-colors">
+<span class="material-symbols-outlined text-secondary text-[22px]">directions_car</span>
+</div>
+<span class="font-caption-sm text-caption-sm text-on-surface-variant group-hover:text-on-surface truncate w-full text-center">Transporte</span>
+</button>
+<!-- Saúde -->
+<button class="group flex flex-col items-center gap-1.5 p-1 rounded-xl transition-all cursor-pointer opacity-80 hover:opacity-100" type="button">
+<div class="w-12 h-12 rounded-full bg-error-container flex items-center justify-center transition-colors">
+<span class="material-symbols-outlined text-error text-[22px]">medical_services</span>
+</div>
+<span class="font-caption-sm text-caption-sm text-on-surface-variant group-hover:text-on-surface truncate w-full text-center">Saúde</span>
+</button>
+<!-- Lazer -->
+<button class="group flex flex-col items-center gap-1.5 p-1 rounded-xl transition-all cursor-pointer opacity-80 hover:opacity-100" type="button">
+<div class="w-12 h-12 rounded-full bg-surface-container flex items-center justify-center transition-colors">
+<span class="material-symbols-outlined text-primary text-[22px]">celebration</span>
+</div>
+<span class="font-caption-sm text-caption-sm text-on-surface-variant group-hover:text-on-surface truncate w-full text-center">Lazer</span>
+</button>
+<!-- Assinaturas -->
+<button class="group flex flex-col items-center gap-1.5 p-1 rounded-xl transition-all cursor-pointer opacity-80 hover:opacity-100" type="button">
+<div class="w-12 h-12 rounded-full bg-secondary-fixed flex items-center justify-center transition-colors">
+<span class="material-symbols-outlined text-primary text-[22px]">subscriptions</span>
+</div>
+<span class="font-caption-sm text-caption-sm text-on-surface-variant group-hover:text-on-surface truncate w-full text-center">Assinaturas</span>
+</button>
+</div>
+</div>
+<!-- Date Selector Chips & Additional Meta -->
+<div class="px-6 py-2 flex flex-col gap-2">
+<span class="font-caption-md text-caption-md text-on-surface-variant font-semibold">Quando foi?</span>
+<div class="flex items-center gap-2">
+<!-- Hoje (Selected) -->
+<button class="h-9 px-4 rounded-full bg-surface-container text-primary-container font-body-md-medium text-body-md-medium flex items-center gap-1.5 cursor-pointer" type="button">
+<span class="material-symbols-outlined text-[16px]">done</span>
+<span>Hoje</span>
+</button>
+<!-- Ontem -->
+<button class="h-9 px-4 rounded-full bg-surface-container-low text-on-surface-variant hover:text-on-surface hover:bg-surface-container font-body-md-medium text-body-md-medium transition-colors cursor-pointer" type="button">
+<span>Ontem</span>
+</button>
+<!-- Specific Calendar Date Picker Icon Button -->
+<button class="h-9 px-3.5 rounded-full bg-surface-container-low text-on-surface-variant hover:text-on-surface hover:bg-surface-container font-body-md-medium text-body-md-medium flex items-center gap-1.5 transition-colors cursor-pointer" type="button">
+<span class="material-symbols-outlined text-[18px]">calendar_month</span>
+<span class="font-caption-sm text-caption-sm">Outra data</span>
+</button>
+</div>
+</div>
+<!-- Note / Observação Field -->
+<div class="px-6 pt-3 pb-4 flex flex-col gap-1.5">
+<label class="font-caption-md text-caption-md text-on-surface-variant font-semibold" for="obs-input">Observação</label>
+<div class="relative flex items-center">
+<span class="material-symbols-outlined absolute left-3.5 text-on-surface-variant text-[18px]">edit_note</span>
+<input class="w-full h-12 pl-10 pr-4 rounded-xl bg-surface-container-low text-on-surface placeholder:text-on-surface-variant font-body-md text-body-md focus:bg-surface-container-lowest focus:outline-none focus:shadow-md transition-all" id="obs-input" type="text" value="Compras da semana no Pão de Açúcar"/>
+</div>
+</div>
+<!-- Modal Footer Action -->
+<div class="p-6 pt-2 pb-6 bg-surface-container-lowest flex flex-col gap-2">
+<button class="w-full h-12 bg-primary-container hover:bg-primary text-on-primary font-body-md-medium text-body-md-medium rounded-xl flex items-center justify-center gap-2 shadow-[0_8px_20px_rgba(108,92,231,0.30)] active:scale-[0.99] transition-all cursor-pointer" type="button">
+<span class="material-symbols-outlined text-[20px]">check_circle</span>
+<span>Salvar Lançamento</span>
+</button>
+<div class="flex items-center justify-center gap-1.5 text-on-surface-variant pt-1">
+<span class="material-symbols-outlined text-[14px]">bolt</span>
+<span class="font-caption-sm text-caption-sm">Atalho: pressione <kbd class="px-1.5 py-0.5 rounded bg-surface-container text-on-surface font-mono text-[10px]">Enter ↵</kbd> para confirmar</span>
+</div>
+</div>
+</div>
+</div>
+</div></main></div></body></html>
