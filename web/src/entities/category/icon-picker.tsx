@@ -97,7 +97,7 @@ export const IconPicker = ({
         <button
           type="button"
           onClick={() => setLimit(limit + PAGE)}
-          className="min-h-11 rounded-xl text-primary text-sm font-semibold"
+          className="min-h-11 rounded-xl font-semibold text-primary text-sm"
         >
           Mais ícones
         </button>

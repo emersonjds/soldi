@@ -101,20 +101,16 @@ describe("CategoryChips", () => {
     expect(screen.getByRole("button", { name: "Nova categoria" })).toBeInTheDocument();
   });
 
-  it("from 640px lists radios with children as Pai › Filho and Nova categoria last", async () => {
+  it("uses the same searchable picker at 1440px, with children as Pai › Filho", async () => {
     window.innerWidth = 1440;
     setup({}, WITH_CHILDREN);
 
-    const radios = await screen.findAllByRole("radio");
-    expect(radios.map((radio) => radio.closest("label")?.textContent)).toEqual([
-      "Mercado",
-      "Comida fora",
-      "Pets",
-      "Pets › Ração",
-    ]);
-    await userEvent.click(screen.getByRole("radio", { name: "Pets › Ração" }));
-    expect(screen.getByRole("radio", { name: "Pets › Ração" })).toBeChecked();
-    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+    const trigger = await screen.findByRole("combobox", { name: "Categoria" });
+    expect(screen.queryByRole("radio")).not.toBeInTheDocument();
+    await userEvent.click(trigger);
+    const sheet = await screen.findByRole("dialog", { name: "Categoria" });
+    await userEvent.click(within(sheet).getByRole("option", { name: "Pets › Ração" }));
+    expect(trigger).toHaveTextContent("Pets › Ração");
     expect(screen.getByRole("button", { name: "Nova categoria" })).toBeInTheDocument();
   });
 

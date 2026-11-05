@@ -38,7 +38,7 @@ export const ResponsiveSheet = ({ open, onOpenChange, title, description, childr
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent
           showCloseButton={false}
-          className="flex max-h-[90dvh] flex-col gap-6 overflow-y-auto rounded-3xl p-8 sm:max-w-lg"
+          className="flex max-h-[90dvh] flex-col gap-6 overflow-y-auto rounded-3xl p-8 [scrollbar-width:none] sm:max-w-lg [&::-webkit-scrollbar]:hidden"
         >
           <DialogTitle className={heading}>{title}</DialogTitle>
           <DialogDescription className="sr-only">{description}</DialogDescription>
@@ -53,7 +53,7 @@ export const ResponsiveSheet = ({ open, onOpenChange, title, description, childr
       <SheetContent
         side="bottom"
         showCloseButton={false}
-        className="mx-auto max-h-[92dvh] max-w-lg gap-6 overflow-y-auto rounded-t-3xl px-4 pt-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))]"
+        className="mx-auto max-h-[92dvh] max-w-lg gap-6 overflow-y-auto rounded-t-3xl px-4 pt-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         <SheetTitle className={heading}>{title}</SheetTitle>
         <SheetDescription className="sr-only">{description}</SheetDescription>
