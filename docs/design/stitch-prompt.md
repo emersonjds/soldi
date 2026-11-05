@@ -1,25 +1,39 @@
-# Stitch prompt — Soldi
+# Stitch prompt — Soldi (v2, Organizze-like)
 
-Paste the block below into Google Stitch (or any UI generator). Generate the mobile frames first (390×844), then the desktop (1440×900).
+v1 (generic fintech, calm neutrals) was rejected by the owner on 2026-11-05: too generic, colors wrong. v2 follows the visual language of Organizze and Mobills: dark header, overlapping summary cards, round colored category icons, day-grouped lists, bottom tab bar, "+" FAB. Generate mobile (390×844) first, then desktop (1440×900).
 
 ```
-Design "Soldi", a personal-finance app in Brazilian Portuguese that replaces a spreadsheet "thermometer". Platform: responsive web app, mobile-first (390x844), then desktop (1440x900). Style: clean fintech, calm and confident, lots of white space, one accent color (deep green), neutral grays, rounded 12px cards, 8px grid, Geist or Inter, tabular figures for money. Light and dark themes. Numbers are the hero: the main number is always the biggest element on screen. Color carries meaning only through five "tiers" of the balance: red (< R$ -500), light red (R$ -500 to 0), yellow (R$ 0 to 1.000), light green (R$ 1.000 to 2.000), green (> R$ 2.000). Every colored element also shows a small label so color is never the only signal. shadcn/ui component vocabulary (cards, sheets, segmented controls, chips, tables, donut chart).
+Design "Soldi", a Brazilian personal-finance app (Portuguese copy) in the visual style of Organizze and Mobills: a mobile-first money app, not a generic admin dashboard. Frames: iPhone 390x844 first, then a desktop version 1440x900 that keeps the same components in a two-column layout with a slim left sidebar.
 
-Screens:
+PALETTE (use exactly):
+- Header gradient: #1E1B4B → #312E81 (deep indigo), white text on it.
+- Accent / primary buttons / FAB: #6C5CE7 (violet), hover #5A4BD1.
+- App background: #F4F5FA. Cards: #FFFFFF, radius 16px, soft shadow 0 4px 16px rgba(30,27,75,0.08).
+- Text: #1B1F3B primary, #6B7280 secondary.
+- Income green: #16A34A on #DCFCE7. Expense red: #DC2626 on #FEE2E2.
+- Balance tiers (the "thermometer"): red #DC2626, light red #F87171, yellow #F59E0B, light green #4ADE80, green #16A34A. Tiers are shown as a pill with the amount and a 1-word label: "Crítico", "Atenção", "Apertado", "Confortável", "Folga".
+- Category icon circles (40px, white lucide icon): Mercado #F59E0B, Comida fora #F97316, Transporte #3B82F6, Saúde #EF4444, Lazer #A855F7, Aluguel #6366F1, Luz #EAB308, Internet #06B6D4, Cartão #EC4899, Assinaturas #8B5CF6, Salário #16A34A, Extra #22C55E.
+- Dark theme: background #0F1222, cards #1A1E36, header #141734, same accent and tier colors.
 
-1. "Mês" (home). Top: month switcher "Novembro 2026" with arrows. Thermometer header: three large numbers side by side on desktop, stacked on mobile: "Saldo hoje R$ 1.842,10" (tinted light green with label "Confortável"), "Projetado fim do mês R$ -312,40" (tinted light red with label "Atenção"), "Performance R$ 2.105,00". Below: a list of the days of the month, one row per day: day number, income (+), bills, daily spending, running balance with a colored pill by tier; today's row is pinned and highlighted; future days are muted. Side panel on desktop / section on mobile: "Contas do mês" with rows like "Aluguel · vence dia 5 · R$ 2.259,56" with a one-tap toggle "Pagar" → "Pago"; overdue ones get a small red clock. Floating primary button "Lançar".
+TYPOGRAPHY: Inter. Money in tabular figures, bold. Hero number 34px, section titles 16px semibold, body 14px, captions 12px.
 
-2. "Lançar" bottom sheet (mobile) / dialog (desktop): big amount field with a numeric keypad feel "R$ 0,00", segmented control "Entrada / Conta / Diário", category chips with icons (Mercado, Transporte, Comida fora, Lazer, Saúde, Assinaturas, Aluguel, Luz, Internet, Cartão, Salário, Extra), date chips "Hoje / Ontem / Escolher", optional note, one primary button "Salvar". Three taps for the common case.
+NAVIGATION: bottom tab bar with 5 items: "Mês" (calendar icon), "Para onde vai" (pie-chart icon), a raised center "+" FAB in #6C5CE7 that opens "Lançar", "Economia" (piggy-bank icon), "Ajustes" (settings icon). Desktop: same items in a left sidebar 240px with the Soldi wordmark.
 
-3. "Para onde vai": donut chart by category for the month with the total in the middle, a legend with amounts and percentage, "vs mês anterior" delta badges, a "Top 5" list, and the transactions of the selected slice below.
+SCREENS:
 
-4. "Economia": a twelve-row table (Mês, Entradas, Guardado, %) with inline editable "Guardado", a year total row, and an optional goal "Meta 20%" progress bar.
+1. MÊS (home). Dark indigo header (height ~220px on mobile) with: avatar + "Olá, Emerson" on the left, bell icon on the right; a month switcher centered "‹ Novembro 2026 ›"; the hero: label "Saldo hoje" and "R$ 1.842,10" in white 34px with a tier pill "Confortável" in light green below it. Overlapping the bottom edge of the header, a white card with three columns: "Entradas R$ 6.361,60" (green arrow-up icon), "Saídas R$ 4.256,50" (red arrow-down icon), "Projetado R$ -312,40" with a light-red tier pill "Atenção". Below, a white card "Contas do mês" listing rows: colored icon circle, name "Aluguel", caption "vence dia 5", amount "R$ 2.259,56" and a pill toggle "Pagar" (outline violet) / "Pago" (filled green); an overdue row shows a small red clock before the caption. Below, a section "Lançamentos" grouped by day with sticky day headers "Hoje, 5 nov" / "Ontem, 4 nov" / "3 nov"; each row: category icon circle, title (category or note), caption with the kind "Diário" or "Conta", amount right-aligned (green with + for income, dark for spending), and at the right end of each day header the running balance pill colored by tier ("R$ 1.842,10"). Future days are not listed. Include a variant with an empty state card: illustration-free, icon + "Nenhum lançamento ainda" + violet button "Lançar agora".
 
-5. "Onboarding" in three steps with a progress indicator: "Quanto você tem hoje?" (amount + date), "Suas contas fixas" (repeatable row: nome, valor, dia do vencimento, categoria, button "Adicionar outra"), "Pronto" with a confetti-free, calm success state and button "Ver meu mês".
+2. LANÇAR (bottom sheet on mobile, centered dialog on desktop). Top segmented control with three colored options: "Entrada" (green), "Conta" (indigo), "Diário" (violet). Big amount "R$ 0,00" 34px centered with a numeric keypad below on mobile. Then a horizontal scroll of category chips (icon circle + label), selected chip gets a violet border. Date chips "Hoje" / "Ontem" / calendar icon. A single-line "Observação" field. Full-width violet button "Salvar". Show the state with "Diário" selected, "Mercado" chosen and "R$ 184,31" typed.
 
-6. "Entrar" and "Criar conta": e-mail, senha, one primary button, link to the other screen, inline errors.
+3. PARA ONDE VAI. Header stays dark but shorter (120px) with the month switcher. Card with a donut chart (category colors above) and the total "R$ 4.256,50" in the center, legend below with icon circle, name, amount, percentage, and a small delta badge vs previous month ("+18%" red, "-6%" green). Card "Top 5" ranked list with thin progress bars in the category color. Then the transaction list of the tapped slice.
 
-7. "Ajustes": sections Categorias, Contas fixas, Termômetro (four threshold inputs with a live colored preview strip), Saldo inicial, Sair.
+4. ECONOMIA. Header with the year "‹ 2026 ›". A hero card: "Guardado no ano R$ 5.416,53" and "8,4% das entradas" with a violet progress bar to a goal "Meta 20%". Then a table card with 12 rows: month, Entradas, Guardado (tappable, inline edit), % with a small colored dot (red < 5%, yellow 5–15%, green > 15%).
 
-Show empty states ("Nenhum lançamento ainda. Toque em Lançar."), loading skeletons and an inline error state for the month screen. Keep touch targets at least 44px and form fields at least 16px font. No illustrations, no gradients, no decorative icons.
+5. ONBOARDING (3 steps, violet progress dots). Step 1: dark header "Quanto você tem hoje?", big amount input, date field "05/11/2026", button "Continuar". Step 2: "Suas contas fixas": list of added bills with icon circles + a form row (nome, valor, dia, categoria chip) and a link "Adicionar outra"; button "Continuar" and a text link "Pular por agora". Step 3: "Tudo pronto" with a preview of the Mês card and button "Ver meu mês".
+
+6. ENTRAR / CRIAR CONTA. Dark indigo full background on top 40% with the Soldi wordmark and tagline "Seu mês no verde."; white sheet below with E-mail, Senha, violet button "Entrar", link "Criar conta". Inline error example "E-mail ou senha incorretos".
+
+7. AJUSTES. Grouped list card style like iOS settings: "Categorias", "Contas fixas", "Termômetro" (opens a card with four amount inputs -500 / 0 / 1.000 / 2.000 and a live five-color preview strip), "Saldo inicial", "Sair" in red.
+
+Also produce a loading skeleton variant of MÊS and the dark theme of MÊS and LANÇAR. Touch targets ≥ 44px, inputs ≥ 16px text, no horizontal scrolling, no gradients outside the header, no decorative illustrations.
 ```
