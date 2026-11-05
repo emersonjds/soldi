@@ -157,6 +157,21 @@ describe("Mês", () => {
     expect(screen.getByRole("radio", { name: "Entrada" })).toBeChecked();
   });
 
+  it("opens Lançar on Entrada with a one-time hint when coming from the tour", async () => {
+    setSearch("lancar=1");
+    open();
+
+    const sheet = await screen.findByRole("dialog", { name: "Lançar" });
+    expect(within(sheet).getByText("Comece pela sua primeira entrada do mês")).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "Entrada" })).toBeChecked();
+    expect(router.replace).toHaveBeenCalledWith("/mes", { scroll: false });
+
+    await userEvent.click(within(sheet).getByRole("button", { name: "Fechar" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Lançar entrada" }));
+    expect(await screen.findByRole("dialog", { name: "Lançar" })).toBeInTheDocument();
+    expect(screen.queryByText("Comece pela sua primeira entrada do mês")).not.toBeInTheDocument();
+  });
+
   it("puts Contas do Mês between the summary and the thermometer, and a negative projection in red", async () => {
     open({
       "GET /api/months/2026-11": {

@@ -4,6 +4,7 @@ import Link from "next/link";
 
 import {
   ChevronRight,
+  CircleHelp,
   Coins,
   FileSpreadsheet,
   type LucideIcon,
@@ -41,6 +42,17 @@ const GROUPS: { title: string; items: Item[] }[] = [
         label: "Importar planilha",
         hint: "Traga seu Termômetro.xlsx",
         icon: FileSpreadsheet,
+      },
+    ],
+  },
+  {
+    title: "Ajuda",
+    items: [
+      {
+        href: "/tour?replay=1",
+        label: "Como funciona",
+        hint: "Entradas, saídas, projeção e economia",
+        icon: CircleHelp,
       },
     ],
   },

@@ -23,9 +23,10 @@ describe("Ajustes", () => {
       ["Saldo inicial", "/ajustes/saldo-inicial"],
       ["Importar planilha", "/ajustes/importar"],
       ["Moeda", "/ajustes/moeda"],
+      ["Como funciona", "/tour?replay=1"],
     ])
       expect(screen.getByRole("link", { name: new RegExp(`^${name}`) })).toHaveAttribute("href", href);
-    expect(screen.getAllByRole("link")).toHaveLength(6);
+    expect(screen.getAllByRole("link")).toHaveLength(7);
     expect(screen.getByText("Traga seu Termômetro.xlsx")).toBeInTheDocument();
     expect(screen.getByText("Grupos e subcategorias")).toBeInTheDocument();
     expect(screen.queryByText(/em breve/i)).not.toBeInTheDocument();

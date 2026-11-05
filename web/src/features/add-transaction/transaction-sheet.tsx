@@ -116,6 +116,8 @@ type TransactionSheetProps = {
   initialKind?: Draft["kind"];
   /** Preselected category when creating, of `initialKind`. */
   initialCategory?: Schemas["Category"];
+  /** A line above the form. */
+  hint?: string;
 };
 
 /** `Lançar`: bottom sheet below 1024px, dialog from there; closes at once and the row appears optimistically. */
@@ -125,6 +127,7 @@ export const TransactionSheet = ({
   transaction,
   initialKind = "daily",
   initialCategory,
+  hint,
 }: TransactionSheetProps) => {
   const create = useCreateTransaction();
   const update = useUpdateTransaction();
@@ -157,6 +160,7 @@ export const TransactionSheet = ({
       title={transaction ? "Editar lançamento" : "Lançar"}
       description="Entrada, conta ou gasto do dia."
     >
+      {hint && <p className="rounded-xl bg-secondary px-4 py-3 font-medium text-primary text-sm">{hint}</p>}
       <TransactionForm
         key={transaction?.id ?? `${initialKind}-${initialCategory?.id}`}
         initial={initial}

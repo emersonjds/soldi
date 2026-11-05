@@ -25,6 +25,7 @@ export const ANA: Schemas["User"] = {
   email: "ana@example.com",
   name: "Ana",
   onboarded: true,
+  tour_seen: true,
 };
 
 export const SETTINGS: Schemas["Settings"] = {

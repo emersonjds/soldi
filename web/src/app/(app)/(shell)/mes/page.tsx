@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 
 import { useRouter, useSearchParams } from "next/navigation";
 
@@ -19,11 +19,18 @@ import { MonthSkeleton, MonthSummary, ThermometerCard } from "@/widgets/month-ov
 
 const MonthScreen = () => {
   const router = useRouter();
-  const month = monthParam(useSearchParams().get("m"));
+  const search = useSearchParams();
+  const month = monthParam(search.get("m"));
+  const fromTour = search.get("lancar") === "1";
   const view = useMonth(month);
   const transactions = useTransactions(month);
   const settings = useQuery(settingsQuery);
-  const [launching, setLaunching] = useState<"income" | "bill" | "daily" | null>(null);
+  const [launching, setLaunching] = useState<"income" | "bill" | "daily" | null>(fromTour ? "income" : null);
+  const [hint, setHint] = useState(fromTour);
+
+  useEffect(() => {
+    if (fromTour) router.replace("/mes", { scroll: false });
+  }, [fromTour, router]);
 
   if (view.isError || transactions.isError)
     return (
@@ -64,8 +71,13 @@ const MonthScreen = () => {
       </div>
       <TransactionSheet
         open={launching !== null}
-        onOpenChange={(open) => !open && setLaunching(null)}
+        onOpenChange={(open) => {
+          if (open) return;
+          setLaunching(null);
+          setHint(false);
+        }}
         initialKind={launching ?? "daily"}
+        hint={hint ? "Comece pela sua primeira entrada do mês" : undefined}
       />
     </div>
   );

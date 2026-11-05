@@ -29,7 +29,9 @@ describe("Criar conta", () => {
   });
 
   it("creates the account and starts onboarding", async () => {
-    const requests = anonymous({ "POST /api/auth/sign-up": { status: 201, body: { ...ANA, onboarded: false } } });
+    const requests = anonymous({
+      "POST /api/auth/sign-up": { status: 201, body: { ...ANA, onboarded: false, tour_seen: false } },
+    });
     renderWithQuery(<CriarContaPage />);
 
     await fillAndSubmit("ana@example.com", "segredo123");

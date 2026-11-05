@@ -244,6 +244,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/me/tour-seen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["tour_seen"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/months/{month}": {
         parameters: {
             query?: never;
@@ -782,6 +798,8 @@ export interface components {
             name: string;
             /** @description False until `POST /api/onboarding` runs; the web shows onboarding while it is false. */
             onboarded: boolean;
+            /** @description False until `POST /api/me/tour-seen` runs; the web shows the welcome tour after onboarding while it is false. */
+            tour_seen: boolean;
         };
         /** @description Takes money out of a cofrinho as an income entry in `Resgate`. */
         Withdraw: {
@@ -1730,6 +1748,32 @@ export interface operations {
             };
             /** @description `import-has-errors` when the preview listed errors and `skip_errors` is not true; `opening_date` after the earliest imported date; `opening_balance` with more than two places */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    tour_seen: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description `tour_seen` is true from now on; calling again changes nothing */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };

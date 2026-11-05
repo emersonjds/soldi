@@ -4,9 +4,9 @@ import { type ReactNode, useEffect } from "react";
 
 import { usePathname, useRouter } from "next/navigation";
 
-import { queryOptions, useQuery } from "@tanstack/react-query";
+import { queryOptions, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { api, type Schemas } from "@/shared/api/client";
+import { api, okOrThrow, type Schemas } from "@/shared/api/client";
 import { PageError, PageLoading } from "@/shared/ui/page-state";
 
 export type User = Schemas["User"];
@@ -29,7 +29,18 @@ export const useMe = () => useQuery(meQuery);
 export const redirectFor = (user: User | null, pathname: string) => {
   if (!user) return "/entrar";
   if (!user.onboarded) return pathname === "/onboarding" ? undefined : "/onboarding";
+  if (pathname === "/tour") return undefined;
+  if (!user.tour_seen) return "/tour";
   return pathname === "/" || pathname === "/onboarding" ? "/mes" : undefined;
+};
+
+/** `POST /api/me/tour-seen`; the cached user reads `tour_seen` once it answers. */
+export const useTourSeen = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => okOrThrow(await api.POST("/api/me/tour-seen")),
+    onSuccess: () => queryClient.setQueryData(meQuery.queryKey, (user) => (user ? { ...user, tour_seen: true } : user)),
+  });
 };
 
 export const SessionGate = ({ children }: { children: ReactNode }) => {
