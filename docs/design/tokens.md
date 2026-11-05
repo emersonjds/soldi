@@ -2,7 +2,7 @@
 
 Source: `docs/design/stitch/*.png` (approved by the owner) and the `tailwind.config` embedded in `docs/design/stitch/*.html`. Stitch project `projects/3056615737483773672` ("Soldi Finance App UI"). Screens: `mes-mobile-home`, `mes-dashboard`, `lancar-bottom-sheet-mobile`, `lancar-modal-desktop`, `para-onde-vai-mobile-analytics`, `para-onde-vai-analytics`, `economia-mobile-anual`, `economia-anual`.
 
-The `designer` agent maps these onto the template's shadcn semantic tokens in `web/src/styles/presets/soldi.css` (light and dark). Raw hex lives only there; components use the semantic names.
+The `designer` agent maps these onto the template's shadcn semantic tokens in `web/src/styles/presets/soldi.css` (light only). Raw hex lives only there; components use the semantic names.
 
 ## Color
 
