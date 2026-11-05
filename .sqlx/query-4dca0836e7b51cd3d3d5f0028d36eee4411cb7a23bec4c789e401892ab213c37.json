@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO recurring_bills (user_id, name, amount, due_day, category_id)\n         SELECT $1, * FROM UNNEST($2::text[], $3::numeric[], $4::smallint[], $5::uuid[])",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray",
+        "NumericArray",
+        "Int2Array",
+        "UuidArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4dca0836e7b51cd3d3d5f0028d36eee4411cb7a23bec4c789e401892ab213c37"
+}
