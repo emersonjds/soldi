@@ -88,8 +88,12 @@ describe("Ajustes › Importar planilha", () => {
       "POST /api/imports/xlsx/confirm": { status: 200, body: { ...RESULT, transactions: 1, years: [2025] } },
     });
 
-    const file = workbook();
-    fireEvent.drop(screen.getByLabelText("Escolha ou arraste o arquivo .xlsx"), { dataTransfer: { files: [file] } });
+    const zone = screen.getByLabelText("Escolha ou arraste o arquivo .xlsx");
+    fireEvent.dragOver(zone);
+    expect(zone.closest("label")).toHaveClass("border-primary");
+    fireEvent.dragLeave(zone);
+    expect(zone.closest("label")).not.toHaveClass("border-primary");
+    fireEvent.drop(zone, { dataTransfer: { files: [workbook()] } });
     await screen.findByRole("region", { name: "2025" });
     expect(screen.queryByText("Células que não deram para ler")).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Importar" }));

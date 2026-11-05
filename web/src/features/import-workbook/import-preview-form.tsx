@@ -66,7 +66,7 @@ export const ImportPreviewForm = ({ preview }: { preview: ImportPreview }) => {
           <section
             key={year.year}
             aria-label={String(year.year)}
-            className="flex flex-col gap-3 rounded-2xl bg-card p-4 shadow-sm lg:p-6"
+            className="flex flex-col gap-3 rounded-2xl bg-card p-4 shadow-sm sm:only:col-span-2 lg:p-6"
           >
             <div className="flex items-baseline justify-between gap-3">
               <h2 className="font-semibold text-lg">{year.year}</h2>

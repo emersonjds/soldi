@@ -81,6 +81,15 @@ describe("importErrorMessage", () => {
     expect(importErrorMessage(error)).toBe(message);
   });
 
+  it("falls back when the error has no problem body", async () => {
+    stubApi({ "POST /api/imports/xlsx": { status: 502 } });
+    const { result } = renderHookWithQuery(() => useImportPreview());
+
+    const error = await result.current.mutateAsync(workbook()).catch((caught: unknown) => caught);
+    expect(error).toMatchObject({ status: 502 });
+    expect(importErrorMessage(error)).toBe("Não foi possível importar. Tente de novo.");
+  });
+
   it("reads a 413 problem from the server", async () => {
     stubApi({ "POST /api/imports/xlsx": { status: 413, body: problem(413, "too-large") } });
     const { result } = renderHookWithQuery(() => useImportPreview());

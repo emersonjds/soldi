@@ -23,7 +23,7 @@ const ImportarPage = () => {
               A planilha não tem lançamentos para importar.
             </p>
           )}
-          <Button variant="ghost" className="min-h-11 self-center" onClick={() => preview.reset()}>
+          <Button variant="ghost" className="min-h-11 self-center lg:self-start" onClick={() => preview.reset()}>
             Escolher outro arquivo
           </Button>
         </>
