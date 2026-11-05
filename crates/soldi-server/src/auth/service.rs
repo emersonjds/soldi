@@ -23,6 +23,7 @@ pub async fn sign_up(pool: &PgPool, input: SignUp) -> Result<(User, String), App
             other => other,
         })?;
     crate::settings::repo::insert_defaults(&mut tx, user.id).await?;
+    crate::categories::repo::seed(&mut tx, user.id, &crate::categories::domain::defaults()).await?;
     let session = start_session(&mut tx, user.id).await?;
     tx.commit().await?;
     Ok((user, session))
