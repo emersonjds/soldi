@@ -7,6 +7,15 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.10.1
+
+> Headline: resgates no longer count as income
+
+### Fixed
+
+- `MonthView.totals.income` and `days[].income` leave resgates out, so `performance`, `savings.rate_pct` (`saved / income`) and the thermometer's share of income no longer inflate when money comes back from a cofrinho. `totals.withdrawn` and `days[].withdrawn` hold the resgates; the balance still adds them and `totals.saved` stays deposits minus `withdrawn`.
+- `GET /api/reports/categories` leaves resgates out of the `income` section, so `income_total` matches `totals.income`.
+
 ## 0.10.0
 
 > Headline: cofrinhos

@@ -11,10 +11,11 @@ use crate::bills::domain::due_date;
 use crate::error::AppError;
 use crate::reports::domain::percent;
 
-/// What the ledger holds for one kind on one date.
+/// What the ledger holds for one kind on one date; `withdrawn` marks the resgates' sum.
 pub struct DaySum {
     pub date: NaiveDate,
     pub kind: CategoryKind,
+    pub withdrawn: bool,
     pub amount: Decimal,
 }
 
@@ -50,13 +51,18 @@ pub struct MonthInput {
 #[derive(Default, Clone, Copy)]
 struct Flows {
     income: Decimal,
+    withdrawn: Decimal,
     bills: Decimal,
     daily: Decimal,
 }
 
 impl Flows {
-    fn net(&self) -> Decimal {
+    fn performance(&self) -> Decimal {
         self.income - self.bills - self.daily
+    }
+
+    fn net(&self) -> Decimal {
+        self.performance() + self.withdrawn
     }
 }
 
@@ -89,6 +95,7 @@ pub fn month_view(input: MonthInput) -> MonthView {
     for sum in sums {
         let flow = flows.entry(sum.date).or_default();
         match sum.kind {
+            CategoryKind::Income if sum.withdrawn => flow.withdrawn += sum.amount,
             CategoryKind::Income => flow.income += sum.amount,
             CategoryKind::Bill => flow.bills += sum.amount,
             CategoryKind::Daily => flow.daily += sum.amount,
@@ -114,11 +121,13 @@ pub fn month_view(input: MonthInput) -> MonthView {
             let flow = flows.get(&date).copied().unwrap_or_default();
             balance += flow.net();
             totals.income += flow.income;
+            totals.withdrawn += flow.withdrawn;
             totals.bills += flow.bills;
             totals.daily += flow.daily;
             Day {
                 date,
                 income: flow.income,
+                withdrawn: flow.withdrawn,
                 bills: flow.bills,
                 daily: flow.daily,
                 balance,
@@ -162,8 +171,9 @@ pub fn month_view(input: MonthInput) -> MonthView {
             bills: totals.bills,
             daily: totals.daily,
             outflow: totals.bills + totals.daily,
-            performance: totals.net(),
+            performance: totals.performance(),
             saved,
+            withdrawn: totals.withdrawn,
         },
         projected_balance: projected,
         projected_tier: tier(projected, &settings),
@@ -256,7 +266,15 @@ mod tests {
         DaySum {
             date: date(on),
             kind,
+            withdrawn: false,
             amount: money(amount),
+        }
+    }
+
+    fn resgate(on: &str, amount: &str) -> DaySum {
+        DaySum {
+            withdrawn: true,
+            ..sum(on, Income, amount)
         }
     }
 
@@ -458,6 +476,7 @@ mod tests {
                 outflow: money("350"),
                 performance: money("150"),
                 saved: money("0"),
+                withdrawn: money("0"),
             }
         );
         assert!(view.bills_of_month.is_empty());
@@ -497,6 +516,36 @@ mod tests {
             at("-50", "1000").savings.rate_pct.unwrap().to_string(),
             "-5.0"
         );
+    }
+
+    #[test]
+    fn a_resgate_is_withdrawn_not_income_and_still_returns_to_the_balance() {
+        let view = month_view(MonthInput {
+            month: date("2026-11-01"),
+            settings: settings("100", "2026-11-01"),
+            sums: vec![
+                sum("2026-11-02", Income, "1000"),
+                sum("2026-11-03", Bill, "4420"),
+                resgate("2026-11-10", "50"),
+            ],
+            bills: vec![],
+            payments: vec![],
+            saved: money("4370"),
+            today: date("2026-11-20"),
+        });
+
+        assert_eq!(view.totals.income, money("1000"));
+        assert_eq!(view.totals.withdrawn, money("50"));
+        assert_eq!(view.totals.saved, money("4370"));
+        assert_eq!(view.totals.performance, money("-3420"));
+        assert_eq!(view.savings.rate_pct.unwrap().to_string(), "437.0");
+        let day_10 = &view.days[9];
+        assert_eq!(
+            (day_10.income, day_10.withdrawn, day_10.balance),
+            (money("0"), money("50"), money("-3270"))
+        );
+        assert_eq!(view.days[2].withdrawn, money("0"));
+        assert_eq!(view.balance_today, money("-3270"));
     }
 
     #[test]

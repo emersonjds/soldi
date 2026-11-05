@@ -15,12 +15,15 @@ pub enum Tier {
     Green,
 }
 
-/// One calendar day: what came in and went out, and the balance at its end.
+/// One calendar day: what came in and went out, and the balance at its end. `income` leaves
+/// resgates out; `withdrawn` holds them, and the balance adds both.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct Day {
     pub date: NaiveDate,
     #[serde(serialize_with = "crate::money")]
     pub income: Decimal,
+    #[serde(serialize_with = "crate::money")]
+    pub withdrawn: Decimal,
     #[serde(serialize_with = "crate::money")]
     pub bills: Decimal,
     #[serde(serialize_with = "crate::money")]
@@ -32,8 +35,9 @@ pub struct Day {
     pub is_future: bool,
 }
 
-/// `outflow` is bills plus daily; `performance` is income minus outflow; `saved` is the bills
-/// under `Economia` minus the month's resgates, already inside `bills`.
+/// `income` leaves the month's resgates out, `withdrawn` sums them (SOL-28); `outflow` is bills
+/// plus daily; `performance` is income minus outflow; `saved` is the bills under `Economia`
+/// minus `withdrawn`, already inside `bills`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct Totals {
     #[serde(serialize_with = "crate::money")]
@@ -48,6 +52,8 @@ pub struct Totals {
     pub performance: Decimal,
     #[serde(serialize_with = "crate::money")]
     pub saved: Decimal,
+    #[serde(serialize_with = "crate::money")]
+    pub withdrawn: Decimal,
 }
 
 /// An active recurring bill in the month. `amount` is what was paid, or the bill's amount while
@@ -108,6 +114,7 @@ mod tests {
         let day = Day {
             date: NaiveDate::from_ymd_opt(2026, 11, 3).unwrap(),
             income: "0".parse().unwrap(),
+            withdrawn: "0".parse().unwrap(),
             bills: "300".parse().unwrap(),
             daily: "50.5".parse().unwrap(),
             balance: "-1150".parse().unwrap(),
@@ -119,7 +126,7 @@ mod tests {
         assert_eq!(
             serde_json::to_value(&day).unwrap(),
             json!({
-                "date": "2026-11-03", "income": "0.00", "bills": "300.00", "daily": "50.50",
+                "date": "2026-11-03", "income": "0.00", "withdrawn": "0.00", "bills": "300.00", "daily": "50.50",
                 "balance": "-1150.00", "tier": "light_red", "is_today": true, "is_future": false
             })
         );

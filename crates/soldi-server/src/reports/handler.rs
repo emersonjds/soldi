@@ -23,7 +23,7 @@ pub struct MonthQuery {
 #[utoipa::path(get, path = "/api/reports/categories", tag = "reports",
     params(("month" = String, Query, description = "The month, `YYYY-MM`", example = "2026-11")),
     responses(
-        (status = 200, body = CategoryReport, description = "The month's outflow and income by category, each against the previous month"),
+        (status = 200, body = CategoryReport, description = "The month's outflow and income by category, each against the previous month; resgates are not income"),
         (status = 400, body = Problem, content_type = "application/problem+json", description = "No `month`"),
         (status = 401, body = Problem, content_type = "application/problem+json"),
         (status = 422, body = Problem, content_type = "application/problem+json", description = "`month` is not `YYYY-MM`")))]

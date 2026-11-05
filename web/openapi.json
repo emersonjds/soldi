@@ -7,7 +7,7 @@
       "name": "AGPL-3.0-only",
       "identifier": "AGPL-3.0-only"
     },
-    "version": "0.9.0"
+    "version": "0.10.0"
   },
   "paths": {
     "/api/auth/me": {
@@ -1267,7 +1267,7 @@
         ],
         "responses": {
           "200": {
-            "description": "The month's outflow and income by category, each against the previous month",
+            "description": "The month's outflow and income by category, each against the previous month; resgates are not income",
             "content": {
               "application/json": {
                 "schema": {
@@ -2177,10 +2177,11 @@
       },
       "Day": {
         "type": "object",
-        "description": "One calendar day: what came in and went out, and the balance at its end.",
+        "description": "One calendar day: what came in and went out, and the balance at its end. `income` leaves\nresgates out; `withdrawn` holds them, and the balance adds both.",
         "required": [
           "date",
           "income",
+          "withdrawn",
           "bills",
           "daily",
           "balance",
@@ -2213,6 +2214,9 @@
           },
           "tier": {
             "$ref": "#/components/schemas/Tier"
+          },
+          "withdrawn": {
+            "type": "string"
           }
         }
       },
@@ -2616,14 +2620,15 @@
       },
       "Totals": {
         "type": "object",
-        "description": "`outflow` is bills plus daily; `performance` is income minus outflow; `saved` is the bills\nunder `Economia` minus the month's resgates, already inside `bills`.",
+        "description": "`income` leaves the month's resgates out, `withdrawn` sums them (SOL-28); `outflow` is bills\nplus daily; `performance` is income minus outflow; `saved` is the bills under `Economia`\nminus `withdrawn`, already inside `bills`.",
         "required": [
           "income",
           "bills",
           "daily",
           "outflow",
           "performance",
-          "saved"
+          "saved",
+          "withdrawn"
         ],
         "properties": {
           "bills": {
@@ -2642,6 +2647,9 @@
             "type": "string"
           },
           "saved": {
+            "type": "string"
+          },
+          "withdrawn": {
             "type": "string"
           }
         }
