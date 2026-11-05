@@ -74,8 +74,8 @@ describe("Economia", () => {
     expect(
       within(row("Novembro")).getByRole("button", { name: /^Guardado em Novembro: R\$\s400,00\. Editar$/ }),
     ).toBeInTheDocument();
-    expect(within(row("Novembro")).getByText("8,0%").previousSibling).toHaveClass("bg-tier-yellow");
-    expect(within(row("Outubro")).getByText("2,5%").previousSibling).toHaveClass("bg-tier-red");
+    expect(within(row("Novembro")).getAllByText("8,0%")[0].previousSibling).toHaveClass("bg-tier-yellow");
+    expect(within(row("Outubro")).getAllByText("2,5%")[0].previousSibling).toHaveClass("bg-tier-red");
     expect(row("Dezembro")).toHaveTextContent("—");
     expect(row("Total")).toHaveTextContent("R$ 9.000,00");
     expect(row("Total")).toHaveTextContent("R$ 500,00");
@@ -85,14 +85,14 @@ describe("Economia", () => {
   it("paints a share above 15% green and exactly 15% yellow", async () => {
     open({ "GET /api/savings": { status: 200, body: withMonth(12, { pct: "15.0" }) } });
     await screen.findByRole("region", { name: "Guardado no ano" });
-    expect(within(row("Dezembro")).getByText("15,0%").previousSibling).toHaveClass("bg-tier-yellow");
-    expect(within(row("Novembro")).getByText("8,0%").previousSibling).toHaveClass("bg-tier-yellow");
+    expect(within(row("Dezembro")).getAllByText("15,0%")[0].previousSibling).toHaveClass("bg-tier-yellow");
+    expect(within(row("Novembro")).getAllByText("8,0%")[0].previousSibling).toHaveClass("bg-tier-yellow");
   });
 
   it("paints a share above 15% green", async () => {
     open({ "GET /api/savings": { status: 200, body: withMonth(12, { pct: "16.2" }) } });
     await screen.findByRole("region", { name: "Guardado no ano" });
-    expect(within(row("Dezembro")).getByText("16,2%").previousSibling).toHaveClass("bg-tier-green");
+    expect(within(row("Dezembro")).getAllByText("16,2%")[0].previousSibling).toHaveClass("bg-tier-green");
   });
 
   it("edits a month's savings inline, shows it at once and says Salvo", async () => {
@@ -112,7 +112,7 @@ describe("Economia", () => {
 
     expect(await screen.findByText("Salvo")).toBeInTheDocument();
     expect(within(row("Novembro")).getByRole("button", { name: /R\$\s650,00/ })).toBeInTheDocument();
-    expect(await within(row("Novembro")).findByText("13,0%")).toBeInTheDocument();
+    expect((await within(row("Novembro")).findAllByText("13,0%"))[0]).toBeInTheDocument();
     expect(await puts(requests)[0].json()).toEqual({ amount: "650.00" });
   });
 

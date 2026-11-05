@@ -242,7 +242,7 @@ const Months = ({ data }: { data: SavingsYear }) => {
             <TableHead className="text-muted-foreground">Mês</TableHead>
             <TableHead className="hidden text-right text-muted-foreground lg:table-cell">Entradas</TableHead>
             <TableHead className="text-right text-muted-foreground">Guardado</TableHead>
-            <TableHead className="w-20 text-right text-muted-foreground">%</TableHead>
+            <TableHead className="hidden w-20 text-right text-muted-foreground lg:table-cell">%</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -257,8 +257,11 @@ const Months = ({ data }: { data: SavingsYear }) => {
                 <TableCell className="hidden text-right lg:table-cell">{income}</TableCell>
                 <TableCell className="py-1.5 text-right">
                   <SavedCell year={data.year} row={row} />
+                  <span className="block text-sm lg:hidden">
+                    <Share pct={row.pct} />
+                  </span>
                 </TableCell>
-                <TableCell className="text-right">
+                <TableCell className="hidden text-right lg:table-cell">
                   <Share pct={row.pct} />
                 </TableCell>
               </TableRow>
@@ -278,8 +281,11 @@ const Months = ({ data }: { data: SavingsYear }) => {
             </TableCell>
             <TableCell className="text-right">
               <Money amount={data.total_saved} />
+              <span className="block font-normal text-sm lg:hidden">
+                <Share pct={data.pct} />
+              </span>
             </TableCell>
-            <TableCell className="text-right">
+            <TableCell className="hidden text-right lg:table-cell">
               <Share pct={data.pct} />
             </TableCell>
           </TableRow>

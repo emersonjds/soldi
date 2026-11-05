@@ -75,9 +75,11 @@ const Donut = ({ shares, total, label, selected, onSelect }: DonutProps) => {
             data={data}
             dataKey="value"
             nameKey="name"
+            startAngle={90}
+            endAngle={-270}
             innerRadius="72%"
             outerRadius="100%"
-            stroke="var(--color-card)"
+            stroke="var(--card)"
             strokeWidth={2}
             cornerRadius={4}
             className="cursor-pointer"
@@ -148,7 +150,7 @@ const CategoryEntries = ({ month, share, onClear, className }: EntriesProps) => 
       <div className="flex items-center justify-between gap-2">
         <h2 id="category-entries-title" className="flex min-w-0 items-center gap-2 font-semibold text-lg leading-6">
           <span aria-hidden className={cn("size-2.5 shrink-0 rounded-full", categoryBg(share.color))} />
-          <span className="truncate">Lançamentos de {share.name}</span>
+          <span className="min-w-0 break-words">Lançamentos de {share.name}</span>
         </h2>
         <Button variant="ghost" className="min-h-11 shrink-0 text-primary" onClick={onClear}>
           Limpar filtro
@@ -216,7 +218,7 @@ export const CategoryBreakdown = ({ month }: { month: string }) => {
 
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:items-start">
-      <section aria-label="Por categoria" className={cn(card, "gap-6 lg:row-span-2")}>
+      <section aria-label="Por categoria" className={cn(card, "gap-6")}>
         <ToggleGroup
           type="single"
           spacing={0}
@@ -253,15 +255,10 @@ export const CategoryBreakdown = ({ month }: { month: string }) => {
           </>
         )}
       </section>
-      {chosen && (
-        <CategoryEntries
-          month={month}
-          share={chosen}
-          onClear={() => setSelected(undefined)}
-          className="lg:col-start-2 lg:row-start-2"
-        />
-      )}
-      {shares.length > 0 && <TopFive shares={shares} className="lg:col-start-2 lg:row-start-1" />}
+      <div className="flex flex-col gap-6">
+        {chosen && <CategoryEntries month={month} share={chosen} onClear={() => setSelected(undefined)} />}
+        {shares.length > 0 && <TopFive shares={shares} className="lg:order-first" />}
+      </div>
     </div>
   );
 };

@@ -85,9 +85,8 @@ const COLORS: Record<string, string> = {
 /** The category's color as a background class; an unknown token falls back to muted. */
 export const categoryBg = (color: string) => COLORS[color] ?? "bg-muted-foreground";
 
-/** The same color for an SVG fill (charts). */
-export const categoryFill = (color: string) =>
-  COLORS[color] ? `var(--color-${color})` : "var(--color-muted-foreground)";
+/** The same color for an SVG fill (charts); the preset's variable, since `@theme inline` emits no `--color-*`. */
+export const categoryFill = (color: string) => (COLORS[color] ? `var(--${color})` : "var(--muted-foreground)");
 
 export const CategoryIcon = ({ icon, color, className }: { icon: string; color: string; className?: string }) => {
   const Icon = ICONS[icon] ?? CircleDashed;
