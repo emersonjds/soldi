@@ -11,14 +11,14 @@ repository = "https://github.com/emersonjds/soldi"
 
 [workspace.dependencies]
 soldi-types = { path = "crates/soldi-types" }
-axum = { version = "0.8.9", features = ["macros"] }
+axum = { version = "0.8.9", features = ["macros", "multipart"] }
 tokio = { version = "1.53", features = ["macros", "rt-multi-thread", "net", "time", "sync"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_path_to_error = "0.1"
 tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"
-sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio", "tls-rustls-ring-webpki", "postgres", "macros", "migrate", "chrono", "rust_decimal", "uuid"] }
+sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio", "tls-rustls-ring-webpki", "postgres", "macros", "migrate", "chrono", "rust_decimal", "uuid", "json"] }
 chrono = { version = "0.4.45", default-features = false, features = ["clock", "serde", "std"] }
 chrono-tz = { version = "0.10", default-features = false }
 rust_decimal = { version = "1", features = ["serde-with-str"] }
@@ -32,6 +32,7 @@ getrandom = "0.4"
 uuid = { version = "1", features = ["v4", "serde"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
+calamine = { version = "0.38", default-features = false }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

@@ -1,6 +1,7 @@
 pub mod auth;
 pub mod bills;
 pub mod categories;
+pub mod imports;
 pub mod months;
 pub mod onboarding;
 pub mod reports;

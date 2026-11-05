@@ -93,6 +93,30 @@ pub async fn insert(
     .await
 }
 
+/// The id of the user's active category with this name and kind, created when missing.
+pub async fn find_or_insert(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    name: &str,
+    kind: CategoryKind,
+    icon: &str,
+    color: &str,
+) -> Result<Uuid, sqlx::Error> {
+    sqlx::query_scalar!(
+        "INSERT INTO categories (user_id, name, kind, icon, color) VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (user_id, kind, lower(name)) WHERE archived_at IS NULL
+         DO UPDATE SET name = categories.name
+         RETURNING id",
+        user_id,
+        name,
+        kind.as_str(),
+        icon,
+        color
+    )
+    .fetch_one(&mut *conn)
+    .await
+}
+
 /// `None` fields stay as they are; `Ok(None)` when no active category of the user has this id.
 pub async fn update(
     conn: &mut PgConnection,
