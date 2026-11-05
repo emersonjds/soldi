@@ -49,3 +49,7 @@ Keeps build size, lint and coverage scoped to Soldi. The `finance` and `default`
 ## D12 — Autonomous delivery: agents decide, owner reviews in the morning (2026-11-05, owner)
 
 Panel (`product`, `ux`, `finance`, `architect`) votes are recorded in the card brief; nothing waits for the owner. One implementing agent at a time, each in its own worktree with a shared `CARGO_TARGET_DIR`. Flow per card: branch from `developer` → build → review → merge `--no-ff` into `developer` → merge into `main` → push both.
+
+## D13 — "Today" is the São Paulo calendar day (2026-11-05, architect + finance)
+
+pt-BR only product (D3): the server computes `today` in `America/Sao_Paulo` (chrono-tz) for `is_today`, `balance_today` and overdue checks; the web sends nothing. Found in SOL-3: UTC flipped the day at 21:00 local. A per-user time zone setting is a future card if the product ever leaves Brazil. Same panel: entries within a day are ordered by `created_at desc` (random v4 ids made `id desc` meaningless); a transaction dated before `opening_date` is refused with 422 `before-opening-date` instead of being silently ignored.
