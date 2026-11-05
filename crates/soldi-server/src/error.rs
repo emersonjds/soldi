@@ -20,6 +20,11 @@ pub enum AppError {
         slug: &'static str,
         detail: String,
     },
+    /// A domain rule refused a well-formed request; 422 with the rule's slug.
+    Rule {
+        slug: &'static str,
+        detail: String,
+    },
     /// Answered with `Retry-After` in seconds.
     TooManyRequests {
         retry_after: u64,
@@ -39,6 +44,13 @@ impl AppError {
 
     pub fn conflict(slug: &'static str, detail: &str) -> Self {
         AppError::Conflict {
+            slug,
+            detail: detail.into(),
+        }
+    }
+
+    pub fn rule(slug: &'static str, detail: &str) -> Self {
+        AppError::Rule {
             slug,
             detail: detail.into(),
         }
@@ -83,6 +95,7 @@ impl AppError {
                 "Nothing exists here, or you cannot see it.".into(),
             ),
             AppError::Conflict { slug, detail } => (409, *slug, "Conflict", detail.clone()),
+            AppError::Rule { slug, detail } => (422, *slug, "Rule broken", detail.clone()),
             AppError::TooManyRequests { retry_after } => (
                 429,
                 "rate-limited",
@@ -257,6 +270,15 @@ mod tests {
         assert_eq!(problem.status, 409);
         assert_eq!(problem.problem_type, "urn:soldi:error:already-onboarded");
         assert_eq!(problem.detail, "Done before.");
+    }
+
+    #[test]
+    fn a_broken_rule_is_a_422_with_its_slug() {
+        let problem = AppError::rule("month-before-opening", "Too early.").to_problem();
+
+        assert_eq!(problem.status, 422);
+        assert_eq!(problem.problem_type, "urn:soldi:error:month-before-opening");
+        assert_eq!(problem.detail, "Too early.");
     }
 
     #[test]

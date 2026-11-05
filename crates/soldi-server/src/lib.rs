@@ -59,6 +59,7 @@ fn api() -> OpenApiRouter<AppState> {
         .merge(categories::handler::router())
         .merge(bills::handler::router())
         .merge(transactions::handler::router())
+        .merge(months::handler::router())
         .merge(onboarding::handler::router())
 }
 
