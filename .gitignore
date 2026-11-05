@@ -1,0 +1,11 @@
+/target
+/data
+.env
+.DS_Store
+web/node_modules
+web/.next
+web/out
+web/coverage
+web/test-results
+web/playwright-report
+.claude/settings.local.json

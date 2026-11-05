@@ -1,0 +1,51 @@
+# Decisions
+
+Architecture decision records, one entry per cross-cutting choice. Newest at the bottom. Card-level choices stay in `docs/specs/cards/SOL-<n>.md`; an entry lands here when it binds more than one card. Format: context, options with votes when a panel ran, winner, trade-off.
+
+## D1 — Name: Soldi (2026-11-05, owner)
+
+Five letters, "money" in Italian, memorable. Alternatives offered: Saldo, Moola, Plata, Kassa.
+
+## D2 — Multi-user from day one, free, no billing (2026-11-05, owner)
+
+Every table carries `user_id`; every query filters by it; no cross-user endpoint exists. Plans and billing are a future card.
+
+## D3 — pt-BR and BRL only (2026-11-05, owner)
+
+Copy in Portuguese, `Intl.NumberFormat("pt-BR", { currency: "BRL" })`. No i18n layer.
+
+## D4 — Rust backend, single repository, mirror of santi (2026-11-05, owner)
+
+axum 0.8 + sqlx 0.9 + PostgreSQL, vertical slices (`domain`, `repo`, `service`, `handler`), utoipa OpenAPI, `crates/` + `web/` in one repo, one Railway deploy. Kotlin/Spring Boot and a separate API repo were considered and dropped by the owner.
+
+## D5 — Next.js static export served by the axum binary (2026-11-05, owner picked option A)
+
+`web/` is `next-shadcn-admin-dashboard` with `output: "export"`; the server serves `web/out` at `/` and answers `/api/*`. Trade-off: no SSR or server components with data; a logged-in dashboard does not need them. Alternatives: Next as a separate service (two deploys, CORS, cross-site cookie) and a Vite SPA port (throws the template away).
+
+## D6 — Session cookie, argon2id, no JWT (2026-11-05, architect)
+
+Opaque token, SHA-256 of it stored in `sessions`, `HttpOnly; Secure; SameSite=Lax` cookie named `__Host-soldi_session`. Same as santi; no key rotation, revocation is a row delete. Google OAuth (SOL-6) links by e-mail into the same table.
+
+## D7 — Money is Decimal end to end (2026-11-05, finance + architect)
+
+`NUMERIC(12,2)` in PostgreSQL, `rust_decimal::Decimal` in Rust, string in JSON, formatted only in the web. Rounding half-even at two decimals. Floats never touch an amount.
+
+## D8 — Transactions are the only ledger; projection is computed (2026-11-05, architect)
+
+Recurring bills never generate rows ahead of time. Paying one inserts a transaction with `recurring_bill_id`; the month view computes the projected end-of-month balance by subtracting unpaid bills. One `GROUP BY date` query per month view, never N+1.
+
+## D9 — Thermometer thresholds per user, sheet values as defaults (2026-11-05, product)
+
+`-500 / 0 / 1000 / 2000` from the owner's sheet; editable in Ajustes with a live preview. Color is never the only signal: each tier also has a label.
+
+## D10 — Backlog lives in the santi tracker, project SOL (2026-11-05, owner)
+
+Never Jira. Branches carry `SOL-<n>`; a card moves To Do → In Progress at branch → Done at merge to `developer`.
+
+## D11 — Unused template screens are deleted in SOL-2 (2026-11-05, architect)
+
+Keeps build size, lint and coverage scoped to Soldi. The `finance` and `default` dashboards stay until `Mês` exists, as the model to adapt (reuse rule).
+
+## D12 — Autonomous delivery: agents decide, owner reviews in the morning (2026-11-05, owner)
+
+Panel (`product`, `ux`, `finance`, `architect`) votes are recorded in the card brief; nothing waits for the owner. One implementing agent at a time, each in its own worktree with a shared `CARGO_TARGET_DIR`. Flow per card: branch from `developer` → build → review → merge `--no-ff` into `developer` → merge into `main` → push both.
