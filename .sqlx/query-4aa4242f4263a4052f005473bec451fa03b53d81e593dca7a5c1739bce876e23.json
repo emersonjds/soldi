@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT COALESCE(SUM(CASE WHEN category_id = $2 THEN amount ELSE -amount END), 0)\n                  AS \"balance!\"\n           FROM transactions\n           WHERE user_id = $1 AND (category_id = $2 OR cofrinho_id = $2) AND date >= $3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "balance!",
+        "type_info": "Numeric",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Date"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "4aa4242f4263a4052f005473bec451fa03b53d81e593dca7a5c1739bce876e23"
+}

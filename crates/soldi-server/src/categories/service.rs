@@ -6,6 +6,7 @@ use super::repo::{CategoryChange, NewCategory};
 use super::{domain, repo};
 use crate::error::AppError;
 use crate::extract::CurrentUser;
+use crate::{cofrinhos, settings};
 
 pub async fn list(
     pool: &PgPool,
@@ -119,7 +120,18 @@ pub async fn update(
 
 pub async fn archive(pool: &PgPool, user: &CurrentUser, id: Uuid) -> Result<(), AppError> {
     let mut conn = pool.acquire().await?;
-    domain::check_not_savings(&active(&mut conn, user, id).await?)?;
+    let category = active(&mut conn, user, id).await?;
+    domain::check_not_savings(&category)?;
+    let parent = match category.parent_id {
+        Some(parent_id) => repo::find_active(&mut conn, user.id, parent_id).await?,
+        None => None,
+    };
+    // ponytail: checked then archived without a lock; an entry landing in between stays inside.
+    if domain::is_cofrinho_parent(parent.as_ref()) {
+        let opening = settings::repo::find(&mut conn, user.id).await?.opening_date;
+        let balance = cofrinhos::repo::balance(&mut conn, user.id, id, opening).await?;
+        cofrinhos::domain::check_empty(balance)?;
+    }
     match repo::archive(&mut conn, user.id, id).await? {
         true => Ok(()),
         false => Err(AppError::NotFound),

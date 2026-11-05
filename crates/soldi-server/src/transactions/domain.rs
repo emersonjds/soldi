@@ -56,6 +56,7 @@ pub fn transaction(
         category,
         note: input.note,
         recurring_bill_id,
+        cofrinho_id: None,
     }
 }
 

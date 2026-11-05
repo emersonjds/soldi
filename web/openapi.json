@@ -714,7 +714,7 @@
             }
           },
           "422": {
-            "description": "`savings-category` for `Economia` or `Resgate`",
+            "description": "`savings-category` for `Economia` or `Resgate`, `cofrinho-not-empty` for a cofrinho holding money",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -793,6 +793,192 @@
           },
           "422": {
             "description": "A bad field, a parent of another kind or itself, `nested-subcategory` when the parent is a subcategory or this category has subcategories, `savings-category` when moving `Economia` or `Resgate` or under `Resgate`, or `not-a-cofrinho` for a target or deadline outside `Economia`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cofrinhos": {
+      "get": {
+        "tags": [
+          "cofrinhos"
+        ],
+        "operationId": "list_cofrinhos",
+        "responses": {
+          "200": {
+            "description": "Every cofrinho with its balance and goal; this month in São Paulo",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Cofrinhos"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cofrinhos/{category_id}/movements": {
+      "get": {
+        "tags": [
+          "cofrinhos"
+        ],
+        "operationId": "list_movements",
+        "parameters": [
+          {
+            "name": "category_id",
+            "in": "path",
+            "description": "`Economia` or one of its subcategories",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "1 to 200; 50 when absent",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "maximum": 200,
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Its entries and resgates, newest date first, then newest entry first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Transaction"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`limit` is not a number",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Missing, archived or another user's",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`limit` out of range, or `not-a-cofrinho`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cofrinhos/{category_id}/withdraw": {
+      "post": {
+        "tags": [
+          "cofrinhos"
+        ],
+        "operationId": "withdraw",
+        "parameters": [
+          {
+            "name": "category_id",
+            "in": "path",
+            "description": "`Economia` or one of its subcategories",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Withdraw"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "The resgate: an income entry in `Resgate` with `cofrinho_id`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Transaction"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Missing, archived or another user's",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "A bad field, `insufficient-cofrinho` above the balance, `before-opening-date`, or `not-a-cofrinho`",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -1744,6 +1930,92 @@
           }
         }
       },
+      "Cofrinho": {
+        "type": "object",
+        "description": "A subcategory of `Economia`, or `Economia` itself as `Sem objetivo` (`parent`). `balance` is\nits entries minus its resgates since the opening date; `progress_pct` is `balance / target`\nwith one decimal, capped at 100, null without a target; `done` is a balance at or above the\ntarget; `monthly_suggestion` is what is left over the months to the deadline, this one\nincluded, null without a deadline or when done.",
+        "required": [
+          "category_id",
+          "name",
+          "icon",
+          "color",
+          "balance",
+          "done",
+          "parent"
+        ],
+        "properties": {
+          "balance": {
+            "type": "string"
+          },
+          "category_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "color": {
+            "type": "string"
+          },
+          "deadline": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date"
+          },
+          "done": {
+            "type": "boolean"
+          },
+          "icon": {
+            "type": "string"
+          },
+          "monthly_suggestion": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "parent": {
+            "type": "boolean"
+          },
+          "progress_pct": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "example": "3.0"
+          },
+          "target": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "Cofrinhos": {
+        "type": "object",
+        "description": "`total_saved` sums every balance; `saved_this_month` is the month view's `totals.saved`.\nItems go done last, then by name; `Sem objetivo` only while its balance is above zero.",
+        "required": [
+          "total_saved",
+          "saved_this_month",
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Cofrinho"
+            }
+          },
+          "saved_this_month": {
+            "type": "string"
+          },
+          "total_saved": {
+            "type": "string"
+          }
+        }
+      },
       "ConfirmImport": {
         "type": "object",
         "description": "Replaces what an earlier import wrote for the same years; entries made by hand stay.",
@@ -2391,6 +2663,14 @@
           "category": {
             "$ref": "#/components/schemas/Category"
           },
+          "cofrinho_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "The cofrinho a resgate took money from."
+          },
           "date": {
             "type": "string",
             "format": "date"
@@ -2625,6 +2905,32 @@
             "description": "False until `POST /api/onboarding` runs; the web shows onboarding while it is false."
           }
         }
+      },
+      "Withdraw": {
+        "type": "object",
+        "description": "Takes money out of a cofrinho as an income entry in `Resgate`.",
+        "required": [
+          "date",
+          "amount"
+        ],
+        "properties": {
+          "amount": {
+            "type": "string",
+            "description": "Greater than zero, up to two decimal places, at most the balance."
+          },
+          "date": {
+            "type": "string",
+            "format": "date"
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Up to 500 characters; blank means none."
+          }
+        },
+        "additionalProperties": false
       },
       "XlsxUpload": {
         "type": "object",

@@ -72,6 +72,24 @@ pub async fn find_active(
     .await
 }
 
+/// The user's `Economia` (bill) or `Resgate` (income).
+pub async fn savings(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    kind: CategoryKind,
+) -> Result<Category, sqlx::Error> {
+    sqlx::query_as!(
+        Category,
+        r#"SELECT id, name, kind AS "kind: CategoryKind", icon, color, parent_id, is_savings,
+                  target, deadline
+           FROM categories WHERE user_id = $1 AND kind = $2 AND is_savings"#,
+        user_id,
+        kind.as_str()
+    )
+    .fetch_one(&mut *conn)
+    .await
+}
+
 pub async fn has_children(
     conn: &mut PgConnection,
     user_id: Uuid,

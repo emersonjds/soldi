@@ -64,7 +64,7 @@ pub async fn create(
     let category = active_category(&mut conn, user, input.category_id).await?;
     domain::check_kind(input.kind, &category)?;
     check_opening(&mut conn, user, input.date).await?;
-    let id = repo::insert(&mut conn, user.id, &input, None).await?;
+    let id = repo::insert(&mut conn, user.id, &input, None, None).await?;
     Ok(domain::transaction(id, input, category, None))
 }
 
@@ -97,12 +97,10 @@ pub async fn update(
     {
         return Err(AppError::NotFound);
     }
-    Ok(domain::transaction(
-        id,
-        next,
-        category,
-        current.recurring_bill_id,
-    ))
+    Ok(Transaction {
+        cofrinho_id: current.cofrinho_id,
+        ..domain::transaction(id, next, category, current.recurring_bill_id)
+    })
 }
 
 pub async fn delete(pool: &PgPool, user: &CurrentUser, id: Uuid) -> Result<(), AppError> {

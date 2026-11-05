@@ -80,7 +80,7 @@ pub async fn update_category(
         (status = 204, description = "Archived with its subcategories: they leave the list, their entries keep them"),
         (status = 401, body = Problem, content_type = "application/problem+json"),
         (status = 404, body = Problem, content_type = "application/problem+json", description = "Missing, archived or another user's"),
-        (status = 422, body = Problem, content_type = "application/problem+json", description = "`savings-category` for `Economia` or `Resgate`")))]
+        (status = 422, body = Problem, content_type = "application/problem+json", description = "`savings-category` for `Economia` or `Resgate`, `cofrinho-not-empty` for a cofrinho holding money")))]
 pub async fn archive_category(
     State(state): State<AppState>,
     user: CurrentUser,
