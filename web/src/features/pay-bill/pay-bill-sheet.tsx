@@ -11,8 +11,9 @@ import { DateChips } from "@/shared/ui/date-chips";
 import { HeroAmount } from "@/shared/ui/hero-amount";
 import { ResponsiveSheet } from "@/shared/ui/responsive-sheet";
 
-const PayForm = ({ bill, month, onDone }: { bill: BillOfMonth; month: string; onDone: () => void }) => {
-  const pay = usePayBill();
+type Payment = { date: string; amount: string };
+
+const PayForm = ({ bill, month, onPay }: { bill: BillOfMonth; month: string; onPay: (payment: Payment) => void }) => {
   const [input, setInput] = useState(toInput(bill.amount));
   const [date, setDate] = useState(payDateFor(month, bill.due_date));
   const [submitted, setSubmitted] = useState(false);
@@ -22,11 +23,7 @@ const PayForm = ({ bill, month, onDone }: { bill: BillOfMonth; month: string; on
     event.preventDefault();
     setSubmitted(true);
     if (!amount) return;
-    onDone();
-    pay.mutate(
-      { billId: bill.bill_id, month, date, amount },
-      { onError: () => toast.error("Não foi possível marcar como paga.") },
-    );
+    onPay({ date, amount });
   };
 
   return (
@@ -47,13 +44,24 @@ type PayBillSheetProps = {
 };
 
 /** `Pagar`: the bill's amount prefilled and editable, dated today. */
-export const PayBillSheet = ({ month, bill, open, onOpenChange }: PayBillSheetProps) => (
-  <ResponsiveSheet
-    open={open}
-    onOpenChange={onOpenChange}
-    title={bill ? `Pagar ${bill.name}` : "Pagar"}
-    description="Valor e data do pagamento desta conta."
-  >
-    {bill && <PayForm key={bill.bill_id} bill={bill} month={month} onDone={() => onOpenChange(false)} />}
-  </ResponsiveSheet>
-);
+export const PayBillSheet = ({ month, bill, open, onOpenChange }: PayBillSheetProps) => {
+  const pay = usePayBill();
+
+  const confirm = (billId: string, payment: Payment) => {
+    onOpenChange(false);
+    pay.mutate({ billId, month, ...payment }, { onError: () => toast.error("Não foi possível marcar como paga.") });
+  };
+
+  return (
+    <ResponsiveSheet
+      open={open}
+      onOpenChange={onOpenChange}
+      title={bill ? `Pagar ${bill.name}` : "Pagar"}
+      description="Valor e data do pagamento desta conta."
+    >
+      {bill && (
+        <PayForm key={bill.bill_id} bill={bill} month={month} onPay={(payment) => confirm(bill.bill_id, payment)} />
+      )}
+    </ResponsiveSheet>
+  );
+};
