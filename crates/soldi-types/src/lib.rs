@@ -3,6 +3,7 @@ pub mod bills;
 pub mod categories;
 pub mod months;
 pub mod onboarding;
+pub mod reports;
 pub mod settings;
 pub mod transactions;
 

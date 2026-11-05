@@ -7,7 +7,7 @@
       "name": "AGPL-3.0-only",
       "identifier": "AGPL-3.0-only"
     },
-    "version": "0.2.0"
+    "version": "0.3.0"
   },
   "paths": {
     "/api/auth/me": {
@@ -890,6 +890,67 @@
         }
       }
     },
+    "/api/reports/categories": {
+      "get": {
+        "tags": [
+          "reports"
+        ],
+        "operationId": "category_report",
+        "parameters": [
+          {
+            "name": "month",
+            "in": "query",
+            "description": "The month, `YYYY-MM`",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "2026-11"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The month's outflow and income by category, each against the previous month",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryReport"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "No `month`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`month` is not `YYYY-MM`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/settings": {
       "get": {
         "tags": [
@@ -1323,6 +1384,89 @@
           "bill",
           "daily"
         ]
+      },
+      "CategoryReport": {
+        "type": "object",
+        "description": "`outflow` (bills and daily) and `income`, each by amount, largest first.",
+        "required": [
+          "month",
+          "outflow_total",
+          "income_total",
+          "outflow",
+          "income"
+        ],
+        "properties": {
+          "income": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CategoryShare"
+            }
+          },
+          "income_total": {
+            "type": "string"
+          },
+          "month": {
+            "type": "string"
+          },
+          "outflow": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CategoryShare"
+            }
+          },
+          "outflow_total": {
+            "type": "string"
+          }
+        }
+      },
+      "CategoryShare": {
+        "type": "object",
+        "description": "A category's spending or income in the month. `pct` is its share of the group's total and\n`delta_pct` its change against the previous month, both percentages with one decimal;\n`delta_pct` is null when the previous month had nothing.",
+        "required": [
+          "category_id",
+          "name",
+          "icon",
+          "color",
+          "kind",
+          "amount",
+          "pct",
+          "previous_amount"
+        ],
+        "properties": {
+          "amount": {
+            "type": "string"
+          },
+          "category_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "color": {
+            "type": "string"
+          },
+          "delta_pct": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "example": "18.4"
+          },
+          "icon": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/CategoryKind"
+          },
+          "name": {
+            "type": "string"
+          },
+          "pct": {
+            "type": "string",
+            "example": "26.0"
+          },
+          "previous_amount": {
+            "type": "string"
+          }
+        }
       },
       "CreateBill": {
         "type": "object",
