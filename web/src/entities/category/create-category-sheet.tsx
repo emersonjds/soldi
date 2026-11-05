@@ -89,20 +89,18 @@ const CreateCategoryForm = ({ kind, onCreated }: { kind: Kind; onCreated: (categ
       </Field>
       <Field className="gap-1.5">
         <FieldLabel htmlFor="category-parent">Subcategoria de</FieldLabel>
-        <NativeSelect className="w-full">
-          <select
-            id="category-parent"
-            value={parentId}
-            onChange={(event) => setParentId(event.target.value)}
-            className="h-12 w-full appearance-none rounded-xl border border-input bg-transparent pr-8 pl-3 text-base"
-          >
-            <NativeSelectOption value="">Nenhuma</NativeSelectOption>
-            {parents.map((parent) => (
-              <NativeSelectOption key={parent.id} value={parent.id}>
-                {parent.name}
-              </NativeSelectOption>
-            ))}
-          </select>
+        <NativeSelect
+          id="category-parent"
+          value={parentId}
+          onChange={(event) => setParentId(event.target.value)}
+          className="h-12 w-full rounded-xl text-base [&>select]:h-12 [&>select]:rounded-xl [&>select]:pl-3 [&>select]:text-base"
+        >
+          <NativeSelectOption value="">Nenhuma</NativeSelectOption>
+          {parents.map((parent) => (
+            <NativeSelectOption key={parent.id} value={parent.id}>
+              {parent.name}
+            </NativeSelectOption>
+          ))}
         </NativeSelect>
       </Field>
       <IconPicker value={icon} color={chosenColor} onChange={setIcon} />
