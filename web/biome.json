@@ -40,7 +40,9 @@
       "!dist",
       "!out",
       "!src/components/ui",
-      "!src/components/calendar"
+      "!src/components/calendar",
+      "!openapi.json",
+      "!src/shared/api/schema.d.ts"
     ]
   },
   "formatter": {
