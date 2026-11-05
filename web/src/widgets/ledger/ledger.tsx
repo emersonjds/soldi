@@ -7,6 +7,7 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
+import { useCategoryLabel } from "@/entities/category/categories-query";
 import {
   type Transaction,
   useCreateTransaction,
@@ -30,7 +31,9 @@ const dayLabel = (date: string) => {
   return short;
 };
 
-const titleOf = (transaction: Transaction) => transaction.note || transaction.category.name;
+type Label = (category: Pick<Schemas["Category"], "name" | "parent_id">) => string;
+
+const titleOf = (transaction: Transaction, label: Label) => transaction.note || label(transaction.category);
 
 /** Days that have entries and are not in the future, newest first. */
 const groupByDay = (days: Schemas["Day"][], transactions: Transaction[]) => {
@@ -45,7 +48,7 @@ const groupByDay = (days: Schemas["Day"][], transactions: Transaction[]) => {
   return [...groups].map(([date, entries]) => ({ day: byDate.get(date) as Schemas["Day"], entries }));
 };
 
-const Row = ({ transaction, onOpen }: { transaction: Transaction; onOpen: () => void }) => (
+const Row = ({ transaction, label, onOpen }: { transaction: Transaction; label: Label; onOpen: () => void }) => (
   <li>
     <button
       type="button"
@@ -54,7 +57,7 @@ const Row = ({ transaction, onOpen }: { transaction: Transaction; onOpen: () => 
     >
       <CategoryIcon icon={transaction.category.icon} color={transaction.category.color} />
       <span className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate font-medium text-base">{titleOf(transaction)}</span>
+        <span className="truncate font-medium text-base">{titleOf(transaction, label)}</span>
         <span className="text-muted-foreground text-xs">{KIND_LABEL[transaction.kind]}</span>
       </span>
       <Money amount={transaction.amount} income={transaction.kind === "income"} className="font-bold text-base" />
@@ -71,6 +74,7 @@ type LedgerProps = {
 
 /** `Lançamentos`: entries grouped by day; a row opens Editar / Excluir, and Excluir can be undone for 5 s. */
 export const Ledger = ({ view, transactions, onLaunch, className }: LedgerProps) => {
+  const label = useCategoryLabel();
   const [selected, setSelected] = useState<Transaction>();
   const [acting, setActing] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -138,7 +142,7 @@ export const Ledger = ({ view, transactions, onLaunch, className }: LedgerProps)
             </h3>
             <ul className="flex flex-col">
               {entries.map((transaction) => (
-                <Row key={transaction.id} transaction={transaction} onOpen={() => open(transaction)} />
+                <Row key={transaction.id} label={label} transaction={transaction} onOpen={() => open(transaction)} />
               ))}
             </ul>
           </div>
@@ -150,8 +154,10 @@ export const Ledger = ({ view, transactions, onLaunch, className }: LedgerProps)
           side="bottom"
           className="mx-auto max-w-lg gap-2 rounded-t-3xl px-4 pt-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))]"
         >
-          <SheetTitle className="pr-12 font-bold text-lg">{selected && titleOf(selected)}</SheetTitle>
-          <SheetDescription>{selected && `${KIND_LABEL[selected.kind]} · ${selected.category.name}`}</SheetDescription>
+          <SheetTitle className="pr-12 font-bold text-lg">{selected && titleOf(selected, label)}</SheetTitle>
+          <SheetDescription>
+            {selected && `${KIND_LABEL[selected.kind]} · ${label(selected.category)}`}
+          </SheetDescription>
           <Button variant="ghost" className="mt-2 min-h-12 justify-start gap-3 text-base" onClick={edit}>
             <Pencil className="size-5" />
             Editar

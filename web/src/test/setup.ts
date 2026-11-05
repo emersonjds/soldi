@@ -35,3 +35,6 @@ globalThis.ResizeObserver ??= class {
   unobserve = () => undefined;
   disconnect = () => undefined;
 };
+
+// jsdom has no scrollIntoView; cmdk scrolls the highlighted option into view.
+Element.prototype.scrollIntoView ??= () => undefined;

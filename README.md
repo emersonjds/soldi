@@ -27,6 +27,14 @@ cd web && pnpm build               # static export to web/out, served by the ser
 - `web/` — Next.js 16 + shadcn/ui, static export served by the server; Feature-Sliced Design.
 - `docs/specs/` — design spec, decisions (ADRs), card briefs. `docs/plans/` — implementation plans. `docs/design/` — tokens and references.
 
+## Tooling
+
+Biome lints and formats the web app (no Prettier or ESLint on purpose: one tool, one config in `web/biome.json`); `rustfmt` and `clippy -D warnings` cover Rust. `.editorconfig` and `.vscode/` carry the same rules into the editor. Enable the pre-commit hook once per clone:
+
+```sh
+git config core.hooksPath .githooks
+```
+
 ## License
 
 AGPL-3.0-only.

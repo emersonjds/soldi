@@ -361,7 +361,10 @@ export interface components {
             /** Format: uuid */
             transaction_id?: string | null;
         };
-        /** @description `icon` is a lucide icon name; `color` a palette token, `cat-1` to `cat-12`. */
+        /**
+         * @description `icon` is a lucide icon name; `color` a palette token, `cat-1` to `cat-12`; `parent_id` the
+         *     category this one is a subcategory of, null for a top-level one.
+         */
         Category: {
             color: string;
             icon: string;
@@ -369,11 +372,37 @@ export interface components {
             id: string;
             kind: components["schemas"]["CategoryKind"];
             name: string;
+            /** Format: uuid */
+            parent_id?: string | null;
+        };
+        /**
+         * @description A top-level category with its subcategories' amounts rolled in: `amount` and `previous_amount`
+         *     add its own entries and its subcategories'; `pct` is its share of the outflow or income total.
+         *     `children` are the subcategories with entries in the month, largest first.
+         */
+        CategoryGroup: {
+            amount: string;
+            /** Format: uuid */
+            category_id: string;
+            children: string[];
+            color: string;
+            /** @example 166.7 */
+            delta_pct?: string | null;
+            icon: string;
+            kind: components["schemas"]["CategoryKind"];
+            name: string;
+            /** @example 40.0 */
+            pct: string;
+            previous_amount: string;
         };
         /** @enum {string} */
         CategoryKind: "income" | "bill" | "daily";
-        /** @description `outflow` (bills and daily) and `income`, each by amount, largest first. */
+        /**
+         * @description `outflow` (bills and daily) and `income`, each by amount, largest first; `groups` the same
+         *     month by top-level category, outflow groups then income groups, each by amount.
+         */
         CategoryReport: {
+            groups: components["schemas"]["CategoryGroup"][];
             income: components["schemas"]["CategoryShare"][];
             income_total: string;
             month: string;
@@ -383,7 +412,7 @@ export interface components {
         /**
          * @description A category's spending or income in the month. `pct` is its share of the group's total and
          *     `delta_pct` its change against the previous month, both percentages with one decimal;
-         *     `delta_pct` is null when the previous month had nothing.
+         *     `delta_pct` is null when the previous month had nothing. `parent_id` is the parent of a subcategory.
          */
         CategoryShare: {
             amount: string;
@@ -395,6 +424,8 @@ export interface components {
             icon: string;
             kind: components["schemas"]["CategoryKind"];
             name: string;
+            /** Format: uuid */
+            parent_id?: string | null;
             /** @example 26.0 */
             pct: string;
             previous_amount: string;
@@ -432,12 +463,17 @@ export interface components {
             /** @description 1 to 100 characters. */
             name: string;
         };
-        /** @description `icon` defaults to `circle-dashed`; `color` to the next token for the kind. */
+        /**
+         * @description `icon` defaults to `circle-dashed`; `color` to the next token for the kind. `parent_id` makes
+         *     it a subcategory of one of the caller's active top-level categories of the same kind.
+         */
         CreateCategory: {
             color?: string | null;
             icon?: string | null;
             kind: components["schemas"]["CategoryKind"];
             name: string;
+            /** Format: uuid */
+            parent_id?: string | null;
         };
         CreateTransaction: {
             /** @description Greater than zero, up to two decimal places; never rounded. */
@@ -666,11 +702,13 @@ export interface components {
             due_day?: number | null;
             name?: string | null;
         };
-        /** @description Absent fields stay as they are; the kind never changes. */
+        /** @description Absent fields stay as they are; the kind never changes; `"parent_id": null` makes it top-level. */
         UpdateCategory: {
             color?: string | null;
             icon?: string | null;
             name?: string | null;
+            /** Format: uuid */
+            parent_id?: string | null;
         };
         /** @description Absent fields stay as they are; `"savings_goal_pct": null` clears the goal. */
         UpdateSettings: {
@@ -1182,7 +1220,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Active categories: income, bills, then daily; by name within a kind */
+            /** @description Active categories, flat: income, bills, then daily; within a kind by parent name, each parent followed by its subcategories by name */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1230,6 +1268,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
+            /** @description `parent_id` is missing, archived or another user's */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
             /** @description An active category of the same kind has this name */
             409: {
                 headers: {
@@ -1239,6 +1286,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
+            /** @description A bad field, a parent of another kind, or `nested-subcategory` when the parent is a subcategory */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -1261,7 +1309,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Archived: it leaves the list, its entries keep it */
+            /** @description Archived with its subcategories: they leave the list, their entries keep them */
             204: {
                 headers: {
                     [name: string]: unknown;
@@ -1320,7 +1368,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Missing, archived or another user's */
+            /** @description The category or `parent_id` is missing, archived or another user's */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -1337,6 +1385,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
+            /** @description A bad field, a parent of another kind or itself, or `nested-subcategory` when the parent is a subcategory or this category has subcategories */
             422: {
                 headers: {
                     [name: string]: unknown;

@@ -1,3 +1,5 @@
+import { lazy, Suspense } from "react";
+
 import {
   BookOpen,
   Briefcase,
@@ -34,12 +36,13 @@ import {
 
 import { cn } from "@/lib/utils";
 
-// ponytail: the icons of the default categories only; a custom icon name draws the dashed circle until a picker exists.
-const ICONS: Record<string, LucideIcon> = {
+/** The default categories' icons ship in the bundle; any other lucide name loads on demand below. */
+export const BUNDLED_ICONS: Record<string, LucideIcon> = {
   "book-open": BookOpen,
   briefcase: Briefcase,
   "building-2": Building2,
   car: Car,
+  "circle-dashed": CircleDashed,
   "credit-card": CreditCard,
   droplets: Droplets,
   fuel: Fuel,
@@ -67,6 +70,20 @@ const ICONS: Record<string, LucideIcon> = {
   zap: Zap,
 };
 
+const DynamicIcon = lazy(() => import("lucide-react/dynamic").then((module) => ({ default: module.DynamicIcon })));
+
+/** Any lucide icon by name: bundled ones render at once, the rest after their chunk loads. */
+export const LucideByName = ({ name, className }: { name: string; className?: string }) => {
+  const Bundled = BUNDLED_ICONS[name];
+  if (Bundled) return <Bundled className={className} />;
+  const fallback = <CircleDashed className={className} />;
+  return (
+    <Suspense fallback={fallback}>
+      <DynamicIcon name={name as never} fallback={() => fallback} className={className} />
+    </Suspense>
+  );
+};
+
 const COLORS: Record<string, string> = {
   "cat-1": "bg-cat-1",
   "cat-2": "bg-cat-2",
@@ -88,18 +105,15 @@ export const categoryBg = (color: string) => COLORS[color] ?? "bg-muted-foregrou
 /** The same color for an SVG fill (charts); the preset's variable, since `@theme inline` emits no `--color-*`. */
 export const categoryFill = (color: string) => (COLORS[color] ? `var(--${color})` : "var(--muted-foreground)");
 
-export const CategoryIcon = ({ icon, color, className }: { icon: string; color: string; className?: string }) => {
-  const Icon = ICONS[icon] ?? CircleDashed;
-  return (
-    <span
-      aria-hidden
-      className={cn(
-        "flex size-10 shrink-0 items-center justify-center rounded-full text-white",
-        categoryBg(color),
-        className,
-      )}
-    >
-      <Icon className="size-5" />
-    </span>
-  );
-};
+export const CategoryIcon = ({ icon, color, className }: { icon: string; color: string; className?: string }) => (
+  <span
+    aria-hidden
+    className={cn(
+      "flex size-10 shrink-0 items-center justify-center rounded-full text-white",
+      categoryBg(color),
+      className,
+    )}
+  >
+    <LucideByName name={icon} className="size-5" />
+  </span>
+);

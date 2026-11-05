@@ -194,6 +194,7 @@ export const REPORT: Schemas["CategoryReport"] = {
   income_total: "500.00",
   outflow: [share(ALUGUEL, "1200.00", "86.7", "1276.60", "-6.0"), share(MERCADO, "184.31", "13.3", "155.67", "18.4")],
   income: [share(SALARIO, "500.00", "100.0", "0.00", null)],
+  groups: [],
 };
 
 const savingsMonth = (month: number, rest: Partial<Schemas["SavingsMonth"]> = {}): Schemas["SavingsMonth"] => ({

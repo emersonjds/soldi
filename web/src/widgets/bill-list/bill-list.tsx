@@ -7,7 +7,7 @@ import { Plus, ReceiptText } from "lucide-react";
 import { toast } from "sonner";
 
 import { type Bill, useArchiveBill, useBills } from "@/entities/bill/bill-queries";
-import { categoriesQuery } from "@/entities/category/categories-query";
+import { categoriesQuery, categoryLabel } from "@/entities/category/categories-query";
 import { EditBillSheet } from "@/features/edit-bill/edit-bill-sheet";
 import { BrandButton } from "@/shared/ui/brand-button";
 import { CategoryIcon } from "@/shared/ui/category-icon";
@@ -34,7 +34,7 @@ const Rows = ({ label, bills, onOpen }: { label: string; bills: Bill[]; onOpen: 
                 <span className="truncate font-medium text-base">{bill.name}</span>
                 <span className="text-muted-foreground text-xs">
                   Dia {bill.due_day}
-                  {category && ` · ${category.name}`}
+                  {category && ` · ${categoryLabel(category, categories.data)}`}
                 </span>
               </span>
               <Money amount={bill.amount} className="font-bold text-base" />
