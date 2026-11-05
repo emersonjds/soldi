@@ -47,11 +47,17 @@ pub struct Totals {
     pub performance: Decimal,
 }
 
-/// A recurring bill in the month (SOL-4).
+/// An active recurring bill in the month. `amount` is what was paid, or the bill's amount while
+/// unpaid; `due_date` clamps a late due day to the month's last day; `overdue` is unpaid with
+/// `due_date` before today in São Paulo.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct BillOfMonth {
     pub bill_id: Uuid,
     pub name: String,
+    /// The category's lucide icon.
+    pub icon: String,
+    /// The category's palette token.
+    pub color: String,
     #[serde(serialize_with = "crate::money")]
     pub amount: Decimal,
     pub due_date: NaiveDate,
@@ -70,7 +76,8 @@ pub struct MonthSavings {
 }
 
 /// `month` is `YYYY-MM`. `balance_today` is the balance at today, or at the month's last day
-/// when the month is past. `projected_balance` is the balance at the month's end.
+/// when the month is past. `projected_balance` is the balance at the month's end minus the
+/// unpaid `bills_of_month`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct MonthView {
     pub month: String,

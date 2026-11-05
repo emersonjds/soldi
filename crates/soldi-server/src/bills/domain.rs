@@ -1,3 +1,4 @@
+use chrono::{Datelike, NaiveDate};
 use soldi_types::bills::CreateBill;
 
 use crate::error::{AppError, reject_nul};
@@ -31,6 +32,13 @@ pub fn check(bill: CreateBill, prefix: &str) -> Result<CreateBill, AppError> {
     })
 }
 
+/// The bill's due date in the month starting `month`; a late due day falls on its last day.
+pub fn due_date(month: NaiveDate, due_day: i16) -> NaiveDate {
+    let last = crate::months::domain::month_end(month);
+    let day = u32::try_from(due_day).unwrap_or(1).clamp(1, last.day());
+    last.with_day(day).unwrap_or(last)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -50,6 +58,17 @@ mod tests {
             Err(AppError::Validation(errors)) => errors[0].field.clone(),
             other => panic!("{other:?}"),
         }
+    }
+
+    #[test]
+    fn rule_6_a_late_due_day_falls_on_the_months_last_day() {
+        let month = |text: &str| text.parse::<chrono::NaiveDate>().unwrap();
+
+        assert_eq!(due_date(month("2026-11-01"), 31), month("2026-11-30"));
+        assert_eq!(due_date(month("2027-02-01"), 29), month("2027-02-28"));
+        assert_eq!(due_date(month("2028-02-01"), 29), month("2028-02-29"));
+        assert_eq!(due_date(month("2026-12-01"), 31), month("2026-12-31"));
+        assert_eq!(due_date(month("2026-11-01"), 5), month("2026-11-05"));
     }
 
     #[test]

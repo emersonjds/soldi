@@ -3,9 +3,11 @@ use std::collections::BTreeMap;
 use chrono::{Datelike, NaiveDate};
 use rust_decimal::Decimal;
 use soldi_types::categories::CategoryKind;
-use soldi_types::months::{Day, MonthView, Tier, Totals};
+use soldi_types::months::{BillOfMonth, Day, MonthView, Tier, Totals};
 use soldi_types::settings::Settings;
+use uuid::Uuid;
 
+use crate::bills::domain::due_date;
 use crate::error::AppError;
 
 /// What the ledger holds for one kind on one date.
@@ -15,11 +17,30 @@ pub struct DaySum {
     pub amount: Decimal,
 }
 
+/// An active bill with its category's icon and color.
+pub struct MonthBill {
+    pub id: Uuid,
+    pub name: String,
+    pub icon: String,
+    pub color: String,
+    pub amount: Decimal,
+    pub due_day: i16,
+}
+
+/// A bill's entry dated in the month.
+pub struct Payment {
+    pub bill_id: Uuid,
+    pub transaction_id: Uuid,
+    pub amount: Decimal,
+}
+
 /// `month` is its first day; `sums` cover `opening_date` to the month's end.
 pub struct MonthInput {
     pub month: NaiveDate,
     pub settings: Settings,
     pub sums: Vec<DaySum>,
+    pub bills: Vec<MonthBill>,
+    pub payments: Vec<Payment>,
     pub today: NaiveDate,
 }
 
@@ -56,6 +77,8 @@ pub fn month_view(input: MonthInput) -> MonthView {
         month,
         settings,
         sums,
+        bills,
+        payments,
         today,
     } = input;
     let mut flows: BTreeMap<NaiveDate, Flows> = BTreeMap::new();
@@ -101,6 +124,30 @@ pub fn month_view(input: MonthInput) -> MonthView {
             }
         })
         .collect();
+    let bills_of_month: Vec<BillOfMonth> = bills
+        .into_iter()
+        .map(|bill| {
+            let payment = payments.iter().find(|payment| payment.bill_id == bill.id);
+            let due_date = due_date(month, bill.due_day);
+            BillOfMonth {
+                bill_id: bill.id,
+                name: bill.name,
+                icon: bill.icon,
+                color: bill.color,
+                amount: payment.map_or(bill.amount, |payment| payment.amount),
+                due_date,
+                paid: payment.is_some(),
+                transaction_id: payment.map(|payment| payment.transaction_id),
+                overdue: payment.is_none() && due_date < today,
+            }
+        })
+        .collect();
+    let projected = balance
+        - bills_of_month
+            .iter()
+            .filter(|bill| !bill.paid)
+            .map(|bill| bill.amount)
+            .sum::<Decimal>();
     MonthView {
         month: month.format("%Y-%m").to_string(),
         days,
@@ -113,9 +160,9 @@ pub fn month_view(input: MonthInput) -> MonthView {
             outflow: totals.bills + totals.daily,
             performance: totals.net(),
         },
-        projected_balance: balance,
-        projected_tier: tier(balance, &settings),
-        bills_of_month: Vec::new(),
+        projected_balance: projected,
+        projected_tier: tier(projected, &settings),
+        bills_of_month,
         savings: None,
     }
 }
@@ -206,12 +253,161 @@ mod tests {
     }
 
     fn view(month: &str, settings: Settings, sums: Vec<DaySum>, today: &str) -> MonthView {
+        with_bills(month, settings, sums, vec![], vec![], today)
+    }
+
+    fn with_bills(
+        month: &str,
+        settings: Settings,
+        sums: Vec<DaySum>,
+        bills: Vec<MonthBill>,
+        payments: Vec<Payment>,
+        today: &str,
+    ) -> MonthView {
         month_view(MonthInput {
             month: date(&format!("{month}-01")),
             settings,
             sums,
+            bills,
+            payments,
             today: date(today),
         })
+    }
+
+    fn bill(id: u128, name: &str, amount: &str, due_day: i16) -> MonthBill {
+        MonthBill {
+            id: uuid::Uuid::from_u128(id),
+            name: name.into(),
+            icon: "home".into(),
+            color: "cat-6".into(),
+            amount: money(amount),
+            due_day,
+        }
+    }
+
+    fn payment(bill: u128, transaction: u128, amount: &str) -> Payment {
+        Payment {
+            bill_id: uuid::Uuid::from_u128(bill),
+            transaction_id: uuid::Uuid::from_u128(transaction),
+            amount: money(amount),
+        }
+    }
+
+    #[test]
+    fn bill_rule_1_an_unpaid_bill_lowers_the_projection() {
+        let view = with_bills(
+            "2026-11",
+            settings("1000", "2026-11-01"),
+            vec![],
+            vec![bill(1, "Aluguel", "2259.56", 5)],
+            vec![],
+            "2026-11-05",
+        );
+
+        assert_eq!(view.days.last().unwrap().balance, money("1000"));
+        assert_eq!(view.projected_balance, money("-1259.56"));
+        assert_eq!(view.projected_tier, Tier::Red);
+        assert_eq!(
+            view.bills_of_month,
+            [BillOfMonth {
+                bill_id: uuid::Uuid::from_u128(1),
+                name: "Aluguel".into(),
+                icon: "home".into(),
+                color: "cat-6".into(),
+                amount: money("2259.56"),
+                due_date: date("2026-11-05"),
+                paid: false,
+                transaction_id: None,
+                overdue: false,
+            }]
+        );
+    }
+
+    #[test]
+    fn bill_rules_2_and_3_a_paid_bill_is_in_the_ledger_only() {
+        let view = with_bills(
+            "2026-11",
+            settings("1000", "2026-11-01"),
+            vec![sum("2026-11-05", Bill, "2300")],
+            vec![bill(1, "Aluguel", "2259.56", 5)],
+            vec![payment(1, 9, "2300")],
+            "2026-11-20",
+        );
+
+        assert_eq!(view.projected_balance, money("-1300"));
+        assert_eq!(view.projected_balance, view.days.last().unwrap().balance);
+        let paid = &view.bills_of_month[0];
+        assert!(paid.paid && !paid.overdue);
+        assert_eq!(paid.transaction_id, Some(uuid::Uuid::from_u128(9)));
+        assert_eq!(paid.amount, money("2300"));
+    }
+
+    #[test]
+    fn bill_rule_7_overdue_starts_the_day_after_the_due_date() {
+        let bills = || vec![bill(1, "Luz", "100", 5), bill(2, "Internet", "100", 6)];
+        let on = |today: &str| {
+            with_bills(
+                "2026-11",
+                settings("0", "2026-11-01"),
+                vec![],
+                bills(),
+                vec![],
+                today,
+            )
+            .bills_of_month
+            .iter()
+            .map(|bill| bill.overdue)
+            .collect::<Vec<_>>()
+        };
+
+        assert_eq!(on("2026-11-05"), [false, false]);
+        assert_eq!(on("2026-11-06"), [true, false]);
+        assert_eq!(on("2026-11-07"), [true, true]);
+    }
+
+    #[test]
+    fn bill_rule_8_a_past_month_keeps_its_unpaid_bills_overdue_and_projected() {
+        let view = with_bills(
+            "2026-12",
+            settings("1000", "2026-11-01"),
+            vec![sum("2026-12-10", Bill, "50")],
+            vec![bill(1, "Luz", "120", 31), bill(2, "Internet", "50", 10)],
+            vec![payment(2, 9, "50")],
+            "2027-01-15",
+        );
+
+        assert_eq!(
+            view.bills_of_month
+                .iter()
+                .map(|bill| (bill.due_date, bill.paid, bill.overdue))
+                .collect::<Vec<_>>(),
+            [
+                (date("2026-12-31"), false, true),
+                (date("2026-12-10"), true, false)
+            ]
+        );
+        assert_eq!(view.projected_balance, money("830"));
+        assert_eq!(view.projected_tier, Tier::Yellow);
+    }
+
+    #[test]
+    fn bill_rule_13_the_projected_tier_uses_the_daily_thresholds() {
+        let tiers: Vec<Tier> = ["500.01", "500", "1500.01"]
+            .iter()
+            .map(|amount| {
+                with_bills(
+                    "2026-11",
+                    settings("1500", "2026-11-01"),
+                    vec![],
+                    vec![bill(1, "Luz", amount, 5)],
+                    vec![],
+                    "2026-11-01",
+                )
+                .projected_tier
+            })
+            .collect();
+
+        assert_eq!(tiers, [Tier::Yellow, Tier::LightGreen, Tier::LightRed]);
     }
 
     fn balances(view: &MonthView) -> Vec<Decimal> {
