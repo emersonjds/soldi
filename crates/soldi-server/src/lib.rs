@@ -5,6 +5,7 @@ pub mod error;
 pub mod extract;
 pub mod onboarding;
 pub mod settings;
+pub mod web;
 
 use std::path::Path;
 use std::time::Duration;
@@ -72,9 +73,17 @@ pub fn app(state: AppState, web_dir: Option<&Path>) -> Router {
             Duration::from_secs(30),
         ))
         .merge(SwaggerUi::new("/api/docs").url("/api/openapi.json", api));
-    let _ = web_dir;
+    let router = match web_dir.filter(|dir| dir.join("index.html").is_file()) {
+        Some(dir) => {
+            let dir = dir.to_path_buf();
+            router.fallback(move |request: axum::extract::Request| {
+                let dir = dir.clone();
+                async move { web::serve(&dir, request).await }
+            })
+        }
+        None => router.fallback(not_found),
+    };
     router
-        .fallback(not_found)
         .layer(middleware::from_fn(extract::reject_cross_site_writes))
         .layer(SetResponseHeaderLayer::if_not_present(
             X_CONTENT_TYPE_OPTIONS,
