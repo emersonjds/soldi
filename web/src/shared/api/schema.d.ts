@@ -132,6 +132,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/months/{month}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_month"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/onboarding": {
         parameters: {
             query?: never;
@@ -164,6 +180,38 @@ export interface paths {
         patch: operations["update_settings"];
         trace?: never;
     };
+    "/api/transactions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_transactions"];
+        put?: never;
+        post: operations["create_transaction"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/transactions/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["delete_transaction"];
+        options?: never;
+        head?: never;
+        patch: operations["update_transaction"];
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -179,6 +227,19 @@ export interface components {
             /** Format: uuid */
             id: string;
             name: string;
+        };
+        /** @description A recurring bill in the month (SOL-4). */
+        BillOfMonth: {
+            amount: string;
+            /** Format: uuid */
+            bill_id: string;
+            /** Format: date */
+            due_date: string;
+            name: string;
+            overdue: boolean;
+            paid: boolean;
+            /** Format: uuid */
+            transaction_id?: string | null;
         };
         /** @description `icon` is a lucide icon name; `color` a palette token, `cat-1` to `cat-12`. */
         Category: {
@@ -214,6 +275,33 @@ export interface components {
             kind: components["schemas"]["CategoryKind"];
             name: string;
         };
+        CreateTransaction: {
+            /** @description Greater than zero, up to two decimal places; never rounded. */
+            amount: string;
+            /**
+             * Format: uuid
+             * @description One of the caller's active categories.
+             */
+            category_id: string;
+            /** Format: date */
+            date: string;
+            /** @description Must equal the category's kind. */
+            kind: components["schemas"]["CategoryKind"];
+            /** @description Up to 500 characters; blank means none. */
+            note?: string | null;
+        };
+        /** @description One calendar day: what came in and went out, and the balance at its end. */
+        Day: {
+            balance: string;
+            bills: string;
+            daily: string;
+            /** Format: date */
+            date: string;
+            income: string;
+            is_future: boolean;
+            is_today: boolean;
+            tier: components["schemas"]["Tier"];
+        };
         FieldError: {
             field: string;
             message: string;
@@ -221,6 +309,26 @@ export interface components {
         Health: {
             status: string;
             version: string;
+        };
+        /** @description The month's savings (SOL-5); `pct` is `amount / income`, null when income is 0. */
+        MonthSavings: {
+            amount: string;
+            pct?: string | null;
+        };
+        /**
+         * @description `month` is `YYYY-MM`. `balance_today` is the balance at today, or at the month's last day
+         *     when the month is past. `projected_balance` is the balance at the month's end.
+         */
+        MonthView: {
+            balance_today: string;
+            balance_today_tier: components["schemas"]["Tier"];
+            bills_of_month: components["schemas"]["BillOfMonth"][];
+            days: components["schemas"]["Day"][];
+            month: string;
+            projected_balance: string;
+            projected_tier: components["schemas"]["Tier"];
+            savings?: components["schemas"]["MonthSavings"] | null;
+            totals: components["schemas"]["Totals"];
         };
         Onboarding: {
             /** @description Up to 50 recurring bills. */
@@ -269,6 +377,30 @@ export interface components {
             /** @description 8 to 128 characters. */
             password: string;
         };
+        /**
+         * @description The thermometer color of a balance; each lower bound is inclusive.
+         * @enum {string}
+         */
+        Tier: "red" | "light_red" | "yellow" | "light_green" | "green";
+        /** @description `outflow` is bills plus daily; `performance` is income minus outflow. */
+        Totals: {
+            bills: string;
+            daily: string;
+            income: string;
+            outflow: string;
+            performance: string;
+        };
+        /** @description `category` is the entry's category as it is now, archived or not. */
+        Transaction: {
+            amount: string;
+            category: components["schemas"]["Category"];
+            /** Format: date */
+            date: string;
+            /** Format: uuid */
+            id: string;
+            kind: components["schemas"]["CategoryKind"];
+            note?: string | null;
+        };
         /** @description Absent fields stay as they are; the kind never changes. */
         UpdateCategory: {
             color?: string | null;
@@ -286,6 +418,16 @@ export interface components {
             tier_red?: string | null;
             tier_yellow?: string | null;
             tier_zero?: string | null;
+        };
+        /** @description Absent fields stay as they are; `"note": null` clears the note. */
+        UpdateTransaction: {
+            amount?: string | null;
+            /** Format: uuid */
+            category_id?: string | null;
+            /** Format: date */
+            date?: string | null;
+            kind?: components["schemas"]["CategoryKind"] | null;
+            note?: string | null;
         };
         User: {
             email: string;
@@ -678,6 +820,49 @@ export interface operations {
             };
         };
     };
+    get_month: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description The month, `YYYY-MM`
+                 * @example 2026-11
+                 */
+                month: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Every calendar day with its balance and tier, carried from the opening balance */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MonthView"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description `month` is not `YYYY-MM` (`validation`), or is before the opening date's month (`month-before-opening`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     complete_onboarding: {
         parameters: {
             query?: never;
@@ -786,6 +971,198 @@ export interface operations {
                 };
             };
             /** @description Money with more than two places, tiers out of order (names the upper tier of the first pair), goal outside 0..100 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    list_transactions: {
+        parameters: {
+            query: {
+                /**
+                 * @description The month, `YYYY-MM`
+                 * @example 2026-11
+                 */
+                month: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The month's entries: newest date first, then by id descending */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Transaction"][];
+                };
+            };
+            /** @description No `month` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description `month` is not `YYYY-MM` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    create_transaction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateTransaction"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Transaction"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The category is missing, archived or another user's */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Amount not above zero or with more than two places, note over 500 characters, or a kind other than the category's (`category_id`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    delete_transaction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Transaction id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Missing or another user's */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    update_transaction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Transaction id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateTransaction"];
+            };
+        };
+        responses: {
+            /** @description The entry after the change; absent fields stay as they are */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Transaction"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The entry is missing or another user's, or the new category is missing, archived or another user's */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Same rules as create, on the entry after the change */
             422: {
                 headers: {
                     [name: string]: unknown;
