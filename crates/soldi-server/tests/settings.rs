@@ -22,7 +22,8 @@ async fn sign_up_creates_the_spreadsheet_defaults(pool: PgPool) {
             "tier_zero": "0.00",
             "tier_yellow": "1000.00",
             "tier_green": "2000.00",
-            "savings_goal_pct": null
+            "savings_goal_pct": null,
+            "currency": "BRL"
         })
     );
 }
@@ -84,6 +85,28 @@ async fn patch_refuses_unordered_tiers_and_numbers_for_money(pool: PgPool) {
     );
 
     assert_eq!(user.get("/api/settings").await.1["tier_yellow"], "1000.00");
+}
+
+#[sqlx::test]
+async fn patch_switches_the_currency_among_the_four_codes(pool: PgPool) {
+    let user = TestApp::signed_in(pool, "ana@example.com").await;
+
+    let (status, settings) = user
+        .patch("/api/settings", json!({ "currency": "USD" }))
+        .await;
+    assert_eq!(status, StatusCode::OK, "{settings}");
+    assert_eq!(settings["currency"], "USD");
+    assert_eq!(settings["tier_green"], "2000.00");
+    assert_eq!(user.get("/api/settings").await.1["currency"], "USD");
+
+    for code in ["JPY", "usd", ""] {
+        let (status, problem) = user
+            .patch("/api/settings", json!({ "currency": code }))
+            .await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{code}");
+        assert_eq!(problem["errors"][0]["field"], "currency", "{code}");
+    }
+    assert_eq!(user.get("/api/settings").await.1["currency"], "USD");
 }
 
 #[sqlx::test]

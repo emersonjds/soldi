@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 use crate::bills::CreateBill;
+use crate::settings::Currency;
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
@@ -13,6 +14,9 @@ pub struct Onboarding {
     #[schema(value_type = String)]
     pub opening_balance: Decimal,
     pub opening_date: NaiveDate,
+    /// BRL when absent.
+    #[serde(default)]
+    pub currency: Option<Currency>,
     /// Up to 50 recurring bills.
     #[serde(default)]
     #[schema(max_items = 50)]

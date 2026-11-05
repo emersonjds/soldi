@@ -56,6 +56,7 @@ pub fn apply(current: Settings, patch: UpdateSettings) -> Result<Settings, AppEr
         tier_yellow: money("tier_yellow", patch.tier_yellow, current.tier_yellow)?,
         tier_green: money("tier_green", patch.tier_green, current.tier_green)?,
         savings_goal_pct: patch.savings_goal_pct.unwrap_or(current.savings_goal_pct),
+        currency: patch.currency.unwrap_or(current.currency),
     };
     check_tiers(
         next.tier_red,
@@ -77,7 +78,7 @@ mod tests {
     use super::*;
     use chrono::NaiveDate;
     use rust_decimal::Decimal;
-    use soldi_types::settings::{Settings, UpdateSettings};
+    use soldi_types::settings::{Currency, Settings, UpdateSettings};
 
     fn money(text: &str) -> Decimal {
         text.parse().unwrap()
@@ -99,6 +100,7 @@ mod tests {
             tier_yellow: money("1000.00"),
             tier_green: money("2000.00"),
             savings_goal_pct: None,
+            currency: Currency::Brl,
         }
     }
 
@@ -140,6 +142,7 @@ mod tests {
         assert_eq!(next.tier_yellow, money("1000.00"));
         assert_eq!(next.savings_goal_pct, Some(20));
         assert_eq!(next.opening_date, defaults().opening_date);
+        assert_eq!(next.currency, Currency::Brl);
 
         let cleared = apply(
             next,
@@ -155,6 +158,19 @@ mod tests {
             cleared.opening_date,
             NaiveDate::from_ymd_opt(2026, 1, 1).unwrap()
         );
+    }
+
+    #[test]
+    fn a_patch_switches_the_currency() {
+        let patch = UpdateSettings {
+            currency: Some(Currency::Gbp),
+            ..UpdateSettings::default()
+        };
+
+        let next = apply(defaults(), patch).unwrap();
+
+        assert_eq!(next.currency, Currency::Gbp);
+        assert_eq!(next.tier_red, money("-500.00"));
     }
 
     #[test]
