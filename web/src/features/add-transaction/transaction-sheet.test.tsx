@@ -47,7 +47,7 @@ describe("TransactionSheet", () => {
 
     const dialog = await screen.findByRole("dialog", { name: "Lançar" });
     expect(dialog).toHaveAttribute("data-slot", "sheet-content");
-    expect(await screen.findByRole("radio", { name: "Mercado" })).toBeChecked();
+    expect(await screen.findByRole("combobox", { name: "Categoria" })).toHaveTextContent("Mercado");
     expect(screen.getByRole("radio", { name: "Diário" })).toBeChecked();
     await userEvent.keyboard("35,90");
     await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
@@ -67,8 +67,9 @@ describe("TransactionSheet", () => {
     const { sent } = setup();
 
     await userEvent.click(await screen.findByRole("radio", { name: "Entrada" }));
-    expect(await screen.findByRole("radio", { name: "Salário" })).toBeChecked();
-    await userEvent.click(screen.getByRole("radio", { name: "Extra" }));
+    expect(await screen.findByRole("combobox", { name: "Categoria" })).toHaveTextContent("Salário");
+    await userEvent.click(screen.getByRole("combobox", { name: "Categoria" }));
+    await userEvent.click(await screen.findByRole("option", { name: "Extra" }));
     await userEvent.type(screen.getByLabelText("Valor"), "abc1.250,00");
     await userEvent.click(screen.getByRole("button", { name: "Ontem" }));
     await userEvent.type(screen.getByLabelText("Observação"), "Freela");
@@ -114,7 +115,7 @@ describe("TransactionSheet", () => {
     const amount = screen.getByLabelText("Valor");
     expect(amount).toHaveValue("184,31");
     expect(screen.getByLabelText("Observação")).toHaveValue("Compras da semana");
-    expect(await screen.findByRole("radio", { name: "Mercado" })).toBeChecked();
+    expect(await screen.findByRole("combobox", { name: "Categoria" })).toHaveTextContent("Mercado");
     expect(screen.getByLabelText("Outra data")).toHaveValue("2026-11-05");
     await userEvent.clear(amount);
     await userEvent.type(amount, "20000");
@@ -152,7 +153,7 @@ describe("TransactionSheet", () => {
     });
     await userEvent.type(within(create).getByLabelText("Nome"), "Carro{Enter}");
 
-    expect(await screen.findByRole("radio", { name: "Carro" })).toBeChecked();
+    expect(await screen.findByRole("combobox", { name: "Categoria" })).toHaveTextContent("Carro");
     expect(screen.getByRole("dialog", { name: "Lançar" })).toBeInTheDocument();
     expect(requests.filter((request) => request.url.endsWith("/api/transactions"))).toHaveLength(0);
   });

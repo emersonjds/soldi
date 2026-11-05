@@ -86,8 +86,9 @@ describe("Ajustes › Contas fixas", () => {
     await userEvent.type(within(sheet).getByLabelText("Nome"), " Luz (Enel) ");
     await userEvent.type(within(sheet).getByLabelText("Valor"), "284,10");
     await userEvent.type(within(sheet).getByLabelText("Vence dia"), "32");
-    expect(within(sheet).getByRole("radio", { name: "Aluguel" })).toBeChecked();
-    await userEvent.click(within(sheet).getByRole("radio", { name: "Luz" }));
+    expect(within(sheet).getByRole("combobox", { name: "Categoria" })).toHaveTextContent("Aluguel");
+    await userEvent.click(within(sheet).getByRole("combobox", { name: "Categoria" }));
+    await userEvent.click(await screen.findByRole("option", { name: "Luz" }));
     await userEvent.click(within(sheet).getByRole("button", { name: "Salvar" }));
     expect(within(sheet).getByText("Escolha um dia de 1 a 31.")).toBeInTheDocument();
 
@@ -110,7 +111,7 @@ describe("Ajustes › Contas fixas", () => {
     await userEvent.click(await screen.findByRole("button", { name: /^Aluguel Residencial/ }));
     const sheet = await screen.findByRole("dialog", { name: "Editar conta" });
     expect(within(sheet).getByLabelText("Valor")).toHaveValue("2.259,56");
-    expect(within(sheet).getByRole("radio", { name: "Aluguel" })).toBeChecked();
+    expect(within(sheet).getByRole("combobox", { name: "Categoria" })).toHaveTextContent("Aluguel");
     await userEvent.click(within(sheet).getByRole("switch", { name: "Ativa" }));
     await userEvent.click(within(sheet).getByRole("button", { name: "Salvar" }));
 

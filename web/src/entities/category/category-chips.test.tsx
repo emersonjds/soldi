@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import type { Schemas } from "@/shared/api/client";
 import { renderWithQuery } from "@/test/render";
-import { CATEGORIES, COMIDA, MERCADO, problem, stubApi } from "@/test/stub-api";
+import { CATEGORIES, MERCADO, problem, stubApi } from "@/test/stub-api";
 
 import { CategoryChips } from "./category-chips";
 
@@ -18,6 +18,24 @@ const CARRO: Schemas["Category"] = {
   icon: "car",
   color: "cat-3",
 };
+
+const PETS: Schemas["Category"] = {
+  id: "c1000000-0000-4000-8000-000000000010",
+  name: "Pets",
+  kind: "daily",
+  icon: "paw-print",
+  color: "cat-5",
+};
+const RACAO: Schemas["Category"] = {
+  id: "c1000000-0000-4000-8000-000000000011",
+  name: "Ração",
+  kind: "daily",
+  icon: "bone",
+  color: "cat-5",
+  parent_id: PETS.id,
+};
+/** In the API's order: kind, parent name, then the children by name. */
+const WITH_CHILDREN = [...CATEGORIES, PETS, RACAO];
 
 const Picker = () => {
   const [chosen, setChosen] = useState<Schemas["Category"]>();
@@ -53,13 +71,50 @@ describe("CategoryChips", () => {
     window.innerWidth = 375;
   });
 
-  it("lists the kind's categories as radios with Nova categoria last", async () => {
-    setup();
+  it("below 640px picks from a searchable sheet, parents first and their children under them", async () => {
+    setup({}, WITH_CHILDREN);
+
+    const trigger = await screen.findByRole("combobox", { name: "Categoria" });
+    expect(trigger).toHaveTextContent("Escolher categoria");
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("radio")).not.toBeInTheDocument();
+    await userEvent.click(trigger);
+
+    const sheet = await screen.findByRole("dialog", { name: "Categoria" });
+    expect(trigger).toHaveAttribute("aria-expanded", "true");
+    expect(
+      within(sheet)
+        .getAllByRole("option")
+        .map((option) => option.getAttribute("aria-label")),
+    ).toEqual(["Mercado", "Comida fora", "Pets", "Pets › Ração"]);
+    await userEvent.type(within(sheet).getByRole("combobox"), "raç");
+    expect(
+      within(sheet)
+        .getAllByRole("option")
+        .map((option) => option.getAttribute("aria-label")),
+    ).toEqual(["Pets › Ração"]);
+    await userEvent.click(within(sheet).getByRole("option", { name: "Pets › Ração" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(trigger).toHaveTextContent("Pets › Ração");
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+    expect(screen.getByRole("button", { name: "Nova categoria" })).toBeInTheDocument();
+  });
+
+  it("from 640px lists radios with children as Pai › Filho and Nova categoria last", async () => {
+    window.innerWidth = 1440;
+    setup({}, WITH_CHILDREN);
 
     const radios = await screen.findAllByRole("radio");
-    expect(radios.map((radio) => radio.closest("label")?.textContent)).toEqual([MERCADO.name, COMIDA.name]);
-    await userEvent.click(screen.getByRole("radio", { name: "Comida fora" }));
-    expect(screen.getByRole("radio", { name: "Comida fora" })).toBeChecked();
+    expect(radios.map((radio) => radio.closest("label")?.textContent)).toEqual([
+      "Mercado",
+      "Comida fora",
+      "Pets",
+      "Pets › Ração",
+    ]);
+    await userEvent.click(screen.getByRole("radio", { name: "Pets › Ração" }));
+    expect(screen.getByRole("radio", { name: "Pets › Ração" })).toBeChecked();
+    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Nova categoria" })).toBeInTheDocument();
   });
 
@@ -87,7 +142,7 @@ describe("CategoryChips", () => {
     });
     expect(await screen.findByText("Categoria criada")).toBeInTheDocument();
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-    expect(await screen.findByRole("radio", { name: "Carro" })).toBeChecked();
+    expect(await screen.findByRole("combobox", { name: "Categoria" })).toHaveTextContent("Carro");
   });
 
   it("asks for a name and sends the default icon, leaving the color to the server when all twelve are taken", async () => {

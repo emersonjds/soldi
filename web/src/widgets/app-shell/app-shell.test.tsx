@@ -59,7 +59,7 @@ describe("AppShell", () => {
 
     const tabs = screen.getByRole("navigation", { name: "Navegação principal" });
     await userEvent.click(within(tabs).getByRole("button", { name: "Lançar" }));
-    await screen.findByRole("radio", { name: "Mercado" });
+    expect(await screen.findByRole("combobox", { name: "Categoria" })).toHaveTextContent("Mercado");
     await userEvent.keyboard("12");
     await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
 

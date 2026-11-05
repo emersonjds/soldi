@@ -2,10 +2,8 @@
 
 import { type FormEvent, useState } from "react";
 
-import { Plus } from "lucide-react";
 import { toast } from "sonner";
 
-import { Button } from "@/components/ui/button";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { hasStatus, type Schemas } from "@/shared/api/client";
@@ -126,44 +124,31 @@ const CreateCategoryForm = ({
   );
 };
 
-/** `Nova categoria`, last in the picker: name and icon; the kind is the picker's and the color the next free one. */
-export const CreateCategoryButton = ({
+/** `Nova categoria`: name and icon; the kind is the picker's and the color the next free one. */
+export const CreateCategorySheet = ({
   kind,
+  open,
+  onOpenChange,
   onCreated,
 }: {
   kind: Kind;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   onCreated: (category: Schemas["Category"]) => void;
-}) => {
-  const [open, setOpen] = useState(false);
-
-  return (
-    <>
-      <Button
-        type="button"
-        variant="ghost"
-        onClick={() => setOpen(true)}
-        className="h-auto min-h-14 justify-start gap-3 rounded-xl border border-input border-dashed px-3 font-medium text-base text-muted-foreground sm:min-w-0 sm:flex-col sm:justify-start sm:gap-1.5 sm:border-0 sm:px-0 sm:py-1 sm:text-xs"
-      >
-        <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-muted sm:size-12 sm:border-2 sm:border-muted-foreground/40 sm:border-dashed sm:bg-transparent">
-          <Plus className="size-5" />
-        </span>
-        Nova categoria
-      </Button>
-      <ResponsiveSheet
-        open={open}
-        onOpenChange={setOpen}
-        title="Nova categoria"
-        description="Nome e ícone da categoria; a cor vem sozinha."
-      >
-        <CreateCategoryForm
-          kind={kind}
-          onCreated={(category) => {
-            setOpen(false);
-            toast.success("Categoria criada");
-            onCreated(category);
-          }}
-        />
-      </ResponsiveSheet>
-    </>
-  );
-};
+}) => (
+  <ResponsiveSheet
+    open={open}
+    onOpenChange={onOpenChange}
+    title="Nova categoria"
+    description="Nome e ícone da categoria; a cor vem sozinha."
+  >
+    <CreateCategoryForm
+      kind={kind}
+      onCreated={(category) => {
+        onOpenChange(false);
+        toast.success("Categoria criada");
+        onCreated(category);
+      }}
+    />
+  </ResponsiveSheet>
+);

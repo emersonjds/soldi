@@ -21,3 +21,16 @@ export const useCreateCategory = () => {
     },
   });
 };
+
+type Named = Pick<Schemas["Category"], "name" | "parent_id">;
+
+/** `Pai › Filho` for a subcategory; the plain name for a top-level one or while the parent is unknown. */
+export const categoryLabel = (category: Named, categories: Schemas["Category"][] = []) => {
+  const parent = category.parent_id && categories.find((each) => each.id === category.parent_id);
+  return parent ? `${parent.name} › ${category.name}` : category.name;
+};
+
+export const useCategoryLabel = () => {
+  const categories = useQuery(categoriesQuery);
+  return (category: Named) => categoryLabel(category, categories.data);
+};
