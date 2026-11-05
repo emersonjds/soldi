@@ -2,7 +2,6 @@
  * How each preference should be saved.
  *
  * "client-cookie"  → write cookie on the browser only.
- * "server-cookie"  → write cookie through a Server Action.
  * "localStorage"   → save only on the client (non-layout stuff).
  * "none"           → no saving, resets on reload.
  *
@@ -21,7 +20,7 @@ import {
 } from "./layout";
 import { THEME_MODE_VALUES, THEME_PRESET_VALUES } from "./theme";
 
-export type PreferencePersistence = "none" | "client-cookie" | "server-cookie" | "localStorage";
+export type PreferencePersistence = "none" | "client-cookie" | "localStorage";
 
 type LayoutPersistence = Exclude<PreferencePersistence, "localStorage">;
 
