@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -110,6 +110,43 @@ describe("Onboarding", () => {
     expect(await screen.findByText("Informe um valor maior que zero.")).toBeInTheDocument();
     expect(screen.getByText("Escolha um dia de 1 a 31.")).toBeInTheDocument();
     expect(screen.getByText("Escolha uma categoria.")).toBeInTheDocument();
+  });
+
+  it("asks for a name and a date and counts the bills", async () => {
+    stub();
+    renderWithQuery(<OnboardingPage />);
+
+    await userEvent.clear(screen.getByLabelText("Data"));
+    await typeBalance("100");
+    expect(await screen.findByText("Informe a data.")).toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText("Data"), "2026-11-05");
+    await userEvent.click(screen.getByRole("button", { name: "Continuar" }));
+
+    await userEvent.type(await screen.findByLabelText("Valor"), "100");
+    await userEvent.click(screen.getByRole("button", { name: "Continuar" }));
+    expect(await screen.findByText("Informe o nome.")).toBeInTheDocument();
+
+    await userEvent.type(screen.getByLabelText("Nome"), "Luz");
+    await userEvent.type(screen.getByLabelText("Dia"), "10");
+    await userEvent.click(screen.getByRole("radio", { name: "Luz" }));
+    await userEvent.click(screen.getByRole("button", { name: "Adicionar outra" }));
+    const [, second] = screen.getAllByRole("group", { name: /Conta/ }).filter((group) => group.tagName === "FIELDSET");
+    await userEvent.type(within(second).getByLabelText("Nome"), "Internet");
+    await userEvent.type(within(second).getByLabelText("Valor"), "99,90");
+    await userEvent.type(within(second).getByLabelText("Dia"), "12");
+    await userEvent.click(within(second).getByRole("radio", { name: "Aluguel" }));
+    await userEvent.click(screen.getByRole("button", { name: "Continuar" }));
+
+    expect(await screen.findByText(/2 contas fixas/)).toBeInTheDocument();
+  });
+
+  it("says when there is no bill category", async () => {
+    stub({ "GET /api/categories": { status: 200, body: [CATEGORIES[2]] } });
+    renderWithQuery(<OnboardingPage />);
+
+    await typeBalance("100");
+
+    expect(await screen.findByText("Nenhuma categoria de conta.")).toBeInTheDocument();
   });
 
   it("offers a retry when the categories fail to load", async () => {

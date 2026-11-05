@@ -1,4 +1,4 @@
-import { screen, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -39,6 +39,17 @@ describe("AppShell", () => {
     await userEvent.click(within(tabs).getByRole("button", { name: "Lançar" }));
 
     expect(await screen.findByRole("dialog", { name: "Lançar" })).toBeInTheDocument();
+  });
+
+  it("opens the Lançar sheet from the sidebar and closes it", async () => {
+    renderWithQuery(<AppShell>conteúdo</AppShell>);
+
+    const sidebar = screen.getByRole("complementary", { name: "Barra lateral" });
+    await userEvent.click(within(sidebar).getByRole("button", { name: "Lançar" }));
+    expect(await screen.findByRole("dialog", { name: "Lançar" })).toBeInTheDocument();
+
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   });
 
   it("shows who is signed in", async () => {

@@ -41,6 +41,7 @@ describe("Criar conta", () => {
 
   it.each([
     [409, "Este e-mail já tem conta. Entre com ele."],
+    [429, "Muitas tentativas. Espere um pouco e tente de novo."],
     [500, "Não foi possível criar a conta. Tente de novo."],
   ])("explains a %i inline", async (status, message) => {
     anonymous({ "POST /api/auth/sign-up": { status, body: problem(status, "x") } });

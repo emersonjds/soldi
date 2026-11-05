@@ -58,49 +58,51 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
 
   return (
     <SidebarProvider style={{ "--sidebar-width": "15rem" } as React.CSSProperties}>
-      <Sidebar collapsible="none" className="sticky top-0 hidden h-svh border-r lg:flex">
-        <SidebarHeader className="gap-1 px-3 pt-7 pb-6 [&>p]:px-2 [&>span]:px-2">
-          <Wordmark />
-          <p className="text-muted-foreground text-sm">Seu mês no verde.</p>
-          <Button
-            className="mt-6 min-h-12 w-full bg-brand text-base text-brand-foreground shadow-lg hover:bg-brand-hover"
-            onClick={() => setLaunching(true)}
-          >
-            <Plus className="size-5" />
-            Lançar
-          </Button>
-        </SidebarHeader>
-        <SidebarContent className="px-3">
-          <nav aria-label="Menu lateral">
-            <SidebarMenu className="gap-1">
-              {NAV.map((item) => {
-                const active = pathname === item.href;
-                return (
-                  <SidebarMenuItem key={item.href}>
-                    <SidebarMenuButton asChild isActive={active} className="h-11 gap-3 px-3 text-base">
-                      <Link href={item.href} aria-current={active ? "page" : undefined}>
-                        <item.icon className="size-5!" aria-hidden />
-                        {item.label}
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                );
-              })}
-            </SidebarMenu>
-          </nav>
-        </SidebarContent>
-        <SidebarFooter className="p-3">
-          <div className="flex items-center gap-3 rounded-2xl bg-muted p-3">
-            <Avatar>
-              <AvatarFallback className="bg-brand text-brand-foreground">{getInitials(name)}</AvatarFallback>
-            </Avatar>
-            <div className="grid min-w-0 text-sm leading-tight">
-              <span className="truncate font-medium">{name}</span>
-              <span className="truncate text-muted-foreground text-xs">{email}</span>
+      <aside aria-label="Barra lateral" className="sticky top-0 hidden h-svh shrink-0 lg:block">
+        <Sidebar collapsible="none" className="h-full border-r">
+          <SidebarHeader className="gap-1 px-3 pt-7 pb-6 [&>p]:px-2 [&>span]:px-2">
+            <Wordmark />
+            <p className="text-muted-foreground text-sm">Seu mês no verde.</p>
+            <Button
+              className="mt-6 min-h-12 w-full bg-brand text-base text-brand-foreground shadow-lg hover:bg-brand-hover"
+              onClick={() => setLaunching(true)}
+            >
+              <Plus className="size-5" />
+              Lançar
+            </Button>
+          </SidebarHeader>
+          <SidebarContent className="px-3">
+            <nav aria-label="Menu lateral">
+              <SidebarMenu className="gap-1">
+                {NAV.map((item) => {
+                  const active = pathname === item.href;
+                  return (
+                    <SidebarMenuItem key={item.href}>
+                      <SidebarMenuButton asChild isActive={active} className="h-11 gap-3 px-3 text-base">
+                        <Link href={item.href} aria-current={active ? "page" : undefined}>
+                          <item.icon className="size-5!" aria-hidden />
+                          {item.label}
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
+              </SidebarMenu>
+            </nav>
+          </SidebarContent>
+          <SidebarFooter className="p-3">
+            <div className="flex items-center gap-3 rounded-2xl bg-muted p-3">
+              <Avatar>
+                <AvatarFallback className="bg-brand text-brand-foreground">{getInitials(name)}</AvatarFallback>
+              </Avatar>
+              <div className="grid min-w-0 text-sm leading-tight">
+                <span className="truncate font-medium">{name}</span>
+                <span className="truncate text-muted-foreground text-xs">{email}</span>
+              </div>
             </div>
-          </div>
-        </SidebarFooter>
-      </Sidebar>
+          </SidebarFooter>
+        </Sidebar>
+      </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b bg-background/90 px-4 backdrop-blur lg:hidden">
