@@ -22,6 +22,10 @@ fn multipart(field: &str, bytes: &[u8]) -> Vec<u8> {
 }
 
 async fn upload_as(user: &TestApp, field: &str, bytes: &[u8]) -> (StatusCode, Value) {
+    post_multipart(user, multipart(field, bytes)).await
+}
+
+async fn post_multipart(user: &TestApp, body: Vec<u8>) -> (StatusCode, Value) {
     let mut request = Request::builder()
         .method(Method::POST)
         .uri("/api/imports/xlsx")
@@ -32,9 +36,7 @@ async fn upload_as(user: &TestApp, field: &str, bytes: &[u8]) -> (StatusCode, Va
     if let Some(cookie) = &user.cookie {
         request = request.header(header::COOKIE, cookie);
     }
-    let response = user
-        .send(request.body(Body::from(multipart(field, bytes))).unwrap())
-        .await;
+    let response = user.send(request.body(Body::from(body)).unwrap()).await;
     let status = response.status();
     (status, body_json(response).await)
 }
@@ -101,6 +103,12 @@ async fn an_upload_that_is_not_an_xlsx_workbook_is_a_422(pool: PgPool) {
     assert_eq!(field_of(&problem), "file");
 
     let (status, problem) = upload_as(&ana, "workbook", SAMPLE).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+    assert_eq!(field_of(&problem), "file");
+
+    let mut truncated = multipart("file", SAMPLE);
+    truncated.truncate(SAMPLE.len() / 2);
+    let (status, problem) = post_multipart(&ana, truncated).await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
     assert_eq!(field_of(&problem), "file");
 

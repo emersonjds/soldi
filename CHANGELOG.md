@@ -7,6 +7,19 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.5.0
+
+> Headline: import the Termômetro spreadsheet
+
+### Added
+
+- `POST /api/imports/xlsx` takes the Termômetro workbook as multipart `file` (at most 5 MB, 413 `too-large` above; 422 when it is not an .xlsx). Year sheets (2000 to 2100) give one entry per `Entrada`, `Saída` and `Diário` number, or one per literal of a `+` sum formula; the `Economia` sheet gives the saved months of each table with a year. The answer lists, per year, the entry count, the income, bills and daily totals and the saved months, plus every unreadable cell (`{ sheet, cell, message }`: another formula, text, more than two decimals, a day the month does not have) and a `token`. Only the preview is stored, for 15 minutes.
+- `POST /api/imports/xlsx/confirm` `{ token, opening_balance, opening_date }` writes the preview in one transaction: the opening balance and date (422 on `opening_date` after the first imported day), the categories `Importado (entrada)`, `Importado (conta)` and `Importado (diário)` (created once, `file-spreadsheet`, `cat-12`), the entries noted `Planilha {year}`, the saved months, and onboarding. A second import of a year replaces what the first wrote for that year; entries made by hand stay. An expired token answers 410 `import-expired`, a preview with errors 422 `import-has-errors`, another user's token 404.
+
+### Upgrade notes
+
+- Migration `0010_import_previews` adds the `import_previews` table and nullable `import_batch_id` and `import_year` columns on `transactions` and `savings`, with a partial index on imported entries. It runs on start-up with the others; no manual step.
+
 ## 0.4.0
 
 > Headline: where the money goes and the savings year
