@@ -12,7 +12,7 @@ const workbook = (bytes = 3) =>
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   });
 
-const RESULT = { transactions: 51, savings_months: 12, years: [2025, 2026], skipped: [] };
+const RESULT = { transactions: 51, years: [2025, 2026], skipped: [] };
 
 describe("useImportPreview", () => {
   it("uploads the workbook as the multipart field file, with the session cookie", async () => {
@@ -49,7 +49,7 @@ describe("useConfirmImport", () => {
   it("posts the token and the opening balance and refetches everything the import touched", async () => {
     const requests = stubApi({ "POST /api/imports/xlsx/confirm": { status: 200, body: RESULT } });
     const view = renderHookWithQuery(() => useConfirmImport());
-    for (const key of ["month", "transactions", "report", "savings", "settings", "me", "categories"]) {
+    for (const key of ["month", "transactions", "report", "cofrinhos", "settings", "me", "categories"]) {
       view.client.setQueryData([key], {});
     }
     const body = { token: PREVIEW.token, opening_balance: "0.00", opening_date: "2025-01-01", skip_errors: true };
@@ -58,7 +58,7 @@ describe("useConfirmImport", () => {
 
     expect(await requests[0].json()).toEqual(body);
     await waitFor(() => expect(view.client.getQueryState(["me"])?.isInvalidated).toBe(true));
-    for (const key of ["month", "transactions", "report", "savings", "settings", "categories"]) {
+    for (const key of ["month", "transactions", "report", "cofrinhos", "settings", "categories"]) {
       expect(view.client.getQueryState([key])?.isInvalidated).toBe(true);
     }
   });

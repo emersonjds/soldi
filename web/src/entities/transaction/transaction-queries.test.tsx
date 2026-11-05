@@ -24,7 +24,7 @@ const seeded = () => {
   view.client.setQueryData(transactionsQuery("2026-11").queryKey, TRANSACTIONS);
   view.client.setQueryData(["month", "2026-11"], MONTH);
   view.client.setQueryData(["report", "categories", "2026-11"], {});
-  view.client.setQueryData(["savings", 2026], {});
+  view.client.setQueryData(["cofrinhos"], {});
   return view;
 };
 
@@ -116,7 +116,7 @@ describe("useUpdateTransaction and useDeleteTransaction", () => {
     expect(await requests[0].json()).toEqual({ amount: "40.00" });
     expect(isStale(view, ["month", "2026-11"])).toBe(true);
     expect(isStale(view, ["report", "categories", "2026-11"])).toBe(true);
-    expect(isStale(view, ["savings", 2026])).toBe(true);
+    expect(isStale(view, ["cofrinhos"])).toBe(true);
   });
 
   it("drops the row at once, deletes and refreshes; a refusal surfaces as an error", async () => {

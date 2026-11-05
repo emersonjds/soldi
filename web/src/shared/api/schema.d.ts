@@ -148,6 +148,54 @@ export interface paths {
         patch: operations["update_category"];
         trace?: never;
     };
+    "/api/cofrinhos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_cofrinhos"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/cofrinhos/{category_id}/movements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_movements"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/cofrinhos/{category_id}/withdraw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["withdraw"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/health": {
         parameters: {
             query?: never;
@@ -244,38 +292,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/savings": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["get_savings_year"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/savings/{year}/{month}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put: operations["set_savings"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/settings": {
         parameters: {
             query?: never;
@@ -363,17 +379,23 @@ export interface components {
         };
         /**
          * @description `icon` is a lucide icon name; `color` a palette token, `cat-1` to `cat-12`; `parent_id` the
-         *     category this one is a subcategory of, null for a top-level one.
+         *     category this one is a subcategory of, null for a top-level one. `is_savings` marks the
+         *     user's `Economia` (bill) and `Resgate` (income); `target` and `deadline` belong only to
+         *     cofrinhos, the subcategories of `Economia`.
          */
         Category: {
             color: string;
+            /** Format: date */
+            deadline?: string | null;
             icon: string;
             /** Format: uuid */
             id: string;
+            is_savings: boolean;
             kind: components["schemas"]["CategoryKind"];
             name: string;
             /** Format: uuid */
             parent_id?: string | null;
+            target?: string | null;
         };
         /**
          * @description A top-level category with its subcategories' amounts rolled in: `amount` and `previous_amount`
@@ -430,6 +452,38 @@ export interface components {
             pct: string;
             previous_amount: string;
         };
+        /**
+         * @description A subcategory of `Economia`, or `Economia` itself as `Sem objetivo` (`parent`). `balance` is
+         *     its entries minus its resgates since the opening date; `progress_pct` is `balance / target`
+         *     with one decimal, capped at 100, null without a target; `done` is a balance at or above the
+         *     target; `monthly_suggestion` is what is left over the months to the deadline, this one
+         *     included, null without a deadline or when done.
+         */
+        Cofrinho: {
+            balance: string;
+            /** Format: uuid */
+            category_id: string;
+            color: string;
+            /** Format: date */
+            deadline?: string | null;
+            done: boolean;
+            icon: string;
+            monthly_suggestion?: string | null;
+            name: string;
+            parent: boolean;
+            /** @example 3.0 */
+            progress_pct?: string | null;
+            target?: string | null;
+        };
+        /**
+         * @description `total_saved` sums every balance; `saved_this_month` is the month view's `totals.saved`.
+         *     Items go done last, then by name; `Sem objetivo` only while its balance is above zero.
+         */
+        Cofrinhos: {
+            items: components["schemas"]["Cofrinho"][];
+            saved_this_month: string;
+            total_saved: string;
+        };
         /** @description Replaces what an earlier import wrote for the same years; entries made by hand stay. */
         ConfirmImport: {
             /** @description The balance before the first imported day; may be negative. */
@@ -469,11 +523,18 @@ export interface components {
          */
         CreateCategory: {
             color?: string | null;
+            /**
+             * Format: date
+             * @description Only for a subcategory of `Economia`.
+             */
+            deadline?: string | null;
             icon?: string | null;
             kind: components["schemas"]["CategoryKind"];
             name: string;
             /** Format: uuid */
             parent_id?: string | null;
+            /** @description Greater than zero; only for a subcategory of `Economia`. */
+            target?: string | null;
         };
         CreateTransaction: {
             /** @description Greater than zero, up to two decimal places; never rounded. */
@@ -529,8 +590,6 @@ export interface components {
             years: components["schemas"]["ImportYear"][];
         };
         ImportResult: {
-            /** Format: int32 */
-            savings_months: number;
             skipped: components["schemas"]["SkippedCell"][];
             /** Format: int32 */
             transactions: number;
@@ -542,16 +601,18 @@ export interface components {
             daily_total: string;
             income_total: string;
             /** Format: int32 */
-            savings_months: number;
-            /** Format: int32 */
             transactions: number;
             /** Format: int32 */
             year: number;
         };
-        /** @description The month's savings (SOL-5); `pct` is `amount / income`, null when income is 0. */
+        /**
+         * @description The month's savings (SOL-20): `saved` is `totals.saved`; `rate_pct` is `saved / income` as a
+         *     percentage with one decimal, null when income is 0.
+         */
         MonthSavings: {
-            amount: string;
-            pct?: string | null;
+            /** @example 13.4 */
+            rate_pct?: string | null;
+            saved: string;
         };
         /**
          * @description `month` is `YYYY-MM`. `balance_today` is the balance at today, or at the month's last day
@@ -566,7 +627,7 @@ export interface components {
             month: string;
             projected_balance: string;
             projected_tier: components["schemas"]["Tier"];
-            savings?: components["schemas"]["MonthSavings"] | null;
+            savings: components["schemas"]["MonthSavings"];
             totals: components["schemas"]["Totals"];
         };
         Onboarding: {
@@ -593,47 +654,6 @@ export interface components {
             title: string;
             type: string;
         };
-        Savings: {
-            amount: string;
-            /** Format: int32 */
-            month: number;
-            /** Format: int32 */
-            year: number;
-        };
-        /**
-         * @description One month of the year. `income` and `saved` are null before the opening month; `pct` is
-         *     `saved / income` as a percentage with one decimal, null when income is 0.
-         */
-        SavingsMonth: {
-            income?: string | null;
-            /**
-             * Format: int32
-             * @description 1 to 12.
-             */
-            month: number;
-            /** @example 8.4 */
-            pct?: string | null;
-            saved?: string | null;
-        };
-        /**
-         * @description `pct` is `total_saved / total_income`; `goal_progress_pct` is `pct / goal_pct`, capped at
-         *     100, null without a goal or without income.
-         */
-        SavingsYear: {
-            /** Format: int32 */
-            goal_pct?: number | null;
-            goal_progress_pct?: string | null;
-            months: components["schemas"]["SavingsMonth"][];
-            pct?: string | null;
-            total_income: string;
-            total_saved: string;
-            /** Format: int32 */
-            year: number;
-        };
-        SetSavings: {
-            /** @description Zero or more, up to two decimal places. */
-            amount: string;
-        };
         /**
          * @description Money is a decimal string with up to two places (`"-500.00"`). The tiers are the lower
          *     bounds of the thermometer colors and are strictly increasing:
@@ -644,11 +664,6 @@ export interface components {
             opening_balance: string;
             /** Format: date */
             opening_date: string;
-            /**
-             * Format: int32
-             * @description 1 to 100; null is no goal.
-             */
-            savings_goal_pct?: number | null;
             tier_green: string;
             tier_red: string;
             tier_yellow: string;
@@ -675,18 +690,27 @@ export interface components {
          * @enum {string}
          */
         Tier: "red" | "light_red" | "yellow" | "light_green" | "green";
-        /** @description `outflow` is bills plus daily; `performance` is income minus outflow. */
+        /**
+         * @description `outflow` is bills plus daily; `performance` is income minus outflow; `saved` is the bills
+         *     under `Economia` minus the month's resgates, already inside `bills`.
+         */
         Totals: {
             bills: string;
             daily: string;
             income: string;
             outflow: string;
             performance: string;
+            saved: string;
         };
         /** @description `category` is the entry's category as it is now, archived or not. */
         Transaction: {
             amount: string;
             category: components["schemas"]["Category"];
+            /**
+             * Format: uuid
+             * @description The cofrinho a resgate took money from.
+             */
+            cofrinho_id?: string | null;
             /** Format: date */
             date: string;
             /** Format: uuid */
@@ -709,22 +733,27 @@ export interface components {
             due_day?: number | null;
             name?: string | null;
         };
-        /** @description Absent fields stay as they are; the kind never changes; `"parent_id": null` makes it top-level. */
+        /**
+         * @description Absent fields stay as they are; the kind never changes; `"parent_id": null` makes it top-level;
+         *     `null` clears `target` or `deadline`, which only a subcategory of `Economia` may set. Leaving
+         *     `Economia` clears both.
+         */
         UpdateCategory: {
             color?: string | null;
+            /** Format: date */
+            deadline?: string | null;
             icon?: string | null;
             name?: string | null;
             /** Format: uuid */
             parent_id?: string | null;
+            target?: string | null;
         };
-        /** @description Absent fields stay as they are; `"savings_goal_pct": null` clears the goal. */
+        /** @description Absent fields stay as they are. */
         UpdateSettings: {
             currency?: components["schemas"]["Currency"] | null;
             opening_balance?: string | null;
             /** Format: date */
             opening_date?: string | null;
-            /** Format: int32 */
-            savings_goal_pct?: number | null;
             tier_green?: string | null;
             tier_red?: string | null;
             tier_yellow?: string | null;
@@ -747,6 +776,15 @@ export interface components {
             name: string;
             /** @description False until `POST /api/onboarding` runs; the web shows onboarding while it is false. */
             onboarded: boolean;
+        };
+        /** @description Takes money out of a cofrinho as an income entry in `Resgate`. */
+        Withdraw: {
+            /** @description Greater than zero, up to two decimal places, at most the balance. */
+            amount: string;
+            /** Format: date */
+            date: string;
+            /** @description Up to 500 characters; blank means none. */
+            note?: string | null;
         };
         /** @description `multipart/form-data` body of the preview. */
         XlsxUpload: {
@@ -1221,7 +1259,10 @@ export interface operations {
     };
     list_categories: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Also list `Resgate`, the income category of withdrawals from a cofrinho */
+                include_system?: boolean;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -1235,6 +1276,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Category"][];
+                };
+            };
+            /** @description `include_system` is not a boolean */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
                 };
             };
             401: {
@@ -1294,7 +1344,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description A bad field, a parent of another kind, or `nested-subcategory` when the parent is a subcategory */
+            /** @description A bad field, a parent of another kind, `nested-subcategory` when the parent is a subcategory, `savings-category` under `Resgate`, or `not-a-cofrinho` for a target or deadline outside `Economia` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -1334,6 +1384,15 @@ export interface operations {
             };
             /** @description Missing, archived or another user's */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description `savings-category` for `Economia` or `Resgate`, `cofrinho-not-empty` for a cofrinho holding money */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1393,7 +1452,149 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description A bad field, a parent of another kind or itself, or `nested-subcategory` when the parent is a subcategory or this category has subcategories */
+            /** @description A bad field, a parent of another kind or itself, `nested-subcategory` when the parent is a subcategory or this category has subcategories, `savings-category` when moving `Economia` or `Resgate` or under `Resgate`, or `not-a-cofrinho` for a target or deadline outside `Economia` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    list_cofrinhos: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Every cofrinho with its balance and goal; this month in São Paulo */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Cofrinhos"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    list_movements: {
+        parameters: {
+            query?: {
+                /** @description 1 to 200; 50 when absent */
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                /** @description `Economia` or one of its subcategories */
+                category_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Its entries and resgates, newest date first, then newest entry first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Transaction"][];
+                };
+            };
+            /** @description `limit` is not a number */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Missing, archived or another user's */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description `limit` out of range, or `not-a-cofrinho` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    withdraw: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description `Economia` or one of its subcategories */
+                category_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Withdraw"];
+            };
+        };
+        responses: {
+            /** @description The resgate: an income entry in `Resgate` with `cofrinho_id` */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Transaction"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Missing, archived or another user's */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description A bad field, `insufficient-cofrinho` above the balance, `before-opening-date`, or `not-a-cofrinho` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -1677,119 +1878,6 @@ export interface operations {
             };
         };
     };
-    get_savings_year: {
-        parameters: {
-            query: {
-                /**
-                 * @description 2000 to 2100
-                 * @example 2026
-                 */
-                year: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Twelve months of income and savings with the year totals and the goal */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SavingsYear"];
-                };
-            };
-            /** @description No `year`, or not a number */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["Problem"];
-                };
-            };
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["Problem"];
-                };
-            };
-            /** @description `year` outside 2000..2100 */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["Problem"];
-                };
-            };
-        };
-    };
-    set_savings: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /**
-                 * @description 2000 to 2100
-                 * @example 2026
-                 */
-                year: number;
-                /**
-                 * @description 1 to 12
-                 * @example 11
-                 */
-                month: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SetSavings"];
-            };
-        };
-        responses: {
-            /** @description The month's savings, created or replaced */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Savings"];
-                };
-            };
-            /** @description `year` or `month` is not a number */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["Problem"];
-                };
-            };
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["Problem"];
-                };
-            };
-            /** @description Amount below zero or with more than two places, `year` outside 2000..2100, `month` outside 1..12, or a month before the opening date's month (`month-before-opening`) */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["Problem"];
-                };
-            };
-        };
-    };
     get_settings: {
         parameters: {
             query?: never;
@@ -1847,7 +1935,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Money with more than two places, tiers out of order (names the upper tier of the first pair), goal outside 1..100 */
+            /** @description Money with more than two places, tiers out of order (names the upper tier of the first pair), an unknown field */
             422: {
                 headers: {
                     [name: string]: unknown;

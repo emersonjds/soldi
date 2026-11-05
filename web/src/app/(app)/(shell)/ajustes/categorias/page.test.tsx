@@ -21,6 +21,7 @@ const PETS: Category = {
   kind: "daily",
   icon: "paw-print",
   color: "cat-5",
+  is_savings: false,
 };
 const RACAO: Category = { ...PETS, id: "c1000000-0000-4000-8000-000000000011", name: "Ração", parent_id: PETS.id };
 const VET: Category = { ...PETS, id: "c1000000-0000-4000-8000-000000000012", name: "Veterinário", parent_id: PETS.id };
@@ -30,6 +31,7 @@ const IMPORTADO: Category = {
   kind: "daily",
   icon: "circle-dashed",
   color: "cat-12",
+  is_savings: false,
 };
 /** In the API's order: kind, parent name, then the children by name. */
 const LIST = [EXTRA, SALARIO, ALUGUEL, LUZ, COMIDA, IMPORTADO, MERCADO, PETS, RACAO, VET];

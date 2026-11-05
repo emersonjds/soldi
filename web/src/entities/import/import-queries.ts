@@ -45,10 +45,10 @@ export const useConfirmImport = () => {
   return useMutation({
     mutationFn: async (body: Schemas["ConfirmImport"]) =>
       dataOrThrow(await api.POST("/api/imports/xlsx/confirm", { body })),
-    // The import writes entries, savings, the Importado categories and the opening balance, and onboards the user.
+    // The import writes entries, the Importado categories and the opening balance, and onboards the user.
     onSuccess: () =>
       Promise.all(
-        ["month", "transactions", "report", "savings", "settings", "me", "categories"].map((key) =>
+        ["month", "transactions", "report", "cofrinhos", "settings", "me", "categories"].map((key) =>
           client.invalidateQueries({ queryKey: [key] }),
         ),
       ),

@@ -17,6 +17,7 @@ const CARRO: Schemas["Category"] = {
   kind: "daily",
   icon: "car",
   color: "cat-3",
+  is_savings: false,
 };
 
 const PETS: Schemas["Category"] = {
@@ -25,6 +26,7 @@ const PETS: Schemas["Category"] = {
   kind: "daily",
   icon: "paw-print",
   color: "cat-5",
+  is_savings: false,
 };
 const RACAO: Schemas["Category"] = {
   id: "c1000000-0000-4000-8000-000000000011",
@@ -32,6 +34,7 @@ const RACAO: Schemas["Category"] = {
   kind: "daily",
   icon: "bone",
   color: "cat-5",
+  is_savings: false,
   parent_id: PETS.id,
 };
 /** In the API's order: kind, parent name, then the children by name. */

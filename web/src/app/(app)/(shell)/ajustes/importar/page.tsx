@@ -30,7 +30,7 @@ const ImportarPage = () => {
       ) : (
         <>
           <p className="text-muted-foreground">
-            Traga seu Termômetro.xlsx: os lançamentos e a economia de cada ano entram na categoria Importado.
+            Traga seu Termômetro.xlsx: os lançamentos de cada ano entram na categoria Importado.
           </p>
           <WorkbookDropZone busy={preview.isPending} onFile={(file) => preview.mutate(file)} />
           {preview.isError && (

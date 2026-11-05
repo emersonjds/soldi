@@ -86,9 +86,6 @@ export const ImportPreviewForm = ({ preview }: { preview: ImportPreview }) => {
                 <Money amount={year.daily_total} />
               </Row>
             </dl>
-            <p className="text-muted-foreground text-xs">
-              {count(year.savings_months, "mês de economia", "meses de economia")}
-            </p>
           </section>
         ))}
       </div>

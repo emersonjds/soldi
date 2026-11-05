@@ -35,7 +35,6 @@ export const SETTINGS: Schemas["Settings"] = {
   tier_zero: "0.00",
   tier_yellow: "1000.00",
   tier_green: "2000.00",
-  savings_goal_pct: null,
 };
 
 export const signedIn = (replies: Record<string, Reply> = {}, user: Schemas["User"] = ANA) =>
@@ -54,7 +53,8 @@ const category = (
   kind: Schemas["CategoryKind"],
   icon: string,
   color: string,
-): Schemas["Category"] => ({ id, name, kind, icon, color });
+  rest: Partial<Schemas["Category"]> = {},
+): Schemas["Category"] => ({ id, name, kind, icon, color, is_savings: false, ...rest });
 
 export const SALARIO = category("c1000000-0000-4000-8000-000000000001", "Salário", "income", "briefcase", "cat-11");
 export const EXTRA = category("c1000000-0000-4000-8000-000000000002", "Extra", "income", "sparkles", "cat-12");
@@ -63,8 +63,26 @@ export const LUZ = category("c1000000-0000-4000-8000-000000000004", "Luz", "bill
 export const MERCADO = category("c1000000-0000-4000-8000-000000000005", "Mercado", "daily", "shopping-cart", "cat-1");
 export const COMIDA = category("c1000000-0000-4000-8000-000000000006", "Comida fora", "daily", "utensils", "cat-2");
 
+export const ECONOMIA = category("c1000000-0000-4000-8000-000000000007", "Economia", "bill", "piggy-bank", "cat-11", {
+  is_savings: true,
+});
+export const RESERVA = category("c1000000-0000-4000-8000-000000000008", "Reserva", "bill", "shield", "cat-3", {
+  parent_id: ECONOMIA.id,
+  target: "10000.00",
+  deadline: "2027-06-30",
+});
+export const VIAGEM = category("c1000000-0000-4000-8000-000000000009", "Viagem", "bill", "plane", "cat-8", {
+  parent_id: ECONOMIA.id,
+});
+export const RESGATE = category("c1000000-0000-4000-8000-000000000010", "Resgate", "income", "piggy-bank", "cat-11", {
+  is_savings: true,
+});
+
 /** In the API's order: kind, then name. */
 export const CATEGORIES = [EXTRA, SALARIO, ALUGUEL, LUZ, COMIDA, MERCADO];
+
+/** With `Economia` and its cofrinhos, each parent followed by its children; `Resgate` only with `include_system`. */
+export const WITH_COFRINHOS = [EXTRA, SALARIO, ALUGUEL, ECONOMIA, RESERVA, VIAGEM, LUZ, COMIDA, MERCADO];
 
 /** Ana's November: 1.842,10 on the 1st, salary on the 3rd, rent on the 4th, groceries today (the 5th). */
 export const TRANSACTIONS: Schemas["Transaction"][] = [
@@ -118,11 +136,18 @@ export const MONTH: Schemas["MonthView"] = {
   ],
   balance_today: "957.79",
   balance_today_tier: "yellow",
-  totals: { income: "500.00", bills: "1200.00", daily: "184.31", outflow: "1384.31", performance: "-884.31" },
+  totals: {
+    income: "500.00",
+    bills: "1200.00",
+    daily: "184.31",
+    outflow: "1384.31",
+    performance: "-884.31",
+    saved: "0.00",
+  },
   projected_balance: "957.79",
   projected_tier: "yellow",
   bills_of_month: [],
-  savings: null,
+  savings: { saved: "0.00", rate_pct: "0.0" },
 };
 
 export const BILL_ALUGUEL: Schemas["Bill"] = {
@@ -198,30 +223,59 @@ export const REPORT: Schemas["CategoryReport"] = {
   groups: [],
 };
 
-const savingsMonth = (month: number, rest: Partial<Schemas["SavingsMonth"]> = {}): Schemas["SavingsMonth"] => ({
-  month,
-  income: "0.00",
-  saved: "0.00",
-  pct: null,
+const cofrinho = (
+  { id, name, icon, color, target, deadline }: Schemas["Category"],
+  rest: Partial<Schemas["Cofrinho"]> = {},
+): Schemas["Cofrinho"] => ({
+  category_id: id,
+  name,
+  icon,
+  color,
+  target,
+  deadline,
+  balance: "0.00",
+  progress_pct: target ? "0.0" : null,
+  done: false,
+  monthly_suggestion: null,
+  parent: false,
   ...rest,
 });
 
-/** Ana opened in October 2026: nothing exists before it; she kept 400 of 5.000 in November. */
-export const SAVINGS: Schemas["SavingsYear"] = {
-  year: 2026,
-  months: Array.from({ length: 12 }, (_, index) => {
-    const month = index + 1;
-    if (month < 10) return { month, income: null, saved: null, pct: null };
-    if (month === 10) return savingsMonth(10, { income: "4000.00", saved: "100.00", pct: "2.5" });
-    if (month === 11) return savingsMonth(11, { income: "5000.00", saved: "400.00", pct: "8.0" });
-    return savingsMonth(month);
-  }),
-  total_income: "9000.00",
-  total_saved: "500.00",
-  pct: "5.6",
-  goal_pct: 20,
-  goal_progress_pct: "27.8",
+/** Ana keeps 300 of 10.000 in Reserva until June 2027, 1.000 in Viagem without a goal and 0 loose in Economia. */
+export const COFRINHO_RESERVA = cofrinho(RESERVA, {
+  balance: "300.00",
+  progress_pct: "3.0",
+  monthly_suggestion: "1212.50",
+});
+export const COFRINHO_VIAGEM = cofrinho(VIAGEM, { balance: "1000.00" });
+export const COFRINHO_SEM_OBJETIVO = cofrinho(ECONOMIA, { name: "Sem objetivo", balance: "0.00", parent: true });
+
+export const COFRINHOS: Schemas["Cofrinhos"] = {
+  total_saved: "1300.00",
+  saved_this_month: "500.00",
+  items: [COFRINHO_RESERVA, COFRINHO_VIAGEM],
 };
+
+/** Reserva: 200 in on the 3rd, 100 on the 4th; 50 taken out today. */
+export const MOVEMENTS: Schemas["Transaction"][] = [
+  {
+    id: "t2000000-0000-4000-8000-000000000003",
+    date: "2026-11-05",
+    amount: "50.00",
+    kind: "income",
+    category: RESGATE,
+    cofrinho_id: RESERVA.id,
+  },
+  { id: "t2000000-0000-4000-8000-000000000002", date: "2026-11-04", amount: "100.00", kind: "bill", category: RESERVA },
+  {
+    id: "t2000000-0000-4000-8000-000000000001",
+    date: "2026-11-03",
+    amount: "200.00",
+    kind: "bill",
+    category: RESERVA,
+    note: "Décimo terceiro",
+  },
+];
 
 /** A Termômetro workbook of 2025 and 2026 with one unreadable cell. */
 export const PREVIEW: Schemas["ImportPreview"] = {
@@ -233,7 +287,6 @@ export const PREVIEW: Schemas["ImportPreview"] = {
       income_total: "60000.00",
       bills_total: "27114.72",
       daily_total: "18240.55",
-      savings_months: 12,
     },
     {
       year: 2026,
@@ -241,7 +294,6 @@ export const PREVIEW: Schemas["ImportPreview"] = {
       income_total: "15000.00",
       bills_total: "6778.68",
       daily_total: "3120.40",
-      savings_months: 0,
     },
   ],
   errors: [{ sheet: "2026", cell: "D14", message: "fórmula que não é soma" }],
