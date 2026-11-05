@@ -20,10 +20,9 @@ import {
   SidebarProvider,
 } from "@/components/ui/sidebar";
 import { useMe } from "@/entities/user/session";
+import { TransactionSheet } from "@/features/add-transaction/transaction-sheet";
 import { cn, getInitials } from "@/lib/utils";
 import { Wordmark } from "@/shared/ui/wordmark";
-
-import { LaunchSheet } from "./launch-sheet";
 
 const NAV = [
   { href: "/mes", label: "Mês", icon: CalendarDays },
@@ -144,7 +143,7 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
         </div>
       </nav>
 
-      <LaunchSheet open={launching} onOpenChange={setLaunching} />
+      <TransactionSheet open={launching} onOpenChange={setLaunching} />
     </SidebarProvider>
   );
 };

@@ -23,3 +23,8 @@ Object.defineProperty(window, "matchMedia", {
     dispatchEvent: () => false,
   }),
 });
+
+// jsdom has no pointer capture; sonner's toast calls it on press.
+Element.prototype.setPointerCapture ??= () => undefined;
+Element.prototype.releasePointerCapture ??= () => undefined;
+Element.prototype.hasPointerCapture ??= () => false;
