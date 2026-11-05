@@ -1,10 +1,30 @@
+"use client";
+
+import { Suspense } from "react";
+
+import { useRouter, useSearchParams } from "next/navigation";
+
 import { BackLink } from "@/shared/ui/back-link";
+import { PageLoading } from "@/shared/ui/page-state";
+import { CategoryList, kindParam } from "@/widgets/category-list/category-list";
+
+const CategoriasScreen = () => {
+  const router = useRouter();
+  const kind = kindParam(useSearchParams().get("k"));
+  return (
+    <CategoryList
+      kind={kind}
+      onKindChange={(next) => router.replace(`/ajustes/categorias?k=${next}`, { scroll: false })}
+    />
+  );
+};
 
 const CategoriasPage = () => (
-  <div className="flex flex-col gap-2">
+  <div className="mx-auto flex w-full max-w-2xl flex-col gap-4">
     <BackLink href="/ajustes" label="Ajustes" />
-    <h1 className="font-bold text-[22px] leading-7">Categorias</h1>
-    <p className="text-muted-foreground">Criar e editar categorias chega em breve.</p>
+    <Suspense fallback={<PageLoading />}>
+      <CategoriasScreen />
+    </Suspense>
   </div>
 );
 

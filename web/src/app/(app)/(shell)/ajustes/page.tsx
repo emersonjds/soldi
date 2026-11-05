@@ -12,7 +12,7 @@ const GROUPS: { title: string; items: Item[] }[] = [
   {
     title: "Organização",
     items: [
-      { href: "/ajustes/categorias", label: "Categorias", hint: "Em breve", icon: Tags },
+      { href: "/ajustes/categorias", label: "Categorias", hint: "Grupos e subcategorias", icon: Tags },
       { href: "/ajustes/contas", label: "Contas fixas", hint: "Aluguel, luz, internet", icon: ReceiptText },
     ],
   },
