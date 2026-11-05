@@ -7,6 +7,32 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.10.0
+
+> Headline: cofrinhos
+
+### Added
+
+- Every user has `Economia` (bill) and `Resgate` (income), both icon `piggy-bank`, color `cat-11`, `is_savings: true`; seeded at sign-up and backfilled for existing accounts. They cannot be archived nor become subcategories (422 `savings-category`), and nothing goes under `Resgate`.
+- A cofrinho is a subcategory of `Economia`. `Category` carries `is_savings`, `target` and `deadline`; `POST`/`PATCH /api/categories` take `target` (money above zero) and `deadline` only for a cofrinho (422 `not-a-cofrinho` elsewhere); moving a category out of `Economia` clears both. A cofrinho holding money cannot be archived (422 `cofrinho-not-empty`).
+- `GET /api/categories` leaves `Resgate` out unless `?include_system=true`.
+- `GET /api/cofrinhos`: `total_saved`, `saved_this_month` and the cofrinhos with `balance` (entries minus resgates since the opening date), `progress_pct`, `done`, `monthly_suggestion` (what is left over the months to the deadline, this one included, half-even) and `parent`; done ones last, then by name; `Economia` itself as `Sem objetivo` while it holds money.
+- `POST /api/cofrinhos/{category_id}/withdraw` `{ date, amount, note? }` writes a resgate: a 201 income entry in `Resgate` with `cofrinho_id` (422 `insufficient-cofrinho` above the balance, `before-opening-date`, `not-a-cofrinho`; 404 for another user's).
+- `GET /api/cofrinhos/{category_id}/movements?limit=50` lists a cofrinho's entries and resgates, newest first (`limit` 1 to 200).
+- `Transaction` carries `cofrinho_id`.
+
+### Changed
+
+- `MonthView.savings` is `{ saved, rate_pct }` and `totals.saved` is added: the month's bills under `Economia` minus its resgates; `rate_pct` is `saved / income` with one decimal, null without income. Those bills stay in `bills` and `outflow`.
+
+### Removed
+
+- `GET /api/savings`, `PUT /api/savings/{year}/{month}`, `Settings.savings_goal_pct` (now an unknown field, 422) and the imports' `savings_months`: the workbook import no longer reads the `Economia` sheet.
+
+### Upgrade notes
+
+- Migration `0013_cofrinhos` adds `categories.is_savings`, `target`, `deadline` and `transactions.cofrinho_id`, backfills `Economia` and `Resgate` for every user (an active category already named so becomes it, moved to the top level), **drops the `savings` table** and `settings.savings_goal_pct`. The monthly savings typed or imported before are deleted; export them first if they matter. It runs on start-up with the others; no manual step.
+
 ## 0.9.0
 
 > Headline: pick your currency
