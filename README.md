@@ -7,7 +7,14 @@ Soldi replaces a spreadsheet "thermometer" kept for years. The rules are the sam
 ## Run locally
 
 ```sh
+scripts/dev.sh                     # Postgres + migrations + web build + server on :8080
+```
+
+Piece by piece:
+
+```sh
 docker compose up -d postgres
+sqlx migrate run --source crates/soldi-server/migrations
 cargo run -p soldi-server          # API on :8080, serves web/out when built
 cd web && pnpm install && pnpm dev # web on :3000, proxies /api to :8080
 cd web && pnpm build               # static export to web/out, served by the server on :8080
