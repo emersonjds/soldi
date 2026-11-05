@@ -556,7 +556,10 @@ export interface components {
          * @enum {string}
          */
         Currency: "BRL" | "USD" | "GBP" | "EUR";
-        /** @description One calendar day: what came in and went out, and the balance at its end. */
+        /**
+         * @description One calendar day: what came in and went out, and the balance at its end. `income` leaves
+         *     resgates out; `withdrawn` holds them, and the balance adds both.
+         */
         Day: {
             balance: string;
             bills: string;
@@ -567,6 +570,7 @@ export interface components {
             is_future: boolean;
             is_today: boolean;
             tier: components["schemas"]["Tier"];
+            withdrawn: string;
         };
         FieldError: {
             field: string;
@@ -691,8 +695,9 @@ export interface components {
          */
         Tier: "red" | "light_red" | "yellow" | "light_green" | "green";
         /**
-         * @description `outflow` is bills plus daily; `performance` is income minus outflow; `saved` is the bills
-         *     under `Economia` minus the month's resgates, already inside `bills`.
+         * @description `income` leaves the month's resgates out, `withdrawn` sums them (SOL-28); `outflow` is bills
+         *     plus daily; `performance` is income minus outflow; `saved` is the bills under `Economia`
+         *     minus `withdrawn`, already inside `bills`.
          */
         Totals: {
             bills: string;
@@ -701,6 +706,7 @@ export interface components {
             outflow: string;
             performance: string;
             saved: string;
+            withdrawn: string;
         };
         /** @description `category` is the entry's category as it is now, archived or not. */
         Transaction: {
@@ -1841,7 +1847,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The month's outflow and income by category, each against the previous month */
+            /** @description The month's outflow and income by category, each against the previous month; resgates are not income */
             200: {
                 headers: {
                     [name: string]: unknown;

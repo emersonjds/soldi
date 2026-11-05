@@ -113,6 +113,7 @@ export const TRANSACTIONS: Schemas["Transaction"][] = [
 const day = (date: string, balance: string, tier: Schemas["Tier"], rest: Partial<Schemas["Day"]> = {}) => ({
   date,
   income: "0.00",
+  withdrawn: "0.00",
   bills: "0.00",
   daily: "0.00",
   balance,
@@ -138,6 +139,7 @@ export const MONTH: Schemas["MonthView"] = {
   balance_today_tier: "yellow",
   totals: {
     income: "500.00",
+    withdrawn: "0.00",
     bills: "1200.00",
     daily: "184.31",
     outflow: "1384.31",
