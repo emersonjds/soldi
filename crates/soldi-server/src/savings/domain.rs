@@ -7,6 +7,7 @@ use crate::error::AppError;
 use crate::reports::domain::percent;
 use crate::settings::domain::check_money;
 
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct MonthAmount {
     pub month: i16,
     pub amount: Decimal,
