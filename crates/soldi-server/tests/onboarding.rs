@@ -30,6 +30,7 @@ async fn onboarding_saves_balance_and_bills_once(pool: PgPool) {
     let body = json!({
         "opening_balance": "-250.75",
         "opening_date": "2026-11-01",
+        "currency": "EUR",
         "bills": [bill(" Aluguel ", "1500", 5, &rent), bill("Luz", "120.5", 10, &light)],
     });
 
@@ -43,6 +44,7 @@ async fn onboarding_saves_balance_and_bills_once(pool: PgPool) {
     assert_eq!(settings["opening_balance"], "-250.75");
     assert_eq!(settings["opening_date"], "2026-11-01");
     assert_eq!(settings["tier_green"], "2000.00");
+    assert_eq!(settings["currency"], "EUR");
     let (_, bills) = user.get("/api/bills").await;
     assert_eq!(bills[0]["name"], "Aluguel");
     assert_eq!(bills[0]["amount"], "1500.00");
@@ -68,6 +70,7 @@ async fn bills_are_optional(pool: PgPool) {
     assert_eq!(status, StatusCode::OK, "{onboarded}");
     assert_eq!(onboarded["onboarded"], true);
     assert_eq!(user.get("/api/bills").await.1, json!([]));
+    assert_eq!(user.get("/api/settings").await.1["currency"], "BRL");
 }
 
 #[sqlx::test]
@@ -129,6 +132,14 @@ async fn a_wrong_shape_is_a_422_and_no_session_a_401(pool: PgPool) {
         .await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
     assert_eq!(problem["errors"][0]["field"], "opening_date");
+    let (status, problem) = user
+        .post(
+            "/api/onboarding",
+            json!({ "opening_balance": "1", "opening_date": "2026-11-05", "currency": "JPY" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(problem["errors"][0]["field"], "currency");
     assert_eq!(
         TestApp::anonymous(pool)
             .post("/api/onboarding", json!({}))

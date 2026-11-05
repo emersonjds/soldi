@@ -3,6 +3,32 @@ use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+/// ISO 4217 code of the currency every amount is shown in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[cfg_attr(
+    feature = "sqlx",
+    derive(sqlx::Encode, sqlx::Decode),
+    sqlx(rename_all = "UPPERCASE")
+)]
+#[serde(rename_all = "UPPERCASE")]
+pub enum Currency {
+    Brl,
+    Usd,
+    Gbp,
+    Eur,
+}
+
+impl Currency {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Currency::Brl => "BRL",
+            Currency::Usd => "USD",
+            Currency::Gbp => "GBP",
+            Currency::Eur => "EUR",
+        }
+    }
+}
+
 /// Money is a decimal string with up to two places (`"-500.00"`). The tiers are the lower
 /// bounds of the thermometer colors and are strictly increasing:
 /// `tier_red < tier_zero < tier_yellow < tier_green`.
@@ -21,6 +47,7 @@ pub struct Settings {
     pub tier_green: Decimal,
     /// 1 to 100; null is no goal.
     pub savings_goal_pct: Option<i16>,
+    pub currency: Currency,
 }
 
 /// Absent fields stay as they are; `"savings_goal_pct": null` clears the goal.
@@ -47,4 +74,6 @@ pub struct UpdateSettings {
     #[serde(default, deserialize_with = "crate::nullable_field")]
     #[schema(value_type = Option<i16>, nullable, minimum = 1, maximum = 100)]
     pub savings_goal_pct: Option<Option<i16>>,
+    #[serde(default)]
+    pub currency: Option<Currency>,
 }

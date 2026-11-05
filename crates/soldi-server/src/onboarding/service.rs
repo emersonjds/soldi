@@ -24,6 +24,7 @@ pub async fn complete(
     let patch = UpdateSettings {
         opening_balance: Some(input.opening_balance),
         opening_date: Some(input.opening_date),
+        currency: input.currency,
         ..UpdateSettings::default()
     };
     let next = settings::domain::apply(settings::repo::find(&mut tx, user.id).await?, patch)?;

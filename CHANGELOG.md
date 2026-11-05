@@ -7,6 +7,19 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.9.0
+
+> Headline: pick your currency
+
+### Added
+
+- `Settings` carries `currency`, one of `BRL`, `USD`, `GBP` or `EUR`; `BRL` for every account until changed.
+- `POST /api/onboarding` takes an optional `currency` (`BRL` when absent) and `PATCH /api/settings` changes it. Any other code, lowercase included, answers 422 on `currency`.
+
+### Upgrade notes
+
+- Migration `0012_currency` adds `settings.currency CHAR(3) NOT NULL DEFAULT 'BRL'` with a check limiting it to the four codes; existing users get `BRL`. It runs on start-up with the others; no manual step.
+
 ## 0.8.0
 
 > Headline: manage categories and subcategories

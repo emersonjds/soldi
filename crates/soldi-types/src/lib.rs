@@ -30,7 +30,7 @@ macro_rules! text_type {
 }
 
 #[cfg(feature = "sqlx")]
-text_type!(categories::CategoryKind);
+text_type!(categories::CategoryKind, settings::Currency);
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct Health {

@@ -7,7 +7,7 @@
       "name": "AGPL-3.0-only",
       "identifier": "AGPL-3.0-only"
     },
-    "version": "0.6.0"
+    "version": "0.8.0"
   },
   "paths": {
     "/api/auth/me": {
@@ -1975,6 +1975,16 @@
         },
         "additionalProperties": false
       },
+      "Currency": {
+        "type": "string",
+        "description": "ISO 4217 code of the currency every amount is shown in.",
+        "enum": [
+          "BRL",
+          "USD",
+          "GBP",
+          "EUR"
+        ]
+      },
       "Day": {
         "type": "object",
         "description": "One calendar day: what came in and went out, and the balance at its end.",
@@ -2253,6 +2263,17 @@
             "description": "Up to 50 recurring bills.",
             "maxItems": 50
           },
+          "currency": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Currency",
+                "description": "BRL when absent."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "opening_balance": {
             "type": "string",
             "description": "What the user has today; may be negative."
@@ -2439,9 +2460,13 @@
           "tier_red",
           "tier_zero",
           "tier_yellow",
-          "tier_green"
+          "tier_green",
+          "currency"
         ],
         "properties": {
+          "currency": {
+            "$ref": "#/components/schemas/Currency"
+          },
           "opening_balance": {
             "type": "string"
           },
@@ -2687,6 +2712,16 @@
         "type": "object",
         "description": "Absent fields stay as they are; `\"savings_goal_pct\": null` clears the goal.",
         "properties": {
+          "currency": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Currency"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "opening_balance": {
             "type": [
               "string",
