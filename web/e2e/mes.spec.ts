@@ -21,7 +21,7 @@ test("a new user logs a Diário in three taps and sees it with the day balance",
   await expect(page.getByRole("region", { name: "Saldo hoje" })).toContainText("R$ 1.000,00");
 
   await page.getByRole("navigation", { name: "Navegação principal" }).getByRole("button", { name: "Lançar" }).click();
-  await expect(page.getByRole("radio", { name: "Mercado" })).toBeChecked();
+  await expect(page.getByRole("combobox", { name: "Categoria" })).toHaveText(/Mercado/);
   await page.keyboard.type("12,50");
   await page.getByRole("button", { name: "Salvar" }).click();
 
@@ -98,7 +98,7 @@ test("Lançar fills the cents from the right and a category created from the pic
 
   const tabs = page.getByRole("navigation", { name: "Navegação principal" });
   await tabs.getByRole("button", { name: "Lançar" }).click();
-  await expect(page.getByRole("radio", { name: "Mercado" })).toBeChecked();
+  await expect(page.getByRole("combobox", { name: "Categoria" })).toHaveText(/Mercado/);
   await page.keyboard.type("12345");
   await expect(page.getByLabel("Valor")).toHaveValue("123,45");
   await page.getByRole("button", { name: "Salvar" }).click();
@@ -110,10 +110,10 @@ test("Lançar fills the cents from the right and a category created from the pic
   await page.getByRole("button", { name: "Nova categoria" }).click();
   const create = page.getByRole("dialog", { name: "Nova categoria" });
   await create.getByLabel("Nome").fill("Feira");
-  await create.getByRole("radio", { name: "Compras" }).check({ force: true });
+  await create.getByRole("radio", { name: "Ícone shopping-cart" }).check({ force: true });
   await create.getByRole("button", { name: "Criar" }).click();
 
   await expect(page.getByText("Categoria criada")).toBeVisible();
   await expect(create).toBeHidden();
-  await expect(page.getByRole("radio", { name: "Feira" })).toBeChecked();
+  await expect(page.getByRole("combobox", { name: "Categoria" })).toHaveText(/Feira/);
 });

@@ -34,6 +34,6 @@ test("a new user imports the Termômetro workbook and finds March's bill in Mês
   await page.goto("/mes?m=2026-03");
   const ledger = page.getByRole("region", { name: "Lançamentos" });
   // A row with a note shows the note; the import notes each row `Planilha {year}` under Importado (conta).
-  await expect(ledger.getByRole("button", { name: /^Planilha 2026 Conta/ })).toContainText("R$ 2.259,56");
+  await expect(ledger.getByRole("button", { name: /^Planilha 2026 Saída/ })).toContainText("R$ 2.259,56");
   await expect(page.getByRole("region", { name: "Resumo do mês" })).toContainText("SaídasR$ 2.259,56");
 });
