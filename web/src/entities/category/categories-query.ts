@@ -1,6 +1,6 @@
 import { queryOptions, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { api, dataOrThrow, type Schemas } from "@/shared/api/client";
+import { api, dataOrThrow, okOrThrow, type Schemas } from "@/shared/api/client";
 
 export const categoriesQuery = queryOptions({
   queryKey: ["categories"],
@@ -19,6 +19,45 @@ export const useCreateCategory = () => {
       client.setQueryData(categoriesQuery.queryKey, (list) => list && [...list, created]);
       client.invalidateQueries({ queryKey: categoriesQuery.queryKey });
     },
+  });
+};
+
+/** Shows the edit at once, rolls it back if refused, then refetches the list in the API's order. */
+export const useUpdateCategory = () => {
+  const client = useQueryClient();
+  const { queryKey } = categoriesQuery;
+  return useMutation({
+    mutationFn: async ({ id, ...body }: Schemas["UpdateCategory"] & { id: string }) =>
+      dataOrThrow(await api.PATCH("/api/categories/{id}", { params: { path: { id } }, body })),
+    onMutate: async ({ id, ...body }) => {
+      await client.cancelQueries({ queryKey });
+      const previous = client.getQueryData(queryKey);
+      client.setQueryData(queryKey, (list) =>
+        list?.map((category) =>
+          category.id === id
+            ? {
+                ...category,
+                name: body.name ?? category.name,
+                icon: body.icon ?? category.icon,
+                color: body.color ?? category.color,
+                parent_id: body.parent_id === undefined ? category.parent_id : body.parent_id,
+              }
+            : category,
+        ),
+      );
+      return () => client.setQueryData(queryKey, previous);
+    },
+    onError: (_error, _body, rollback) => rollback?.(),
+    onSettled: () => client.invalidateQueries({ queryKey }),
+  });
+};
+
+/** Archives the category with its subcategories; their entries keep them. */
+export const useArchiveCategory = () => {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => okOrThrow(await api.DELETE("/api/categories/{id}", { params: { path: { id } } })),
+    onSettled: () => client.invalidateQueries({ queryKey: categoriesQuery.queryKey }),
   });
 };
 

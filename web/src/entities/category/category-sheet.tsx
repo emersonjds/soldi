@@ -2,8 +2,10 @@
 
 import { type FormEvent, useState } from "react";
 
+import { Archive } from "lucide-react";
 import { toast } from "sonner";
 
+import { Button } from "@/components/ui/button";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
@@ -13,7 +15,7 @@ import { BrandButton } from "@/shared/ui/brand-button";
 import { categoryBg } from "@/shared/ui/category-icon";
 import { ResponsiveSheet } from "@/shared/ui/responsive-sheet";
 
-import { useCategories, useCreateCategory } from "./categories-query";
+import { useCategories, useCreateCategory, useUpdateCategory } from "./categories-query";
 import { IconPicker } from "./icon-picker";
 
 type Kind = Schemas["CategoryKind"];
@@ -39,25 +41,39 @@ export const COLOR_NAMES: [token: string, name: string][] = [
 const nextColor = (taken: Category[]) =>
   COLOR_NAMES.find(([token]) => !taken.some((category) => category.color === token))?.[0] ?? "cat-12";
 
-const problemOf = (error: Error | null) => {
+const problemOf = (error: Error | null, editing: boolean) => {
   if (!error) return undefined;
-  return hasStatus(error, 409) ? "Já existe uma categoria com esse nome" : "Não foi possível criar a categoria.";
+  if (hasStatus(error, 409)) return "Já existe uma categoria com esse nome";
+  return editing ? "Não foi possível salvar a categoria." : "Não foi possível criar a categoria.";
 };
 
-const CreateCategoryForm = ({ kind, onCreated }: { kind: Kind; onCreated: (category: Category) => void }) => {
-  const [name, setName] = useState("");
-  const [icon, setIcon] = useState("circle-dashed");
-  const [parentId, setParentId] = useState("");
+type FormProps = {
+  kind: Kind;
+  /** Given: the form edits it and offers `Arquivar`. */
+  category?: Category;
+  /** The parent preselected when creating. */
+  parentId?: string;
+  onSaved: (category: Category) => void;
+  onArchive: (category: Category) => void;
+};
+
+const CategoryForm = ({ kind, category, parentId: presetParent, onSaved, onArchive }: FormProps) => {
+  const [name, setName] = useState(category?.name ?? "");
+  const [icon, setIcon] = useState(category?.icon ?? "circle-dashed");
+  const [parentId, setParentId] = useState(category?.parent_id ?? presetParent ?? "");
   const [submitted, setSubmitted] = useState(false);
   const categories = useCategories(kind);
   const list = categories.data ?? [];
-  const [color, setColor] = useState<string>();
+  const [color, setColor] = useState(category?.color);
   const chosenColor = color ?? nextColor(list);
-  const parents = list.filter((category) => !category.parent_id);
+  const parents = list.filter((each) => !each.parent_id && each.id !== category?.id);
+  const hasChildren = Boolean(category) && list.some((each) => each.parent_id === category?.id);
   const create = useCreateCategory();
+  const update = useUpdateCategory();
+  const mutation = category ? update : create;
   const trimmed = name.trim();
   const nameError = submitted && !trimmed ? "Informe o nome." : undefined;
-  const problem = problemOf(create.error);
+  const problem = problemOf(mutation.error, Boolean(category));
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -65,9 +81,14 @@ const CreateCategoryForm = ({ kind, onCreated }: { kind: Kind; onCreated: (categ
     event.stopPropagation();
     setSubmitted(true);
     if (!trimmed) return;
+    if (category)
+      return update.mutate(
+        { id: category.id, name: trimmed, icon, color: chosenColor, parent_id: parentId || null },
+        { onSuccess: onSaved },
+      );
     create.mutate(
       { name: trimmed, kind, icon, color: chosenColor, ...(parentId ? { parent_id: parentId } : {}) },
-      { onSuccess: onCreated },
+      { onSuccess: onSaved },
     );
   };
 
@@ -87,24 +108,26 @@ const CreateCategoryForm = ({ kind, onCreated }: { kind: Kind; onCreated: (categ
         />
         {nameError && <FieldError>{nameError}</FieldError>}
       </Field>
-      <Field className="gap-1.5">
-        <FieldLabel htmlFor="category-parent">Subcategoria de</FieldLabel>
-        <NativeSelect className="w-full">
-          <select
-            id="category-parent"
-            value={parentId}
-            onChange={(event) => setParentId(event.target.value)}
-            className="h-12 w-full appearance-none rounded-xl border border-input bg-transparent pr-8 pl-3 text-base"
-          >
-            <NativeSelectOption value="">Nenhuma</NativeSelectOption>
-            {parents.map((parent) => (
-              <NativeSelectOption key={parent.id} value={parent.id}>
-                {parent.name}
-              </NativeSelectOption>
-            ))}
-          </select>
-        </NativeSelect>
-      </Field>
+      {!hasChildren && (
+        <Field className="gap-1.5">
+          <FieldLabel htmlFor="category-parent">Subcategoria de</FieldLabel>
+          <NativeSelect className="w-full">
+            <select
+              id="category-parent"
+              value={parentId}
+              onChange={(event) => setParentId(event.target.value)}
+              className="h-12 w-full appearance-none rounded-xl border border-input bg-transparent pr-8 pl-3 text-base"
+            >
+              <NativeSelectOption value="">Nenhuma</NativeSelectOption>
+              {parents.map((parent) => (
+                <NativeSelectOption key={parent.id} value={parent.id}>
+                  {parent.name}
+                </NativeSelectOption>
+              ))}
+            </select>
+          </NativeSelect>
+        </Field>
+      )}
       <IconPicker value={icon} color={chosenColor} onChange={setIcon} />
       <fieldset className="flex flex-col gap-2">
         <legend className="mb-2 font-semibold text-sm">Cor</legend>
@@ -138,37 +161,50 @@ const CreateCategoryForm = ({ kind, onCreated }: { kind: Kind; onCreated: (categ
           {problem}
         </p>
       )}
-      <BrandButton type="submit" disabled={create.isPending}>
-        Criar
+      <BrandButton type="submit" disabled={mutation.isPending}>
+        {category ? "Salvar" : "Criar"}
       </BrandButton>
+      {category && (
+        <Button
+          type="button"
+          variant="ghost"
+          className="min-h-11 text-base text-destructive hover:text-destructive"
+          onClick={() => onArchive(category)}
+        >
+          <Archive className="size-5" />
+          Arquivar
+        </Button>
+      )}
     </form>
   );
 };
 
-/** `Nova categoria`: name, optional parent, any lucide icon and a palette color; the kind is the picker's. */
-export const CreateCategorySheet = ({
-  kind,
-  open,
-  onOpenChange,
-  onCreated,
-}: {
-  kind: Kind;
+type CategorySheetProps = Omit<FormProps, "onSaved" | "onArchive"> & {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onCreated: (category: Category) => void;
-}) => (
+  onSaved?: (category: Category) => void;
+  onArchive?: (category: Category) => void;
+};
+
+/** `Nova categoria` or `Editar categoria`: name, optional parent, any lucide icon and a palette color; the kind is fixed. */
+export const CategorySheet = ({ open, onOpenChange, onSaved, onArchive, ...form }: CategorySheetProps) => (
   <ResponsiveSheet
     open={open}
     onOpenChange={onOpenChange}
-    title="Nova categoria"
+    title={form.category ? "Editar categoria" : "Nova categoria"}
     description="Nome, ícone e cor; subcategoria se quiser agrupar."
   >
-    <CreateCategoryForm
-      kind={kind}
-      onCreated={(category) => {
+    <CategoryForm
+      key={form.category?.id ?? form.parentId ?? "new"}
+      {...form}
+      onSaved={(category) => {
         onOpenChange(false);
-        toast.success("Categoria criada");
-        onCreated(category);
+        toast.success(form.category ? "Categoria salva" : "Categoria criada");
+        onSaved?.(category);
+      }}
+      onArchive={(category) => {
+        onOpenChange(false);
+        onArchive?.(category);
       }}
     />
   </ResponsiveSheet>

@@ -13,7 +13,7 @@ import { PageError } from "@/shared/ui/page-state";
 
 import { categoryLabel, useCategories } from "./categories-query";
 import { CategorySelect } from "./category-select";
-import { CreateCategorySheet } from "./create-category-sheet";
+import { CategorySheet } from "./category-sheet";
 
 type Kind = Schemas["CategoryKind"];
 type Category = Schemas["Category"];
@@ -60,7 +60,7 @@ export const CategoryChips = ({
     );
 
   const list = categories.data;
-  const create = <CreateCategorySheet kind={kind} open={creating} onOpenChange={setCreating} onCreated={onChoose} />;
+  const create = <CategorySheet kind={kind} open={creating} onOpenChange={setCreating} onSaved={onChoose} />;
 
   if (!isSm)
     return (
