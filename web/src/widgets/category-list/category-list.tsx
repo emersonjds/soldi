@@ -2,14 +2,14 @@
 
 import { useState } from "react";
 
-import { ChevronRight, Plus, Tags } from "lucide-react";
+import { ChevronRight, PiggyBank, Plus, Tags } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useArchiveCategory, useCategories } from "@/entities/category/categories-query";
 import { CategorySheet } from "@/entities/category/category-sheet";
-import type { Schemas } from "@/shared/api/client";
+import { hasProblem, type Schemas } from "@/shared/api/client";
 import { CategoryIcon } from "@/shared/ui/category-icon";
 import { PageError, PageLoading } from "@/shared/ui/page-state";
 
@@ -52,9 +52,13 @@ export const CategoryList = ({ kind, onKindChange }: { kind: Kind; onKindChange:
     const commit = () => {
       if (undone) return;
       archive.mutate(category.id, {
-        onError: () => {
+        onError: (error) => {
           restore(ids);
-          toast.error("Não foi possível arquivar a categoria.");
+          toast.error(
+            hasProblem(error, "cofrinho-not-empty")
+              ? "Resgate tudo antes de arquivar"
+              : "Não foi possível arquivar a categoria.",
+          );
         },
       });
     };
@@ -106,13 +110,19 @@ export const CategoryList = ({ kind, onKindChange }: { kind: Kind; onKindChange:
                 >
                   <CategoryIcon icon={parent.icon} color={parent.color} />
                   <span className="min-w-0 flex-1 truncate font-medium text-base">{parent.name}</span>
+                  {parent.is_savings && (
+                    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-secondary px-2.5 py-1 font-medium text-primary text-xs">
+                      <PiggyBank className="size-3.5" aria-hidden />
+                      Cofrinhos
+                    </span>
+                  )}
                   <ChevronRight className="size-5 shrink-0 text-muted-foreground" aria-hidden />
                 </button>
                 <Button
                   type="button"
                   variant="ghost"
                   size="icon"
-                  aria-label={`Nova subcategoria em ${parent.name}`}
+                  aria-label={`${parent.is_savings ? "Novo cofrinho" : "Nova subcategoria"} em ${parent.name}`}
                   onClick={() => setEditing({ open: true, parentId: parent.id })}
                   className="size-11 shrink-0 rounded-full text-muted-foreground"
                 >

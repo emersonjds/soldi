@@ -5,7 +5,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { router, setSearch } from "@/test/next-navigation";
 import { renderWithQuery } from "@/test/render";
-import { BILLS_OF_MONTH, CATEGORIES, MERCADO, MONTH, problem, signedIn, TRANSACTIONS } from "@/test/stub-api";
+import {
+  BILLS_OF_MONTH,
+  CATEGORIES,
+  ECONOMIA,
+  MERCADO,
+  MONTH,
+  MOVEMENTS,
+  problem,
+  signedIn,
+  TRANSACTIONS,
+  WITH_COFRINHOS,
+} from "@/test/stub-api";
 
 import MesPage from "./page";
 
@@ -80,6 +91,40 @@ describe("Mês", () => {
     expect(groceries).toHaveTextContent("Compras da semanaDiárioR$ 184,31");
     expect(within(ledger()).getByRole("button", { name: /Aluguel/ })).toHaveTextContent("AluguelSaídaR$ 1.200,00");
     expect(within(ledger()).getByText("+ R$ 500,00")).toHaveClass("text-income");
+  });
+
+  it("shows saving into a cofrinho as Guardado and a resgate as Resgatado, in income color", async () => {
+    const loose = { ...MOVEMENTS[1], id: "t2000000-0000-4000-8000-000000000009", amount: "10.00", category: ECONOMIA };
+    open({
+      "GET /api/transactions": { status: 200, body: [...MOVEMENTS.map((each) => ({ ...each, note: null })), loose] },
+      "GET /api/categories": { status: 200, body: WITH_COFRINHOS },
+      "GET /api/months/2026-11": {
+        status: 200,
+        body: { ...MONTH, totals: { ...MONTH.totals, saved: "250.00" } },
+      },
+    });
+
+    const resgate = await within(await screen.findByRole("region", { name: "Lançamentos" })).findByRole("button", {
+      name: /^Resgate › Reserva/,
+    });
+    expect(resgate).toHaveTextContent("Resgate › ReservaResgatado+ R$ 50,00");
+    expect(within(resgate).getByText("+ R$ 50,00")).toHaveClass("text-income");
+    expect(within(ledger()).getByRole("button", { name: /^Economia › Reserva.*R\$\s100,00/ })).toHaveTextContent(
+      "Economia › ReservaGuardadoR$ 100,00",
+    );
+    expect(within(ledger()).getByRole("button", { name: /^Economia.*R\$\s10,00/ })).toHaveTextContent(
+      "EconomiaGuardadoR$ 10,00",
+    );
+    expect(screen.getByRole("region", { name: "Termômetro do Mês" })).toHaveTextContent("Guardou R$ 250,00 este mês.");
+
+    await userEvent.click(resgate);
+    expect(await screen.findByText("Resgatado · Resgate › Reserva")).toBeInTheDocument();
+  });
+
+  it("says nothing about saving when the month kept nothing", async () => {
+    open();
+
+    expect(await screen.findByRole("region", { name: "Termômetro do Mês" })).not.toHaveTextContent("Guardou");
   });
 
   it("hides entries dated in the future", async () => {

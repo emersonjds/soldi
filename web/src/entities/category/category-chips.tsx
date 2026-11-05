@@ -27,9 +27,12 @@ const grouped = (list: Category[], first: string) => {
   return ordered.flatMap((top) => [top, ...list.filter((child) => child.parent_id === top.id)]);
 };
 
+/** `Resgate` is written by the Cofrinhos screen only, never picked by hand. */
+const pickable = (list: Category[]) => list.filter((category) => !(category.kind === "income" && category.is_savings));
+
 export const useCategoryChips = (kind: Kind) => {
   const categories = useCategories(kind);
-  return { ...categories, data: categories.data && grouped(categories.data, FIRST[kind]) };
+  return { ...categories, data: categories.data && grouped(pickable(categories.data), FIRST[kind]) };
 };
 
 /** One kind's categories as a select-like field that opens a searchable picker, beside `+` to create one; every size. */

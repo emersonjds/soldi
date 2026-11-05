@@ -6,7 +6,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Schemas } from "@/shared/api/client";
 import { router, setSearch } from "@/test/next-navigation";
 import { renderWithQuery } from "@/test/render";
-import { ALUGUEL, COMIDA, EXTRA, LUZ, MERCADO, problem, SALARIO, signedIn } from "@/test/stub-api";
+import {
+  ALUGUEL,
+  COMIDA,
+  ECONOMIA,
+  EXTRA,
+  LUZ,
+  MERCADO,
+  problem,
+  RESERVA,
+  SALARIO,
+  signedIn,
+  VIAGEM,
+} from "@/test/stub-api";
 
 import CategoriasPage from "./page";
 
@@ -34,7 +46,7 @@ const IMPORTADO: Category = {
   is_savings: false,
 };
 /** In the API's order: kind, parent name, then the children by name. */
-const LIST = [EXTRA, SALARIO, ALUGUEL, LUZ, COMIDA, IMPORTADO, MERCADO, PETS, RACAO, VET];
+const LIST = [EXTRA, SALARIO, ALUGUEL, ECONOMIA, RESERVA, VIAGEM, LUZ, COMIDA, IMPORTADO, MERCADO, PETS, RACAO, VET];
 
 const open = (replies: Record<string, Reply> = {}) => {
   const requests = signedIn({ "GET /api/categories": { status: 200, body: LIST }, ...replies });
@@ -141,6 +153,19 @@ describe("Ajustes › Categorias", () => {
     expect(within(sheet).getByLabelText("Nome")).toHaveValue("Ração");
   });
 
+  it("marks Economia as the cofrinhos and creates one from its +", async () => {
+    setSearch("k=bill");
+    open();
+
+    const economia = within(await list()).getByRole("button", { name: "Editar Economia" });
+    expect(within(economia).getByText("Cofrinhos")).toBeInTheDocument();
+    expect(screen.getByRole("list", { name: "Subcategorias de Economia" })).toHaveTextContent("ReservaViagem");
+    await userEvent.click(screen.getByRole("button", { name: "Novo cofrinho em Economia" }));
+
+    const sheet = await screen.findByRole("dialog", { name: "Novo cofrinho" });
+    expect(within(sheet).getByLabelText("Meta")).toBeInTheDocument();
+  });
+
   describe("archiving", () => {
     beforeEach(() => {
       vi.useFakeTimers({ shouldAdvanceTime: true });
@@ -181,6 +206,22 @@ describe("Ajustes › Categorias", () => {
       act(() => vi.advanceTimersByTime(6000));
 
       await waitFor(() => expect(sent(requests, "DELETE")).toHaveLength(1));
+    });
+
+    it("says to take the money out first when a cofrinho still holds some", async () => {
+      setSearch("k=bill");
+      open({
+        [`DELETE /api/categories/${RESERVA.id}`]: {
+          status: 422,
+          body: { ...problem(422, "No."), type: "urn:soldi:error:cofrinho-not-empty" },
+        },
+      });
+
+      await archive("Reserva");
+      await screen.findByText("Categoria arquivada");
+      act(() => vi.advanceTimersByTime(6000));
+
+      expect(await screen.findByText("Resgate tudo antes de arquivar")).toBeInTheDocument();
     });
 
     it("brings the category back and says so when archiving fails", async () => {

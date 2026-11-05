@@ -6,10 +6,10 @@ import { Toaster } from "sonner";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import type { Schemas } from "@/shared/api/client";
-import { renderWithQuery } from "@/test/render";
-import { CATEGORIES, MERCADO, problem, stubApi } from "@/test/stub-api";
+import { renderHookWithQuery, renderWithQuery } from "@/test/render";
+import { CATEGORIES, MERCADO, problem, RESGATE, SALARIO, stubApi } from "@/test/stub-api";
 
-import { CategoryChips } from "./category-chips";
+import { CategoryChips, useCategoryChips } from "./category-chips";
 
 const CARRO: Schemas["Category"] = {
   id: "c1000000-0000-4000-8000-000000000099",
@@ -212,5 +212,14 @@ describe("CategoryChips", () => {
     await userEvent.type(within(sheet).getByLabelText("Nome"), "Feira{Enter}");
 
     expect(await within(sheet).findByText("Não foi possível criar a categoria.")).toBeInTheDocument();
+  });
+});
+
+describe("useCategoryChips", () => {
+  it("never offers Resgate, which only the Cofrinhos screen writes", async () => {
+    stubApi({ "GET /api/categories": { status: 200, body: [...CATEGORIES, RESGATE] } });
+    const { result } = renderHookWithQuery(() => useCategoryChips("income"));
+
+    await waitFor(() => expect(result.current.data?.map((each) => each.name)).toEqual([SALARIO.name, "Extra"]));
   });
 });
