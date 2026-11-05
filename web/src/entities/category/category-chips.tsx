@@ -8,6 +8,7 @@ import { CategoryIcon } from "@/shared/ui/category-icon";
 import { PageError } from "@/shared/ui/page-state";
 
 import { useCategories } from "./categories-query";
+import { CreateCategoryButton } from "./create-category-sheet";
 
 type Kind = Schemas["CategoryKind"];
 
@@ -24,7 +25,7 @@ export const useCategoryChips = (kind: Kind) => {
   };
 };
 
-/** Icon chips of one kind in a wrapping grid, every category visible; a radio group under the hood. */
+/** One kind's categories as rows below 640px and an icon grid from there, `Nova categoria` last; a radio group. */
 export const CategoryChips = ({
   kind,
   chosen,
@@ -48,11 +49,11 @@ export const CategoryChips = ({
     );
 
   return (
-    <div className="grid grid-cols-4 gap-x-2 gap-y-3 pt-1 pb-2 sm:grid-cols-6">
+    <div className="flex flex-col gap-1 pt-1 pb-2 sm:grid sm:grid-cols-6 sm:gap-x-2 sm:gap-y-3">
       {categories.data.map((category) => (
         <label
           key={category.id}
-          className="group relative flex min-w-0 cursor-pointer flex-col items-center gap-1.5 rounded-xl py-1 text-center text-muted-foreground text-xs has-checked:font-semibold has-checked:text-primary has-focus-visible:outline-2 has-focus-visible:outline-ring"
+          className="group relative flex min-h-14 min-w-0 cursor-pointer items-center gap-3 rounded-xl px-3 text-base has-checked:bg-muted has-checked:font-semibold has-focus-visible:outline-2 has-focus-visible:outline-ring sm:min-h-0 sm:flex-col sm:gap-1.5 sm:px-0 sm:py-1 sm:text-center sm:text-muted-foreground sm:text-xs sm:has-checked:bg-transparent sm:has-checked:text-primary"
         >
           <input
             type="radio"
@@ -64,17 +65,18 @@ export const CategoryChips = ({
           <CategoryIcon
             icon={category.icon}
             color={category.color}
-            className="size-12 opacity-60 transition-opacity group-has-checked:opacity-100 group-has-checked:ring-2 group-has-checked:ring-primary group-has-checked:ring-offset-2 group-has-checked:ring-offset-background"
+            className="size-10 transition-opacity sm:size-12 sm:opacity-60 sm:group-has-checked:opacity-100 sm:group-has-checked:ring-2 sm:group-has-checked:ring-primary sm:group-has-checked:ring-offset-2 sm:group-has-checked:ring-offset-background"
           />
+          <span className="min-w-0 flex-1 truncate sm:w-full sm:flex-none">{category.name}</span>
           <span
             aria-hidden
-            className="absolute top-0 right-3 hidden size-5 items-center justify-center rounded-full bg-primary text-primary-foreground group-has-checked:flex"
+            className="hidden size-6 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground group-has-checked:flex sm:absolute sm:top-0 sm:right-3 sm:size-5"
           >
-            <Check className="size-3" />
+            <Check className="size-4 sm:size-3" />
           </span>
-          <span className="w-full truncate">{category.name}</span>
         </label>
       ))}
+      <CreateCategoryButton kind={kind} onCreated={onChoose} />
     </div>
   );
 };

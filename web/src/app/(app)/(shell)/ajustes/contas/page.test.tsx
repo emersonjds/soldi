@@ -109,7 +109,7 @@ describe("Ajustes › Contas fixas", () => {
 
     await userEvent.click(await screen.findByRole("button", { name: /^Aluguel Residencial/ }));
     const sheet = await screen.findByRole("dialog", { name: "Editar conta" });
-    expect(within(sheet).getByLabelText("Valor")).toHaveValue("2259,56");
+    expect(within(sheet).getByLabelText("Valor")).toHaveValue("2.259,56");
     expect(within(sheet).getByRole("radio", { name: "Aluguel" })).toBeChecked();
     await userEvent.click(within(sheet).getByRole("switch", { name: "Ativa" }));
     await userEvent.click(within(sheet).getByRole("button", { name: "Salvar" }));

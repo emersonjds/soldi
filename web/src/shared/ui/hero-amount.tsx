@@ -1,4 +1,6 @@
-/** The big `R$ 0,00` field of Lançar and Pagar; keeps digits, dots and commas only. */
+import { amountMask } from "./amount-input";
+
+/** The big `R$ 0,00` field of Lançar and Pagar, bank-style; `value` is the API decimal. */
 export const HeroAmount = ({
   id,
   value,
@@ -25,11 +27,8 @@ export const HeroAmount = ({
         id={id}
         // biome-ignore lint/a11y/noAutofocus: the sheet opens to type the amount; three taps in total.
         autoFocus
-        inputMode="decimal"
-        autoComplete="off"
         placeholder="0,00"
-        value={value}
-        onChange={(event) => onChange(event.target.value.replace(/[^\d.,]/g, ""))}
+        {...amountMask({ value, onValueChange: onChange })}
         aria-invalid={invalid}
         aria-describedby={invalid ? `${id}-error` : undefined}
         className="w-48 border-transparent border-b-2 bg-transparent text-center font-bold text-[34px] text-foreground tabular-nums leading-10 tracking-[-0.02em] outline-none placeholder:text-muted-foreground/50 focus:border-ring aria-invalid:border-destructive"

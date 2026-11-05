@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Toaster } from "sonner";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -117,12 +117,12 @@ describe("TransactionSheet", () => {
     expect(await screen.findByRole("radio", { name: "Mercado" })).toBeChecked();
     expect(screen.getByLabelText("Outra data")).toHaveValue("2026-11-05");
     await userEvent.clear(amount);
-    await userEvent.type(amount, "200");
+    await userEvent.type(amount, "20000");
     await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
 
     expect(await sent("PATCH")).toEqual({
       date: "2026-11-05",
-      amount: "200",
+      amount: "200.00",
       kind: "daily",
       category_id: MERCADO_ROW.category.id,
       note: "Compras da semana",
@@ -138,6 +138,23 @@ describe("TransactionSheet", () => {
     await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
 
     expect(await screen.findByText("Não foi possível salvar o lançamento.")).toBeInTheDocument();
+  });
+
+  it("creates a category from the picker, selects it and keeps the sheet open", async () => {
+    const carro = { ...MERCADO, id: "c1000000-0000-4000-8000-000000000099", name: "Carro", icon: "car" };
+    setup();
+
+    await userEvent.click(await screen.findByRole("button", { name: "Nova categoria" }));
+    const create = await screen.findByRole("dialog", { name: "Nova categoria" });
+    const requests = stubApi({
+      "GET /api/categories": { status: 200, body: [...CATEGORIES, carro] },
+      "POST /api/categories": { status: 201, body: carro },
+    });
+    await userEvent.type(within(create).getByLabelText("Nome"), "Carro{Enter}");
+
+    expect(await screen.findByRole("radio", { name: "Carro" })).toBeChecked();
+    expect(screen.getByRole("dialog", { name: "Lançar" })).toBeInTheDocument();
+    expect(requests.filter((request) => request.url.endsWith("/api/transactions"))).toHaveLength(0);
   });
 
   it("is a centered dialog from 1024px", async () => {

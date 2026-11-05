@@ -12,7 +12,8 @@ import { Switch } from "@/components/ui/switch";
 import { type Bill, useCreateBill, useUpdateBill } from "@/entities/bill/bill-queries";
 import { CategoryChips, useCategoryChips } from "@/entities/category/category-chips";
 import type { Schemas } from "@/shared/api/client";
-import { positiveAmount, toInput } from "@/shared/lib/money";
+import { positiveAmount } from "@/shared/lib/money";
+import { AmountInput } from "@/shared/ui/amount-input";
 import { BrandButton } from "@/shared/ui/brand-button";
 import { ResponsiveSheet } from "@/shared/ui/responsive-sheet";
 
@@ -35,7 +36,7 @@ const BillForm = ({
     bill
       ? {
           name: bill.name,
-          amount: toInput(bill.amount),
+          amount: bill.amount,
           dueDay: String(bill.due_day),
           categoryId: bill.category_id,
           active: bill.active,
@@ -83,13 +84,10 @@ const BillForm = ({
       <div className="grid grid-cols-[1fr_7rem] gap-3">
         <Field className="gap-1.5" data-invalid={Boolean(errors.amount)}>
           <FieldLabel htmlFor="bill-amount">Valor</FieldLabel>
-          <Input
+          <AmountInput
             id="bill-amount"
-            inputMode="decimal"
-            autoComplete="off"
-            placeholder="0,00"
             value={draft.amount}
-            onChange={(event) => set({ amount: event.target.value.replace(/[^\d.,]/g, "") })}
+            onValueChange={(amount) => set({ amount })}
             className={`${input} tabular-nums`}
             aria-invalid={Boolean(errors.amount)}
           />

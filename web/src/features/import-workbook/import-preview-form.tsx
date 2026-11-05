@@ -12,6 +12,7 @@ import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui
 import { Input } from "@/components/ui/input";
 import { type ImportPreview, importErrorMessage, useConfirmImport } from "@/entities/import/import-queries";
 import { parseBRL } from "@/shared/lib/money";
+import { AmountInput } from "@/shared/ui/amount-input";
 import { BrandButton } from "@/shared/ui/brand-button";
 import { Money } from "@/shared/ui/money";
 
@@ -36,7 +37,7 @@ const Row = ({ label, children }: { label: string; children: ReactNode }) => (
 export const ImportPreviewForm = ({ preview }: { preview: ImportPreview }) => {
   const router = useRouter();
   const confirm = useConfirmImport();
-  const [amount, setAmount] = useState("0,00");
+  const [amount, setAmount] = useState("0.00");
   const [date, setDate] = useState(() => firstJanuary(preview.years));
   const [skip, setSkip] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -115,12 +116,11 @@ export const ImportPreviewForm = ({ preview }: { preview: ImportPreview }) => {
       <div className="flex flex-col gap-4 rounded-2xl bg-card p-4 shadow-sm lg:p-6">
         <Field className="gap-1.5" data-invalid={invalid}>
           <FieldLabel htmlFor="import-balance">Saldo inicial</FieldLabel>
-          <Input
+          <AmountInput
             id="import-balance"
-            inputMode="decimal"
-            autoComplete="off"
+            negative
             value={amount}
-            onChange={(event) => setAmount(event.target.value)}
+            onValueChange={setAmount}
             className="h-12 text-base tabular-nums md:text-base"
             aria-invalid={invalid}
           />

@@ -73,7 +73,7 @@ describe("Onboarding", () => {
     const requests = stub();
     renderWithQuery(<OnboardingPage />);
 
-    await typeBalance("-200");
+    await typeBalance("-20000");
     await userEvent.click(await screen.findByRole("button", { name: "Adicionar outra" }));
     expect(screen.getAllByLabelText("Nome")).toHaveLength(2);
     await userEvent.click(screen.getAllByRole("button", { name: "Remover conta" })[1]);
@@ -83,14 +83,14 @@ describe("Onboarding", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Voltar" }));
     expect(await screen.findByRole("heading", { name: "Suas contas fixas" })).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Voltar" }));
-    expect(screen.getByLabelText("Saldo de hoje")).toHaveValue("-200");
+    expect(screen.getByLabelText("Saldo de hoje")).toHaveValue("-200,00");
     await userEvent.click(screen.getByRole("button", { name: "Continuar" }));
     await userEvent.click(await screen.findByRole("button", { name: "Pular por agora" }));
     await userEvent.click(await screen.findByRole("button", { name: "Ver meu mês" }));
 
     await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/mes"));
     const onboarding = requests.find((request) => request.method === "POST");
-    expect(await onboarding?.json()).toMatchObject({ opening_balance: "-200", bills: [] });
+    expect(await onboarding?.json()).toMatchObject({ opening_balance: "-200.00", bills: [] });
   });
 
   it("checks the balance and every half-filled bill", async () => {

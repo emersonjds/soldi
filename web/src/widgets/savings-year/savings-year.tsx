@@ -14,9 +14,10 @@ import { useSaveSavings, useSavingsGoal, useSavingsYear } from "@/entities/savin
 import { cn } from "@/lib/utils";
 import type { Schemas } from "@/shared/api/client";
 import { todayISO } from "@/shared/lib/date";
-import { formatBRL, parseBRL, toInput } from "@/shared/lib/money";
+import { formatBRL, parseBRL } from "@/shared/lib/money";
 import { formatPct } from "@/shared/lib/percent";
 import { TIER_STYLE, type Tier } from "@/shared/lib/tier";
+import { amountMask } from "@/shared/ui/amount-input";
 import { Money } from "@/shared/ui/money";
 import { PageError } from "@/shared/ui/page-state";
 
@@ -70,7 +71,7 @@ const SavedCell = ({ year, row }: { year: number; row: SavingsMonth }) => {
         aria-label={`Guardado em ${name}: ${formatBRL(saved)}. Editar`}
         onClick={() => {
           cancelled.current = false;
-          setDraft(toInput(saved));
+          setDraft(saved);
         }}
         className="-mr-2 inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 font-semibold transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"
       >
@@ -96,10 +97,7 @@ const SavedCell = ({ year, row }: { year: number; row: SavingsMonth }) => {
       aria-label={`Guardado em ${name}`}
       // biome-ignore lint/a11y/noAutofocus: the field replaces the amount just tapped.
       autoFocus
-      inputMode="decimal"
-      autoComplete="off"
-      value={draft}
-      onChange={(event) => setDraft(event.target.value.replace(/[^\d.,]/g, ""))}
+      {...amountMask({ value: draft, onValueChange: setDraft })}
       onKeyDown={(event) => {
         if (event.key === "Escape") cancelled.current = true;
         if (event.key === "Enter" || event.key === "Escape") event.currentTarget.blur();

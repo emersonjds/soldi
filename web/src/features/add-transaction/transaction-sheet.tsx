@@ -15,7 +15,7 @@ import {
 } from "@/entities/transaction/transaction-queries";
 import type { Schemas } from "@/shared/api/client";
 import { todayISO } from "@/shared/lib/date";
-import { positiveAmount, toInput } from "@/shared/lib/money";
+import { positiveAmount } from "@/shared/lib/money";
 import { BrandButton } from "@/shared/ui/brand-button";
 import { DateChips } from "@/shared/ui/date-chips";
 import { HeroAmount } from "@/shared/ui/hero-amount";
@@ -133,7 +133,7 @@ export const TransactionSheet = ({ open, onOpenChange, transaction }: Transactio
   const initial: Draft = transaction
     ? {
         kind: transaction.kind,
-        amount: toInput(transaction.amount),
+        amount: transaction.amount,
         category: transaction.category,
         date: transaction.date,
         note: transaction.note ?? "",

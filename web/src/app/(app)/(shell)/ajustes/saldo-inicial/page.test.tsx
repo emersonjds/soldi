@@ -28,7 +28,7 @@ describe("Ajustes › Saldo inicial", () => {
     const requests = open({ "PATCH /api/settings": { status: 200, body: SETTINGS } });
 
     const amount = await screen.findByLabelText("Saldo inicial");
-    expect(amount).toHaveValue("1842,10");
+    expect(amount).toHaveValue("1.842,10");
     expect(screen.getByLabelText("Data")).toHaveValue("2026-11-01");
     expect(screen.getByRole("link", { name: "Ajustes" })).toHaveAttribute("href", "/ajustes");
 
