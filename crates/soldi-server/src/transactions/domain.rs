@@ -109,6 +109,7 @@ mod tests {
             kind: CategoryKind::Daily,
             icon: "shopping-cart".into(),
             color: "cat-1".into(),
+            parent_id: None,
         };
 
         assert!(check_kind(CategoryKind::Daily, &market).is_ok());

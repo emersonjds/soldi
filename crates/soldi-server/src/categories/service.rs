@@ -1,5 +1,5 @@
 use soldi_types::categories::{Category, CreateCategory, UpdateCategory};
-use sqlx::PgPool;
+use sqlx::{PgConnection, PgPool};
 use uuid::Uuid;
 
 use super::{domain, repo};
@@ -9,6 +9,16 @@ use crate::extract::CurrentUser;
 pub async fn list(pool: &PgPool, user: &CurrentUser) -> Result<Vec<Category>, AppError> {
     let mut conn = pool.acquire().await?;
     Ok(repo::list(&mut conn, user.id).await?)
+}
+
+async fn active(
+    conn: &mut PgConnection,
+    user: &CurrentUser,
+    id: Uuid,
+) -> Result<Category, AppError> {
+    repo::find_active(conn, user.id, id)
+        .await?
+        .ok_or(AppError::NotFound)
 }
 
 pub async fn create(
@@ -25,6 +35,10 @@ pub async fn create(
         .map(domain::check_color)
         .transpose()?;
     let mut conn = pool.acquire().await?;
+    if let Some(parent_id) = input.parent_id {
+        let parent = active(&mut conn, user, parent_id).await?;
+        domain::check_parent(None, input.kind, false, &parent)?;
+    }
     let color = match input.color {
         Some(color) => color,
         None => {
@@ -32,7 +46,16 @@ pub async fn create(
             domain::color_for(usize::try_from(count).unwrap_or_default())
         }
     };
-    Ok(repo::insert(&mut conn, user.id, &name, input.kind, &icon, &color).await?)
+    Ok(repo::insert(
+        &mut conn,
+        user.id,
+        &name,
+        input.kind,
+        &icon,
+        &color,
+        input.parent_id,
+    )
+    .await?)
 }
 
 pub async fn update(
@@ -49,6 +72,13 @@ pub async fn update(
         .map(domain::check_color)
         .transpose()?;
     let mut conn = pool.acquire().await?;
+    // ponytail: checked then written without a lock; two concurrent moves could nest two levels.
+    if let Some(Some(parent_id)) = input.parent_id {
+        let category = active(&mut conn, user, id).await?;
+        let parent = active(&mut conn, user, parent_id).await?;
+        let has_children = repo::has_children(&mut conn, user.id, id).await?;
+        domain::check_parent(Some(id), category.kind, has_children, &parent)?;
+    }
     repo::update(
         &mut conn,
         user.id,
@@ -56,6 +86,7 @@ pub async fn update(
         name.as_deref(),
         input.icon.as_deref(),
         input.color.as_deref(),
+        input.parent_id,
     )
     .await?
     .ok_or(AppError::NotFound)

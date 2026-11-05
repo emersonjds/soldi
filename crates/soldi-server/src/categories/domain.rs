@@ -1,4 +1,5 @@
-use soldi_types::categories::CategoryKind;
+use soldi_types::categories::{Category, CategoryKind};
+use uuid::Uuid;
 
 use crate::error::{AppError, reject_nul};
 
@@ -126,10 +127,32 @@ pub fn check_color(color: &str) -> Result<(), AppError> {
     Ok(())
 }
 
+/// `parent` may hold the category `id` (none when creating) of `kind`: a top-level category of the
+/// same kind, not itself, and only when `id` has no subcategories of its own.
+pub fn check_parent(
+    id: Option<Uuid>,
+    kind: CategoryKind,
+    has_children: bool,
+    parent: &Category,
+) -> Result<(), AppError> {
+    if parent.kind != kind {
+        return Err(AppError::invalid("parent_id", "must be of the same kind"));
+    }
+    if id == Some(parent.id) {
+        return Err(AppError::invalid("parent_id", "must be another category"));
+    }
+    if has_children || parent.parent_id.is_some() {
+        return Err(AppError::rule(
+            "nested-subcategory",
+            "A subcategory cannot have subcategories.",
+        ));
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use soldi_types::categories::CategoryKind;
 
     fn field(result: Result<impl std::fmt::Debug, AppError>) -> String {
         match result {
@@ -215,6 +238,65 @@ mod tests {
             assert_eq!(field(check_icon(icon)), "icon", "{icon}");
         }
         assert!(check_icon(&"a".repeat(51)).is_err());
+    }
+
+    fn category(id: u128, kind: CategoryKind, parent_id: Option<u128>) -> Category {
+        Category {
+            id: Uuid::from_u128(id),
+            name: "Casa".into(),
+            kind,
+            icon: "sofa".into(),
+            color: "cat-1".into(),
+            parent_id: parent_id.map(Uuid::from_u128),
+        }
+    }
+
+    fn slug(result: Result<(), AppError>) -> &'static str {
+        match result {
+            Err(AppError::Rule { slug, .. }) => slug,
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_parent_is_a_top_level_category_of_the_same_kind() {
+        let casa = category(1, CategoryKind::Daily, None);
+
+        assert!(check_parent(None, CategoryKind::Daily, false, &casa).is_ok());
+        assert!(check_parent(Some(Uuid::from_u128(2)), CategoryKind::Daily, false, &casa).is_ok());
+        assert_eq!(
+            field(check_parent(None, CategoryKind::Bill, false, &casa)),
+            "parent_id"
+        );
+        assert_eq!(
+            field(check_parent(
+                Some(Uuid::from_u128(1)),
+                CategoryKind::Daily,
+                false,
+                &casa
+            )),
+            "parent_id"
+        );
+    }
+
+    #[test]
+    fn subcategories_are_one_level_deep() {
+        let luz = category(2, CategoryKind::Daily, Some(1));
+        let casa = category(1, CategoryKind::Daily, None);
+
+        assert_eq!(
+            slug(check_parent(None, CategoryKind::Daily, false, &luz)),
+            "nested-subcategory"
+        );
+        assert_eq!(
+            slug(check_parent(
+                Some(Uuid::from_u128(3)),
+                CategoryKind::Daily,
+                true,
+                &casa
+            )),
+            "nested-subcategory"
+        );
     }
 
     #[test]
