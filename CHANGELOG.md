@@ -9,7 +9,7 @@ versions. This file covers the server and the web app together.
 
 ## 0.1.0
 
-> Headline: workspace, auth, settings, categories, bills and onboarding API
+> Headline: workspace, auth, settings, categories, bills and onboarding API, plus the web app to sign in, onboard and see the month
 
 ### Added
 
@@ -22,3 +22,6 @@ versions. This file covers the server and the web app together.
 - The Next.js export is served from `SOLDI_WEB_DIR` (default `web/out`) with `.html`, `index.html` and client-route fallbacks.
 - OpenAPI at `/api/openapi.json`, Swagger UI at `/api/docs`, committed snapshot in `web/openapi.json`.
 - RFC 9457 problem responses for every error.
+- Web app (Next.js static export, pnpm): Entrar, Criar conta, three-step onboarding (opening balance and date, fixed bills, done), a `Mês` placeholder with the month hero and today's balance tier, and `Ajustes` with sign-out.
+- Soldi theme in light and dark (Inter, violet brand, indigo hero, income, expense and five thermometer tiers), desktop sidebar and phone tab bar with the raised `Lançar` button.
+- Template screens Soldi does not use were removed; Vitest with 90% coverage thresholds and a Playwright smoke test.
