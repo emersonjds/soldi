@@ -7,6 +7,19 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.6.0
+
+> Headline: bank-style amount entry and categories created from the picker
+
+### Added
+
+- `Nova categoria`, last in the category picker of Lançar and of a bill: a sheet with Nome (required, up to 40 characters) and Ícone (16 icons, `circle-dashed` by default); the kind is the picker's and the color the first `cat-n` the kind does not use yet (the server picks once all twelve are taken). The new category is selected at once and `Categoria criada` confirms it; a taken name says `Já existe uma categoria com esse nome`.
+
+### Changed
+
+- Every money field (Lançar, Pagar, a bill, onboarding, Ajustes saldo inicial and termômetro, import, the Economia inline edit) takes digits only, bank-style: the cents fill from the right as you type (`1` → `0,01`, `123456` → `1.234,56`), Backspace drops the last digit, a pasted `1.234,56` or `1234.56` is read whole and the caret stays at the end. Fields that may be negative take a `-`. The numeric keypad opens on phones.
+- The category picker is a list of 56px rows with the icon, the name and a check below 640px; the icon grid stays from 640px.
+
 ## 0.5.1
 
 > Headline: light theme only

@@ -81,7 +81,7 @@ const CreateCategoryForm = ({
           id="category-name"
           value={name}
           onChange={(event) => setName(event.target.value)}
-          placeholder="Farmácia"
+          placeholder="Ex.: Academia"
           maxLength={40}
           autoComplete="off"
           className="h-12 text-base md:text-base"
