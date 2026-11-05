@@ -5,7 +5,8 @@ use uuid::Uuid;
 
 use super::domain::Balance;
 
-/// `Economia` and its active subcategories with their balances since `opening`.
+/// `Economia` and its active subcategories with their balances since `opening`. The `!`
+/// overrides hold on a database full of rows, where the plan hides the columns' nullability.
 pub async fn balances(
     conn: &mut PgConnection,
     user_id: Uuid,
@@ -13,8 +14,8 @@ pub async fn balances(
 ) -> Result<Vec<Balance>, sqlx::Error> {
     sqlx::query_as!(
         Balance,
-        r#"SELECT c.id AS category_id, c.name, c.icon, c.color, c.target, c.deadline,
-                  c.is_savings AS parent,
+        r#"SELECT c.id AS "category_id!", c.name AS "name!", c.icon AS "icon!",
+                  c.color AS "color!", c.target, c.deadline, c.is_savings AS "parent!",
                   COALESCE((SELECT SUM(t.amount) FROM transactions t
                             WHERE t.user_id = $1 AND t.category_id = c.id AND t.date >= $2), 0)
                   - COALESCE((SELECT SUM(t.amount) FROM transactions t
