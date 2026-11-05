@@ -1,7 +1,10 @@
+use chrono::NaiveDate;
+use rust_decimal::Decimal;
 use soldi_types::categories::{Category, CategoryKind};
 use uuid::Uuid;
 
 use crate::error::{AppError, reject_nul};
+use crate::settings::domain::check_money;
 
 /// The market analysis list (docs/specs/market-analysis.md): name, kind, lucide icon.
 const DEFAULTS: [(&str, CategoryKind, &str); 30] = {
@@ -40,6 +43,12 @@ const DEFAULTS: [(&str, CategoryKind, &str); 30] = {
     ]
 };
 
+/// The savings categories (SOL-20), seeded after the defaults with their own color.
+const SAVINGS: [(&str, CategoryKind); 2] = [
+    ("Economia", CategoryKind::Bill),
+    ("Resgate", CategoryKind::Income),
+];
+
 pub const DEFAULT_ICON: &str = "circle-dashed";
 
 pub struct Seed {
@@ -47,6 +56,7 @@ pub struct Seed {
     pub kind: CategoryKind,
     pub icon: &'static str,
     pub color: String,
+    pub is_savings: bool,
 }
 
 /// `cat-1..cat-12` in order (docs/design/tokens.md).
@@ -82,8 +92,16 @@ pub fn defaults() -> Vec<Seed> {
                 kind,
                 icon,
                 color,
+                is_savings: false,
             }
         })
+        .chain(SAVINGS.map(|(name, kind)| Seed {
+            name,
+            kind,
+            icon: "piggy-bank",
+            color: "cat-11".into(),
+            is_savings: true,
+        }))
         .collect()
 }
 
@@ -135,6 +153,9 @@ pub fn check_parent(
     has_children: bool,
     parent: &Category,
 ) -> Result<(), AppError> {
+    if parent.is_savings && parent.kind == CategoryKind::Income {
+        return Err(savings_category());
+    }
     if parent.kind != kind {
         return Err(AppError::invalid("parent_id", "must be of the same kind"));
     }
@@ -145,6 +166,47 @@ pub fn check_parent(
         return Err(AppError::rule(
             "nested-subcategory",
             "A subcategory cannot have subcategories.",
+        ));
+    }
+    Ok(())
+}
+
+fn savings_category() -> AppError {
+    AppError::rule(
+        "savings-category",
+        "Economia and Resgate are never archived and never subcategories.",
+    )
+}
+
+/// `Economia` and `Resgate` stay top-level and active.
+pub fn check_not_savings(category: &Category) -> Result<(), AppError> {
+    match category.is_savings {
+        true => Err(savings_category()),
+        false => Ok(()),
+    }
+}
+
+/// A cofrinho is a subcategory of `Economia`.
+pub fn is_cofrinho_parent(parent: Option<&Category>) -> bool {
+    parent.is_some_and(|parent| parent.is_savings && parent.kind == CategoryKind::Bill)
+}
+
+/// `target` and `deadline` are set only on a cofrinho; a target is money greater than zero.
+pub fn check_goal(
+    cofrinho: bool,
+    target: Option<Decimal>,
+    deadline: Option<NaiveDate>,
+) -> Result<(), AppError> {
+    if let Some(target) = target {
+        if target <= Decimal::ZERO {
+            return Err(AppError::invalid("target", "must be greater than zero"));
+        }
+        check_money("target", target)?;
+    }
+    if !cofrinho && (target.is_some() || deadline.is_some()) {
+        return Err(AppError::rule(
+            "not-a-cofrinho",
+            "Only a subcategory of Economia has a target or a deadline.",
         ));
     }
     Ok(())
@@ -166,9 +228,9 @@ mod tests {
         let seeds = defaults();
         let count = |kind| seeds.iter().filter(|seed| seed.kind == kind).count();
 
-        assert_eq!(seeds.len(), 30);
-        assert_eq!(count(CategoryKind::Income), 3);
-        assert_eq!(count(CategoryKind::Bill), 12);
+        assert_eq!(seeds.len(), 32);
+        assert_eq!(count(CategoryKind::Income), 4);
+        assert_eq!(count(CategoryKind::Bill), 13);
         assert_eq!(count(CategoryKind::Daily), 15);
         assert_eq!(
             (seeds[0].name, seeds[0].icon, seeds[0].color.as_str()),
@@ -182,6 +244,51 @@ mod tests {
         for seed in &seeds {
             assert!(check_icon(seed.icon).is_ok(), "{}", seed.icon);
         }
+        let savings: Vec<_> = seeds
+            .iter()
+            .filter(|seed| seed.is_savings)
+            .map(|seed| (seed.name, seed.kind, seed.icon, seed.color.as_str()))
+            .collect();
+        assert_eq!(
+            savings,
+            [
+                ("Economia", CategoryKind::Bill, "piggy-bank", "cat-11"),
+                ("Resgate", CategoryKind::Income, "piggy-bank", "cat-11")
+            ]
+        );
+    }
+
+    #[test]
+    fn only_a_cofrinho_has_a_positive_target_or_a_deadline() {
+        let economia = Category {
+            is_savings: true,
+            ..category(1, CategoryKind::Bill, None)
+        };
+        let resgate = Category {
+            is_savings: true,
+            ..category(2, CategoryKind::Income, None)
+        };
+        let deadline = Some(NaiveDate::from_ymd_opt(2027, 6, 30).unwrap());
+
+        assert!(is_cofrinho_parent(Some(&economia)));
+        assert!(!is_cofrinho_parent(Some(&resgate)));
+        assert!(!is_cofrinho_parent(None));
+        assert!(check_goal(true, Some(Decimal::new(1000000, 2)), deadline).is_ok());
+        assert!(check_goal(false, None, None).is_ok());
+        assert_eq!(slug(check_goal(false, None, deadline)), "not-a-cofrinho");
+        assert_eq!(
+            slug(check_goal(false, Some(Decimal::ONE), None)),
+            "not-a-cofrinho"
+        );
+        for target in [Decimal::ZERO, Decimal::NEGATIVE_ONE, Decimal::new(1001, 3)] {
+            assert_eq!(field(check_goal(true, Some(target), None)), "target");
+        }
+        assert_eq!(slug(check_not_savings(&economia)), "savings-category");
+        assert_eq!(
+            slug(check_parent(None, CategoryKind::Income, false, &resgate)),
+            "savings-category"
+        );
+        assert!(check_not_savings(&category(3, CategoryKind::Daily, None)).is_ok());
     }
 
     #[test]
@@ -248,6 +355,9 @@ mod tests {
             icon: "sofa".into(),
             color: "cat-1".into(),
             parent_id: parent_id.map(Uuid::from_u128),
+            is_savings: false,
+            target: None,
+            deadline: None,
         }
     }
 

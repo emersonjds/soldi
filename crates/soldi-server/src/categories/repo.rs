@@ -1,3 +1,5 @@
+use chrono::NaiveDate;
+use rust_decimal::Decimal;
 use soldi_types::categories::{Category, CategoryKind};
 use sqlx::PgConnection;
 use uuid::Uuid;
@@ -13,14 +15,16 @@ pub async fn seed(
     let kinds: Vec<&str> = seeds.iter().map(|seed| seed.kind.as_str()).collect();
     let icons: Vec<&str> = seeds.iter().map(|seed| seed.icon).collect();
     let colors: Vec<&str> = seeds.iter().map(|seed| seed.color.as_str()).collect();
+    let savings: Vec<bool> = seeds.iter().map(|seed| seed.is_savings).collect();
     sqlx::query!(
-        "INSERT INTO categories (user_id, name, kind, icon, color)
-         SELECT $1, * FROM UNNEST($2::text[], $3::text[], $4::text[], $5::text[])",
+        "INSERT INTO categories (user_id, name, kind, icon, color, is_savings)
+         SELECT $1, * FROM UNNEST($2::text[], $3::text[], $4::text[], $5::text[], $6::bool[])",
         user_id,
         &names as &[&str],
         &kinds as &[&str],
         &icons as &[&str],
-        &colors as &[&str]
+        &colors as &[&str],
+        &savings
     )
     .execute(&mut *conn)
     .await?;
@@ -28,17 +32,24 @@ pub async fn seed(
 }
 
 /// Active categories: income, then bills, then daily; within a kind by parent name, each parent
-/// followed by its subcategories by name.
-pub async fn list(conn: &mut PgConnection, user_id: Uuid) -> Result<Vec<Category>, sqlx::Error> {
+/// followed by its subcategories by name. `Resgate` only with `include_system`.
+pub async fn list(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    include_system: bool,
+) -> Result<Vec<Category>, sqlx::Error> {
     sqlx::query_as!(
         Category,
-        r#"SELECT c.id, c.name, c.kind AS "kind: CategoryKind", c.icon, c.color, c.parent_id
+        r#"SELECT c.id, c.name, c.kind AS "kind: CategoryKind", c.icon, c.color, c.parent_id,
+                  c.is_savings, c.target, c.deadline
            FROM categories c LEFT JOIN categories p ON p.user_id = c.user_id AND p.id = c.parent_id
            WHERE c.user_id = $1 AND c.archived_at IS NULL AND p.archived_at IS NULL
+             AND ($2 OR NOT (c.is_savings AND c.kind = 'income'))
            ORDER BY array_position(ARRAY['income', 'bill', 'daily'], c.kind),
                     lower(COALESCE(p.name, c.name)), COALESCE(p.id, c.id),
                     c.parent_id IS NOT NULL, lower(c.name), c.id"#,
-        user_id
+        user_id,
+        include_system
     )
     .fetch_all(&mut *conn)
     .await
@@ -51,8 +62,9 @@ pub async fn find_active(
 ) -> Result<Option<Category>, sqlx::Error> {
     sqlx::query_as!(
         Category,
-        r#"SELECT id, name, kind AS "kind: CategoryKind", icon, color, parent_id FROM categories
-           WHERE user_id = $1 AND id = $2 AND archived_at IS NULL"#,
+        r#"SELECT id, name, kind AS "kind: CategoryKind", icon, color, parent_id, is_savings,
+                  target, deadline
+           FROM categories WHERE user_id = $1 AND id = $2 AND archived_at IS NULL"#,
         user_id,
         id
     )
@@ -75,14 +87,16 @@ pub async fn has_children(
     .await
 }
 
-/// Archived ones included, so a new category does not reuse a recent color.
+/// Archived ones included, so a new category does not reuse a recent color; the savings ones
+/// keep their own.
 pub async fn count_of_kind(
     conn: &mut PgConnection,
     user_id: Uuid,
     kind: CategoryKind,
 ) -> Result<i64, sqlx::Error> {
     sqlx::query_scalar!(
-        r#"SELECT count(*) AS "count!" FROM categories WHERE user_id = $1 AND kind = $2"#,
+        r#"SELECT count(*) AS "count!" FROM categories
+           WHERE user_id = $1 AND kind = $2 AND NOT is_savings"#,
         user_id,
         kind.as_str()
     )
@@ -90,26 +104,35 @@ pub async fn count_of_kind(
     .await
 }
 
+pub struct NewCategory<'a> {
+    pub name: &'a str,
+    pub kind: CategoryKind,
+    pub icon: &'a str,
+    pub color: &'a str,
+    pub parent_id: Option<Uuid>,
+    pub target: Option<Decimal>,
+    pub deadline: Option<NaiveDate>,
+}
+
 pub async fn insert(
     conn: &mut PgConnection,
     user_id: Uuid,
-    name: &str,
-    kind: CategoryKind,
-    icon: &str,
-    color: &str,
-    parent_id: Option<Uuid>,
+    new: NewCategory<'_>,
 ) -> Result<Category, sqlx::Error> {
     sqlx::query_as!(
         Category,
-        r#"INSERT INTO categories (user_id, name, kind, icon, color, parent_id)
-           VALUES ($1, $2, $3, $4, $5, $6)
-           RETURNING id, name, kind AS "kind: CategoryKind", icon, color, parent_id"#,
+        r#"INSERT INTO categories (user_id, name, kind, icon, color, parent_id, target, deadline)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+           RETURNING id, name, kind AS "kind: CategoryKind", icon, color, parent_id, is_savings,
+                     target, deadline"#,
         user_id,
-        name,
-        kind.as_str(),
-        icon,
-        color,
-        parent_id
+        new.name,
+        new.kind.as_str(),
+        new.icon,
+        new.color,
+        new.parent_id,
+        new.target,
+        new.deadline
     )
     .fetch_one(&mut *conn)
     .await
@@ -139,30 +162,44 @@ pub async fn find_or_insert(
     .await
 }
 
-/// `None` fields stay as they are; `Ok(None)` when no active category of the user has this id.
+/// `None` fields stay as they are.
+pub struct CategoryChange<'a> {
+    pub name: Option<&'a str>,
+    pub icon: Option<&'a str>,
+    pub color: Option<&'a str>,
+    pub parent_id: Option<Option<Uuid>>,
+    pub target: Option<Option<Decimal>>,
+    pub deadline: Option<Option<NaiveDate>>,
+}
+
+/// `Ok(None)` when no active category of the user has this id.
 pub async fn update(
     conn: &mut PgConnection,
     user_id: Uuid,
     id: Uuid,
-    name: Option<&str>,
-    icon: Option<&str>,
-    color: Option<&str>,
-    parent_id: Option<Option<Uuid>>,
+    change: CategoryChange<'_>,
 ) -> Result<Option<Category>, sqlx::Error> {
     sqlx::query_as!(
         Category,
         r#"UPDATE categories
            SET name = COALESCE($3, name), icon = COALESCE($4, icon), color = COALESCE($5, color),
-               parent_id = CASE WHEN $6 THEN $7 ELSE parent_id END, updated_at = now()
+               parent_id = CASE WHEN $6 THEN $7 ELSE parent_id END,
+               target = CASE WHEN $8 THEN $9 ELSE target END,
+               deadline = CASE WHEN $10 THEN $11 ELSE deadline END, updated_at = now()
            WHERE user_id = $1 AND id = $2 AND archived_at IS NULL
-           RETURNING id, name, kind AS "kind: CategoryKind", icon, color, parent_id"#,
+           RETURNING id, name, kind AS "kind: CategoryKind", icon, color, parent_id, is_savings,
+                     target, deadline"#,
         user_id,
         id,
-        name,
-        icon,
-        color,
-        parent_id.is_some(),
-        parent_id.flatten()
+        change.name,
+        change.icon,
+        change.color,
+        change.parent_id.is_some(),
+        change.parent_id.flatten(),
+        change.target.is_some(),
+        change.target.flatten(),
+        change.deadline.is_some(),
+        change.deadline.flatten()
     )
     .fetch_optional(&mut *conn)
     .await

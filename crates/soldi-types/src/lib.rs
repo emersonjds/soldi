@@ -86,6 +86,16 @@ where
     Option::<T>::deserialize(deserializer).map(Some)
 }
 
+/// [`nullable_field`] for a decimal string, like the `str_option` amounts.
+pub fn nullable_money<'de, D>(
+    deserializer: D,
+) -> Result<Option<Option<rust_decimal::Decimal>>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    rust_decimal::serde::str_option::deserialize(deserializer).map(Some)
+}
+
 #[cfg(test)]
 mod tests {
     #[derive(serde::Serialize)]

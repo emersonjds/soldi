@@ -1,3 +1,5 @@
+use chrono::NaiveDate;
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -26,7 +28,9 @@ impl CategoryKind {
 }
 
 /// `icon` is a lucide icon name; `color` a palette token, `cat-1` to `cat-12`; `parent_id` the
-/// category this one is a subcategory of, null for a top-level one.
+/// category this one is a subcategory of, null for a top-level one. `is_savings` marks the
+/// user's `Economia` (bill) and `Resgate` (income); `target` and `deadline` belong only to
+/// cofrinhos, the subcategories of `Economia`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct Category {
     pub id: Uuid,
@@ -35,6 +39,11 @@ pub struct Category {
     pub icon: String,
     pub color: String,
     pub parent_id: Option<Uuid>,
+    pub is_savings: bool,
+    #[serde(serialize_with = "crate::optional_money")]
+    #[schema(value_type = Option<String>)]
+    pub target: Option<Decimal>,
+    pub deadline: Option<NaiveDate>,
 }
 
 /// `icon` defaults to `circle-dashed`; `color` to the next token for the kind. `parent_id` makes
@@ -50,9 +59,18 @@ pub struct CreateCategory {
     pub color: Option<String>,
     #[serde(default)]
     pub parent_id: Option<Uuid>,
+    /// Greater than zero; only for a subcategory of `Economia`.
+    #[serde(default, with = "rust_decimal::serde::str_option")]
+    #[schema(value_type = Option<String>)]
+    pub target: Option<Decimal>,
+    /// Only for a subcategory of `Economia`.
+    #[serde(default)]
+    pub deadline: Option<NaiveDate>,
 }
 
-/// Absent fields stay as they are; the kind never changes; `"parent_id": null` makes it top-level.
+/// Absent fields stay as they are; the kind never changes; `"parent_id": null` makes it top-level;
+/// `null` clears `target` or `deadline`, which only a subcategory of `Economia` may set. Leaving
+/// `Economia` clears both.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct UpdateCategory {
@@ -65,4 +83,10 @@ pub struct UpdateCategory {
     #[serde(default, deserialize_with = "crate::nullable_field")]
     #[schema(value_type = Option<Uuid>, nullable)]
     pub parent_id: Option<Option<Uuid>>,
+    #[serde(default, deserialize_with = "crate::nullable_money")]
+    #[schema(value_type = Option<String>, nullable)]
+    pub target: Option<Option<Decimal>>,
+    #[serde(default, deserialize_with = "crate::nullable_field")]
+    #[schema(value_type = Option<NaiveDate>, nullable)]
+    pub deadline: Option<Option<NaiveDate>>,
 }

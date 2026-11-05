@@ -7,7 +7,7 @@
       "name": "AGPL-3.0-only",
       "identifier": "AGPL-3.0-only"
     },
-    "version": "0.8.0"
+    "version": "0.9.0"
   },
   "paths": {
     "/api/auth/me": {
@@ -559,6 +559,17 @@
           "categories"
         ],
         "operationId": "list_categories",
+        "parameters": [
+          {
+            "name": "include_system",
+            "in": "query",
+            "description": "Also list `Resgate`, the income category of withdrawals from a cofrinho",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Active categories, flat: income, bills, then daily; within a kind by parent name, each parent followed by its subcategories by name",
@@ -569,6 +580,16 @@
                   "items": {
                     "$ref": "#/components/schemas/Category"
                   }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`include_system` is not a boolean",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
                 }
               }
             }
@@ -639,7 +660,7 @@
             }
           },
           "422": {
-            "description": "A bad field, a parent of another kind, or `nested-subcategory` when the parent is a subcategory",
+            "description": "A bad field, a parent of another kind, `nested-subcategory` when the parent is a subcategory, `savings-category` under `Resgate`, or `not-a-cofrinho` for a target or deadline outside `Economia`",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -684,6 +705,16 @@
           },
           "404": {
             "description": "Missing, archived or another user's",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`savings-category` for `Economia` or `Resgate`",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -761,7 +792,7 @@
             }
           },
           "422": {
-            "description": "A bad field, a parent of another kind or itself, or `nested-subcategory` when the parent is a subcategory or this category has subcategories",
+            "description": "A bad field, a parent of another kind or itself, `nested-subcategory` when the parent is a subcategory or this category has subcategories, `savings-category` when moving `Economia` or `Resgate` or under `Resgate`, or `not-a-cofrinho` for a target or deadline outside `Economia`",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -1645,17 +1676,25 @@
       },
       "Category": {
         "type": "object",
-        "description": "`icon` is a lucide icon name; `color` a palette token, `cat-1` to `cat-12`; `parent_id` the\ncategory this one is a subcategory of, null for a top-level one.",
+        "description": "`icon` is a lucide icon name; `color` a palette token, `cat-1` to `cat-12`; `parent_id` the\ncategory this one is a subcategory of, null for a top-level one. `is_savings` marks the\nuser's `Economia` (bill) and `Resgate` (income); `target` and `deadline` belong only to\ncofrinhos, the subcategories of `Economia`.",
         "required": [
           "id",
           "name",
           "kind",
           "icon",
-          "color"
+          "color",
+          "is_savings"
         ],
         "properties": {
           "color": {
             "type": "string"
+          },
+          "deadline": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date"
           },
           "icon": {
             "type": "string"
@@ -1663,6 +1702,9 @@
           "id": {
             "type": "string",
             "format": "uuid"
+          },
+          "is_savings": {
+            "type": "boolean"
           },
           "kind": {
             "$ref": "#/components/schemas/CategoryKind"
@@ -1676,6 +1718,12 @@
               "null"
             ],
             "format": "uuid"
+          },
+          "target": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       },
@@ -1917,6 +1965,14 @@
               "null"
             ]
           },
+          "deadline": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date",
+            "description": "Only for a subcategory of `Economia`."
+          },
           "icon": {
             "type": [
               "string",
@@ -1935,6 +1991,13 @@
               "null"
             ],
             "format": "uuid"
+          },
+          "target": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Greater than zero; only for a subcategory of `Economia`."
           }
         },
         "additionalProperties": false
@@ -2678,13 +2741,20 @@
       },
       "UpdateCategory": {
         "type": "object",
-        "description": "Absent fields stay as they are; the kind never changes; `\"parent_id\": null` makes it top-level.",
+        "description": "Absent fields stay as they are; the kind never changes; `\"parent_id\": null` makes it top-level;\n`null` clears `target` or `deadline`, which only a subcategory of `Economia` may set. Leaving\n`Economia` clears both.",
         "properties": {
           "color": {
             "type": [
               "string",
               "null"
             ]
+          },
+          "deadline": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date"
           },
           "icon": {
             "type": [
@@ -2704,6 +2774,12 @@
               "null"
             ],
             "format": "uuid"
+          },
+          "target": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "additionalProperties": false
