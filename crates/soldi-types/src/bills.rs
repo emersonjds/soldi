@@ -14,3 +14,19 @@ pub struct Bill {
     pub due_day: i16,
     pub active: bool,
 }
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct CreateBill {
+    /// 1 to 100 characters.
+    pub name: String,
+    /// Greater than zero, up to two decimal places.
+    #[serde(with = "rust_decimal::serde::str")]
+    #[schema(value_type = String)]
+    pub amount: Decimal,
+    /// 1 to 31.
+    #[schema(minimum = 1, maximum = 31)]
+    pub due_day: i16,
+    /// One of the caller's active `bill` categories.
+    pub category_id: Uuid,
+}
