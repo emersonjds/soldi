@@ -1,0 +1,236 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT t.id, t.date, t.amount, t.kind AS \"kind: CategoryKind\", t.note,\n                  t.recurring_bill_id, t.cofrinho_id,\n                  c.id AS category_id, c.name AS category_name,\n                  c.kind AS \"category_kind: CategoryKind\", c.icon AS category_icon,\n                  c.color AS category_color, c.parent_id AS category_parent_id,\n                  c.is_savings AS category_is_savings, c.target AS category_target,\n                  c.deadline AS category_deadline, t.series_id,\n                  s.position AS \"series_position!\", s.total AS \"series_total!\"\n           FROM transactions t JOIN categories c ON c.user_id = t.user_id AND c.id = t.category_id\n           LEFT JOIN LATERAL (\n               SELECT count(*) AS total, count(*) FILTER (WHERE m.date <= t.date) AS position\n               FROM transactions m WHERE m.user_id = t.user_id AND m.series_id = t.series_id\n           ) s ON true\n           WHERE t.user_id = $1 AND (t.category_id = $2 OR t.cofrinho_id = $2)\n           ORDER BY t.date DESC, t.created_at DESC, t.id DESC\n           LIMIT $3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "transactions",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "date",
+        "type_info": "Date",
+        "origin": {
+          "Table": {
+            "table": "transactions",
+            "name": "date"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "amount",
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "transactions",
+            "name": "amount"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "kind: CategoryKind",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "transactions",
+            "name": "kind"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "note",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "transactions",
+            "name": "note"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "recurring_bill_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "transactions",
+            "name": "recurring_bill_id"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "cofrinho_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "transactions",
+            "name": "cofrinho_id"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "category_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "categories",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "category_name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "categories",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "category_kind: CategoryKind",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "categories",
+            "name": "kind"
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "category_icon",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "categories",
+            "name": "icon"
+          }
+        }
+      },
+      {
+        "ordinal": 11,
+        "name": "category_color",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "categories",
+            "name": "color"
+          }
+        }
+      },
+      {
+        "ordinal": 12,
+        "name": "category_parent_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "categories",
+            "name": "parent_id"
+          }
+        }
+      },
+      {
+        "ordinal": 13,
+        "name": "category_is_savings",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "categories",
+            "name": "is_savings"
+          }
+        }
+      },
+      {
+        "ordinal": 14,
+        "name": "category_target",
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "categories",
+            "name": "target"
+          }
+        }
+      },
+      {
+        "ordinal": 15,
+        "name": "category_deadline",
+        "type_info": "Date",
+        "origin": {
+          "Table": {
+            "table": "categories",
+            "name": "deadline"
+          }
+        }
+      },
+      {
+        "ordinal": 16,
+        "name": "series_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "transactions",
+            "name": "series_id"
+          }
+        }
+      },
+      {
+        "ordinal": 17,
+        "name": "series_position!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 18,
+        "name": "series_total!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      true,
+      true,
+      true,
+      null,
+      null
+    ]
+  },
+  "hash": "cee7ca7b48a60ef3e75a69e1546888face9ebf8ac6bb09a65131c69c3be6cb6c"
+}

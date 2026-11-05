@@ -50,7 +50,7 @@ impl AppState {
         title = "soldi",
         description = "Personal-finance thermometer API. Authenticate with the `__Host-soldi_session` cookie (`soldi_session` over plain HTTP). Money is a decimal string. Errors are RFC 9457 `application/problem+json`."
     ),
-    components(schemas(Problem))
+    components(schemas(Problem, soldi_types::transactions::Scope))
 )]
 struct ApiDoc;
 
