@@ -34,6 +34,7 @@ impl From<Row> for Transaction {
             note: row.note,
             recurring_bill_id: row.recurring_bill_id,
             cofrinho_id: row.cofrinho_id,
+            series: None,
             category: Category {
                 id: row.category_id,
                 name: row.category_name,

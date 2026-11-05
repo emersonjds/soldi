@@ -105,6 +105,7 @@ pub async fn pay(
         kind: CategoryKind::Bill,
         category_id: bill.category_id,
         note: None,
+        repeat_months: None,
     })?;
     if month.is_some_and(|first| !(first..=month_end(first)).contains(&entry.date)) {
         return Err(AppError::invalid("date", "must be in the month"));

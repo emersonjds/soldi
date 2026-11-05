@@ -88,6 +88,7 @@ pub async fn update(
         kind: patch.kind.unwrap_or(current.kind),
         category_id: category.id,
         note: patch.note.unwrap_or(current.note),
+        repeat_months: None,
     })?;
     domain::check_kind(next.kind, &category)?;
     check_opening(&mut conn, user, next.date).await?;
