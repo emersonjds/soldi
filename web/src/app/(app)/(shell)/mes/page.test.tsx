@@ -78,7 +78,7 @@ describe("Mês", () => {
     ]);
     const groceries = within(ledger()).getByRole("button", { name: /Compras da semana/ });
     expect(groceries).toHaveTextContent("Compras da semanaDiárioR$ 184,31");
-    expect(within(ledger()).getByRole("button", { name: /Aluguel/ })).toHaveTextContent("AluguelContaR$ 1.200,00");
+    expect(within(ledger()).getByRole("button", { name: /Aluguel/ })).toHaveTextContent("AluguelSaídaR$ 1.200,00");
     expect(within(ledger()).getByText("+ R$ 500,00")).toHaveClass("text-income");
   });
 
