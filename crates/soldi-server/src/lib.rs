@@ -3,6 +3,7 @@ pub mod bills;
 pub mod categories;
 pub mod error;
 pub mod extract;
+pub mod onboarding;
 pub mod settings;
 
 use std::path::Path;
@@ -54,6 +55,7 @@ fn api() -> OpenApiRouter<AppState> {
         .merge(settings::handler::router())
         .merge(categories::handler::router())
         .merge(bills::handler::router())
+        .merge(onboarding::handler::router())
 }
 
 /// The API contract, built without a database; `web/openapi.json` is its committed snapshot.
