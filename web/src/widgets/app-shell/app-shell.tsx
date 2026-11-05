@@ -99,6 +99,9 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
               <div className="grid min-w-0 text-sm leading-tight">
                 <span className="truncate font-medium">{name}</span>
                 <span className="truncate text-muted-foreground text-xs">{email}</span>
+                <span className="text-[11px] text-muted-foreground/70 tabular-nums">
+                  v{process.env.NEXT_PUBLIC_APP_VERSION}
+                </span>
               </div>
               <SignOutButton compact />
             </div>
