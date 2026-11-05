@@ -1,8 +1,10 @@
 pub mod auth;
 pub mod bills;
 pub mod categories;
+pub mod months;
 pub mod onboarding;
 pub mod settings;
+pub mod transactions;
 
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;

@@ -14,4 +14,4 @@ trap cleanup EXIT
 
 sqlx database create
 sqlx migrate run --source crates/soldi-server/migrations >/dev/null
-cargo sqlx prepare --workspace "$@"
+cargo sqlx prepare --workspace "$@" -- --all-targets

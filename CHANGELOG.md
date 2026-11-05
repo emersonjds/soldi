@@ -7,6 +7,19 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.2.0
+
+> Headline: transactions and the month view with the thermometer
+
+### Added
+
+- Transactions: `GET /api/transactions?month=YYYY-MM` (newest first, each with its category), `POST`, `PATCH` and `DELETE /api/transactions/{id}`. Amounts must be above zero with at most two decimal places and are never rounded; the category must be the caller's, active and of the entry's kind.
+- `GET /api/months/{YYYY-MM}`: every day of the month with income, bills, daily spending and the running balance carried from the opening balance across months and years, each colored by the user's thermometer tiers; today's balance, month totals and performance, and the month-end projection. A month before the opening date answers 422 `month-before-opening`.
+
+### Fixed
+
+- `scripts/sqlx-prepare.sh` and CI cache the queries used only by tests, so offline builds compile the test targets.
+
 ## 0.1.0
 
 > Headline: workspace, auth, settings, categories, bills and onboarding API, plus the web app to sign in, onboard and see the month

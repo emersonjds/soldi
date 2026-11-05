@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE recurring_bills SET archived_at = now() WHERE name = 'Velha'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "f69c484ee613290c341b5dfba66cd0258af465f262c737470fcc82cc6e335c4b"
+}

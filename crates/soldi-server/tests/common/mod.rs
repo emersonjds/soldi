@@ -41,6 +41,18 @@ impl TestApp {
         }
     }
 
+    /// The id of the caller's active category with this name.
+    pub async fn category_id(&self, name: &str) -> String {
+        let (_, categories) = self.get("/api/categories").await;
+        let category = categories
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|category| category["name"] == name)
+            .unwrap_or_else(|| panic!("no category {name}"));
+        category["id"].as_str().unwrap().to_string()
+    }
+
     pub async fn send(&self, request: Request<Body>) -> Response {
         self.router.clone().oneshot(request).await.unwrap()
     }

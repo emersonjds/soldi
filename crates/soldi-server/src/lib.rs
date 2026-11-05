@@ -3,8 +3,10 @@ pub mod bills;
 pub mod categories;
 pub mod error;
 pub mod extract;
+pub mod months;
 pub mod onboarding;
 pub mod settings;
+pub mod transactions;
 pub mod web;
 
 use std::path::Path;
@@ -56,6 +58,8 @@ fn api() -> OpenApiRouter<AppState> {
         .merge(settings::handler::router())
         .merge(categories::handler::router())
         .merge(bills::handler::router())
+        .merge(transactions::handler::router())
+        .merge(months::handler::router())
         .merge(onboarding::handler::router())
 }
 
