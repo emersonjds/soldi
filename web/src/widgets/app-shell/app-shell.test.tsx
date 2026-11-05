@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { setPathname } from "@/test/next-navigation";
 import { renderWithQuery } from "@/test/render";
-import { signedIn } from "@/test/stub-api";
+import { CATEGORIES, signedIn, TRANSACTIONS } from "@/test/stub-api";
 
 import { AppShell } from "./app-shell";
 
@@ -39,6 +39,23 @@ describe("AppShell", () => {
     await userEvent.click(within(tabs).getByRole("button", { name: "Lançar" }));
 
     expect(await screen.findByRole("dialog", { name: "Lançar" })).toBeInTheDocument();
+  });
+
+  it("saves a Diário in three taps from the floating button: Lançar, amount, Salvar", async () => {
+    const requests = signedIn({
+      "GET /api/categories": { status: 200, body: CATEGORIES },
+      "POST /api/transactions": { status: 201, body: TRANSACTIONS[0] },
+    });
+    renderWithQuery(<AppShell>conteúdo</AppShell>);
+
+    const tabs = screen.getByRole("navigation", { name: "Navegação principal" });
+    await userEvent.click(within(tabs).getByRole("button", { name: "Lançar" }));
+    await screen.findByRole("radio", { name: "Mercado" });
+    await userEvent.keyboard("12");
+    await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
+
+    await waitFor(() => expect(requests.some((request) => request.method === "POST")).toBe(true));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   });
 
   it("opens the Lançar sheet from the sidebar and closes it", async () => {
