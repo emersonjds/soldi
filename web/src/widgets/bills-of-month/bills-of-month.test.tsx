@@ -1,0 +1,239 @@
+import { screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { Toaster } from "sonner";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { useMonth } from "@/entities/month/month-query";
+import type { Schemas } from "@/shared/api/client";
+import { renderWithQuery } from "@/test/render";
+import { BILL_ALUGUEL, BILL_LUZ, BILLS_OF_MONTH, MONTH, problem, signedIn, TRANSACTIONS } from "@/test/stub-api";
+
+import { BillsOfMonth } from "./bills-of-month";
+
+type Reply = { status: number; body?: unknown };
+
+const PAYMENT = { ...TRANSACTIONS[1], id: "t-paid" };
+const PAID_RENT = { ...BILLS_OF_MONTH[1], paid: true, transaction_id: "t-paid" };
+
+/** A month on the server that a test can move forward, as a payment would. */
+const show = (
+  bills: Schemas["BillOfMonth"][] = BILLS_OF_MONTH,
+  replies: Record<string, Reply> = {},
+  month = "2026-11",
+) => {
+  let server: Schemas["MonthView"] = { ...MONTH, month, bills_of_month: bills };
+  const requests = signedIn(replies);
+  const stubbed = globalThis.fetch;
+  vi.stubGlobal("fetch", async (request: Request) => {
+    if (new URL(request.url).pathname !== `/api/months/${month}`) return stubbed(request);
+    requests.push(request);
+    return Response.json(server);
+  });
+  const Screen = () => {
+    const view = useMonth(month);
+    return view.data ? <BillsOfMonth view={view.data} /> : null;
+  };
+  renderWithQuery(
+    <>
+      <Screen />
+      <Toaster />
+    </>,
+  );
+  return {
+    requests,
+    serverHas: (next: Schemas["BillOfMonth"][]) => {
+      server = { ...server, bills_of_month: next };
+    },
+  };
+};
+
+const card = () => screen.getByRole("region", { name: "Contas do Mês" });
+const loaded = () => screen.findByRole("region", { name: "Contas do Mês" });
+const rowOf = (name: string) => within(card()).getByRole("listitem", { name });
+
+describe("Contas do Mês", () => {
+  beforeEach(() => {
+    window.innerWidth = 375;
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 10, 5, 12));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("lists the month's bills with due day, amount and a pill; the overdue one is tinted", async () => {
+    show();
+    await loaded();
+
+    expect(card()).toHaveTextContent("2 obrigações cadastradas");
+    expect(within(card()).getByRole("link", { name: "Ver todas" })).toHaveAttribute("href", "/ajustes/contas");
+
+    const rent = rowOf("Aluguel Residencial");
+    expect(rent).toHaveTextContent("Vence dia 10/11");
+    expect(rent).toHaveTextContent("R$ 2.259,56");
+    expect(within(rent).getByRole("button", { name: "Pagar Aluguel Residencial" })).toHaveTextContent("Pagar");
+
+    const power = rowOf("Luz (Enel)");
+    expect(power).toHaveTextContent("Venceu dia 02/11");
+    expect(power).toHaveClass("bg-expense-soft");
+    expect(within(power).getByRole("button", { name: "Pagar Luz (Enel), vencida" })).toHaveTextContent("Vencido");
+
+    expect(card()).toHaveTextContent("Próximo vencimento: Aluguel Residencial em 5 dias");
+  });
+
+  it("pays with one tap, dated today, and shows Pago at once", async () => {
+    const { requests, serverHas } = show(BILLS_OF_MONTH, {
+      [`POST /api/bills/${BILL_ALUGUEL.id}/pay`]: { status: 201, body: PAYMENT },
+    });
+    await loaded();
+    serverHas([BILLS_OF_MONTH[0], PAID_RENT]);
+
+    await userEvent.click(within(rowOf("Aluguel Residencial")).getByRole("button", { name: /^Pagar/ }));
+
+    expect(
+      await within(rowOf("Aluguel Residencial")).findByRole("button", { name: "Pago: desfazer Aluguel Residencial" }),
+    ).toHaveTextContent("Pago");
+    const post = requests.find((request) => request.method === "POST");
+    expect(new URL(post?.url ?? "").searchParams.get("month")).toBe("2026-11");
+    expect(await post?.json()).toEqual({ date: "2026-11-05" });
+  });
+
+  it("says so and goes back to Pagar when paying fails", async () => {
+    show(BILLS_OF_MONTH, {
+      [`POST /api/bills/${BILL_ALUGUEL.id}/pay`]: { status: 409, body: problem(409, "bill-already-paid") },
+    });
+    await loaded();
+
+    await userEvent.click(within(rowOf("Aluguel Residencial")).getByRole("button", { name: /^Pagar/ }));
+
+    expect(await screen.findByText("Não foi possível marcar como paga.")).toBeInTheDocument();
+    expect(within(rowOf("Aluguel Residencial")).getByRole("button", { name: /^Pagar/ })).toBeInTheDocument();
+  });
+
+  it("undoes a payment with a tap on Pago and says so", async () => {
+    const { requests, serverHas } = show([BILLS_OF_MONTH[0], PAID_RENT], {
+      [`DELETE /api/bills/${BILL_ALUGUEL.id}/pay`]: { status: 204 },
+    });
+    await loaded();
+    serverHas(BILLS_OF_MONTH);
+
+    await userEvent.click(within(rowOf("Aluguel Residencial")).getByRole("button", { name: /^Pago/ }));
+
+    expect(await screen.findByText("Pagamento desfeito")).toBeInTheDocument();
+    expect(within(rowOf("Aluguel Residencial")).getByRole("button", { name: /^Pagar/ })).toBeInTheDocument();
+    const remove = requests.find((request) => request.method === "DELETE");
+    expect(new URL(remove?.url ?? "").searchParams.get("month")).toBe("2026-11");
+  });
+
+  it("says so when undoing fails", async () => {
+    show([PAID_RENT], {
+      [`DELETE /api/bills/${BILL_ALUGUEL.id}/pay`]: { status: 500, body: problem(500, "Falhou.") },
+    });
+    await loaded();
+
+    await userEvent.click(within(rowOf("Aluguel Residencial")).getByRole("button", { name: /^Pago/ }));
+
+    expect(await screen.findByText("Não foi possível desfazer o pagamento.")).toBeInTheDocument();
+  });
+
+  it("opens Pagar from the amount to pay another value on another day", async () => {
+    const { requests } = show(BILLS_OF_MONTH, {
+      [`POST /api/bills/${BILL_LUZ.id}/pay`]: { status: 201, body: PAYMENT },
+    });
+    await loaded();
+
+    await userEvent.click(within(rowOf("Luz (Enel)")).getByRole("button", { name: /ajustar pagamento de Luz / }));
+    const sheet = await screen.findByRole("dialog", { name: "Pagar Luz (Enel)" });
+    const amount = within(sheet).getByLabelText("Valor");
+    expect(amount).toHaveValue("284,10");
+    expect(within(sheet).getByRole("button", { name: "Hoje" })).toHaveAttribute("aria-pressed", "true");
+
+    await userEvent.clear(amount);
+    await userEvent.click(within(sheet).getByRole("button", { name: "Confirmar" }));
+    expect(within(sheet).getByText("Informe um valor")).toBeInTheDocument();
+
+    await userEvent.type(amount, "300,00");
+    await userEvent.click(within(sheet).getByRole("button", { name: "Ontem" }));
+    await userEvent.click(within(sheet).getByRole("button", { name: "Confirmar" }));
+
+    await waitFor(() => expect(requests.some((request) => request.method === "POST")).toBe(true));
+    const post = requests.find((request) => request.method === "POST");
+    expect(await post?.json()).toEqual({ date: "2026-11-04", amount: "300.00" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+
+  it("dates a payment in another month on its due date", async () => {
+    const december = BILLS_OF_MONTH.map((bill) => ({ ...bill, due_date: bill.due_date.replace("-11-", "-12-") }));
+    const { requests } = show(
+      december,
+      { [`POST /api/bills/${BILL_ALUGUEL.id}/pay`]: { status: 201, body: PAYMENT } },
+      "2026-12",
+    );
+    await loaded();
+
+    await userEvent.click(within(rowOf("Aluguel Residencial")).getByRole("button", { name: /^Pagar/ }));
+
+    await waitFor(() => expect(requests.some((request) => request.method === "POST")).toBe(true));
+    expect(await requests.find((request) => request.method === "POST")?.json()).toEqual({ date: "2026-12-10" });
+  });
+
+  it("filters Pendentes and Pagas on desktop", async () => {
+    window.innerWidth = 1440;
+    show([BILLS_OF_MONTH[0], PAID_RENT]);
+    await loaded();
+
+    const filters = await within(card()).findByRole("radiogroup", { name: "Filtrar contas" });
+    await userEvent.click(within(filters).getByRole("radio", { name: "Pagas" }));
+    expect(within(card()).queryByRole("listitem", { name: "Luz (Enel)" })).not.toBeInTheDocument();
+    expect(rowOf("Aluguel Residencial")).toBeInTheDocument();
+
+    await userEvent.click(within(filters).getByRole("radio", { name: "Pendentes" }));
+    expect(within(card()).queryByRole("listitem", { name: "Aluguel Residencial" })).not.toBeInTheDocument();
+    expect(rowOf("Luz (Enel)")).toBeInTheDocument();
+
+    await userEvent.click(within(filters).getByRole("radio", { name: "Pendentes" }));
+    expect(rowOf("Luz (Enel)")).toBeInTheDocument();
+  });
+
+  it("says when a filter has nothing", async () => {
+    window.innerWidth = 1440;
+    show([PAID_RENT]);
+    await loaded();
+
+    await userEvent.click(
+      within(await within(card()).findByRole("radiogroup")).getByRole("radio", { name: "Pendentes" }),
+    );
+
+    expect(card()).toHaveTextContent("Nenhuma conta aqui.");
+  });
+
+  it("celebrates when every bill is paid and counts one bill in the singular", async () => {
+    show([PAID_RENT]);
+    await loaded();
+
+    expect(card()).toHaveTextContent("1 obrigação cadastrada");
+    expect(card()).toHaveTextContent("Todas as contas do mês pagas");
+  });
+
+  it("names a bill due today or tomorrow", async () => {
+    show([{ ...BILLS_OF_MONTH[1], due_date: "2026-11-05" }]);
+    await loaded();
+    expect(card()).toHaveTextContent("Próximo vencimento: Aluguel Residencial hoje");
+  });
+
+  it("names a bill due tomorrow", async () => {
+    show([{ ...BILLS_OF_MONTH[1], due_date: "2026-11-06" }]);
+    await loaded();
+    expect(card()).toHaveTextContent("Próximo vencimento: Aluguel Residencial amanhã");
+  });
+
+  it("invites the first bill when there is none", async () => {
+    show([]);
+    await loaded();
+
+    expect(card()).toHaveTextContent("Nenhuma conta fixa ainda");
+    expect(within(card()).getByRole("link", { name: "Cadastrar contas" })).toHaveAttribute("href", "/ajustes/contas");
+    expect(within(card()).queryByRole("link", { name: "Ver todas" })).not.toBeInTheDocument();
+  });
+});

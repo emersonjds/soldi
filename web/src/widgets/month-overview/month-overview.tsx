@@ -70,17 +70,18 @@ export const MonthSummary = ({ view }: { view: MonthView }) => (
 
 const Insight = ({ totals, projected }: { totals: MonthView["totals"]; projected: string }) => {
   const income = Number(totals.income);
-  if (income === 0) return <>Nenhuma entrada ainda este mês.</>;
   const committed = Math.round((Number(totals.outflow) / income) * 100);
-  const green = !projected.startsWith("-");
   return (
     <>
-      Você comprometeu <strong className="font-bold text-foreground">{committed}%</strong> da renda. Mantendo o ritmo,
-      seu mês termina no{" "}
-      <strong className={cn("font-bold", green ? "text-income" : "text-expense")}>
-        {green ? "verde" : "vermelho"}
-      </strong>
-      .
+      {income === 0 ? (
+        "Nenhuma entrada ainda este mês."
+      ) : (
+        <>
+          Você comprometeu <strong className="font-bold text-foreground">{committed}%</strong> da renda.
+        </>
+      )}{" "}
+      Com as contas em aberto, seu mês termina em{" "}
+      <Money amount={projected} className={cn("font-bold", !projected.startsWith("-") && "text-foreground")} />.
     </>
   );
 };

@@ -94,3 +94,9 @@ export const useUnpayBill = () => {
     onSettled: () => refresh(client),
   });
 };
+
+/** Today when paying the current month, the due date otherwise: the API wants a date inside `month`. */
+export const payDateFor = (month: string, dueDate: string) => {
+  const today = todayISO();
+  return today.startsWith(month) ? today : dueDate;
+};

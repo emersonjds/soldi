@@ -12,6 +12,7 @@ import { useTransactions } from "@/entities/transaction/transaction-queries";
 import { TransactionSheet } from "@/features/add-transaction/transaction-sheet";
 import { todayISO } from "@/shared/lib/date";
 import { PageError } from "@/shared/ui/page-state";
+import { BillsOfMonth } from "@/widgets/bills-of-month/bills-of-month";
 import { Ledger } from "@/widgets/ledger/ledger";
 import { MonthHeader } from "@/widgets/month-header/month-header";
 import { MonthSkeleton, MonthSummary, ThermometerCard } from "@/widgets/month-overview/month-overview";
@@ -55,12 +56,13 @@ const MonthScreen = () => {
         <MonthSummary view={view.data} />
       </div>
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3 lg:items-start">
-        <ThermometerCard view={view.data} className="lg:sticky lg:top-6 lg:col-start-3 lg:row-start-1" />
+        <BillsOfMonth view={view.data} className="lg:col-span-2 lg:col-start-1 lg:row-start-1" />
+        <ThermometerCard view={view.data} className="lg:sticky lg:top-6 lg:col-start-3 lg:row-span-2 lg:row-start-1" />
         <Ledger
           view={view.data}
           transactions={transactions.data}
           onLaunch={() => setLaunching(true)}
-          className="lg:col-span-2 lg:col-start-1 lg:row-start-1"
+          className="lg:col-span-2 lg:col-start-1 lg:row-start-2"
         />
       </div>
       <TransactionSheet open={launching} onOpenChange={setLaunching} />

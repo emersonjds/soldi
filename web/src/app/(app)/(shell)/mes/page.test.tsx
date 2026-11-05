@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { router, setSearch } from "@/test/next-navigation";
 import { renderWithQuery } from "@/test/render";
-import { CATEGORIES, MERCADO, MONTH, problem, signedIn, TRANSACTIONS } from "@/test/stub-api";
+import { BILLS_OF_MONTH, CATEGORIES, MERCADO, MONTH, problem, signedIn, TRANSACTIONS } from "@/test/stub-api";
 
 import MesPage from "./page";
 
@@ -61,7 +61,7 @@ describe("Mês", () => {
     const thermometer = screen.getByRole("region", { name: "Termômetro do Mês" });
     expect(within(thermometer).getByRole("meter")).toHaveAttribute("aria-valuetext", "Apertado");
     expect(thermometer).toHaveTextContent(
-      "Você comprometeu 277% da renda. Mantendo o ritmo, seu mês termina no verde.",
+      "Você comprometeu 277% da renda. Com as contas em aberto, seu mês termina em R$ 957,79.",
     );
   });
 
@@ -98,15 +98,29 @@ describe("Mês", () => {
     });
 
     expect(await screen.findByText("Nenhum lançamento ainda")).toBeInTheDocument();
-    expect(screen.getByText("Nenhuma entrada ainda este mês.")).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Termômetro do Mês" })).toHaveTextContent(
+      "Nenhuma entrada ainda este mês. Com as contas em aberto",
+    );
     await userEvent.click(screen.getByRole("button", { name: "Lançar agora" }));
     expect(await screen.findByRole("dialog", { name: "Lançar" })).toBeInTheDocument();
   });
 
-  it("says the month ends in the red when the projection is negative", async () => {
-    open({ "GET /api/months/2026-11": { status: 200, body: { ...MONTH, projected_balance: "-312.40" } } });
+  it("puts Contas do Mês between the summary and the thermometer, and a negative projection in red", async () => {
+    open({
+      "GET /api/months/2026-11": {
+        status: 200,
+        body: { ...MONTH, projected_balance: "-312.40", projected_tier: "light_red", bills_of_month: BILLS_OF_MONTH },
+      },
+    });
 
-    expect(await screen.findByText(/seu mês termina no/)).toHaveTextContent("vermelho");
+    const bills = await screen.findByRole("region", { name: "Contas do Mês" });
+    const summary = screen.getByRole("region", { name: "Resumo do mês" });
+    const thermometer = screen.getByRole("region", { name: "Termômetro do Mês" });
+    expect(summary.compareDocumentPosition(bills) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(bills.compareDocumentPosition(thermometer) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(within(bills).getByRole("listitem", { name: "Luz (Enel)" })).toHaveTextContent("Vencido");
+    expect(within(summary).getByText("-R$ 312,40")).toHaveClass("text-expense");
+    expect(within(thermometer).getByText("-R$ 312,40")).toHaveClass("text-expense");
   });
 
   it("shows a skeleton while loading, then an error card with a retry", async () => {
