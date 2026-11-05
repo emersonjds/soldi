@@ -23,5 +23,23 @@ export const positiveAmount = (input: string) => {
   return amount && !amount.startsWith("-") && /[1-9]/.test(amount) ? amount : null;
 };
 
-/** An API decimal as a person types it: `1234.5` → `1234,5`. */
-export const toInput = (amount: string) => amount.replace(".", ",");
+const plain = new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+/** An API decimal as a money field shows it: `1234.5` → `1.234,50`; `""` and a lone `-` stay as they are. */
+export const toInput = (amount: string) =>
+  /\d/.test(amount) ? plain.format(amount as Intl.StringNumericLiteral) : amount;
+
+/** NUMERIC(12,2): ten digits before the comma, two after. */
+const MAX_DIGITS = 12;
+
+/**
+ * Bank-style entry: the digits of what is in the field fill the cents from the right (`123456` → `1234.56`).
+ * With `negative`, an odd number of `-` makes it negative; a sign without digits stays `-`.
+ */
+export const maskAmount = (typed: string, negative = false): string => {
+  const sign = negative && (typed.match(/-/g)?.length ?? 0) % 2 === 1 ? "-" : "";
+  const digits = typed.replace(/\D/g, "").replace(/^0+/, "").slice(0, MAX_DIGITS);
+  if (!digits) return sign;
+  const padded = digits.padStart(3, "0");
+  return `${sign}${padded.slice(0, -2)}.${padded.slice(-2)}`;
+};

@@ -116,18 +116,19 @@ describe("Economia", () => {
     expect(await puts(requests)[0].json()).toEqual({ amount: "650.00" });
   });
 
-  it("sends exactly the amount typed, on blur too", async () => {
+  it("fills the cents from the right as digits are typed and saves on blur", async () => {
     const requests = open({
       "PUT /api/savings/2026/10": { status: 200, body: { year: 2026, month: 10, amount: "1234.50" } },
     });
     await userEvent.click(await screen.findByRole("button", { name: /^Guardado em Outubro/ }));
     const input = screen.getByRole("textbox", { name: "Guardado em Outubro" });
     await userEvent.clear(input);
-    await userEvent.type(input, "1.234,5");
+    await userEvent.type(input, "12345");
+    expect(input).toHaveValue("123,45");
     fireEvent.blur(input);
 
     await waitFor(() => expect(puts(requests)).toHaveLength(1));
-    expect(await puts(requests)[0].json()).toEqual({ amount: "1234.5" });
+    expect(await puts(requests)[0].json()).toEqual({ amount: "123.45" });
   });
 
   it("Escape cancels and an unchanged value saves nothing", async () => {

@@ -8,12 +8,13 @@ import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui
 import { Input } from "@/components/ui/input";
 import { useUpdateSettings } from "@/entities/settings/settings-query";
 import type { Schemas } from "@/shared/api/client";
-import { parseBRL, toInput } from "@/shared/lib/money";
+import { parseBRL } from "@/shared/lib/money";
+import { AmountInput } from "@/shared/ui/amount-input";
 import { BrandButton } from "@/shared/ui/brand-button";
 
 /** The balance everything starts from, and the day it was true. */
 export const OpeningForm = ({ settings }: { settings: Schemas["Settings"] }) => {
-  const [amount, setAmount] = useState(toInput(settings.opening_balance));
+  const [amount, setAmount] = useState(settings.opening_balance);
   const [date, setDate] = useState(settings.opening_date);
   const [submitted, setSubmitted] = useState(false);
   const save = useUpdateSettings();
@@ -38,12 +39,11 @@ export const OpeningForm = ({ settings }: { settings: Schemas["Settings"] }) => 
       <div className="flex flex-col gap-4 rounded-2xl bg-card p-4 shadow-sm lg:p-6">
         <Field className="gap-1.5" data-invalid={invalid}>
           <FieldLabel htmlFor="opening-balance">Saldo inicial</FieldLabel>
-          <Input
+          <AmountInput
             id="opening-balance"
-            inputMode="decimal"
-            autoComplete="off"
+            negative
             value={amount}
-            onChange={(event) => setAmount(event.target.value)}
+            onValueChange={setAmount}
             className="h-12 text-base tabular-nums md:text-base"
             aria-invalid={invalid}
           />

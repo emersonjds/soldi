@@ -200,6 +200,6 @@ describe("Mês", () => {
     );
 
     const edit = await screen.findByRole("dialog", { name: "Editar lançamento" });
-    expect(within(edit).getByLabelText("Valor")).toHaveValue("1200,00");
+    expect(within(edit).getByLabelText("Valor")).toHaveValue("1.200,00");
   });
 });

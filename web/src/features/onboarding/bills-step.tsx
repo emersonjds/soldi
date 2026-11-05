@@ -3,7 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
 import { Plus, Trash2 } from "lucide-react";
-import { type UseFormRegister, useFieldArray, useForm } from "react-hook-form";
+import { Controller, type UseFormRegister, useFieldArray, useForm } from "react-hook-form";
 import { z } from "zod";
 
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { categoriesQuery } from "@/entities/category/categories-query";
 import type { Schemas } from "@/shared/api/client";
 import { parseBRL } from "@/shared/lib/money";
+import { AmountInput } from "@/shared/ui/amount-input";
 import { BrandButton } from "@/shared/ui/brand-button";
 import { PageError } from "@/shared/ui/page-state";
 
@@ -133,13 +134,19 @@ export const BillsStep = ({ defaultRows, onNext, onSkip, onBack }: BillsStepProp
             <div className="grid grid-cols-[1fr_6rem] gap-3">
               <Field className="gap-1.5" data-invalid={Boolean(rowErrors?.amount)}>
                 <FieldLabel htmlFor={`bill-${index}-amount`}>Valor</FieldLabel>
-                <Input
-                  {...form.register(`rows.${index}.amount`)}
-                  id={`bill-${index}-amount`}
-                  inputMode="decimal"
-                  placeholder="0,00"
-                  className="h-12 text-base tabular-nums md:text-base"
-                  aria-invalid={Boolean(rowErrors?.amount)}
+                <Controller
+                  control={form.control}
+                  name={`rows.${index}.amount`}
+                  render={({ field: { value, onChange, ...field } }) => (
+                    <AmountInput
+                      {...field}
+                      id={`bill-${index}-amount`}
+                      value={value}
+                      onValueChange={onChange}
+                      className="h-12 text-base tabular-nums md:text-base"
+                      aria-invalid={Boolean(rowErrors?.amount)}
+                    />
+                  )}
                 />
                 {rowErrors?.amount && <FieldError errors={[rowErrors.amount]} />}
               </Field>

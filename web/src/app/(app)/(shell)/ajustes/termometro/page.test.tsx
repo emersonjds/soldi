@@ -45,12 +45,12 @@ describe("Ajustes › Termômetro", () => {
 
     expect(await screen.findByLabelText("Atenção a partir de")).toHaveValue("-500,00");
     expect(field("Apertado a partir de")).toHaveValue("0,00");
-    expect(field("Confortável a partir de")).toHaveValue("1000,00");
-    expect(field("Folga a partir de")).toHaveValue("2000,00");
+    expect(field("Confortável a partir de")).toHaveValue("1.000,00");
+    expect(field("Folga a partir de")).toHaveValue("2.000,00");
     expect(await screen.findByText(/Com o saldo de hoje/)).toHaveTextContent("R$ 957,79");
     expect(screen.getByRole("meter")).toHaveAttribute("aria-valuetext", "Apertado");
 
-    await retype("Confortável a partir de", "900");
+    await retype("Confortável a partir de", "90000");
 
     expect(screen.getByRole("meter")).toHaveAttribute("aria-valuetext", "Confortável");
     expect(screen.getByRole("link", { name: "Ajustes" })).toHaveAttribute("href", "/ajustes");
@@ -60,7 +60,7 @@ describe("Ajustes › Termômetro", () => {
     const requests = open({ "PATCH /api/settings": { status: 200, body: { ...SETTINGS, tier_yellow: "900.00" } } });
 
     await screen.findByLabelText("Confortável a partir de");
-    await retype("Confortável a partir de", "900");
+    await retype("Confortável a partir de", "90000");
     await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
 
     expect(await screen.findByText("Termômetro salvo")).toBeInTheDocument();
@@ -68,7 +68,7 @@ describe("Ajustes › Termômetro", () => {
     expect(await patch?.json()).toEqual({
       tier_red: "-500.00",
       tier_zero: "0.00",
-      tier_yellow: "900",
+      tier_yellow: "900.00",
       tier_green: "2000.00",
     });
   });
@@ -77,7 +77,7 @@ describe("Ajustes › Termômetro", () => {
     const requests = open();
 
     await screen.findByLabelText("Apertado a partir de");
-    await retype("Apertado a partir de", "-600");
+    await retype("Apertado a partir de", "-60000");
     expect(screen.getByRole("alert")).toHaveTextContent("Cada faixa precisa ser maior que a anterior.");
     expect(screen.getByRole("button", { name: "Salvar" })).toBeDisabled();
 

@@ -5,13 +5,13 @@ import { type FormEvent, useState } from "react";
 import { toast } from "sonner";
 
 import { Field, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
 import { useMonth } from "@/entities/month/month-query";
 import { useUpdateSettings } from "@/entities/settings/settings-query";
 import type { Schemas } from "@/shared/api/client";
 import { todayISO } from "@/shared/lib/date";
-import { formatBRL, parseBRL, toInput } from "@/shared/lib/money";
+import { formatBRL, parseBRL } from "@/shared/lib/money";
 import { boundsRise, type TierBounds, tierOf } from "@/shared/lib/tier";
+import { AmountInput } from "@/shared/ui/amount-input";
 import { BrandButton } from "@/shared/ui/brand-button";
 import { ThermometerStrip } from "@/shared/ui/thermometer-strip";
 
@@ -31,10 +31,10 @@ const parseAll = (draft: TierBounds): TierBounds | null => {
 /** The four lower bounds of the thermometer, with today's balance placed live as they change. */
 export const ThermometerForm = ({ settings }: { settings: Schemas["Settings"] }) => {
   const [draft, setDraft] = useState<TierBounds>({
-    tier_red: toInput(settings.tier_red),
-    tier_zero: toInput(settings.tier_zero),
-    tier_yellow: toInput(settings.tier_yellow),
-    tier_green: toInput(settings.tier_green),
+    tier_red: settings.tier_red,
+    tier_zero: settings.tier_zero,
+    tier_yellow: settings.tier_yellow,
+    tier_green: settings.tier_green,
   });
   const month = useMonth(todayISO().slice(0, 7));
   const save = useUpdateSettings();
@@ -73,12 +73,11 @@ export const ThermometerForm = ({ settings }: { settings: Schemas["Settings"] })
           {FIELDS.map(({ key, label }) => (
             <Field key={key} className="gap-1.5" data-invalid={!rising}>
               <FieldLabel htmlFor={key}>{label}</FieldLabel>
-              <Input
+              <AmountInput
                 id={key}
-                inputMode="decimal"
-                autoComplete="off"
+                negative
                 value={draft[key]}
-                onChange={(event) => setDraft((current) => ({ ...current, [key]: event.target.value }))}
+                onValueChange={(value) => setDraft((current) => ({ ...current, [key]: value }))}
                 className="h-12 text-base tabular-nums md:text-base"
                 aria-invalid={!rising}
               />

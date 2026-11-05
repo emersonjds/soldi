@@ -5,7 +5,7 @@ import { type FormEvent, useState } from "react";
 import { toast } from "sonner";
 
 import { type BillOfMonth, payDateFor, usePayBill } from "@/entities/bill/bill-queries";
-import { positiveAmount, toInput } from "@/shared/lib/money";
+import { positiveAmount } from "@/shared/lib/money";
 import { BrandButton } from "@/shared/ui/brand-button";
 import { DateChips } from "@/shared/ui/date-chips";
 import { HeroAmount } from "@/shared/ui/hero-amount";
@@ -14,7 +14,7 @@ import { ResponsiveSheet } from "@/shared/ui/responsive-sheet";
 type Payment = { date: string; amount: string };
 
 const PayForm = ({ bill, month, onPay }: { bill: BillOfMonth; month: string; onPay: (payment: Payment) => void }) => {
-  const [input, setInput] = useState(toInput(bill.amount));
+  const [input, setInput] = useState(bill.amount);
   const [date, setDate] = useState(payDateFor(month, bill.due_date));
   const [submitted, setSubmitted] = useState(false);
   const amount = positiveAmount(input);

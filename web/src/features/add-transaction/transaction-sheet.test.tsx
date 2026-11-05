@@ -117,12 +117,12 @@ describe("TransactionSheet", () => {
     expect(await screen.findByRole("radio", { name: "Mercado" })).toBeChecked();
     expect(screen.getByLabelText("Outra data")).toHaveValue("2026-11-05");
     await userEvent.clear(amount);
-    await userEvent.type(amount, "200");
+    await userEvent.type(amount, "20000");
     await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
 
     expect(await sent("PATCH")).toEqual({
       date: "2026-11-05",
-      amount: "200",
+      amount: "200.00",
       kind: "daily",
       category_id: MERCADO_ROW.category.id,
       note: "Compras da semana",
