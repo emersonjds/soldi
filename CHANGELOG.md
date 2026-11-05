@@ -15,10 +15,17 @@ versions. This file covers the server and the web app together.
 
 - Transactions: `GET /api/transactions?month=YYYY-MM` (newest first, each with its category), `POST`, `PATCH` and `DELETE /api/transactions/{id}`. Amounts must be above zero with at most two decimal places and are never rounded; the category must be the caller's, active and of the entry's kind.
 - `GET /api/months/{YYYY-MM}`: every day of the month with income, bills, daily spending and the running balance carried from the opening balance across months and years, each colored by the user's thermometer tiers; today's balance, month totals and performance, and the month-end projection. A month before the opening date answers 422 `month-before-opening`.
+- Web `Mês`: month switcher (`?m=YYYY-MM`, arrow keys, nothing before the opening month), today's balance with its tier, Entradas / Saídas / Projetado over the hero, `Termômetro do Mês` with the five-tier strip and how much of the income is committed, and `Lançamentos` grouped by day with the day's balance and tier. Loading, empty and error states; light and dark, 375px and 1440px.
+- Web `Lançar`: bottom sheet on phones and dialog from 1024px for Entrada, Conta or Diário, with Diário, its first category and today preselected so the floating button, the amount and Salvar log a spend. The new row shows at once. Tapping a row edits or deletes it; a deletion can be undone for 5 seconds.
+- Web thermometer components: tier pill, tier strip, money with tabular figures and category icons.
 
 ### Fixed
 
 - `scripts/sqlx-prepare.sh` and CI cache the queries used only by tests, so offline builds compile the test targets.
+
+### Removed
+
+- The template's sample dashboards and the `simple-icons` dependency.
 
 ## 0.1.0
 
