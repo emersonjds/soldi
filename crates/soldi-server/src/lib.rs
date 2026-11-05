@@ -66,6 +66,7 @@ fn api() -> OpenApiRouter<AppState> {
         .merge(onboarding::handler::router())
         .merge(reports::handler::router())
         .merge(savings::handler::router())
+        .merge(imports::handler::router())
 }
 
 /// The API contract, built without a database; `web/openapi.json` is its committed snapshot.

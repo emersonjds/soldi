@@ -6,7 +6,8 @@ use chrono::NaiveDate;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use soldi_types::categories::CategoryKind;
-use soldi_types::imports::ImportError;
+use soldi_types::imports::{ImportError, ImportPreview, ImportYear};
+use uuid::Uuid;
 
 use crate::savings::domain::MonthAmount;
 use crate::settings::domain::check_money;
@@ -77,6 +78,33 @@ fn entry(years: &mut BTreeMap<i16, Year>, year: i16) -> &mut Year {
         rows: Vec::new(),
         savings: Vec::new(),
     })
+}
+
+/// Counts and totals per year, for the user to check before confirming.
+pub fn preview(parsed: &ParsedWorkbook, token: Uuid) -> ImportPreview {
+    let total = |year: &Year, kind| {
+        year.rows
+            .iter()
+            .filter(|row| row.kind == kind)
+            .map(|row| row.amount)
+            .sum()
+    };
+    ImportPreview {
+        years: parsed
+            .years
+            .iter()
+            .map(|year| ImportYear {
+                year: year.year,
+                transactions: year.rows.len() as u32,
+                income_total: total(year, CategoryKind::Income),
+                bills_total: total(year, CategoryKind::Bill),
+                daily_total: total(year, CategoryKind::Daily),
+                savings_months: year.savings.len() as u32,
+            })
+            .collect(),
+        errors: parsed.errors.clone(),
+        token,
+    }
 }
 
 /// Cell positions are 0-based `(row, column)`.
