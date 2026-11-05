@@ -7,7 +7,7 @@
       "name": "AGPL-3.0-only",
       "identifier": "AGPL-3.0-only"
     },
-    "version": "0.8.0"
+    "version": "0.9.0"
   },
   "paths": {
     "/api/auth/me": {
@@ -559,6 +559,17 @@
           "categories"
         ],
         "operationId": "list_categories",
+        "parameters": [
+          {
+            "name": "include_system",
+            "in": "query",
+            "description": "Also list `Resgate`, the income category of withdrawals from a cofrinho",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Active categories, flat: income, bills, then daily; within a kind by parent name, each parent followed by its subcategories by name",
@@ -569,6 +580,16 @@
                   "items": {
                     "$ref": "#/components/schemas/Category"
                   }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`include_system` is not a boolean",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
                 }
               }
             }
@@ -639,7 +660,7 @@
             }
           },
           "422": {
-            "description": "A bad field, a parent of another kind, or `nested-subcategory` when the parent is a subcategory",
+            "description": "A bad field, a parent of another kind, `nested-subcategory` when the parent is a subcategory, `savings-category` under `Resgate`, or `not-a-cofrinho` for a target or deadline outside `Economia`",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -684,6 +705,16 @@
           },
           "404": {
             "description": "Missing, archived or another user's",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`savings-category` for `Economia` or `Resgate`, `cofrinho-not-empty` for a cofrinho holding money",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -761,7 +792,193 @@
             }
           },
           "422": {
-            "description": "A bad field, a parent of another kind or itself, or `nested-subcategory` when the parent is a subcategory or this category has subcategories",
+            "description": "A bad field, a parent of another kind or itself, `nested-subcategory` when the parent is a subcategory or this category has subcategories, `savings-category` when moving `Economia` or `Resgate` or under `Resgate`, or `not-a-cofrinho` for a target or deadline outside `Economia`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cofrinhos": {
+      "get": {
+        "tags": [
+          "cofrinhos"
+        ],
+        "operationId": "list_cofrinhos",
+        "responses": {
+          "200": {
+            "description": "Every cofrinho with its balance and goal; this month in São Paulo",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Cofrinhos"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cofrinhos/{category_id}/movements": {
+      "get": {
+        "tags": [
+          "cofrinhos"
+        ],
+        "operationId": "list_movements",
+        "parameters": [
+          {
+            "name": "category_id",
+            "in": "path",
+            "description": "`Economia` or one of its subcategories",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "1 to 200; 50 when absent",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "maximum": 200,
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Its entries and resgates, newest date first, then newest entry first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Transaction"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`limit` is not a number",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Missing, archived or another user's",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`limit` out of range, or `not-a-cofrinho`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cofrinhos/{category_id}/withdraw": {
+      "post": {
+        "tags": [
+          "cofrinhos"
+        ],
+        "operationId": "withdraw",
+        "parameters": [
+          {
+            "name": "category_id",
+            "in": "path",
+            "description": "`Economia` or one of its subcategories",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Withdraw"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "The resgate: an income entry in `Resgate` with `cofrinho_id`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Transaction"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Missing, archived or another user's",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "A bad field, `insufficient-cofrinho` above the balance, `before-opening-date`, or `not-a-cofrinho`",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -1091,151 +1308,6 @@
         }
       }
     },
-    "/api/savings": {
-      "get": {
-        "tags": [
-          "savings"
-        ],
-        "operationId": "get_savings_year",
-        "parameters": [
-          {
-            "name": "year",
-            "in": "query",
-            "description": "2000 to 2100",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            },
-            "example": 2026
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Twelve months of income and savings with the year totals and the goal",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SavingsYear"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "No `year`, or not a number",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "401": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "`year` outside 2000..2100",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/savings/{year}/{month}": {
-      "put": {
-        "tags": [
-          "savings"
-        ],
-        "operationId": "set_savings",
-        "parameters": [
-          {
-            "name": "year",
-            "in": "path",
-            "description": "2000 to 2100",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            },
-            "example": 2026
-          },
-          {
-            "name": "month",
-            "in": "path",
-            "description": "1 to 12",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            },
-            "example": 11
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SetSavings"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "The month's savings, created or replaced",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Savings"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "`year` or `month` is not a number",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "401": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Amount below zero or with more than two places, `year` outside 2000..2100, `month` outside 1..12, or a month before the opening date's month (`month-before-opening`)",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/settings": {
       "get": {
         "tags": [
@@ -1299,7 +1371,7 @@
             }
           },
           "422": {
-            "description": "Money with more than two places, tiers out of order (names the upper tier of the first pair), goal outside 1..100",
+            "description": "Money with more than two places, tiers out of order (names the upper tier of the first pair), an unknown field",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -1645,17 +1717,25 @@
       },
       "Category": {
         "type": "object",
-        "description": "`icon` is a lucide icon name; `color` a palette token, `cat-1` to `cat-12`; `parent_id` the\ncategory this one is a subcategory of, null for a top-level one.",
+        "description": "`icon` is a lucide icon name; `color` a palette token, `cat-1` to `cat-12`; `parent_id` the\ncategory this one is a subcategory of, null for a top-level one. `is_savings` marks the\nuser's `Economia` (bill) and `Resgate` (income); `target` and `deadline` belong only to\ncofrinhos, the subcategories of `Economia`.",
         "required": [
           "id",
           "name",
           "kind",
           "icon",
-          "color"
+          "color",
+          "is_savings"
         ],
         "properties": {
           "color": {
             "type": "string"
+          },
+          "deadline": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date"
           },
           "icon": {
             "type": "string"
@@ -1663,6 +1743,9 @@
           "id": {
             "type": "string",
             "format": "uuid"
+          },
+          "is_savings": {
+            "type": "boolean"
           },
           "kind": {
             "$ref": "#/components/schemas/CategoryKind"
@@ -1676,6 +1759,12 @@
               "null"
             ],
             "format": "uuid"
+          },
+          "target": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       },
@@ -1841,6 +1930,92 @@
           }
         }
       },
+      "Cofrinho": {
+        "type": "object",
+        "description": "A subcategory of `Economia`, or `Economia` itself as `Sem objetivo` (`parent`). `balance` is\nits entries minus its resgates since the opening date; `progress_pct` is `balance / target`\nwith one decimal, capped at 100, null without a target; `done` is a balance at or above the\ntarget; `monthly_suggestion` is what is left over the months to the deadline, this one\nincluded, null without a deadline or when done.",
+        "required": [
+          "category_id",
+          "name",
+          "icon",
+          "color",
+          "balance",
+          "done",
+          "parent"
+        ],
+        "properties": {
+          "balance": {
+            "type": "string"
+          },
+          "category_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "color": {
+            "type": "string"
+          },
+          "deadline": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date"
+          },
+          "done": {
+            "type": "boolean"
+          },
+          "icon": {
+            "type": "string"
+          },
+          "monthly_suggestion": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "parent": {
+            "type": "boolean"
+          },
+          "progress_pct": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "example": "3.0"
+          },
+          "target": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "Cofrinhos": {
+        "type": "object",
+        "description": "`total_saved` sums every balance; `saved_this_month` is the month view's `totals.saved`.\nItems go done last, then by name; `Sem objetivo` only while its balance is above zero.",
+        "required": [
+          "total_saved",
+          "saved_this_month",
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Cofrinho"
+            }
+          },
+          "saved_this_month": {
+            "type": "string"
+          },
+          "total_saved": {
+            "type": "string"
+          }
+        }
+      },
       "ConfirmImport": {
         "type": "object",
         "description": "Replaces what an earlier import wrote for the same years; entries made by hand stay.",
@@ -1917,6 +2092,14 @@
               "null"
             ]
           },
+          "deadline": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date",
+            "description": "Only for a subcategory of `Economia`."
+          },
           "icon": {
             "type": [
               "string",
@@ -1935,6 +2118,13 @@
               "null"
             ],
             "format": "uuid"
+          },
+          "target": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Greater than zero; only for a subcategory of `Economia`."
           }
         },
         "additionalProperties": false
@@ -2107,16 +2297,10 @@
         "type": "object",
         "required": [
           "transactions",
-          "savings_months",
           "years",
           "skipped"
         ],
         "properties": {
-          "savings_months": {
-            "type": "integer",
-            "format": "int32",
-            "minimum": 0
-          },
           "skipped": {
             "type": "array",
             "items": {
@@ -2145,8 +2329,7 @@
           "transactions",
           "income_total",
           "bills_total",
-          "daily_total",
-          "savings_months"
+          "daily_total"
         ],
         "properties": {
           "bills_total": {
@@ -2157,11 +2340,6 @@
           },
           "income_total": {
             "type": "string"
-          },
-          "savings_months": {
-            "type": "integer",
-            "format": "int32",
-            "minimum": 0
           },
           "transactions": {
             "type": "integer",
@@ -2176,19 +2354,20 @@
       },
       "MonthSavings": {
         "type": "object",
-        "description": "The month's savings (SOL-5); `pct` is `amount / income`, null when income is 0.",
+        "description": "The month's savings (SOL-20): `saved` is `totals.saved`; `rate_pct` is `saved / income` as a\npercentage with one decimal, null when income is 0.",
         "required": [
-          "amount"
+          "saved"
         ],
         "properties": {
-          "amount": {
-            "type": "string"
-          },
-          "pct": {
+          "rate_pct": {
             "type": [
               "string",
               "null"
-            ]
+            ],
+            "example": "13.4"
+          },
+          "saved": {
+            "type": "string"
           }
         }
       },
@@ -2203,7 +2382,8 @@
           "totals",
           "projected_balance",
           "projected_tier",
-          "bills_of_month"
+          "bills_of_month",
+          "savings"
         ],
         "properties": {
           "balance_today": {
@@ -2234,14 +2414,7 @@
             "$ref": "#/components/schemas/Tier"
           },
           "savings": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/MonthSavings"
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "$ref": "#/components/schemas/MonthSavings"
           },
           "totals": {
             "$ref": "#/components/schemas/Totals"
@@ -2337,120 +2510,6 @@
           }
         }
       },
-      "Savings": {
-        "type": "object",
-        "required": [
-          "year",
-          "month",
-          "amount"
-        ],
-        "properties": {
-          "amount": {
-            "type": "string"
-          },
-          "month": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "year": {
-            "type": "integer",
-            "format": "int32"
-          }
-        }
-      },
-      "SavingsMonth": {
-        "type": "object",
-        "description": "One month of the year. `income` and `saved` are null before the opening month; `pct` is\n`saved / income` as a percentage with one decimal, null when income is 0.",
-        "required": [
-          "month"
-        ],
-        "properties": {
-          "income": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "month": {
-            "type": "integer",
-            "format": "int32",
-            "description": "1 to 12."
-          },
-          "pct": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "example": "8.4"
-          },
-          "saved": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        }
-      },
-      "SavingsYear": {
-        "type": "object",
-        "description": "`pct` is `total_saved / total_income`; `goal_progress_pct` is `pct / goal_pct`, capped at\n100, null without a goal or without income.",
-        "required": [
-          "year",
-          "months",
-          "total_income",
-          "total_saved"
-        ],
-        "properties": {
-          "goal_pct": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          },
-          "goal_progress_pct": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "months": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/SavingsMonth"
-            }
-          },
-          "pct": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "total_income": {
-            "type": "string"
-          },
-          "total_saved": {
-            "type": "string"
-          },
-          "year": {
-            "type": "integer",
-            "format": "int32"
-          }
-        }
-      },
-      "SetSavings": {
-        "type": "object",
-        "required": [
-          "amount"
-        ],
-        "properties": {
-          "amount": {
-            "type": "string",
-            "description": "Zero or more, up to two decimal places."
-          }
-        },
-        "additionalProperties": false
-      },
       "Settings": {
         "type": "object",
         "description": "Money is a decimal string with up to two places (`\"-500.00\"`). The tiers are the lower\nbounds of the thermometer colors and are strictly increasing:\n`tier_red < tier_zero < tier_yellow < tier_green`.",
@@ -2473,14 +2532,6 @@
           "opening_date": {
             "type": "string",
             "format": "date"
-          },
-          "savings_goal_pct": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32",
-            "description": "1 to 100; null is no goal."
           },
           "tier_green": {
             "type": "string"
@@ -2565,13 +2616,14 @@
       },
       "Totals": {
         "type": "object",
-        "description": "`outflow` is bills plus daily; `performance` is income minus outflow.",
+        "description": "`outflow` is bills plus daily; `performance` is income minus outflow; `saved` is the bills\nunder `Economia` minus the month's resgates, already inside `bills`.",
         "required": [
           "income",
           "bills",
           "daily",
           "outflow",
-          "performance"
+          "performance",
+          "saved"
         ],
         "properties": {
           "bills": {
@@ -2587,6 +2639,9 @@
             "type": "string"
           },
           "performance": {
+            "type": "string"
+          },
+          "saved": {
             "type": "string"
           }
         }
@@ -2607,6 +2662,14 @@
           },
           "category": {
             "$ref": "#/components/schemas/Category"
+          },
+          "cofrinho_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "The cofrinho a resgate took money from."
           },
           "date": {
             "type": "string",
@@ -2678,13 +2741,20 @@
       },
       "UpdateCategory": {
         "type": "object",
-        "description": "Absent fields stay as they are; the kind never changes; `\"parent_id\": null` makes it top-level.",
+        "description": "Absent fields stay as they are; the kind never changes; `\"parent_id\": null` makes it top-level;\n`null` clears `target` or `deadline`, which only a subcategory of `Economia` may set. Leaving\n`Economia` clears both.",
         "properties": {
           "color": {
             "type": [
               "string",
               "null"
             ]
+          },
+          "deadline": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date"
           },
           "icon": {
             "type": [
@@ -2704,13 +2774,19 @@
               "null"
             ],
             "format": "uuid"
+          },
+          "target": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "additionalProperties": false
       },
       "UpdateSettings": {
         "type": "object",
-        "description": "Absent fields stay as they are; `\"savings_goal_pct\": null` clears the goal.",
+        "description": "Absent fields stay as they are.",
         "properties": {
           "currency": {
             "oneOf": [
@@ -2734,15 +2810,6 @@
               "null"
             ],
             "format": "date"
-          },
-          "savings_goal_pct": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32",
-            "maximum": 100,
-            "minimum": 1
           },
           "tier_green": {
             "type": [
@@ -2838,6 +2905,32 @@
             "description": "False until `POST /api/onboarding` runs; the web shows onboarding while it is false."
           }
         }
+      },
+      "Withdraw": {
+        "type": "object",
+        "description": "Takes money out of a cofrinho as an income entry in `Resgate`.",
+        "required": [
+          "date",
+          "amount"
+        ],
+        "properties": {
+          "amount": {
+            "type": "string",
+            "description": "Greater than zero, up to two decimal places, at most the balance."
+          },
+          "date": {
+            "type": "string",
+            "format": "date"
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Up to 500 characters; blank means none."
+          }
+        },
+        "additionalProperties": false
       },
       "XlsxUpload": {
         "type": "object",

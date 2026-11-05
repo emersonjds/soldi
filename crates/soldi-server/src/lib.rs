@@ -1,13 +1,13 @@
 pub mod auth;
 pub mod bills;
 pub mod categories;
+pub mod cofrinhos;
 pub mod error;
 pub mod extract;
 pub mod imports;
 pub mod months;
 pub mod onboarding;
 pub mod reports;
-pub mod savings;
 pub mod settings;
 pub mod transactions;
 pub mod web;
@@ -60,12 +60,12 @@ fn api() -> OpenApiRouter<AppState> {
         .merge(auth::handler::router())
         .merge(settings::handler::router())
         .merge(categories::handler::router())
+        .merge(cofrinhos::handler::router())
         .merge(bills::handler::router())
         .merge(transactions::handler::router())
         .merge(months::handler::router())
         .merge(onboarding::handler::router())
         .merge(reports::handler::router())
-        .merge(savings::handler::router())
         .merge(imports::handler::router())
 }
 

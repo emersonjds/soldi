@@ -6,7 +6,6 @@ use sqlx::types::Json;
 use uuid::Uuid;
 
 use super::domain::{ParsedWorkbook, Row, Year};
-use crate::savings::domain::MonthAmount;
 
 /// Drops the user's expired previews first.
 pub async fn insert_preview(
@@ -66,7 +65,7 @@ pub async fn delete_preview(
     Ok(())
 }
 
-/// Transactions and savings an earlier import wrote for these years.
+/// Transactions an earlier import wrote for these years.
 pub async fn delete_imported(
     conn: &mut PgConnection,
     user_id: Uuid,
@@ -74,14 +73,6 @@ pub async fn delete_imported(
 ) -> Result<(), sqlx::Error> {
     sqlx::query!(
         "DELETE FROM transactions
-         WHERE user_id = $1 AND import_batch_id IS NOT NULL AND import_year = ANY($2)",
-        user_id,
-        years
-    )
-    .execute(&mut *conn)
-    .await?;
-    sqlx::query!(
-        "DELETE FROM savings
          WHERE user_id = $1 AND import_batch_id IS NOT NULL AND import_year = ANY($2)",
         user_id,
         years
@@ -125,38 +116,6 @@ pub async fn insert_rows(
         &categories,
         &notes,
         &import_years
-    )
-    .execute(&mut *conn)
-    .await?;
-    Ok(result.rows_affected())
-}
-
-/// Returns how many months were written; a month saved by hand is overwritten.
-pub async fn upsert_savings(
-    conn: &mut PgConnection,
-    user_id: Uuid,
-    batch_id: Uuid,
-    years: &[Year],
-) -> Result<u64, sqlx::Error> {
-    let saved: Vec<(i16, &MonthAmount)> = years
-        .iter()
-        .flat_map(|year| year.savings.iter().map(|month| (year.year, month)))
-        .collect();
-    let import_years: Vec<i16> = saved.iter().map(|(year, _)| *year).collect();
-    let months: Vec<i16> = saved.iter().map(|(_, month)| month.month).collect();
-    let amounts: Vec<Decimal> = saved.iter().map(|(_, month)| month.amount).collect();
-    let result = sqlx::query!(
-        "INSERT INTO savings (user_id, import_batch_id, year, month, amount, import_year)
-         SELECT $1, $2, saved.year, saved.month, saved.amount, saved.year
-         FROM UNNEST($3::smallint[], $4::smallint[], $5::numeric[]) AS saved (year, month, amount)
-         ON CONFLICT (user_id, year, month)
-         DO UPDATE SET amount = EXCLUDED.amount, import_batch_id = EXCLUDED.import_batch_id,
-                       import_year = EXCLUDED.import_year, updated_at = now()",
-        user_id,
-        batch_id,
-        &import_years,
-        &months,
-        &amounts
     )
     .execute(&mut *conn)
     .await?;

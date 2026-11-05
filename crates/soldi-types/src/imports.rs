@@ -26,7 +26,6 @@ pub struct ImportYear {
     #[serde(serialize_with = "crate::money")]
     #[schema(value_type = String)]
     pub daily_total: Decimal,
-    pub savings_months: u32,
 }
 
 /// `token` confirms this preview for 15 minutes; a preview with errors cannot be confirmed.
@@ -72,7 +71,6 @@ pub struct SkippedCell {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct ImportResult {
     pub transactions: u32,
-    pub savings_months: u32,
     pub years: Vec<i16>,
     pub skipped: Vec<SkippedCell>,
 }

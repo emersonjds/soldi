@@ -110,9 +110,10 @@ pub async fn pay(
         return Err(AppError::invalid("date", "must be in the month"));
     }
     transactions::service::check_opening(&mut conn, user, entry.date).await?;
-    let transaction_id = transactions::repo::insert(&mut conn, user.id, &entry, Some(bill.id))
-        .await
-        .map_err(transactions::service::paid_once)?;
+    let transaction_id =
+        transactions::repo::insert(&mut conn, user.id, &entry, Some(bill.id), None)
+            .await
+            .map_err(transactions::service::paid_once)?;
     transactions::repo::find(&mut conn, user.id, transaction_id)
         .await?
         .ok_or(AppError::NotFound)

@@ -1,0 +1,340 @@
+mod common;
+
+use axum::http::StatusCode;
+use common::TestApp;
+use serde_json::{Value, json};
+use sqlx::PgPool;
+
+struct Setup {
+    user: TestApp,
+    today: String,
+    reserva: String,
+    viagem: String,
+}
+
+/// Opened at the first of this month, with `Reserva` (target 10000, deadline 2027-06-30) and
+/// `Viagem` (target 100, no deadline) under `Economia`.
+async fn setup(pool: PgPool) -> Setup {
+    let user = TestApp::signed_in(pool, "ana@example.com").await;
+    let today = soldi_server::today_sao_paulo();
+    user.open_at("0", &today.format("%Y-%m-01").to_string())
+        .await;
+    let economia = user.category_id("Economia").await;
+    let create = |name: &str, goal: Value| {
+        let mut body = json!({ "name": name, "kind": "bill", "parent_id": economia });
+        body.as_object_mut()
+            .unwrap()
+            .extend(goal.as_object().unwrap().clone());
+        body
+    };
+    let (status, reserva) = user
+        .post(
+            "/api/categories",
+            create(
+                "Reserva",
+                json!({ "target": "10000", "deadline": "2027-06-30" }),
+            ),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{reserva}");
+    let (_, viagem) = user
+        .post(
+            "/api/categories",
+            create("Viagem", json!({ "target": "100" })),
+        )
+        .await;
+    Setup {
+        user,
+        today: today.to_string(),
+        reserva: reserva["id"].as_str().unwrap().into(),
+        viagem: viagem["id"].as_str().unwrap().into(),
+    }
+}
+
+async fn deposit(user: &TestApp, date: &str, category_id: &str, amount: &str) {
+    let (status, created) = user
+        .post(
+            "/api/transactions",
+            json!({ "date": date, "amount": amount, "kind": "bill", "category_id": category_id }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{created}");
+}
+
+async fn withdraw(user: &TestApp, id: &str, body: Value) -> (StatusCode, Value) {
+    user.post(&format!("/api/cofrinhos/{id}/withdraw"), body)
+        .await
+}
+
+fn item<'a>(cofrinhos: &'a Value, name: &str) -> &'a Value {
+    cofrinhos["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|item| item["name"] == name)
+        .unwrap_or_else(|| panic!("no {name} in {cofrinhos}"))
+}
+
+#[sqlx::test]
+async fn no_cofrinho_yet_lists_nothing(pool: PgPool) {
+    let user = TestApp::signed_in(pool.clone(), "ana@example.com").await;
+
+    let (status, cofrinhos) = user.get("/api/cofrinhos").await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        cofrinhos,
+        json!({ "total_saved": "0.00", "saved_this_month": "0.00", "items": [] })
+    );
+    assert_eq!(
+        TestApp::anonymous(pool).get("/api/cofrinhos").await.0,
+        StatusCode::UNAUTHORIZED
+    );
+}
+
+#[sqlx::test]
+async fn a_deposit_then_a_resgate_leave_the_balance_progress_and_month(pool: PgPool) {
+    let Setup {
+        user,
+        today,
+        reserva,
+        ..
+    } = setup(pool).await;
+    deposit(&user, &today, &reserva, "500").await;
+
+    let (status, resgate) = withdraw(
+        &user,
+        &reserva,
+        json!({ "date": today, "amount": "200", "note": " carro " }),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::CREATED, "{resgate}");
+    assert_eq!(resgate["kind"], "income");
+    assert_eq!(resgate["amount"], "200.00");
+    assert_eq!(resgate["note"], "carro");
+    assert_eq!(resgate["category"]["name"], "Resgate");
+    assert_eq!(resgate["cofrinho_id"], reserva.as_str());
+    let (_, cofrinhos) = user.get("/api/cofrinhos").await;
+    assert_eq!(cofrinhos["total_saved"], "300.00");
+    assert_eq!(cofrinhos["saved_this_month"], "300.00");
+    let item = item(&cofrinhos, "Reserva");
+    assert_eq!(
+        (
+            &item["category_id"],
+            &item["balance"],
+            &item["target"],
+            &item["deadline"],
+            &item["progress_pct"],
+            &item["done"],
+            &item["parent"],
+            &item["icon"]
+        ),
+        (
+            &json!(reserva),
+            &json!("300.00"),
+            &json!("10000.00"),
+            &json!("2027-06-30"),
+            &json!("3.0"),
+            &json!(false),
+            &json!(false),
+            &json!("circle-dashed")
+        )
+    );
+    assert!(item["monthly_suggestion"].is_string(), "{item}");
+    let (_, month) = user.get(&format!("/api/months/{}", &today[..7])).await;
+    assert_eq!(month["totals"]["saved"], "300.00");
+    assert_eq!(month["totals"]["income"], "200.00");
+    assert_eq!(month["totals"]["outflow"], "500.00");
+    let (_, entries) = user
+        .get(&format!("/api/transactions?month={}", &today[..7]))
+        .await;
+    assert_eq!(entries[0]["cofrinho_id"], reserva.as_str());
+    assert_eq!(entries[1]["cofrinho_id"], Value::Null);
+}
+
+#[sqlx::test]
+async fn a_done_cofrinho_goes_last_and_economia_shows_as_sem_objetivo_with_money(pool: PgPool) {
+    let Setup {
+        user,
+        today,
+        reserva,
+        viagem,
+    } = setup(pool).await;
+    let economia = user.category_id("Economia").await;
+    deposit(&user, &today, &viagem, "150").await;
+    deposit(&user, &today, &reserva, "1").await;
+
+    let (_, before) = user.get("/api/cofrinhos").await;
+    let names: Vec<&str> = before["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|item| item["name"].as_str().unwrap())
+        .collect();
+    assert_eq!(names, ["Reserva", "Viagem"]);
+    let viagem = item(&before, "Viagem");
+    assert_eq!(
+        (
+            &viagem["done"],
+            &viagem["progress_pct"],
+            &viagem["monthly_suggestion"],
+            &viagem["deadline"]
+        ),
+        (&json!(true), &json!("100.0"), &Value::Null, &Value::Null)
+    );
+
+    deposit(&user, &today, &economia, "50").await;
+
+    let (_, after) = user.get("/api/cofrinhos").await;
+    let sem_objetivo = item(&after, "Sem objetivo");
+    assert_eq!(
+        (
+            &sem_objetivo["category_id"],
+            &sem_objetivo["balance"],
+            &sem_objetivo["parent"],
+            &sem_objetivo["target"],
+            &sem_objetivo["progress_pct"],
+            &sem_objetivo["icon"]
+        ),
+        (
+            &json!(economia),
+            &json!("50.00"),
+            &json!(true),
+            &Value::Null,
+            &Value::Null,
+            &json!("piggy-bank")
+        )
+    );
+    assert_eq!(after["total_saved"], "201.00");
+    assert_eq!(after["items"][2]["name"], "Viagem");
+}
+
+#[sqlx::test]
+async fn a_resgate_is_refused_above_the_balance_before_the_opening_or_outside_a_cofrinho(
+    pool: PgPool,
+) {
+    let Setup {
+        user,
+        today,
+        reserva,
+        ..
+    } = setup(pool).await;
+    deposit(&user, &today, &reserva, "100").await;
+    let aluguel = user.category_id("Aluguel").await;
+    let bia = user.another_user("bia@example.com").await;
+
+    for (id, body, status, slug) in [
+        (
+            &reserva,
+            json!({ "date": today, "amount": "100.01" }),
+            422,
+            "insufficient-cofrinho",
+        ),
+        (
+            &reserva,
+            json!({ "date": "2000-01-01", "amount": "1" }),
+            422,
+            "before-opening-date",
+        ),
+        (
+            &aluguel,
+            json!({ "date": today, "amount": "1" }),
+            422,
+            "not-a-cofrinho",
+        ),
+        (
+            &reserva,
+            json!({ "date": today, "amount": "0" }),
+            422,
+            "validation",
+        ),
+        (
+            &reserva,
+            json!({ "date": today, "amount": "1", "kind": "bill" }),
+            422,
+            "validation",
+        ),
+    ] {
+        let (got, problem) = withdraw(&user, id, body.clone()).await;
+        assert_eq!(got.as_u16(), status, "{body} {problem}");
+        assert_eq!(problem["type"], format!("urn:soldi:error:{slug}"), "{body}");
+    }
+    let (status, _) = withdraw(&bia, &reserva, json!({ "date": today, "amount": "1" })).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let (status, _) = withdraw(&user, &reserva, json!({ "date": today, "amount": "100" })).await;
+    assert_eq!(status, StatusCode::CREATED);
+}
+
+#[sqlx::test]
+async fn movements_list_deposits_and_resgates_newest_first(pool: PgPool) {
+    let Setup {
+        user,
+        today,
+        reserva,
+        viagem,
+    } = setup(pool).await;
+    let first = &format!("{}-01", &today[..7]);
+    deposit(&user, first, &reserva, "500").await;
+    deposit(&user, &today, &viagem, "7").await;
+    withdraw(&user, &reserva, json!({ "date": today, "amount": "200" })).await;
+    let uri = format!("/api/cofrinhos/{reserva}/movements");
+
+    let (status, movements) = user.get(&uri).await;
+
+    assert_eq!(status, StatusCode::OK, "{movements}");
+    let amounts: Vec<(&str, &str)> = movements
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|entry| {
+            (
+                entry["kind"].as_str().unwrap(),
+                entry["amount"].as_str().unwrap(),
+            )
+        })
+        .collect();
+    assert_eq!(amounts, [("income", "200.00"), ("bill", "500.00")]);
+    let (_, one) = user.get(&format!("{uri}?limit=1")).await;
+    assert_eq!(one.as_array().unwrap().len(), 1);
+    for limit in ["0", "201"] {
+        let (status, problem) = user.get(&format!("{uri}?limit={limit}")).await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{limit}");
+        assert_eq!(problem["errors"][0]["field"], "limit");
+    }
+    let bia = user.another_user("bia@example.com").await;
+    assert_eq!(bia.get(&uri).await.0, StatusCode::NOT_FOUND);
+    let aluguel = user.category_id("Aluguel").await;
+    let (status, problem) = user
+        .get(&format!("/api/cofrinhos/{aluguel}/movements"))
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(problem["type"], "urn:soldi:error:not-a-cofrinho");
+}
+
+#[sqlx::test]
+async fn a_cofrinho_with_money_is_archived_only_once_empty(pool: PgPool) {
+    let Setup {
+        user,
+        today,
+        reserva,
+        viagem,
+    } = setup(pool).await;
+    deposit(&user, &today, &reserva, "40").await;
+
+    let (status, problem) = user.delete(&format!("/api/categories/{reserva}")).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(problem["type"], "urn:soldi:error:cofrinho-not-empty");
+    withdraw(&user, &reserva, json!({ "date": today, "amount": "40" })).await;
+
+    assert_eq!(
+        user.delete(&format!("/api/categories/{reserva}")).await.0,
+        StatusCode::NO_CONTENT
+    );
+    assert_eq!(
+        user.delete(&format!("/api/categories/{viagem}")).await.0,
+        StatusCode::NO_CONTENT
+    );
+    let (_, cofrinhos) = user.get("/api/cofrinhos").await;
+    assert_eq!(cofrinhos["items"], json!([]));
+}

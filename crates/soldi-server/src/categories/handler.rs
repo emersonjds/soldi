@@ -1,6 +1,7 @@
 use axum::Json;
 use axum::extract::State;
 use axum::http::StatusCode;
+use serde::Deserialize;
 use soldi_types::Problem;
 use soldi_types::categories::{Category, CreateCategory, UpdateCategory};
 use utoipa_axum::router::OpenApiRouter;
@@ -10,7 +11,7 @@ use uuid::Uuid;
 use super::service;
 use crate::AppState;
 use crate::error::AppError;
-use crate::extract::{CurrentUser, JsonBody, PathParams};
+use crate::extract::{CurrentUser, JsonBody, PathParams, QueryParams};
 
 pub fn router() -> OpenApiRouter<AppState> {
     OpenApiRouter::new()
@@ -18,15 +19,26 @@ pub fn router() -> OpenApiRouter<AppState> {
         .routes(routes!(update_category, archive_category))
 }
 
+#[derive(Deserialize)]
+pub struct ListQuery {
+    #[serde(default)]
+    include_system: bool,
+}
+
 #[utoipa::path(get, path = "/api/categories", tag = "categories",
+    params(("include_system" = Option<bool>, Query, description = "Also list `Resgate`, the income category of withdrawals from a cofrinho")),
     responses(
         (status = 200, body = Vec<Category>, description = "Active categories, flat: income, bills, then daily; within a kind by parent name, each parent followed by its subcategories by name"),
+        (status = 400, body = Problem, content_type = "application/problem+json", description = "`include_system` is not a boolean"),
         (status = 401, body = Problem, content_type = "application/problem+json")))]
 pub async fn list_categories(
     State(state): State<AppState>,
     user: CurrentUser,
+    QueryParams(query): QueryParams<ListQuery>,
 ) -> Result<Json<Vec<Category>>, AppError> {
-    Ok(Json(service::list(&state.pool, &user).await?))
+    Ok(Json(
+        service::list(&state.pool, &user, query.include_system).await?,
+    ))
 }
 
 #[utoipa::path(post, path = "/api/categories", tag = "categories", request_body = CreateCategory,
@@ -35,7 +47,7 @@ pub async fn list_categories(
         (status = 401, body = Problem, content_type = "application/problem+json"),
         (status = 404, body = Problem, content_type = "application/problem+json", description = "`parent_id` is missing, archived or another user's"),
         (status = 409, body = Problem, content_type = "application/problem+json", description = "An active category of the same kind has this name"),
-        (status = 422, body = Problem, content_type = "application/problem+json", description = "A bad field, a parent of another kind, or `nested-subcategory` when the parent is a subcategory")))]
+        (status = 422, body = Problem, content_type = "application/problem+json", description = "A bad field, a parent of another kind, `nested-subcategory` when the parent is a subcategory, `savings-category` under `Resgate`, or `not-a-cofrinho` for a target or deadline outside `Economia`")))]
 pub async fn create_category(
     State(state): State<AppState>,
     user: CurrentUser,
@@ -52,7 +64,7 @@ pub async fn create_category(
         (status = 401, body = Problem, content_type = "application/problem+json"),
         (status = 404, body = Problem, content_type = "application/problem+json", description = "The category or `parent_id` is missing, archived or another user's"),
         (status = 409, body = Problem, content_type = "application/problem+json"),
-        (status = 422, body = Problem, content_type = "application/problem+json", description = "A bad field, a parent of another kind or itself, or `nested-subcategory` when the parent is a subcategory or this category has subcategories")))]
+        (status = 422, body = Problem, content_type = "application/problem+json", description = "A bad field, a parent of another kind or itself, `nested-subcategory` when the parent is a subcategory or this category has subcategories, `savings-category` when moving `Economia` or `Resgate` or under `Resgate`, or `not-a-cofrinho` for a target or deadline outside `Economia`")))]
 pub async fn update_category(
     State(state): State<AppState>,
     user: CurrentUser,
@@ -67,7 +79,8 @@ pub async fn update_category(
     responses(
         (status = 204, description = "Archived with its subcategories: they leave the list, their entries keep them"),
         (status = 401, body = Problem, content_type = "application/problem+json"),
-        (status = 404, body = Problem, content_type = "application/problem+json", description = "Missing, archived or another user's")))]
+        (status = 404, body = Problem, content_type = "application/problem+json", description = "Missing, archived or another user's"),
+        (status = 422, body = Problem, content_type = "application/problem+json", description = "`savings-category` for `Economia` or `Resgate`, `cofrinho-not-empty` for a cofrinho holding money")))]
 pub async fn archive_category(
     State(state): State<AppState>,
     user: CurrentUser,

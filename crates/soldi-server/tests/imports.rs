@@ -60,9 +60,9 @@ async fn the_preview_sums_each_year_and_writes_no_entry(pool: PgPool) {
         preview["years"],
         json!([
             { "year": 2025, "transactions": 6, "income_total": "6383.00", "bills_total": "368.00",
-              "daily_total": "133.44", "savings_months": 2 },
+              "daily_total": "133.44" },
             { "year": 2026, "transactions": 6, "income_total": "715.00", "bills_total": "2354.44",
-              "daily_total": "210.00", "savings_months": 0 },
+              "daily_total": "210.00" },
         ])
     );
     assert_eq!(preview["errors"], json!([]));
@@ -91,7 +91,6 @@ async fn a_formula_other_than_a_sum_is_listed_in_the_preview(pool: PgPool) {
         (&json!("2026"), &json!("C5"))
     );
     assert_eq!(preview["years"][0]["transactions"], 1);
-    assert_eq!(preview["years"][0]["savings_months"], 1);
 }
 
 #[sqlx::test]
@@ -180,16 +179,12 @@ async fn confirming_writes_the_rows_and_a_second_import_of_the_year_replaces_the
         )
         .await;
     assert_eq!(status, StatusCode::CREATED, "{manual}");
-    let (status, _) = ana
-        .put("/api/savings/2026/5", json!({ "amount": "70" }))
-        .await;
-    assert_eq!(status, StatusCode::OK);
 
     let result = import_sample(&ana).await;
 
     assert_eq!(
         result,
-        json!({ "transactions": 12, "savings_months": 2, "years": [2025, 2026], "skipped": [] })
+        json!({ "transactions": 12, "years": [2025, 2026], "skipped": [] })
     );
     // 1000 + 2025 (6383 - 368 - 133.44) + January (715 - 94.88 - 210) - 10 by hand.
     let expected = (json!("7281.68"), json!("220.00"));
@@ -201,8 +196,6 @@ async fn confirming_writes_the_rows_and_a_second_import_of_the_year_replaces_the
     assert_eq!(march[0]["category"]["name"], "Importado (conta)");
     assert_eq!(march[0]["category"]["icon"], "file-spreadsheet");
     assert_eq!(march[0]["category"]["color"], "cat-12");
-    let (_, savings) = ana.get("/api/savings?year=2025").await;
-    assert_eq!(savings["months"][1]["saved"], "300.00");
     let (_, me) = ana.get("/api/auth/me").await;
     assert_eq!(me["onboarded"], true);
 
@@ -218,8 +211,6 @@ async fn confirming_writes_the_rows_and_a_second_import_of_the_year_replaces_the
         .filter(|category| category["name"].as_str().unwrap().starts_with("Importado"))
         .count();
     assert_eq!(imported, 3);
-    let (_, savings) = ana.get("/api/savings?year=2026").await;
-    assert_eq!(savings["months"][4]["saved"], "70.00");
     let (_, settings) = ana.get("/api/settings").await;
     assert_eq!(
         (&settings["opening_balance"], &settings["opening_date"]),
@@ -295,7 +286,7 @@ async fn a_preview_with_errors_is_confirmed_only_when_skipping_them(pool: PgPool
     assert_eq!(status, StatusCode::OK, "{result}");
     assert_eq!(
         result,
-        json!({ "transactions": 1, "savings_months": 1, "years": [2026],
+        json!({ "transactions": 1, "years": [2026],
                 "skipped": [{ "sheet": "2026", "cell": "C5" }] })
     );
     let (_, entries) = ana.get("/api/transactions?month=2026-01").await;

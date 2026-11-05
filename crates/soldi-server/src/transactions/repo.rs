@@ -12,12 +12,16 @@ struct Row {
     kind: CategoryKind,
     note: Option<String>,
     recurring_bill_id: Option<Uuid>,
+    cofrinho_id: Option<Uuid>,
     category_id: Uuid,
     category_name: String,
     category_kind: CategoryKind,
     category_icon: String,
     category_color: String,
     category_parent_id: Option<Uuid>,
+    category_is_savings: bool,
+    category_target: Option<Decimal>,
+    category_deadline: Option<NaiveDate>,
 }
 
 impl From<Row> for Transaction {
@@ -29,6 +33,7 @@ impl From<Row> for Transaction {
             kind: row.kind,
             note: row.note,
             recurring_bill_id: row.recurring_bill_id,
+            cofrinho_id: row.cofrinho_id,
             category: Category {
                 id: row.category_id,
                 name: row.category_name,
@@ -36,6 +41,9 @@ impl From<Row> for Transaction {
                 icon: row.category_icon,
                 color: row.category_color,
                 parent_id: row.category_parent_id,
+                is_savings: row.category_is_savings,
+                target: row.category_target,
+                deadline: row.category_deadline,
             },
         }
     }
@@ -53,10 +61,12 @@ pub async fn list(
     let rows = sqlx::query_as!(
         Row,
         r#"SELECT t.id, t.date, t.amount, t.kind AS "kind: CategoryKind", t.note,
-                  t.recurring_bill_id,
+                  t.recurring_bill_id, t.cofrinho_id,
                   c.id AS category_id, c.name AS category_name,
                   c.kind AS "category_kind: CategoryKind", c.icon AS category_icon,
-                  c.color AS category_color, c.parent_id AS category_parent_id
+                  c.color AS category_color, c.parent_id AS category_parent_id,
+                  c.is_savings AS category_is_savings, c.target AS category_target,
+                  c.deadline AS category_deadline
            FROM transactions t JOIN categories c ON c.user_id = t.user_id AND c.id = t.category_id
            WHERE t.user_id = $1 AND t.date BETWEEN $2 AND $3
              AND ($4::uuid IS NULL OR t.category_id = $4)
@@ -71,6 +81,35 @@ pub async fn list(
     Ok(rows.into_iter().map(Transaction::from).collect())
 }
 
+/// A cofrinho's entries and resgates, newest date first, then newest entry first.
+pub async fn movements(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    cofrinho_id: Uuid,
+    limit: i64,
+) -> Result<Vec<Transaction>, sqlx::Error> {
+    let rows = sqlx::query_as!(
+        Row,
+        r#"SELECT t.id, t.date, t.amount, t.kind AS "kind: CategoryKind", t.note,
+                  t.recurring_bill_id, t.cofrinho_id,
+                  c.id AS category_id, c.name AS category_name,
+                  c.kind AS "category_kind: CategoryKind", c.icon AS category_icon,
+                  c.color AS category_color, c.parent_id AS category_parent_id,
+                  c.is_savings AS category_is_savings, c.target AS category_target,
+                  c.deadline AS category_deadline
+           FROM transactions t JOIN categories c ON c.user_id = t.user_id AND c.id = t.category_id
+           WHERE t.user_id = $1 AND (t.category_id = $2 OR t.cofrinho_id = $2)
+           ORDER BY t.date DESC, t.created_at DESC, t.id DESC
+           LIMIT $3"#,
+        user_id,
+        cofrinho_id,
+        limit
+    )
+    .fetch_all(&mut *conn)
+    .await?;
+    Ok(rows.into_iter().map(Transaction::from).collect())
+}
+
 pub async fn find(
     conn: &mut PgConnection,
     user_id: Uuid,
@@ -79,10 +118,12 @@ pub async fn find(
     let row = sqlx::query_as!(
         Row,
         r#"SELECT t.id, t.date, t.amount, t.kind AS "kind: CategoryKind", t.note,
-                  t.recurring_bill_id,
+                  t.recurring_bill_id, t.cofrinho_id,
                   c.id AS category_id, c.name AS category_name,
                   c.kind AS "category_kind: CategoryKind", c.icon AS category_icon,
-                  c.color AS category_color, c.parent_id AS category_parent_id
+                  c.color AS category_color, c.parent_id AS category_parent_id,
+                  c.is_savings AS category_is_savings, c.target AS category_target,
+                  c.deadline AS category_deadline
            FROM transactions t JOIN categories c ON c.user_id = t.user_id AND c.id = t.category_id
            WHERE t.user_id = $1 AND t.id = $2"#,
         user_id,
@@ -98,17 +139,20 @@ pub async fn insert(
     user_id: Uuid,
     input: &CreateTransaction,
     recurring_bill_id: Option<Uuid>,
+    cofrinho_id: Option<Uuid>,
 ) -> Result<Uuid, sqlx::Error> {
     sqlx::query_scalar!(
-        "INSERT INTO transactions (user_id, date, amount, kind, category_id, note, recurring_bill_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id",
+        "INSERT INTO transactions
+             (user_id, date, amount, kind, category_id, note, recurring_bill_id, cofrinho_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id",
         user_id,
         input.date,
         input.amount,
         input.kind.as_str(),
         input.category_id,
         input.note,
-        recurring_bill_id
+        recurring_bill_id,
+        cofrinho_id
     )
     .fetch_one(&mut *conn)
     .await

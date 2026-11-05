@@ -1,0 +1,131 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO categories (user_id, name, kind, icon, color, parent_id, target, deadline)\n           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)\n           RETURNING id, name, kind AS \"kind: CategoryKind\", icon, color, parent_id, is_savings,\n                     target, deadline",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "categories",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "categories",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "kind: CategoryKind",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "categories",
+            "name": "kind"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "icon",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "categories",
+            "name": "icon"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "color",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "categories",
+            "name": "color"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "parent_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "categories",
+            "name": "parent_id"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "is_savings",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "categories",
+            "name": "is_savings"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "target",
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "categories",
+            "name": "target"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "deadline",
+        "type_info": "Date",
+        "origin": {
+          "Table": {
+            "table": "categories",
+            "name": "deadline"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Uuid",
+        "Numeric",
+        "Date"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "10daf94addc403af32f47b2fd34d61d47de9f37a398752554fc6bc02d86f3106"
+}

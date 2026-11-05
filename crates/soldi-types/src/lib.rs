@@ -1,11 +1,11 @@
 pub mod auth;
 pub mod bills;
 pub mod categories;
+pub mod cofrinhos;
 pub mod imports;
 pub mod months;
 pub mod onboarding;
 pub mod reports;
-pub mod savings;
 pub mod settings;
 pub mod transactions;
 
@@ -84,6 +84,16 @@ where
     T: serde::Deserialize<'de>,
 {
     Option::<T>::deserialize(deserializer).map(Some)
+}
+
+/// [`nullable_field`] for a decimal string, like the `str_option` amounts.
+pub fn nullable_money<'de, D>(
+    deserializer: D,
+) -> Result<Option<Option<rust_decimal::Decimal>>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    rust_decimal::serde::str_option::deserialize(deserializer).map(Some)
 }
 
 #[cfg(test)]

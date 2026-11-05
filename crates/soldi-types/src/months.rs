@@ -32,7 +32,8 @@ pub struct Day {
     pub is_future: bool,
 }
 
-/// `outflow` is bills plus daily; `performance` is income minus outflow.
+/// `outflow` is bills plus daily; `performance` is income minus outflow; `saved` is the bills
+/// under `Economia` minus the month's resgates, already inside `bills`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct Totals {
     #[serde(serialize_with = "crate::money")]
@@ -45,6 +46,8 @@ pub struct Totals {
     pub outflow: Decimal,
     #[serde(serialize_with = "crate::money")]
     pub performance: Decimal,
+    #[serde(serialize_with = "crate::money")]
+    pub saved: Decimal,
 }
 
 /// An active recurring bill in the month. `amount` is what was paid, or the bill's amount while
@@ -66,13 +69,14 @@ pub struct BillOfMonth {
     pub overdue: bool,
 }
 
-/// The month's savings (SOL-5); `pct` is `amount / income`, null when income is 0.
+/// The month's savings (SOL-20): `saved` is `totals.saved`; `rate_pct` is `saved / income` as a
+/// percentage with one decimal, null when income is 0.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct MonthSavings {
     #[serde(serialize_with = "crate::money")]
-    pub amount: Decimal,
-    #[schema(value_type = Option<String>)]
-    pub pct: Option<Decimal>,
+    pub saved: Decimal,
+    #[schema(value_type = Option<String>, example = "13.4")]
+    pub rate_pct: Option<Decimal>,
 }
 
 /// `month` is `YYYY-MM`. `balance_today` is the balance at today, or at the month's last day
@@ -90,7 +94,7 @@ pub struct MonthView {
     pub projected_balance: Decimal,
     pub projected_tier: Tier,
     pub bills_of_month: Vec<BillOfMonth>,
-    pub savings: Option<MonthSavings>,
+    pub savings: MonthSavings,
 }
 
 #[cfg(test)]

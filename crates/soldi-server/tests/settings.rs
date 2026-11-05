@@ -22,7 +22,6 @@ async fn sign_up_creates_the_spreadsheet_defaults(pool: PgPool) {
             "tier_zero": "0.00",
             "tier_yellow": "1000.00",
             "tier_green": "2000.00",
-            "savings_goal_pct": null,
             "currency": "BRL"
         })
     );
@@ -35,7 +34,7 @@ async fn patch_changes_only_the_given_fields(pool: PgPool) {
     let (status, settings) = user
         .patch(
             "/api/settings",
-            json!({ "opening_balance": "-120.5", "opening_date": "2026-01-01", "tier_green": "2500", "savings_goal_pct": 15 }),
+            json!({ "opening_balance": "-120.5", "opening_date": "2026-01-01", "tier_green": "2500" }),
         )
         .await;
 
@@ -44,14 +43,7 @@ async fn patch_changes_only_the_given_fields(pool: PgPool) {
     assert_eq!(settings["opening_date"], "2026-01-01");
     assert_eq!(settings["tier_green"], "2500.00");
     assert_eq!(settings["tier_yellow"], "1000.00");
-    assert_eq!(settings["savings_goal_pct"], 15);
     assert_eq!(user.get("/api/settings").await.1, settings);
-
-    let (_, cleared) = user
-        .patch("/api/settings", json!({ "savings_goal_pct": null }))
-        .await;
-    assert_eq!(cleared["savings_goal_pct"], serde_json::Value::Null);
-    assert_eq!(cleared["tier_green"], "2500.00");
 }
 
 #[sqlx::test]
@@ -70,18 +62,14 @@ async fn patch_refuses_unordered_tiers_and_numbers_for_money(pool: PgPool) {
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
     assert_eq!(problem["errors"][0]["field"], "opening_balance");
 
-    for goal in [0, 101] {
-        let (status, problem) = user
-            .patch("/api/settings", json!({ "savings_goal_pct": goal }))
-            .await;
-        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{goal}");
-        assert_eq!(problem["errors"][0]["field"], "savings_goal_pct");
-    }
+    let (status, problem) = user
+        .patch("/api/settings", json!({ "savings_goal_pct": 15 }))
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(problem["errors"][0]["field"], "savings_goal_pct");
     assert_eq!(
-        user.patch("/api/settings", json!({ "savings_goal_pct": 100 }))
-            .await
-            .1["savings_goal_pct"],
-        100
+        user.get("/api/savings?year=2026").await.0,
+        StatusCode::NOT_FOUND
     );
 
     assert_eq!(user.get("/api/settings").await.1["tier_yellow"], "1000.00");

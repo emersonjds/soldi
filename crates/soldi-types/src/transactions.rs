@@ -18,6 +18,8 @@ pub struct Transaction {
     pub note: Option<String>,
     /// The recurring bill this entry pays, if any.
     pub recurring_bill_id: Option<Uuid>,
+    /// The cofrinho a resgate took money from.
+    pub cofrinho_id: Option<Uuid>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
