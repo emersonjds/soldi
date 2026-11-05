@@ -123,10 +123,11 @@ describe("CategoryChips", () => {
 
     const sheet = await openCreate();
     expect(within(sheet).getByLabelText("Nome")).toHaveAttribute("maxlength", "40");
-    expect(within(sheet).getByRole("radio", { name: "Padrão" })).toBeChecked();
-    expect(within(sheet).getAllByRole("radio")).toHaveLength(16);
+    expect(within(sheet).getByRole("radio", { name: "Ícone circle-dashed" })).toBeChecked();
+    expect(within(sheet).getAllByRole("radio", { name: /^Ícone / })).toHaveLength(16);
+    expect(within(sheet).getByRole("radio", { name: "Cor Azul" })).toBeChecked();
     await userEvent.type(within(sheet).getByLabelText("Nome"), "  Carro ");
-    await userEvent.click(within(sheet).getByRole("radio", { name: "Carro" }));
+    await userEvent.click(within(sheet).getByRole("radio", { name: "Ícone car" }));
     const requests = stubApi({
       "GET /api/categories": { status: 200, body: [...CATEGORIES, CARRO] },
       "POST /api/categories": { status: 201, body: CARRO },
@@ -145,7 +146,7 @@ describe("CategoryChips", () => {
     expect(await screen.findByRole("combobox", { name: "Categoria" })).toHaveTextContent("Carro");
   });
 
-  it("asks for a name and sends the default icon, leaving the color to the server when all twelve are taken", async () => {
+  it("asks for a name and sends the default icon with the last color when all twelve are taken", async () => {
     const full = Array.from({ length: 12 }, (_, index) => ({
       ...MERCADO,
       id: `c2000000-0000-4000-8000-0000000000${String(index).padStart(2, "0")}`,
@@ -160,7 +161,40 @@ describe("CategoryChips", () => {
     expect(requests.some((request) => request.method === "POST")).toBe(false);
 
     await userEvent.type(within(sheet).getByLabelText("Nome"), "Feira{Enter}");
-    expect(await posted()).toEqual({ name: "Feira", kind: "daily", icon: "circle-dashed", color: null });
+    expect(await posted()).toEqual({ name: "Feira", kind: "daily", icon: "circle-dashed", color: "cat-12" });
+  });
+
+  it("creates a subcategory with a searched icon and a chosen color", async () => {
+    setup({}, WITH_CHILDREN);
+    const sheet = await openCreate();
+
+    await userEvent.type(within(sheet).getByLabelText("Nome"), "Pet shop");
+    await userEvent.selectOptions(within(sheet).getByLabelText("Subcategoria de"), PETS.id);
+    await userEvent.type(within(sheet).getByLabelText("Buscar ícone"), "dog");
+    await userEvent.click(await within(sheet).findByRole("radio", { name: "Ícone dog" }));
+    await userEvent.click(within(sheet).getByRole("radio", { name: "Cor Rosa" }));
+    const created = {
+      ...RACAO,
+      id: "c1000000-0000-4000-8000-000000000012",
+      name: "Pet shop",
+      icon: "dog",
+      color: "cat-9",
+    };
+    const requests = stubApi({
+      "GET /api/categories": { status: 200, body: [...WITH_CHILDREN, created] },
+      "POST /api/categories": { status: 201, body: created },
+    });
+    await userEvent.click(within(sheet).getByRole("button", { name: "Criar" }));
+
+    await waitFor(() => expect(requests.some((request) => request.method === "POST")).toBe(true));
+    expect(await requests.find((request) => request.method === "POST")?.json()).toEqual({
+      name: "Pet shop",
+      kind: "daily",
+      icon: "dog",
+      color: "cat-9",
+      parent_id: PETS.id,
+    });
+    expect(await screen.findByRole("combobox", { name: "Categoria" })).toHaveTextContent("Pets › Pet shop");
   });
 
   it("says when the name is taken", async () => {

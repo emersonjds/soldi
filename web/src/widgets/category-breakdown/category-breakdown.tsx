@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { ChartContainer } from "@/components/ui/chart";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { useCategoryLabel } from "@/entities/category/categories-query";
 import { type CategoryShare, useCategoryReport } from "@/entities/report/report-query";
 import { useTransactions } from "@/entities/transaction/transaction-queries";
 import { cn } from "@/lib/utils";
@@ -95,54 +96,61 @@ const Donut = ({ shares, total, label, selected, onSelect }: DonutProps) => {
   );
 };
 
-const LegendRow = ({ share, pressed, onSelect }: { share: CategoryShare; pressed: boolean; onSelect: () => void }) => (
-  <li>
-    <button
-      type="button"
-      aria-pressed={pressed}
-      onClick={onSelect}
-      className="flex min-h-16 w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring aria-pressed:bg-secondary"
-    >
-      <CategoryIcon icon={share.icon} color={share.color} />
-      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="truncate font-medium text-base">{share.name}</span>
-        <span className="flex items-center gap-2 text-muted-foreground text-sm tabular-nums">
-          {formatPct(share.pct, 0)}
-          <DeltaBadge share={share} />
+const LegendRow = ({ share, pressed, onSelect }: { share: CategoryShare; pressed: boolean; onSelect: () => void }) => {
+  const label = useCategoryLabel();
+  return (
+    <li>
+      <button
+        type="button"
+        aria-pressed={pressed}
+        onClick={onSelect}
+        className="flex min-h-16 w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring aria-pressed:bg-secondary"
+      >
+        <CategoryIcon icon={share.icon} color={share.color} />
+        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <span className="truncate font-medium text-base">{label(share)}</span>
+          <span className="flex items-center gap-2 text-muted-foreground text-sm tabular-nums">
+            {formatPct(share.pct, 0)}
+            <DeltaBadge share={share} />
+          </span>
         </span>
-      </span>
-      <Money amount={share.amount} className="font-bold text-base" />
-    </button>
-  </li>
-);
+        <Money amount={share.amount} className="font-bold text-base" />
+      </button>
+    </li>
+  );
+};
 
-const TopFive = ({ shares, className }: { shares: CategoryShare[]; className?: string }) => (
-  <section aria-labelledby="top-five-title" className={cn(card, className)}>
-    <h2 id="top-five-title" className="font-semibold text-lg leading-6">
-      Top 5
-    </h2>
-    <ol className="flex flex-col gap-4">
-      {shares.slice(0, 5).map((share) => (
-        <li key={share.category_id} className="flex flex-col gap-1.5">
-          <span className="flex items-baseline justify-between gap-3 text-sm">
-            <span className="truncate">{share.name}</span>
-            <span className="font-semibold tabular-nums">{formatPct(share.pct)}</span>
-          </span>
-          <span aria-hidden className="h-2 overflow-hidden rounded-full bg-muted">
-            <span
-              className={cn("block h-full rounded-full", categoryBg(share.color))}
-              style={{ width: `${share.pct}%` }}
-            />
-          </span>
-        </li>
-      ))}
-    </ol>
-  </section>
-);
+const TopFive = ({ shares, className }: { shares: CategoryShare[]; className?: string }) => {
+  const label = useCategoryLabel();
+  return (
+    <section aria-labelledby="top-five-title" className={cn(card, className)}>
+      <h2 id="top-five-title" className="font-semibold text-lg leading-6">
+        Top 5
+      </h2>
+      <ol className="flex flex-col gap-4">
+        {shares.slice(0, 5).map((share) => (
+          <li key={share.category_id} className="flex flex-col gap-1.5">
+            <span className="flex items-baseline justify-between gap-3 text-sm">
+              <span className="truncate">{label(share)}</span>
+              <span className="font-semibold tabular-nums">{formatPct(share.pct)}</span>
+            </span>
+            <span aria-hidden className="h-2 overflow-hidden rounded-full bg-muted">
+              <span
+                className={cn("block h-full rounded-full", categoryBg(share.color))}
+                style={{ width: `${share.pct}%` }}
+              />
+            </span>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+};
 
 type EntriesProps = { month: string; share: CategoryShare; onClear: () => void; className?: string };
 
 const CategoryEntries = ({ month, share, onClear, className }: EntriesProps) => {
+  const label = useCategoryLabel();
   const entries = useTransactions(month, share.category_id);
 
   return (
@@ -150,7 +158,7 @@ const CategoryEntries = ({ month, share, onClear, className }: EntriesProps) => 
       <div className="flex items-center justify-between gap-2">
         <h2 id="category-entries-title" className="flex min-w-0 items-center gap-2 font-semibold text-lg leading-6">
           <span aria-hidden className={cn("size-2.5 shrink-0 rounded-full", categoryBg(share.color))} />
-          <span className="min-w-0 break-words">Lançamentos de {share.name}</span>
+          <span className="min-w-0 break-words">Lançamentos de {label(share)}</span>
         </h2>
         <Button variant="ghost" className="min-h-11 shrink-0 text-primary" onClick={onClear}>
           Limpar filtro
@@ -166,7 +174,7 @@ const CategoryEntries = ({ month, share, onClear, className }: EntriesProps) => 
             <li key={entry.id} className="flex min-h-16 items-center gap-3 px-2 py-2">
               <CategoryIcon icon={entry.category.icon} color={entry.category.color} />
               <span className="flex min-w-0 flex-1 flex-col">
-                <span className="truncate font-medium text-base">{entry.note || entry.category.name}</span>
+                <span className="truncate font-medium text-base">{entry.note || label(entry.category)}</span>
                 <span className="text-muted-foreground text-xs">{shortDay(entry.date)}</span>
               </span>
               <Money amount={entry.amount} income={entry.kind === "income"} className="font-bold text-base" />

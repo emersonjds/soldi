@@ -6,58 +6,55 @@ import { toast } from "sonner";
 
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { cn } from "@/lib/utils";
 import { hasStatus, type Schemas } from "@/shared/api/client";
 import { BrandButton } from "@/shared/ui/brand-button";
-import { CategoryIcon } from "@/shared/ui/category-icon";
+import { categoryBg } from "@/shared/ui/category-icon";
 import { ResponsiveSheet } from "@/shared/ui/responsive-sheet";
 
 import { useCategories, useCreateCategory } from "./categories-query";
+import { IconPicker } from "./icon-picker";
 
 type Kind = Schemas["CategoryKind"];
+type Category = Schemas["Category"];
 
-const ICONS: [icon: string, label: string][] = [
-  ["circle-dashed", "Padrão"],
-  ["shopping-cart", "Compras"],
-  ["utensils", "Comida"],
-  ["car", "Carro"],
-  ["fuel", "Combustível"],
-  ["home", "Casa"],
-  ["zap", "Energia"],
-  ["wifi", "Internet"],
-  ["smartphone", "Celular"],
-  ["heart-pulse", "Saúde"],
-  ["graduation-cap", "Educação"],
-  ["gamepad-2", "Lazer"],
-  ["plane", "Viagem"],
-  ["gift", "Presente"],
-  ["paw-print", "Pets"],
-  ["briefcase", "Trabalho"],
+/** The twelve palette tokens with the names the swatches announce (docs/design/tokens.md). */
+export const COLOR_NAMES: [token: string, name: string][] = [
+  ["cat-1", "Âmbar"],
+  ["cat-2", "Laranja"],
+  ["cat-3", "Azul"],
+  ["cat-4", "Vermelho"],
+  ["cat-5", "Roxo"],
+  ["cat-6", "Índigo"],
+  ["cat-7", "Amarelo"],
+  ["cat-8", "Ciano"],
+  ["cat-9", "Rosa"],
+  ["cat-10", "Violeta"],
+  ["cat-11", "Verde"],
+  ["cat-12", "Verde-claro"],
 ];
 
-const PALETTE = Array.from({ length: 12 }, (_, index) => `cat-${index + 1}`);
-
-/** The first palette token the kind does not wear yet; `null` lets the server pick once all twelve are taken. */
-const nextColor = (taken: Schemas["Category"][]) =>
-  PALETTE.find((color) => !taken.some((category) => category.color === color)) ?? null;
+/** The first palette token the kind does not wear yet; the last one once all twelve are taken. */
+const nextColor = (taken: Category[]) =>
+  COLOR_NAMES.find(([token]) => !taken.some((category) => category.color === token))?.[0] ?? "cat-12";
 
 const problemOf = (error: Error | null) => {
   if (!error) return undefined;
   return hasStatus(error, 409) ? "Já existe uma categoria com esse nome" : "Não foi possível criar a categoria.";
 };
 
-const CreateCategoryForm = ({
-  kind,
-  onCreated,
-}: {
-  kind: Kind;
-  onCreated: (category: Schemas["Category"]) => void;
-}) => {
+const CreateCategoryForm = ({ kind, onCreated }: { kind: Kind; onCreated: (category: Category) => void }) => {
   const [name, setName] = useState("");
   const [icon, setIcon] = useState("circle-dashed");
+  const [parentId, setParentId] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const categories = useCategories(kind);
+  const list = categories.data ?? [];
+  const [color, setColor] = useState<string>();
+  const chosenColor = color ?? nextColor(list);
+  const parents = list.filter((category) => !category.parent_id);
   const create = useCreateCategory();
-  const color = nextColor(categories.data ?? []);
   const trimmed = name.trim();
   const nameError = submitted && !trimmed ? "Informe o nome." : undefined;
   const problem = problemOf(create.error);
@@ -68,7 +65,10 @@ const CreateCategoryForm = ({
     event.stopPropagation();
     setSubmitted(true);
     if (!trimmed) return;
-    create.mutate({ name: trimmed, kind, icon, color }, { onSuccess: onCreated });
+    create.mutate(
+      { name: trimmed, kind, icon, color: chosenColor, ...(parentId ? { parent_id: parentId } : {}) },
+      { onSuccess: onCreated },
+    );
   };
 
   return (
@@ -87,26 +87,47 @@ const CreateCategoryForm = ({
         />
         {nameError && <FieldError>{nameError}</FieldError>}
       </Field>
+      <Field className="gap-1.5">
+        <FieldLabel htmlFor="category-parent">Subcategoria de</FieldLabel>
+        <NativeSelect className="w-full">
+          <select
+            id="category-parent"
+            value={parentId}
+            onChange={(event) => setParentId(event.target.value)}
+            className="h-12 w-full appearance-none rounded-xl border border-input bg-transparent pr-8 pl-3 text-base"
+          >
+            <NativeSelectOption value="">Nenhuma</NativeSelectOption>
+            {parents.map((parent) => (
+              <NativeSelectOption key={parent.id} value={parent.id}>
+                {parent.name}
+              </NativeSelectOption>
+            ))}
+          </select>
+        </NativeSelect>
+      </Field>
+      <IconPicker value={icon} color={chosenColor} onChange={setIcon} />
       <fieldset className="flex flex-col gap-2">
-        <legend className="mb-2 font-semibold text-sm">Ícone</legend>
-        <div className="grid grid-cols-4 gap-2">
-          {ICONS.map(([value, label]) => (
+        <legend className="mb-2 font-semibold text-sm">Cor</legend>
+        <div className="flex flex-wrap gap-2">
+          {COLOR_NAMES.map(([token, label]) => (
             <label
-              key={value}
-              className="group flex min-h-14 cursor-pointer items-center justify-center rounded-xl has-checked:bg-muted has-focus-visible:outline-2 has-focus-visible:outline-ring"
+              key={token}
+              className="group flex size-11 cursor-pointer items-center justify-center rounded-full has-focus-visible:outline-2 has-focus-visible:outline-ring"
             >
               <input
                 type="radio"
-                name="category-icon"
-                aria-label={label}
+                name="category-color"
+                aria-label={`Cor ${label}`}
                 className="sr-only"
-                checked={icon === value}
-                onChange={() => setIcon(value)}
+                checked={chosenColor === token}
+                onChange={() => setColor(token)}
               />
-              <CategoryIcon
-                icon={value}
-                color={color ?? ""}
-                className="size-11 opacity-50 transition-opacity group-has-checked:opacity-100 group-has-checked:ring-2 group-has-checked:ring-primary group-has-checked:ring-offset-2 group-has-checked:ring-offset-muted"
+              <span
+                aria-hidden
+                className={cn(
+                  "size-8 rounded-full transition-transform group-has-checked:scale-110 group-has-checked:ring-2 group-has-checked:ring-primary group-has-checked:ring-offset-2 group-has-checked:ring-offset-background",
+                  categoryBg(token),
+                )}
               />
             </label>
           ))}
@@ -124,7 +145,7 @@ const CreateCategoryForm = ({
   );
 };
 
-/** `Nova categoria`: name and icon; the kind is the picker's and the color the next free one. */
+/** `Nova categoria`: name, optional parent, any lucide icon and a palette color; the kind is the picker's. */
 export const CreateCategorySheet = ({
   kind,
   open,
@@ -134,13 +155,13 @@ export const CreateCategorySheet = ({
   kind: Kind;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onCreated: (category: Schemas["Category"]) => void;
+  onCreated: (category: Category) => void;
 }) => (
   <ResponsiveSheet
     open={open}
     onOpenChange={onOpenChange}
     title="Nova categoria"
-    description="Nome e ícone da categoria; a cor vem sozinha."
+    description="Nome, ícone e cor; subcategoria se quiser agrupar."
   >
     <CreateCategoryForm
       kind={kind}
