@@ -50,6 +50,10 @@ export const WelcomeTour = () => {
     if (!seen.isPending) seen.mutate(undefined, { onSuccess: () => router.replace("/mes?lancar=1") });
   };
 
+  // Next's export caches `/mes` under the first search it is opened with; prefetching the bare path keeps
+  // `?lancar=1` from coming back on every later link to Mês.
+  useEffect(() => router.prefetch("/mes"), [router]);
+
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "ArrowRight") setStep((at) => Math.min(at + 1, LAST));
@@ -96,7 +100,7 @@ export const WelcomeTour = () => {
         </div>
         <div
           aria-hidden
-          className="flex flex-1 items-center justify-center rounded-3xl bg-muted px-4 py-8 lg:min-h-64 lg:flex-none"
+          className="-mx-6 flex flex-1 items-center justify-center bg-muted px-4 py-8 lg:mx-0 lg:min-h-64 lg:flex-none lg:rounded-3xl"
         >
           {current.illustration}
         </div>

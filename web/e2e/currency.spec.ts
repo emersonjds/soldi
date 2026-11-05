@@ -23,6 +23,8 @@ test("a new user picks Euro right after sign-up and sees the month in euros", as
   await page.getByRole("button", { name: "Pular por agora" }).click();
   await expect(page.getByText("€ 1.000,00")).toBeVisible();
   await page.getByRole("button", { name: "Ver meu mês" }).click();
+  await page.getByRole("button", { name: "Pular" }).click();
+  await page.getByRole("dialog", { name: "Lançar" }).getByRole("button", { name: "Fechar" }).click();
 
   await expect(page.getByRole("region", { name: "Saldo hoje" })).toContainText("€ 1.000,00");
 });

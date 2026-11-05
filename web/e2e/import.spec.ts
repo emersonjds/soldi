@@ -19,6 +19,8 @@ test("a new user imports the Termômetro workbook and finds March's bill in Mês
   await page.getByRole("button", { name: "Continuar" }).click();
   await page.getByRole("button", { name: "Pular por agora" }).click();
   await page.getByRole("button", { name: "Ver meu mês" }).click();
+  await page.getByRole("button", { name: "Pular" }).click();
+  await page.getByRole("dialog", { name: "Lançar" }).getByRole("button", { name: "Fechar" }).click();
   await expect(page.getByRole("region", { name: "Saldo hoje" })).toBeVisible();
 
   await page.goto("/ajustes");

@@ -3,15 +3,16 @@ import type { CSSProperties } from "react";
 import { ArrowUp, ChevronRight } from "lucide-react";
 
 import { Progress } from "@/components/ui/progress";
+import { cn } from "@/lib/utils";
 import { CategoryIcon, categoryFill } from "@/shared/ui/category-icon";
 import { Money } from "@/shared/ui/money";
 import { ThermometerStrip } from "@/shared/ui/thermometer-strip";
 import { TierPill } from "@/shared/ui/tier-pill";
 
-const card = "w-full max-w-xs rounded-2xl bg-card p-4 shadow-sm";
+const card = "w-full rounded-2xl bg-card p-4 shadow-sm";
 
 export const IncomeIllustration = () => (
-  <div className={`${card} flex flex-col items-center gap-1 text-center`}>
+  <div className={cn(card, "flex max-w-xs flex-col items-center gap-1 text-center")}>
     <span className="flex size-12 items-center justify-center rounded-full bg-income-soft text-income">
       <ArrowUp className="size-6" aria-hidden />
     </span>
@@ -26,7 +27,7 @@ const ROWS = [
 ];
 
 export const LedgerIllustration = () => (
-  <ul className={`${card} flex flex-col p-2`}>
+  <ul className={cn(card, "flex max-w-xs flex-col p-2")}>
     {ROWS.map((row) => (
       <li key={row.title} className="flex min-h-16 items-center gap-3 px-2 py-2">
         <CategoryIcon icon={row.icon} color={row.color} />
@@ -41,7 +42,7 @@ export const LedgerIllustration = () => (
 );
 
 export const ProjectionIllustration = () => (
-  <div className={`${card} flex flex-col gap-5`}>
+  <div className={cn(card, "flex max-w-sm flex-col gap-5")}>
     <ThermometerStrip tier="light_red" />
     <div className="flex flex-col items-center gap-1">
       <span className="text-muted-foreground text-sm">Projetado</span>
@@ -53,7 +54,7 @@ export const ProjectionIllustration = () => (
 const bar: CSSProperties & { "--bar": string } = { "--bar": categoryFill("cat-3") };
 
 export const CofrinhoIllustration = () => (
-  <div className={`${card} flex flex-col gap-4`}>
+  <div className={cn(card, "flex max-w-xs flex-col gap-4")}>
     <span className="flex items-center gap-3">
       <CategoryIcon icon="shield" color="cat-3" className="size-11" />
       <span className="flex min-w-0 flex-1 flex-col">

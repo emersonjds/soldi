@@ -29,8 +29,8 @@ const MonthScreen = () => {
   const [hint, setHint] = useState(fromTour);
 
   useEffect(() => {
-    if (fromTour) router.replace("/mes", { scroll: false });
-  }, [fromTour, router]);
+    if (fromTour) window.history.replaceState(null, "", "/mes");
+  }, [fromTour]);
 
   if (view.isError || transactions.isError)
     return (
