@@ -17,6 +17,8 @@ test("a new user logs a Diário in three taps and sees it with the day balance",
   await page.getByRole("button", { name: "Continuar" }).click();
   await page.getByRole("button", { name: "Pular por agora" }).click();
   await page.getByRole("button", { name: "Ver meu mês" }).click();
+  await page.getByRole("button", { name: "Pular" }).click();
+  await page.getByRole("dialog", { name: "Lançar" }).getByRole("button", { name: "Fechar" }).click();
 
   await expect(page.getByRole("region", { name: "Saldo hoje" })).toContainText("R$ 1.000,00");
 
@@ -53,6 +55,8 @@ test("a bill from onboarding shows under Contas do Mês, pays in one tap and mov
   await page.getByRole("radio", { name: "Aluguel" }).check({ force: true });
   await page.getByRole("button", { name: "Continuar" }).click();
   await page.getByRole("button", { name: "Ver meu mês" }).click();
+  await page.getByRole("button", { name: "Pular" }).click();
+  await page.getByRole("dialog", { name: "Lançar" }).getByRole("button", { name: "Fechar" }).click();
 
   const hero = page.getByRole("region", { name: "Saldo hoje" });
   const summary = page.getByRole("region", { name: "Resumo do mês" });
@@ -95,6 +99,8 @@ test("Lançar fills the cents from the right and a category created from the pic
   await page.getByRole("button", { name: "Continuar" }).click();
   await page.getByRole("button", { name: "Pular por agora" }).click();
   await page.getByRole("button", { name: "Ver meu mês" }).click();
+  await page.getByRole("button", { name: "Pular" }).click();
+  await page.getByRole("dialog", { name: "Lançar" }).getByRole("button", { name: "Fechar" }).click();
 
   const tabs = page.getByRole("navigation", { name: "Navegação principal" });
   await tabs.getByRole("button", { name: "Lançar" }).click();

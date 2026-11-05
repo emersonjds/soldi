@@ -7,6 +7,24 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.11.0
+
+> Headline: welcome tour
+
+### Added
+
+- `User` carries `tour_seen`, false until `POST /api/me/tour-seen` (204, idempotent; the first time is kept) runs.
+
+### Web
+
+- Right after onboarding a four-card tour explains `Entradas`, `Saídas e Diário`, `Projeção do fim do mês` and `Economia`, each with an example built from the app's own pieces (the Entradas figure, ledger rows, the thermometer with `Atenção` on `Projetado`, a cofrinho at 30%). Full screen on phones, a 560px card on desktop; progress dots, `Próximo`, `Pular`, `Começar` on the last card; arrows move and Esc skips.
+- `Começar` and `Pular` mark the tour as seen and open `Mês` with `Lançar` on Entrada and the hint `Comece pela sua primeira entrada do mês`, once. An account that has not seen the tour (existing ones included) gets it on its next visit.
+- `Ajustes › Ajuda › Como funciona` replays the tour; `Começar` then just goes back to `Mês`.
+
+### Upgrade notes
+
+- Migration `0014_tour` adds the nullable `users.tour_seen_at`; every existing user starts with `tour_seen: false` and sees the tour once. It runs on start-up with the others; no manual step.
+
 ## 0.10.1
 
 > Headline: resgates no longer count as income

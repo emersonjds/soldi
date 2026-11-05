@@ -231,3 +231,32 @@ async fn a_malformed_body_is_a_400_problem(pool: PgPool) {
         "application/problem+json"
     );
 }
+
+#[sqlx::test]
+async fn tour_seen_starts_false_and_sticks_once_marked(pool: PgPool) {
+    let ana = TestApp::signed_in(pool, "ana@example.com").await;
+    let bia = ana.another_user("bia@example.com").await;
+    assert_eq!(ana.get("/api/auth/me").await.1["tour_seen"], false);
+
+    assert_eq!(
+        ana.post("/api/me/tour-seen", json!({})).await.0,
+        StatusCode::NO_CONTENT
+    );
+    assert_eq!(
+        ana.post("/api/me/tour-seen", json!({})).await.0,
+        StatusCode::NO_CONTENT
+    );
+
+    assert_eq!(ana.get("/api/auth/me").await.1["tour_seen"], true);
+    assert_eq!(bia.get("/api/auth/me").await.1["tour_seen"], false);
+}
+
+#[sqlx::test]
+async fn tour_seen_needs_a_session(pool: PgPool) {
+    let app = TestApp::anonymous(pool);
+
+    let (status, problem) = app.post("/api/me/tour-seen", json!({})).await;
+
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    assert_eq!(problem["type"], "urn:soldi:error:unauthorized");
+}

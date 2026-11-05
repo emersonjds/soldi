@@ -61,7 +61,7 @@ describe("Entrar", () => {
   });
 
   it("sends a user who has not onboarded to onboarding", async () => {
-    anonymous({ "POST /api/auth/sign-in": { status: 200, body: { ...ANA, onboarded: false } } });
+    anonymous({ "POST /api/auth/sign-in": { status: 200, body: { ...ANA, onboarded: false, tour_seen: false } } });
     renderPage();
 
     await fillAndSubmit("ana@example.com", "segredo123");

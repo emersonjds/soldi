@@ -10,7 +10,8 @@ import { redirectFor, SessionGate } from "./session";
 
 vi.mock("next/navigation", () => import("@/test/next-navigation"));
 
-const NEW_USER = { ...ANA, onboarded: false };
+const NEW_USER = { ...ANA, onboarded: false, tour_seen: false };
+const NO_TOUR = { ...ANA, tour_seen: false };
 
 describe("redirectFor", () => {
   it.each([
@@ -19,6 +20,12 @@ describe("redirectFor", () => {
     [NEW_USER, "/", "/onboarding"],
     [NEW_USER, "/mes", "/onboarding"],
     [NEW_USER, "/onboarding", undefined],
+    [NEW_USER, "/tour", "/onboarding"],
+    [NO_TOUR, "/", "/tour"],
+    [NO_TOUR, "/onboarding", "/tour"],
+    [NO_TOUR, "/mes", "/tour"],
+    [NO_TOUR, "/tour", undefined],
+    [ANA, "/tour", undefined],
     [ANA, "/", "/mes"],
     [ANA, "/onboarding", "/mes"],
     [ANA, "/mes", undefined],

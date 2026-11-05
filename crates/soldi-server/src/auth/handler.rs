@@ -19,6 +19,7 @@ pub fn router() -> OpenApiRouter<AppState> {
         .routes(routes!(sign_in))
         .routes(routes!(sign_out))
         .routes(routes!(me))
+        .routes(routes!(tour_seen))
 }
 
 #[utoipa::path(post, path = "/api/auth/sign-up", tag = "auth", request_body = SignUp,
@@ -73,4 +74,16 @@ pub async fn sign_out(
         (status = 401, body = Problem, content_type = "application/problem+json")))]
 pub async fn me(State(state): State<AppState>, user: CurrentUser) -> Result<Json<User>, AppError> {
     Ok(Json(service::me(&state.pool, &user).await?))
+}
+
+#[utoipa::path(post, path = "/api/me/tour-seen", tag = "auth",
+    responses(
+        (status = 204, description = "`tour_seen` is true from now on; calling again changes nothing"),
+        (status = 401, body = Problem, content_type = "application/problem+json")))]
+pub async fn tour_seen(
+    State(state): State<AppState>,
+    user: CurrentUser,
+) -> Result<StatusCode, AppError> {
+    service::mark_tour_seen(&state.pool, &user).await?;
+    Ok(StatusCode::NO_CONTENT)
 }

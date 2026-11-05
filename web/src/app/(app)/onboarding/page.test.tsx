@@ -16,7 +16,7 @@ const CATEGORIES = [
   { id: "33333333-3333-4333-8333-333333333333", name: "Mercado", kind: "daily", icon: "shopping-cart", color: "cat-1" },
 ];
 
-const NEW_USER = { ...ANA, onboarded: false };
+const NEW_USER = { ...ANA, onboarded: false, tour_seen: false };
 
 const stub = (replies = {}) =>
   signedIn(
@@ -80,6 +80,17 @@ describe("Onboarding", () => {
       opening_date: "2026-11-05",
       bills: [{ name: "Aluguel do apê", amount: "2259.56", due_day: 5, category_id: CATEGORIES[0].id }],
     });
+  });
+
+  it("goes to the welcome tour when the user has not seen it", async () => {
+    stub({ "POST /api/onboarding": { status: 200, body: { ...ANA, tour_seen: false } } });
+    await renderOnboarding();
+
+    await typeBalance("100");
+    await userEvent.click(await screen.findByRole("button", { name: "Pular por agora" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Ver meu mês" }));
+
+    await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/tour"));
   });
 
   it("lets the user skip the bills, add and remove rows, and go back", async () => {

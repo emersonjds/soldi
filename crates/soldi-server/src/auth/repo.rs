@@ -19,7 +19,7 @@ pub async fn insert_user(
     sqlx::query_as!(
         User,
         r#"INSERT INTO users (email, name, password_hash) VALUES ($1::text, $2, $3)
-           RETURNING id, email::text AS "email!", name, onboarded_at IS NOT NULL AS "onboarded!""#,
+           RETURNING id, email::text AS "email!", name, onboarded_at IS NOT NULL AS "onboarded!", tour_seen_at IS NOT NULL AS "tour_seen!""#,
         email,
         name,
         password_hash
@@ -33,7 +33,7 @@ pub async fn find_user_by_email(
     email: &str,
 ) -> Result<Option<UserWithHash>, sqlx::Error> {
     let row = sqlx::query!(
-        r#"SELECT id, email::text AS "email!", name, onboarded_at IS NOT NULL AS "onboarded!", password_hash
+        r#"SELECT id, email::text AS "email!", name, onboarded_at IS NOT NULL AS "onboarded!", tour_seen_at IS NOT NULL AS "tour_seen!", password_hash
            FROM users WHERE email = $1::text::citext"#,
         email
     )
@@ -45,6 +45,7 @@ pub async fn find_user_by_email(
             email: row.email,
             name: row.name,
             onboarded: row.onboarded,
+            tour_seen: row.tour_seen,
         },
         password_hash: row.password_hash,
     }))
@@ -53,11 +54,22 @@ pub async fn find_user_by_email(
 pub async fn find_user(conn: &mut PgConnection, user_id: Uuid) -> Result<User, sqlx::Error> {
     sqlx::query_as!(
         User,
-        r#"SELECT id, email::text AS "email!", name, onboarded_at IS NOT NULL AS "onboarded!" FROM users WHERE id = $1"#,
+        r#"SELECT id, email::text AS "email!", name, onboarded_at IS NOT NULL AS "onboarded!", tour_seen_at IS NOT NULL AS "tour_seen!" FROM users WHERE id = $1"#,
         user_id
     )
     .fetch_one(&mut *conn)
     .await
+}
+
+/// Keeps the first time; a second call changes nothing.
+pub async fn mark_tour_seen(conn: &mut PgConnection, user_id: Uuid) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        "UPDATE users SET tour_seen_at = now(), updated_at = now() WHERE id = $1 AND tour_seen_at IS NULL",
+        user_id
+    )
+    .execute(&mut *conn)
+    .await?;
+    Ok(())
 }
 
 pub async fn insert_session(

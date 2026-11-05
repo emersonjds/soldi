@@ -7,7 +7,7 @@
       "name": "AGPL-3.0-only",
       "identifier": "AGPL-3.0-only"
     },
-    "version": "0.10.0"
+    "version": "0.10.1"
   },
   "paths": {
     "/api/auth/me": {
@@ -1126,6 +1126,28 @@
           },
           "422": {
             "description": "`import-has-errors` when the preview listed errors and `skip_errors` is not true; `opening_date` after the earliest imported date; `opening_balance` with more than two places",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/me/tour-seen": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "operationId": "tour_seen",
+        "responses": {
+          "204": {
+            "description": "`tour_seen` is true from now on; calling again changes nothing"
+          },
+          "401": {
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -2895,7 +2917,8 @@
           "id",
           "email",
           "name",
-          "onboarded"
+          "onboarded",
+          "tour_seen"
         ],
         "properties": {
           "email": {
@@ -2911,6 +2934,10 @@
           "onboarded": {
             "type": "boolean",
             "description": "False until `POST /api/onboarding` runs; the web shows onboarding while it is false."
+          },
+          "tour_seen": {
+            "type": "boolean",
+            "description": "False until `POST /api/me/tour-seen` runs; the web shows the welcome tour after onboarding while it is false."
           }
         }
       },

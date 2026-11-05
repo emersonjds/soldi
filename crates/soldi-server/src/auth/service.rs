@@ -59,6 +59,11 @@ pub async fn me(pool: &PgPool, user: &CurrentUser) -> Result<User, AppError> {
     Ok(repo::find_user(&mut conn, user.id).await?)
 }
 
+pub async fn mark_tour_seen(pool: &PgPool, user: &CurrentUser) -> Result<(), AppError> {
+    let mut conn = pool.acquire().await?;
+    Ok(repo::mark_tour_seen(&mut conn, user.id).await?)
+}
+
 async fn start_session(conn: &mut PgConnection, user_id: Uuid) -> Result<String, AppError> {
     let token = domain::new_secret();
     let expires_at = Utc::now() + Duration::days(domain::SESSION_DAYS);

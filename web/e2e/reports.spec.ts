@@ -18,6 +18,8 @@ test("an entry shows up in Para onde vai and Cofrinhos starts empty", async ({ p
   await page.getByRole("button", { name: "Continuar" }).click();
   await page.getByRole("button", { name: "Pular por agora" }).click();
   await page.getByRole("button", { name: "Ver meu mês" }).click();
+  await page.getByRole("button", { name: "Pular" }).click();
+  await page.getByRole("dialog", { name: "Lançar" }).getByRole("button", { name: "Fechar" }).click();
 
   const nav = page.getByRole("navigation", { name: "Navegação principal" });
   await nav.getByRole("button", { name: "Lançar" }).click();

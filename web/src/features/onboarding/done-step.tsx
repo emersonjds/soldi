@@ -7,7 +7,7 @@ import { CircleCheck } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
-import { meQuery } from "@/entities/user/session";
+import { meQuery, redirectFor } from "@/entities/user/session";
 import { api, dataOrThrow, hasStatus, type Schemas } from "@/shared/api/client";
 import { useCurrency } from "@/shared/lib/currency";
 import { formatMoney } from "@/shared/lib/money";
@@ -24,12 +24,12 @@ export const DoneStep = ({ onboarding, onBack }: { onboarding: Schemas["Onboardi
     mutationFn: async () => dataOrThrow(await api.POST("/api/onboarding", { body: onboarding })),
     onSuccess: (user) => {
       queryClient.setQueryData(meQuery.queryKey, user);
-      router.replace("/mes");
+      router.replace(redirectFor(user, "/onboarding") ?? "/mes");
     },
     onError: async (error) => {
       if (!hasStatus(error, 409)) return;
-      await queryClient.fetchQuery({ ...meQuery, staleTime: 0 });
-      router.replace("/mes");
+      const user = await queryClient.fetchQuery({ ...meQuery, staleTime: 0 });
+      router.replace(redirectFor(user, "/onboarding") ?? "/mes");
     },
   });
 
