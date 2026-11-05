@@ -1,15 +1,37 @@
 import { describe, expect, it } from "vitest";
 
-import { formatBRL, maskAmount, parseBRL, toInput } from "./money";
+import { currencySymbol, formatMoney, maskAmount, parseBRL, toInput } from "./money";
 
-describe("formatBRL", () => {
+describe("formatMoney", () => {
   it.each([
     ["1842.10", "R$ 1.842,10"],
     ["0", "R$ 0,00"],
     ["-312.40", "-R$ 312,40"],
     ["9999999999.99", "R$ 9.999.999.999,99"],
-  ])("formats %s as %s", (amount, expected) => {
-    expect(formatBRL(amount)).toBe(expected);
+  ])("formats %s as %s in reais", (amount, expected) => {
+    expect(formatMoney(amount, "BRL")).toBe(expected);
+  });
+});
+
+describe("formatMoney by currency", () => {
+  it.each([
+    ["BRL", "R$\u00a01.234,56"],
+    ["USD", "US$\u00a01.234,56"],
+    ["GBP", "£\u00a01.234,56"],
+    ["EUR", "€\u00a01.234,56"],
+  ] as const)("formats in %s with the pt-BR comma", (currency, expected) => {
+    expect(formatMoney("1234.56", currency)).toBe(expected);
+  });
+});
+
+describe("currencySymbol", () => {
+  it.each([
+    ["BRL", "R$"],
+    ["USD", "US$"],
+    ["GBP", "£"],
+    ["EUR", "€"],
+  ] as const)("shows %s as %s", (currency, symbol) => {
+    expect(currencySymbol(currency)).toBe(symbol);
   });
 });
 
@@ -18,6 +40,9 @@ describe("parseBRL", () => {
     ["1842,10", "1842.10"],
     ["1.842,10", "1842.10"],
     ["R$ 1.842,1", "1842.1"],
+    ["US$ 12,50", "12.50"],
+    ["€ 7", "7"],
+    ["£3,10", "3.10"],
     ["-200", "-200"],
     ["0", "0"],
     [" 35 ", "35"],

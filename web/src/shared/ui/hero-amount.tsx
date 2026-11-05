@@ -1,6 +1,9 @@
+import { useCurrency } from "@/shared/lib/currency";
+import { currencySymbol } from "@/shared/lib/money";
+
 import { amountMask } from "./amount-input";
 
-/** The big `R$ 0,00` field of Lançar and Pagar, bank-style; `value` is the API decimal. */
+/** The big `R$ 0,00` field (in the user's currency) of Lançar and Pagar, bank-style; `value` is the API decimal. */
 export const HeroAmount = ({
   id,
   value,
@@ -21,7 +24,7 @@ export const HeroAmount = ({
     </label>
     <div className="flex items-baseline justify-center gap-2">
       <span aria-hidden className="font-bold text-2xl text-muted-foreground">
-        R$
+        {currencySymbol(useCurrency())}
       </span>
       <input
         id={id}

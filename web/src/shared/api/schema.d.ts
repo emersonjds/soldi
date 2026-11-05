@@ -490,6 +490,11 @@ export interface components {
             /** @description Up to 500 characters; blank means none. */
             note?: string | null;
         };
+        /**
+         * @description ISO 4217 code of the currency every amount is shown in.
+         * @enum {string}
+         */
+        Currency: "BRL" | "USD" | "GBP" | "EUR";
         /** @description One calendar day: what came in and went out, and the balance at its end. */
         Day: {
             balance: string;
@@ -567,6 +572,7 @@ export interface components {
         Onboarding: {
             /** @description Up to 50 recurring bills. */
             bills?: components["schemas"]["CreateBill"][];
+            currency?: components["schemas"]["Currency"] | null;
             /** @description What the user has today; may be negative. */
             opening_balance: string;
             /** Format: date */
@@ -634,6 +640,7 @@ export interface components {
          *     `tier_red < tier_zero < tier_yellow < tier_green`.
          */
         Settings: {
+            currency: components["schemas"]["Currency"];
             opening_balance: string;
             /** Format: date */
             opening_date: string;
@@ -712,6 +719,7 @@ export interface components {
         };
         /** @description Absent fields stay as they are; `"savings_goal_pct": null` clears the goal. */
         UpdateSettings: {
+            currency?: components["schemas"]["Currency"] | null;
             opening_balance?: string | null;
             /** Format: date */
             opening_date?: string | null;

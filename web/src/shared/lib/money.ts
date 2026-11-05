@@ -1,7 +1,24 @@
-const brl = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
+import type { Currency } from "./currency";
+
+const formats = new Map<Currency, Intl.NumberFormat>();
+
+const formatFor = (currency: Currency) => {
+  const cached = formats.get(currency);
+  if (cached) return cached;
+  const format = new Intl.NumberFormat("pt-BR", { style: "currency", currency });
+  formats.set(currency, format);
+  return format;
+};
 
 /** The API sends decimals as strings; Intl formats the string exactly, no float in between. */
-export const formatBRL = (amount: string): string => brl.format(amount as Intl.StringNumericLiteral);
+export const formatMoney = (amount: string, currency: Currency): string =>
+  formatFor(currency).format(amount as Intl.StringNumericLiteral);
+
+/** `R$`, `US$`, `£` or `€`, as pt-BR writes it. */
+export const currencySymbol = (currency: Currency) =>
+  formatFor(currency)
+    .formatToParts(0)
+    .find((part) => part.type === "currency")?.value ?? currency;
 
 const DECIMAL = /^-?\d+(\.\d{1,2})?$/;
 
@@ -11,9 +28,9 @@ const toDecimal = (bare: string) => {
   return bare.replaceAll(".", "");
 };
 
-/** Reads what a person types in pt-BR (`1.842,10`, `R$ 35`, `-200`) as the API's decimal string, or `null`. */
+/** Reads what a person types in pt-BR (`1.842,10`, `R$ 35`, `€ 35`, `-200`) as the API's decimal string, or `null`. */
 export const parseBRL = (input: string): string | null => {
-  const decimal = toDecimal(input.replace(/R\$|\s/g, ""));
+  const decimal = toDecimal(input.replace(/US\$|R\$|£|€|\s/g, ""));
   return DECIMAL.test(decimal) ? decimal : null;
 };
 
