@@ -196,6 +196,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/reports/categories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["category_report"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/savings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_savings_year"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/savings/{year}/{month}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["set_savings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/settings": {
         parameters: {
             query?: never;
@@ -292,6 +340,33 @@ export interface components {
         };
         /** @enum {string} */
         CategoryKind: "income" | "bill" | "daily";
+        /** @description `outflow` (bills and daily) and `income`, each by amount, largest first. */
+        CategoryReport: {
+            income: components["schemas"]["CategoryShare"][];
+            income_total: string;
+            month: string;
+            outflow: components["schemas"]["CategoryShare"][];
+            outflow_total: string;
+        };
+        /**
+         * @description A category's spending or income in the month. `pct` is its share of the group's total and
+         *     `delta_pct` its change against the previous month, both percentages with one decimal;
+         *     `delta_pct` is null when the previous month had nothing.
+         */
+        CategoryShare: {
+            amount: string;
+            /** Format: uuid */
+            category_id: string;
+            color: string;
+            /** @example 18.4 */
+            delta_pct?: string | null;
+            icon: string;
+            kind: components["schemas"]["CategoryKind"];
+            name: string;
+            /** @example 26.0 */
+            pct: string;
+            previous_amount: string;
+        };
         CreateBill: {
             /** @description Greater than zero, up to two decimal places. */
             amount: string;
@@ -394,6 +469,47 @@ export interface components {
             title: string;
             type: string;
         };
+        Savings: {
+            amount: string;
+            /** Format: int32 */
+            month: number;
+            /** Format: int32 */
+            year: number;
+        };
+        /**
+         * @description One month of the year. `income` and `saved` are null before the opening month; `pct` is
+         *     `saved / income` as a percentage with one decimal, null when income is 0.
+         */
+        SavingsMonth: {
+            income?: string | null;
+            /**
+             * Format: int32
+             * @description 1 to 12.
+             */
+            month: number;
+            /** @example 8.4 */
+            pct?: string | null;
+            saved?: string | null;
+        };
+        /**
+         * @description `pct` is `total_saved / total_income`; `goal_progress_pct` is `pct / goal_pct`, capped at
+         *     100, null without a goal or without income.
+         */
+        SavingsYear: {
+            /** Format: int32 */
+            goal_pct?: number | null;
+            goal_progress_pct?: string | null;
+            months: components["schemas"]["SavingsMonth"][];
+            pct?: string | null;
+            total_income: string;
+            total_saved: string;
+            /** Format: int32 */
+            year: number;
+        };
+        SetSavings: {
+            /** @description Zero or more, up to two decimal places. */
+            amount: string;
+        };
         /**
          * @description Money is a decimal string with up to two places (`"-500.00"`). The tiers are the lower
          *     bounds of the thermometer colors and are strictly increasing:
@@ -405,7 +521,7 @@ export interface components {
             opening_date: string;
             /**
              * Format: int32
-             * @description 0 to 100.
+             * @description 1 to 100; null is no goal.
              */
             savings_goal_pct?: number | null;
             tier_green: string;
@@ -1248,6 +1364,171 @@ export interface operations {
             };
         };
     };
+    category_report: {
+        parameters: {
+            query: {
+                /**
+                 * @description The month, `YYYY-MM`
+                 * @example 2026-11
+                 */
+                month: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The month's outflow and income by category, each against the previous month */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryReport"];
+                };
+            };
+            /** @description No `month` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description `month` is not `YYYY-MM` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    get_savings_year: {
+        parameters: {
+            query: {
+                /**
+                 * @description 2000 to 2100
+                 * @example 2026
+                 */
+                year: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Twelve months of income and savings with the year totals and the goal */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavingsYear"];
+                };
+            };
+            /** @description No `year`, or not a number */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description `year` outside 2000..2100 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    set_savings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description 2000 to 2100
+                 * @example 2026
+                 */
+                year: number;
+                /**
+                 * @description 1 to 12
+                 * @example 11
+                 */
+                month: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetSavings"];
+            };
+        };
+        responses: {
+            /** @description The month's savings, created or replaced */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Savings"];
+                };
+            };
+            /** @description `year` or `month` is not a number */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Amount below zero or with more than two places, `year` outside 2000..2100, `month` outside 1..12, or a month before the opening date's month (`month-before-opening`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     get_settings: {
         parameters: {
             query?: never;
@@ -1305,7 +1586,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Money with more than two places, tiers out of order (names the upper tier of the first pair), goal outside 0..100 */
+            /** @description Money with more than two places, tiers out of order (names the upper tier of the first pair), goal outside 1..100 */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -1324,6 +1605,8 @@ export interface operations {
                  * @example 2026-11
                  */
                 month: string;
+                /** @description Only this category's entries; another user's category lists nothing */
+                category_id?: string;
             };
             header?: never;
             path?: never;
@@ -1340,7 +1623,7 @@ export interface operations {
                     "application/json": components["schemas"]["Transaction"][];
                 };
             };
-            /** @description No `month` */
+            /** @description No `month`, or `category_id` is not a UUID */
             400: {
                 headers: {
                     [name: string]: unknown;
