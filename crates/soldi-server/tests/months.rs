@@ -47,14 +47,14 @@ async fn the_sheets_first_days_come_back_with_balances_tiers_and_totals(pool: Pg
     assert_eq!(
         view["days"][2],
         json!({
-            "date": "2026-11-03", "income": "0.00", "bills": "300.00", "daily": "50.00",
+            "date": "2026-11-03", "income": "0.00", "withdrawn": "0.00", "bills": "300.00", "daily": "50.00",
             "balance": "1150.00", "tier": "light_green",
             "is_today": view["days"][2]["is_today"], "is_future": view["days"][2]["is_future"]
         })
     );
     assert_eq!(
         view["totals"],
-        json!({ "income": "500.00", "bills": "300.00", "daily": "50.00", "outflow": "350.00", "performance": "150.00", "saved": "0.00" })
+        json!({ "income": "500.00", "bills": "300.00", "daily": "50.00", "outflow": "350.00", "performance": "150.00", "saved": "0.00", "withdrawn": "0.00" })
     );
     assert_eq!(view["projected_balance"], "1150.00");
     assert_eq!(view["projected_tier"], "light_green");

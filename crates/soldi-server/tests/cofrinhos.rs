@@ -144,13 +144,72 @@ async fn a_deposit_then_a_resgate_leave_the_balance_progress_and_month(pool: PgP
     assert!(item["monthly_suggestion"].is_string(), "{item}");
     let (_, month) = user.get(&format!("/api/months/{}", &today[..7])).await;
     assert_eq!(month["totals"]["saved"], "300.00");
-    assert_eq!(month["totals"]["income"], "200.00");
+    assert_eq!(month["totals"]["income"], "0.00");
+    assert_eq!(month["totals"]["withdrawn"], "200.00");
     assert_eq!(month["totals"]["outflow"], "500.00");
     let (_, entries) = user
         .get(&format!("/api/transactions?month={}", &today[..7]))
         .await;
     assert_eq!(entries[0]["cofrinho_id"], reserva.as_str());
     assert_eq!(entries[1]["cofrinho_id"], Value::Null);
+}
+
+#[sqlx::test]
+async fn a_resgate_is_not_income_on_the_month_nor_in_the_report(pool: PgPool) {
+    let Setup {
+        user,
+        today,
+        reserva,
+        ..
+    } = setup(pool).await;
+    let salario = user.category_id("Salário").await;
+    let (status, _) = user
+        .post(
+            "/api/transactions",
+            json!({ "date": today, "amount": "1000", "kind": "income", "category_id": salario }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED);
+    deposit(&user, &today, &reserva, "4420").await;
+    let (status, _) = withdraw(&user, &reserva, json!({ "date": today, "amount": "50" })).await;
+    assert_eq!(status, StatusCode::CREATED);
+
+    let (_, month) = user.get(&format!("/api/months/{}", &today[..7])).await;
+    let (_, report) = user
+        .get(&format!("/api/reports/categories?month={}", &today[..7]))
+        .await;
+
+    assert_eq!(month["totals"]["income"], "1000.00");
+    assert_eq!(month["totals"]["withdrawn"], "50.00");
+    assert_eq!(month["totals"]["saved"], "4370.00");
+    assert_eq!(month["totals"]["performance"], "-3420.00");
+    assert_eq!(month["savings"]["rate_pct"], "437.0");
+    let day = month["days"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|day| day["date"] == today.as_str())
+        .unwrap();
+    assert_eq!(
+        (&day["income"], &day["withdrawn"], &day["balance"]),
+        (&json!("1000.00"), &json!("50.00"), &json!("-3370.00"))
+    );
+    assert_eq!(report["income_total"], month["totals"]["income"]);
+    let income: Vec<&str> = report["income"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|row| row["name"].as_str().unwrap())
+        .collect();
+    assert_eq!(income, ["Salário"]);
+    assert!(
+        report["groups"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|group| group["name"] != "Resgate"),
+        "{report}"
+    );
 }
 
 #[sqlx::test]

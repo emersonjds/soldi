@@ -14,10 +14,11 @@ pub async fn day_sums(
 ) -> Result<Vec<DaySum>, sqlx::Error> {
     sqlx::query_as!(
         DaySum,
-        r#"SELECT date, kind AS "kind: CategoryKind", SUM(amount) AS "amount!"
+        r#"SELECT date, kind AS "kind: CategoryKind", cofrinho_id IS NOT NULL AS "withdrawn!",
+                  SUM(amount) AS "amount!"
            FROM transactions
            WHERE user_id = $1 AND date BETWEEN $2 AND $3
-           GROUP BY date, kind"#,
+           GROUP BY date, kind, cofrinho_id IS NOT NULL"#,
         user_id,
         from,
         to
