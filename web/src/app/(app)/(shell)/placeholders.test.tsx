@@ -2,15 +2,9 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import CategoriasPage from "./ajustes/categorias/page";
-import EconomiaPage from "./economia/page";
-import ParaOndeVaiPage from "./para-onde-vai/page";
 
 describe("screens still to come", () => {
-  it.each([
-    ["Para onde vai", ParaOndeVaiPage],
-    ["Economia", EconomiaPage],
-    ["Categorias", CategoriasPage],
-  ])("%s says it is on the way", (title, Page) => {
+  it.each([["Categorias", CategoriasPage]])("%s says it is on the way", (title, Page) => {
     render(<Page />);
 
     expect(screen.getByRole("heading", { name: title })).toBeInTheDocument();

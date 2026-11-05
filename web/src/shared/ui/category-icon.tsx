@@ -82,6 +82,13 @@ const COLORS: Record<string, string> = {
   "cat-12": "bg-cat-12",
 };
 
+/** The category's color as a background class; an unknown token falls back to muted. */
+export const categoryBg = (color: string) => COLORS[color] ?? "bg-muted-foreground";
+
+/** The same color for an SVG fill (charts). */
+export const categoryFill = (color: string) =>
+  COLORS[color] ? `var(--color-${color})` : "var(--color-muted-foreground)";
+
 export const CategoryIcon = ({ icon, color, className }: { icon: string; color: string; className?: string }) => {
   const Icon = ICONS[icon] ?? CircleDashed;
   return (
@@ -89,7 +96,7 @@ export const CategoryIcon = ({ icon, color, className }: { icon: string; color: 
       aria-hidden
       className={cn(
         "flex size-10 shrink-0 items-center justify-center rounded-full text-white",
-        COLORS[color] ?? "bg-muted-foreground",
+        categoryBg(color),
         className,
       )}
     >

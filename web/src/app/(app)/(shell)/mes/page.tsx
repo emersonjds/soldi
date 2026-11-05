@@ -10,19 +10,16 @@ import { useMonth } from "@/entities/month/month-query";
 import { settingsQuery } from "@/entities/settings/settings-query";
 import { useTransactions } from "@/entities/transaction/transaction-queries";
 import { TransactionSheet } from "@/features/add-transaction/transaction-sheet";
-import { todayISO } from "@/shared/lib/date";
+import { monthParam } from "@/shared/lib/date";
 import { PageError } from "@/shared/ui/page-state";
 import { BillsOfMonth } from "@/widgets/bills-of-month/bills-of-month";
 import { Ledger } from "@/widgets/ledger/ledger";
 import { MonthHeader } from "@/widgets/month-header/month-header";
 import { MonthSkeleton, MonthSummary, ThermometerCard } from "@/widgets/month-overview/month-overview";
 
-const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
-
 const MonthScreen = () => {
   const router = useRouter();
-  const asked = useSearchParams().get("m");
-  const month = asked && MONTH.test(asked) ? asked : todayISO().slice(0, 7);
+  const month = monthParam(useSearchParams().get("m"));
   const view = useMonth(month);
   const transactions = useTransactions(month);
   const settings = useQuery(settingsQuery);

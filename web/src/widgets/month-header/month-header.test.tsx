@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import { MonthHeader } from "./month-header";
+import { MonthHeader, YearHeader } from "./month-header";
 
 describe("MonthHeader", () => {
   it("shows the month, today's balance and its tier label", () => {
@@ -40,5 +40,39 @@ describe("MonthHeader", () => {
     fireEvent.keyDown(switcher, { key: "Enter" });
     expect(onMonthChange).toHaveBeenCalledTimes(1);
     expect(screen.getByRole("button", { name: "Mês anterior" })).toBeDisabled();
+  });
+
+  it("has a compact variant: the screen's title over the switcher, no balance", async () => {
+    const onMonthChange = vi.fn();
+    render(<MonthHeader month="2026-11" title="Para onde vai" onMonthChange={onMonthChange} />);
+
+    expect(screen.getByRole("heading", { level: 1, name: "Para onde vai" })).toBeInTheDocument();
+    expect(screen.getByText("Novembro 2026")).toBeInTheDocument();
+    expect(screen.queryByText("Saldo hoje")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Próximo mês" }));
+    expect(onMonthChange).toHaveBeenLastCalledWith("2026-12");
+  });
+});
+
+describe("YearHeader", () => {
+  it("switches years and never before the first one", async () => {
+    const onYearChange = vi.fn();
+    render(<YearHeader year={2026} minYear={2026} title="Economia" onYearChange={onYearChange} />);
+
+    expect(screen.getByRole("heading", { level: 1, name: "Economia" })).toBeInTheDocument();
+    expect(screen.getByText("2026")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Ano anterior" })).toBeDisabled();
+    await userEvent.click(screen.getByRole("button", { name: "Próximo ano" }));
+    expect(onYearChange).toHaveBeenLastCalledWith(2027);
+    fireEvent.keyDown(screen.getByRole("group", { name: "Ano" }), { key: "ArrowLeft" });
+    expect(onYearChange).toHaveBeenCalledTimes(1);
+  });
+
+  it("goes back a year when there is no floor", async () => {
+    const onYearChange = vi.fn();
+    render(<YearHeader year={2026} title="Economia" onYearChange={onYearChange} />);
+
+    await userEvent.click(screen.getByRole("button", { name: "Ano anterior" }));
+    expect(onYearChange).toHaveBeenLastCalledWith(2025);
   });
 });
