@@ -178,3 +178,45 @@ export const BILLS_OF_MONTH: Schemas["BillOfMonth"][] = [
     overdue: false,
   },
 ];
+
+const share = (
+  { id, name, icon, color, kind }: Schemas["Category"],
+  amount: string,
+  pct: string,
+  previous_amount: string,
+  delta_pct: string | null,
+): Schemas["CategoryShare"] => ({ category_id: id, name, icon, color, kind, amount, pct, previous_amount, delta_pct });
+
+/** Ana's November by category: rent fell against October, groceries grew, salary is new. */
+export const REPORT: Schemas["CategoryReport"] = {
+  month: "2026-11",
+  outflow_total: "1384.31",
+  income_total: "500.00",
+  outflow: [share(ALUGUEL, "1200.00", "86.7", "1276.60", "-6.0"), share(MERCADO, "184.31", "13.3", "155.67", "18.4")],
+  income: [share(SALARIO, "500.00", "100.0", "0.00", null)],
+};
+
+const savingsMonth = (month: number, rest: Partial<Schemas["SavingsMonth"]> = {}): Schemas["SavingsMonth"] => ({
+  month,
+  income: "0.00",
+  saved: "0.00",
+  pct: null,
+  ...rest,
+});
+
+/** Ana opened in October 2026: nothing exists before it; she kept 400 of 5.000 in November. */
+export const SAVINGS: Schemas["SavingsYear"] = {
+  year: 2026,
+  months: Array.from({ length: 12 }, (_, index) => {
+    const month = index + 1;
+    if (month < 10) return { month, income: null, saved: null, pct: null };
+    if (month === 10) return savingsMonth(10, { income: "4000.00", saved: "100.00", pct: "2.5" });
+    if (month === 11) return savingsMonth(11, { income: "5000.00", saved: "400.00", pct: "8.0" });
+    return savingsMonth(month);
+  }),
+  total_income: "9000.00",
+  total_saved: "500.00",
+  pct: "5.6",
+  goal_pct: 20,
+  goal_progress_pct: "27.8",
+};

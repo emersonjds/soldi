@@ -41,7 +41,8 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
         <TooltipProvider>
           <PreferencesStoreProvider initialValues={PREFERENCE_DEFAULTS}>
             <QueryProvider>{children}</QueryProvider>
-            <Toaster />
+            {/* Above the mobile tab bar and its Lançar button. */}
+            <Toaster mobileOffset={{ bottom: "calc(5.5rem + env(safe-area-inset-bottom))" }} />
           </PreferencesStoreProvider>
         </TooltipProvider>
       </body>

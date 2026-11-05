@@ -7,21 +7,21 @@ export type Transaction = Schemas["Transaction"];
 /** What the API takes, plus the chosen category so the optimistic row can draw its icon. */
 export type NewTransaction = Schemas["CreateTransaction"] & { category: Schemas["Category"] };
 
-/** `month` is `YYYY-MM`. */
-export const transactionsQuery = (month: string) =>
+/** `month` is `YYYY-MM`; `categoryId` narrows the list to one category. */
+export const transactionsQuery = (month: string, categoryId?: string) =>
   queryOptions({
-    queryKey: ["transactions", month],
-    queryFn: async () => dataOrThrow(await api.GET("/api/transactions", { params: { query: { month } } })),
+    queryKey: categoryId ? ["transactions", month, categoryId] : ["transactions", month],
+    queryFn: async () =>
+      dataOrThrow(await api.GET("/api/transactions", { params: { query: { month, category_id: categoryId } } })),
   });
 
-export const useTransactions = (month: string) => useQuery(transactionsQuery(month));
+export const useTransactions = (month: string, categoryId?: string) => useQuery(transactionsQuery(month, categoryId));
 
-// Balances carry into every later month, so every cached month goes stale.
+// Balances carry into every later month, so every cached month goes stale; reports and savings read the same rows.
 const refresh = (client: QueryClient) =>
-  Promise.all([
-    client.invalidateQueries({ queryKey: ["month"] }),
-    client.invalidateQueries({ queryKey: ["transactions"] }),
-  ]);
+  Promise.all(
+    ["month", "transactions", "report", "savings"].map((key) => client.invalidateQueries({ queryKey: [key] })),
+  );
 
 export const useCreateTransaction = () => {
   const client = useQueryClient();

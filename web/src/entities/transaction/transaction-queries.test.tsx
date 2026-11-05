@@ -23,10 +23,12 @@ const seeded = () => {
   }));
   view.client.setQueryData(transactionsQuery("2026-11").queryKey, TRANSACTIONS);
   view.client.setQueryData(["month", "2026-11"], MONTH);
+  view.client.setQueryData(["report", "categories", "2026-11"], {});
+  view.client.setQueryData(["savings", 2026], {});
   return view;
 };
 
-const isStale = (view: ReturnType<typeof seeded>, key: string[]) =>
+const isStale = (view: ReturnType<typeof seeded>, key: unknown[]) =>
   view.client.getQueryState(key)?.isInvalidated === true;
 
 describe("useTransactions", () => {
@@ -36,6 +38,15 @@ describe("useTransactions", () => {
 
     await waitFor(() => expect(result.current.data).toEqual(TRANSACTIONS));
     expect(new URL(requests[0].url).searchParams.get("month")).toBe("2026-11");
+  });
+
+  it("lists only one category's transactions when asked, cached apart from the whole month", async () => {
+    const requests = stubApi({ "GET /api/transactions": { status: 200, body: [TRANSACTIONS[0]] } });
+    const { result, client } = renderHookWithQuery(() => useTransactions("2026-11", MERCADO.id));
+
+    await waitFor(() => expect(result.current.data).toEqual([TRANSACTIONS[0]]));
+    expect(new URL(requests[0].url).searchParams.get("category_id")).toBe(MERCADO.id);
+    expect(client.getQueryData(["transactions", "2026-11", MERCADO.id])).toEqual([TRANSACTIONS[0]]);
   });
 });
 
@@ -104,6 +115,8 @@ describe("useUpdateTransaction and useDeleteTransaction", () => {
 
     expect(await requests[0].json()).toEqual({ amount: "40.00" });
     expect(isStale(view, ["month", "2026-11"])).toBe(true);
+    expect(isStale(view, ["report", "categories", "2026-11"])).toBe(true);
+    expect(isStale(view, ["savings", 2026])).toBe(true);
   });
 
   it("drops the row at once, deletes and refreshes; a refusal surfaces as an error", async () => {

@@ -18,10 +18,13 @@ versions. This file covers the server and the web app together.
 - `GET /api/savings?year=YYYY`: twelve months of income, savings and their percentage (null without income; income and savings null before the opening month), the year totals and the progress towards the savings goal, capped at 100%.
 - `PUT /api/savings/{year}/{month}` `{ amount }` sets a month's savings (zero or more, two decimal places; a month before the opening date answers 422 `month-before-opening`).
 - `GET /api/months/{YYYY-MM}` fills `savings` with the month's amount and its percentage of the month's income.
+- Web `Para onde vai` (`/para-onde-vai?m=YYYY-MM`): a short header with the month switcher, `Saídas / Entradas`, a donut in the category colors with the month's total in the center, legend rows with amount, share and the change against the previous month (red when spending grew, green when it fell), a `Top 5` with bars, and tapping a slice or a row lists that category's entries with `Limpar filtro`. Rows are keyboard-selectable buttons.
+- Web `Economia` (`/economia?y=YYYY`): a year switcher, `Guardado no ano` with its share of income and the progress to the goal (edited inline: pencil, 1 to 100, empty clears it), and a twelve-month table where `Guardado` is edited in place (Enter or leaving the field saves with `Salvo`, Escape cancels); `%` carries a red, yellow or green dot (under 5%, 5 to 15%, over 15%); months before the opening show `—`. On a phone the income sits under the month name and the share under the amount.
 
 ### Changed
 
 - `savings_goal_pct` in `PATCH /api/settings` is 1 to 100; `null` clears the goal and `0` is refused.
+- Web: toasts on a phone sit above the tab bar and its `Lançar` button instead of covering them.
 
 ### Upgrade notes
 

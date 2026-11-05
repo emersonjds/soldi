@@ -15,19 +15,16 @@ import {
 import { TransactionSheet } from "@/features/add-transaction/transaction-sheet";
 import { cn } from "@/lib/utils";
 import type { Schemas } from "@/shared/api/client";
-import { todayISO, yesterdayISO } from "@/shared/lib/date";
+import { shortDay, todayISO, yesterdayISO } from "@/shared/lib/date";
 import { BrandButton } from "@/shared/ui/brand-button";
 import { CategoryIcon } from "@/shared/ui/category-icon";
 import { Money } from "@/shared/ui/money";
 import { TierPill } from "@/shared/ui/tier-pill";
 
-const MONTHS = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
-
 const KIND_LABEL: Record<Schemas["CategoryKind"], string> = { income: "Entrada", bill: "Conta", daily: "Diário" };
 
 const dayLabel = (date: string) => {
-  const [, month, day] = date.split("-").map(Number);
-  const short = `${day} ${MONTHS[month - 1]}`;
+  const short = shortDay(date);
   if (date === todayISO()) return `Hoje, ${short}`;
   if (date === yesterdayISO()) return `Ontem, ${short}`;
   return short;
