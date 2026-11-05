@@ -24,7 +24,7 @@ export const useCategoryChips = (kind: Kind) => {
   };
 };
 
-/** Icon chips of one kind, scrolling sideways; a radio group under the hood. */
+/** Icon chips of one kind in a wrapping grid, every category visible; a radio group under the hood. */
 export const CategoryChips = ({
   kind,
   chosen,
@@ -48,11 +48,11 @@ export const CategoryChips = ({
     );
 
   return (
-    <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pt-1 pb-2">
+    <div className="grid grid-cols-4 gap-x-2 gap-y-3 pt-1 pb-2 sm:grid-cols-6">
       {categories.data.map((category) => (
         <label
           key={category.id}
-          className="group relative flex w-20 shrink-0 cursor-pointer flex-col items-center gap-1.5 rounded-xl py-1 text-center text-muted-foreground text-xs has-checked:font-semibold has-checked:text-primary has-focus-visible:outline-2 has-focus-visible:outline-ring"
+          className="group relative flex min-w-0 cursor-pointer flex-col items-center gap-1.5 rounded-xl py-1 text-center text-muted-foreground text-xs has-checked:font-semibold has-checked:text-primary has-focus-visible:outline-2 has-focus-visible:outline-ring"
         >
           <input
             type="radio"
