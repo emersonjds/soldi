@@ -74,6 +74,18 @@ async fn bills_need_a_session(pool: PgPool) {
         StatusCode::UNAUTHORIZED
     );
     assert_eq!(anonymous.delete(&uri).await.0, StatusCode::UNAUTHORIZED);
+    let pay = format!("{uri}/pay");
+    assert_eq!(
+        anonymous
+            .post(&pay, json!({ "date": "2026-11-05" }))
+            .await
+            .0,
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        anonymous.delete(&format!("{pay}?month=2026-11")).await.0,
+        StatusCode::UNAUTHORIZED
+    );
 }
 
 async fn create(app: &TestApp, body: serde_json::Value) -> serde_json::Value {
