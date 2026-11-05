@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE users SET tour_seen_at = now(), updated_at = now() WHERE id = $1 AND tour_seen_at IS NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "23c076ce17f2df3772444d77e174d31354260b81ca85ce01d2702ce89d6655f3"
+}

@@ -27,4 +27,6 @@ pub struct User {
     pub name: String,
     /// False until `POST /api/onboarding` runs; the web shows onboarding while it is false.
     pub onboarded: bool,
+    /// False until `POST /api/me/tour-seen` runs; the web shows the welcome tour after onboarding while it is false.
+    pub tour_seen: bool,
 }

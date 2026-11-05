@@ -12,7 +12,7 @@ pub async fn mark_onboarded(
         User,
         r#"UPDATE users SET onboarded_at = now(), updated_at = now()
            WHERE id = $1 AND onboarded_at IS NULL
-           RETURNING id, email::text AS "email!", name, true AS "onboarded!""#,
+           RETURNING id, email::text AS "email!", name, true AS "onboarded!", tour_seen_at IS NOT NULL AS "tour_seen!""#,
         user_id
     )
     .fetch_optional(&mut *conn)

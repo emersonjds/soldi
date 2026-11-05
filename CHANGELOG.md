@@ -7,6 +7,18 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.11.0
+
+> Headline: welcome tour
+
+### Added
+
+- `User` carries `tour_seen`, false until `POST /api/me/tour-seen` (204, idempotent; the first time is kept) runs.
+
+### Upgrade notes
+
+- Migration `0014_tour` adds the nullable `users.tour_seen_at`; every existing user starts with `tour_seen: false` and sees the tour once. It runs on start-up with the others; no manual step.
+
 ## 0.10.1
 
 > Headline: resgates no longer count as income
