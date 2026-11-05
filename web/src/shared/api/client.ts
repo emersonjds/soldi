@@ -1,0 +1,44 @@
+import createClient from "openapi-fetch";
+
+import type { components, paths } from "./schema";
+
+export type Schemas = components["schemas"];
+
+// The session is an HttpOnly cookie on the same origin: no token ever reaches this code.
+export const api = createClient<paths>({
+  // Absolute so Node's Request (tests) accepts it; same origin as a relative URL in the browser.
+  baseUrl: globalThis.location?.origin ?? "",
+  credentials: "include",
+  // Looked up per call so tests can stub the global fetch.
+  fetch: (request) => globalThis.fetch(request),
+});
+
+export class ApiError extends Error {
+  readonly status: number;
+  readonly errors: Schemas["FieldError"][];
+
+  constructor(status: number, detail: string, errors: Schemas["FieldError"][] = []) {
+    super(detail);
+    this.status = status;
+    this.errors = errors;
+  }
+}
+
+type Result<Data> = {
+  data?: Data;
+  error?: { detail?: string; errors?: Schemas["FieldError"][] };
+  response: Response;
+};
+
+const problemOf = ({ error, response }: Result<unknown>) =>
+  new ApiError(response.status, error?.detail ?? response.statusText, error?.errors);
+
+export const dataOrThrow = <Data>(result: Result<Data>): Data => {
+  if (result.data !== undefined) return result.data;
+  throw problemOf(result);
+};
+
+/** For answers without a body (204): only the status tells success. */
+export const okOrThrow = (result: Result<unknown>) => {
+  if (!result.response.ok) throw problemOf(result);
+};
