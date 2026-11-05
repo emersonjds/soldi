@@ -7,6 +7,25 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.7.0
+
+> Headline: subcategories
+
+### Added
+
+- Subcategories, one level deep: `POST /api/categories` takes `parent_id`, one of the caller's active top-level categories of the same kind, and `PATCH /api/categories/{id}` moves a category under one (`"parent_id": null` makes it top-level again). Another user's, a missing or an archived parent answers 404; a parent of another kind, or the category itself, 422 on `parent_id`; a parent that is a subcategory, or moving a category that has subcategories, 422 `nested-subcategory`. Names stay unique per kind among active categories, subcategories included.
+- `Category` carries `parent_id` (null for a top-level one), in the list and in each entry's category.
+- `GET /api/reports/categories` adds `parent_id` on each `outflow` and `income` item and `groups`: one per top-level category with entries in the month, itself or through its subcategories, with the subcategories' amounts and previous amounts rolled in, its share of the outflow or income total, the change against the previous month and `children`, the ids of its subcategories with entries. Outflow groups come first, then income, each by amount.
+
+### Changed
+
+- `GET /api/categories` stays flat, ordered within a kind by parent name with each parent followed by its subcategories by name.
+- `DELETE /api/categories/{id}` archives the category's subcategories with it, in the same statement.
+
+### Upgrade notes
+
+- Migration `0011_category_parent` adds the nullable `categories.parent_id`, a foreign key on `(user_id, parent_id)` to the same user's category with `ON DELETE RESTRICT`, a check that a category is not its own parent and an index on `(user_id, parent_id)`. Every existing category stays top-level. It runs on start-up with the others; no manual step.
+
 ## 0.6.0
 
 > Headline: bank-style amount entry and categories created from the picker
