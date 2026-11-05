@@ -16,3 +16,12 @@ export const parseBRL = (input: string): string | null => {
   const decimal = toDecimal(input.replace(/R\$|\s/g, ""));
   return DECIMAL.test(decimal) ? decimal : null;
 };
+
+/** A decimal above zero, or `null`. */
+export const positiveAmount = (input: string) => {
+  const amount = parseBRL(input);
+  return amount && !amount.startsWith("-") && /[1-9]/.test(amount) ? amount : null;
+};
+
+/** An API decimal as a person types it: `1234.5` → `1234,5`. */
+export const toInput = (amount: string) => amount.replace(".", ",");
