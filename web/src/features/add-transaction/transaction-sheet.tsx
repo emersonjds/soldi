@@ -25,7 +25,7 @@ type Kind = Schemas["CategoryKind"];
 
 const KINDS: { value: Kind; label: string }[] = [
   { value: "income", label: "Entrada" },
-  { value: "bill", label: "Conta" },
+  { value: "bill", label: "Saída" },
   { value: "daily", label: "Diário" },
 ];
 

@@ -21,7 +21,7 @@ import { CategoryIcon } from "@/shared/ui/category-icon";
 import { Money } from "@/shared/ui/money";
 import { TierPill } from "@/shared/ui/tier-pill";
 
-const KIND_LABEL: Record<Schemas["CategoryKind"], string> = { income: "Entrada", bill: "Conta", daily: "Diário" };
+const KIND_LABEL: Record<Schemas["CategoryKind"], string> = { income: "Entrada", bill: "Saída", daily: "Diário" };
 
 const dayLabel = (date: string) => {
   const short = shortDay(date);
