@@ -227,7 +227,7 @@ impl Sheet {
             .get_value((row, column))
             .map_or("", |formula| formula.trim());
         let amounts = if !formula.is_empty() {
-            sum_of_literals(formula)?
+            formula_amounts(formula)?
         } else {
             match self
                 .values
@@ -263,23 +263,57 @@ fn is_blank(cell: &Data) -> bool {
     }
 }
 
-/// `=a + b + …` of decimal literals, with or without the `=` calamine drops.
-fn sum_of_literals(formula: &str) -> Result<Vec<Decimal>, String> {
+/// `+` and `-` over decimal literals, optionally inside `sum( … )`, with or without the `=`
+/// calamine drops. A pure sum gives one amount per literal; with any `-`, one net amount.
+fn formula_amounts(formula: &str) -> Result<Vec<Decimal>, String> {
     let formula = formula.trim();
-    let body = formula.strip_prefix('=').unwrap_or(formula);
-    let parts: Vec<&str> = body.split('+').map(str::trim).collect();
-    let is_literal = |part: &&str| {
-        !part.is_empty()
-            && part
+    let formula = formula.strip_prefix('=').unwrap_or(formula).trim();
+    let mut body = formula;
+    let wrapped = body
+        .get(..4)
+        .is_some_and(|prefix| prefix.eq_ignore_ascii_case("sum("));
+    if wrapped && body.ends_with(')') {
+        body = &body[4..body.len() - 1];
+    }
+    let not_arithmetic =
+        || format!("only + and - of numbers like `=10 + 5.50 - 2` are imported, not `={formula}`");
+    let mut rest = body.trim_start();
+    let mut negative = false;
+    if let Some(sign) = rest.chars().next().filter(|char| matches!(char, '+' | '-')) {
+        negative = sign == '-';
+        rest = &rest[1..];
+    }
+    let mut terms = Vec::new();
+    loop {
+        let end = rest.find(['+', '-']).unwrap_or(rest.len());
+        let text = rest[..end].trim();
+        if text.is_empty()
+            || !text
                 .chars()
                 .all(|char| char.is_ascii_digit() || char == '.')
-    };
-    if !parts.iter().all(is_literal) {
+        {
+            return Err(not_arithmetic());
+        }
+        terms.push((negative, literal(text)?));
+        if end == rest.len() {
+            break;
+        }
+        negative = rest.as_bytes()[end] == b'-';
+        rest = &rest[end + 1..];
+    }
+    if !terms.iter().any(|(negative, _)| *negative) {
+        return Ok(terms.into_iter().map(|(_, amount)| amount).collect());
+    }
+    let net: Decimal = terms
+        .iter()
+        .map(|(negative, amount)| if *negative { -amount } else { *amount })
+        .sum();
+    if net <= Decimal::ZERO {
         return Err(format!(
-            "only sums of numbers like `=10 + 5.50` are imported, not `={body}`"
+            "`={formula}` comes to {net}, not a positive amount"
         ));
     }
-    parts.into_iter().map(literal).collect()
+    Ok(vec![checked(net)?])
 }
 
 fn literal(text: &str) -> Result<Decimal, String> {
@@ -401,31 +435,43 @@ mod tests {
     }
 
     #[test]
-    fn a_formula_is_read_only_as_a_sum_of_literals() {
-        let sum = |formula| sum_of_literals(formula).map(|amounts| amounts.len());
+    fn a_formula_is_read_only_as_arithmetic_of_literals() {
+        let amounts = |formula| formula_amounts(formula).unwrap();
+        let amounts_of = |texts: &[&str]| texts.iter().map(|text| money(text)).collect::<Vec<_>>();
 
-        assert_eq!(
-            sum_of_literals("= 59.17 + 35.71").unwrap(),
-            vec![money("59.17"), money("35.71")]
-        );
-        assert_eq!(
-            sum_of_literals("150+60").unwrap(),
-            vec![money("150"), money("60")]
-        );
-        assert_eq!(sum("=368 + 2259.56 + 950 "), Ok(3));
+        assert_eq!(amounts("= 59.17 + 35.71"), amounts_of(&["59.17", "35.71"]));
+        assert_eq!(amounts("150+60"), amounts_of(&["150", "60"]));
+        assert_eq!(amounts("=368 + 2259.56 + 950 ").len(), 3);
+        assert_eq!(amounts("=sum(5408 + 265)"), amounts_of(&["5408", "265"]));
+        assert_eq!(amounts("=+ 81.28"), amounts_of(&["81.28"]));
+        assert_eq!(amounts("=74.75+280 - 27.91 + 22"), amounts_of(&["348.84"]));
+        assert_eq!(amounts("=SUM(1 - 0.5)"), amounts_of(&["0.5"]));
+        assert_eq!(amounts("=5 - 2"), amounts_of(&["3"]));
+        for formula in ["=5 - 5", "=2 - 7", "=-5"] {
+            let message = formula_amounts(formula).unwrap_err();
+            assert!(
+                message.contains("not a positive amount"),
+                "{formula}: {message}"
+            );
+        }
         for formula in [
+            "=BG32",
             "=SUM(B3:B5)",
-            "=5 - 2",
             "=1++2",
+            "=1 - -2",
             "=",
             "=1 2",
             "=1.2.3",
-            "=-5",
+            "=sum(5",
+            "=5)",
+            "=5 * 2",
+            "=ação(1)",
         ] {
-            assert!(sum_of_literals(formula).is_err(), "{formula}");
+            assert!(formula_amounts(formula).is_err(), "{formula}");
         }
+        assert!(formula_amounts("=BG32").unwrap_err().contains("`=BG32`"));
         assert!(
-            sum_of_literals("=1.005")
+            formula_amounts("=1.005")
                 .unwrap_err()
                 .contains("two decimal")
         );
