@@ -25,7 +25,7 @@ pub async fn preview(
     Ok(domain::preview(&parsed, token))
 }
 
-/// Settings, the `Importado` categories, the rows and the saved months, all or nothing.
+/// Settings, the `Importado` categories and the rows, all or nothing.
 pub async fn confirm(
     pool: &PgPool,
     user: &CurrentUser,
@@ -79,13 +79,11 @@ pub async fn confirm(
     repo::delete_imported(&mut tx, user.id, &years).await?;
     let transactions =
         repo::insert_rows(&mut tx, user.id, input.token, &parsed.years, category_id).await?;
-    let savings_months = repo::upsert_savings(&mut tx, user.id, input.token, &parsed.years).await?;
     repo::delete_preview(&mut tx, user.id, input.token).await?;
     onboarding::repo::mark_onboarded(&mut tx, user.id).await?;
     tx.commit().await?;
     Ok(ImportResult {
         transactions: transactions as u32,
-        savings_months: savings_months as u32,
         years,
         skipped: parsed
             .errors

@@ -26,3 +26,8 @@ SELECT u.id, s.name, s.kind, 'piggy-bank', 'cat-11', true
 FROM users u CROSS JOIN (VALUES ('Economia', 'bill'), ('Resgate', 'income')) AS s (name, kind)
 WHERE NOT EXISTS (
     SELECT 1 FROM categories c WHERE c.user_id = u.id AND c.kind = s.kind AND c.is_savings);
+
+-- Savings are entries under Economia now; the monthly amounts and the goal go (the owner
+-- discarded the imported values).
+DROP TABLE savings;
+ALTER TABLE settings DROP COLUMN savings_goal_pct;

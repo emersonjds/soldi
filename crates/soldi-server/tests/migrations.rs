@@ -69,6 +69,14 @@ async fn cofrinhos_backfill_economia_and_resgate_once_per_user(pool: PgPool) {
     let bia_rows: Vec<_> = rows.iter().filter(|row| row.0 == bia).collect();
     assert_eq!(bia_rows.len(), 2);
     assert_eq!(bia_rows[0].1, "economia");
+    let leftovers: (Option<String>, i64) = sqlx::query_as(
+        "SELECT to_regclass('savings')::text, (SELECT count(*) FROM information_schema.columns
+         WHERE table_name = 'settings' AND column_name = 'savings_goal_pct')",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(leftovers, (None, 0));
     let duplicate = sqlx::query(
         "INSERT INTO categories (user_id, name, kind, icon, color, is_savings) VALUES ($1, 'Outra', 'bill', 'x', 'cat-1', true)",
     )

@@ -55,7 +55,6 @@ pub fn apply(current: Settings, patch: UpdateSettings) -> Result<Settings, AppEr
         tier_zero: money("tier_zero", patch.tier_zero, current.tier_zero)?,
         tier_yellow: money("tier_yellow", patch.tier_yellow, current.tier_yellow)?,
         tier_green: money("tier_green", patch.tier_green, current.tier_green)?,
-        savings_goal_pct: patch.savings_goal_pct.unwrap_or(current.savings_goal_pct),
         currency: patch.currency.unwrap_or(current.currency),
     };
     check_tiers(
@@ -64,12 +63,6 @@ pub fn apply(current: Settings, patch: UpdateSettings) -> Result<Settings, AppEr
         next.tier_yellow,
         next.tier_green,
     )?;
-    if next
-        .savings_goal_pct
-        .is_some_and(|pct| !(1..=100).contains(&pct))
-    {
-        return Err(AppError::invalid("savings_goal_pct", "must be 1 to 100"));
-    }
     Ok(next)
 }
 
@@ -99,7 +92,6 @@ mod tests {
             tier_zero: money("0.00"),
             tier_yellow: money("1000.00"),
             tier_green: money("2000.00"),
-            savings_goal_pct: None,
             currency: Currency::Brl,
         }
     }
@@ -131,7 +123,6 @@ mod tests {
         let patch = UpdateSettings {
             opening_balance: Some(money("1234.56")),
             tier_green: Some(money("3000")),
-            savings_goal_pct: Some(Some(20)),
             ..UpdateSettings::default()
         };
 
@@ -140,20 +131,17 @@ mod tests {
         assert_eq!(next.opening_balance, money("1234.56"));
         assert_eq!(next.tier_green, money("3000"));
         assert_eq!(next.tier_yellow, money("1000.00"));
-        assert_eq!(next.savings_goal_pct, Some(20));
         assert_eq!(next.opening_date, defaults().opening_date);
         assert_eq!(next.currency, Currency::Brl);
 
         let cleared = apply(
             next,
             UpdateSettings {
-                savings_goal_pct: Some(None),
                 opening_date: NaiveDate::from_ymd_opt(2026, 1, 1),
                 ..UpdateSettings::default()
             },
         )
         .unwrap();
-        assert_eq!(cleared.savings_goal_pct, None);
         assert_eq!(
             cleared.opening_date,
             NaiveDate::from_ymd_opt(2026, 1, 1).unwrap()
@@ -180,21 +168,6 @@ mod tests {
             ..UpdateSettings::default()
         };
         assert_eq!(field(apply(defaults(), below_red)), "tier_zero");
-        let goal = UpdateSettings {
-            savings_goal_pct: Some(Some(101)),
-            ..UpdateSettings::default()
-        };
-        assert_eq!(field(apply(defaults(), goal)), "savings_goal_pct");
-        let negative_goal = UpdateSettings {
-            savings_goal_pct: Some(Some(-1)),
-            ..UpdateSettings::default()
-        };
-        assert!(apply(defaults(), negative_goal).is_err());
-        let no_goal = UpdateSettings {
-            savings_goal_pct: Some(Some(0)),
-            ..UpdateSettings::default()
-        };
-        assert_eq!(field(apply(defaults(), no_goal)), "savings_goal_pct");
         let cents = UpdateSettings {
             tier_red: Some(money("-500.001")),
             ..UpdateSettings::default()

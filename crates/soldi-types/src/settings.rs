@@ -45,12 +45,10 @@ pub struct Settings {
     pub tier_yellow: Decimal,
     #[serde(serialize_with = "crate::money")]
     pub tier_green: Decimal,
-    /// 1 to 100; null is no goal.
-    pub savings_goal_pct: Option<i16>,
     pub currency: Currency,
 }
 
-/// Absent fields stay as they are; `"savings_goal_pct": null` clears the goal.
+/// Absent fields stay as they are.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct UpdateSettings {
@@ -71,9 +69,6 @@ pub struct UpdateSettings {
     #[serde(default, with = "rust_decimal::serde::str_option")]
     #[schema(value_type = Option<String>)]
     pub tier_green: Option<Decimal>,
-    #[serde(default, deserialize_with = "crate::nullable_field")]
-    #[schema(value_type = Option<i16>, nullable, minimum = 1, maximum = 100)]
-    pub savings_goal_pct: Option<Option<i16>>,
     #[serde(default)]
     pub currency: Option<Currency>,
 }

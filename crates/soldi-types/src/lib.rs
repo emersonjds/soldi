@@ -5,7 +5,6 @@ pub mod imports;
 pub mod months;
 pub mod onboarding;
 pub mod reports;
-pub mod savings;
 pub mod settings;
 pub mod transactions;
 

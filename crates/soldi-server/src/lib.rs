@@ -7,7 +7,6 @@ pub mod imports;
 pub mod months;
 pub mod onboarding;
 pub mod reports;
-pub mod savings;
 pub mod settings;
 pub mod transactions;
 pub mod web;
@@ -65,7 +64,6 @@ fn api() -> OpenApiRouter<AppState> {
         .merge(months::handler::router())
         .merge(onboarding::handler::router())
         .merge(reports::handler::router())
-        .merge(savings::handler::router())
         .merge(imports::handler::router())
 }
 

@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::io::Cursor;
 
-use calamine::{Data, DataType, Range, Reader, Xlsx, XlsxError, open_workbook_from_rs};
+use calamine::{Data, Range, Reader, Xlsx, XlsxError, open_workbook_from_rs};
 use chrono::NaiveDate;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
@@ -10,7 +10,6 @@ use soldi_types::imports::{ImportError, ImportPreview, ImportYear};
 use uuid::Uuid;
 
 use crate::error::AppError;
-use crate::savings::domain::MonthAmount;
 use crate::settings::domain::check_money;
 
 pub const MAX_FILE_BYTES: usize = 5 * 1024 * 1024;
@@ -53,7 +52,6 @@ pub struct Row {
 pub struct Year {
     pub year: i16,
     pub rows: Vec<Row>,
-    pub savings: Vec<MonthAmount>,
 }
 
 /// Years in ascending order.
@@ -74,37 +72,20 @@ pub fn parse(bytes: Vec<u8>) -> Result<ParsedWorkbook, XlsxError> {
             .parse::<i16>()
             .ok()
             .filter(|year| (2000..=2100).contains(year));
-        if year.is_none() && name != "Economia" {
+        let Some(year) = year else {
             continue;
-        }
+        };
         let sheet = Sheet {
             values: workbook.worksheet_range(&name)?,
             formulas: workbook.worksheet_formula(&name)?,
             name,
         };
-        match year {
-            Some(year) => {
-                let rows = sheet.days(year, &mut errors);
-                entry(&mut years, year).rows = rows;
-            }
-            None => {
-                for (year, saved) in sheet.savings(&mut errors) {
-                    entry(&mut years, year).savings.push(saved);
-                }
-            }
-        }
+        let rows = sheet.days(year, &mut errors);
+        years.insert(year, Year { year, rows });
     }
     Ok(ParsedWorkbook {
         years: years.into_values().collect(),
         errors,
-    })
-}
-
-fn entry(years: &mut BTreeMap<i16, Year>, year: i16) -> &mut Year {
-    years.entry(year).or_insert_with(|| Year {
-        year,
-        rows: Vec::new(),
-        savings: Vec::new(),
     })
 }
 
@@ -127,7 +108,6 @@ pub fn preview(parsed: &ParsedWorkbook, token: Uuid) -> ImportPreview {
                 income_total: total(year, CategoryKind::Income),
                 bills_total: total(year, CategoryKind::Bill),
                 daily_total: total(year, CategoryKind::Daily),
-                savings_months: year.savings.len() as u32,
             })
             .collect(),
         errors: parsed.errors.clone(),
@@ -174,50 +154,6 @@ impl Sheet {
             }
         }
         rows
-    }
-
-    /// Tables at B and H: the year in row 4, months in rows 5..16, the amount two columns right.
-    fn savings(&self, errors: &mut Vec<ImportError>) -> Vec<(i16, MonthAmount)> {
-        let mut saved = Vec::new();
-        for column in [1, 7] {
-            let Some(cell) = self
-                .values
-                .get_value((3, column))
-                .filter(|cell| !is_blank(cell))
-            else {
-                continue;
-            };
-            let Some(year) = cell
-                .as_f64()
-                .filter(|year| year.fract() == 0.0 && (2000.0..=2100.0).contains(year))
-            else {
-                errors.push(self.error(3, column, "must be a year from 2000 to 2100".into()));
-                continue;
-            };
-            let year = year as i16;
-            if saved.iter().any(|(seen, _)| *seen == year) {
-                errors.push(self.error(3, column, format!("{year} is in another table")));
-                continue;
-            }
-            for month in 1..=12 {
-                let (row, column) = (3 + month, column + 2);
-                let total = self
-                    .amounts(row, column)
-                    .and_then(|amounts| checked(amounts.iter().sum()));
-                match total {
-                    Ok(amount) if amount.is_zero() => {}
-                    Ok(amount) => saved.push((
-                        year,
-                        MonthAmount {
-                            month: month as i16,
-                            amount,
-                        },
-                    )),
-                    Err(message) => errors.push(self.error(row, column, message)),
-                }
-            }
-        }
-        saved
     }
 
     /// The cell's non-zero amounts: a number, or one per literal of a sum formula.
@@ -364,13 +300,6 @@ mod tests {
         }
     }
 
-    fn saved(month: i16, amount: &str) -> MonthAmount {
-        MonthAmount {
-            month,
-            amount: money(amount),
-        }
-    }
-
     fn sheet(name: &str) -> Sheet {
         Sheet {
             name: name.into(),
@@ -382,7 +311,7 @@ mod tests {
     use CategoryKind::{Bill, Daily, Income};
 
     #[test]
-    fn the_sample_yields_one_row_per_literal_and_the_saved_months() {
+    fn the_sample_yields_one_row_per_literal_and_skips_the_economia_sheet() {
         let parsed = parse(SAMPLE.to_vec()).unwrap();
 
         assert_eq!(parsed.errors, vec![]);
@@ -399,7 +328,6 @@ mod tests {
                         row("2025-02-28", Daily, "80"),
                         row("2025-12-31", Daily, "12.5"),
                     ],
-                    savings: vec![saved(1, "100"), saved(2, "300")],
                 },
                 Year {
                     year: 2026,
@@ -411,7 +339,6 @@ mod tests {
                         row("2026-01-02", Income, "715"),
                         row("2026-03-10", Bill, "2259.56"),
                     ],
-                    savings: vec![],
                 },
             ]
         );
@@ -426,7 +353,6 @@ mod tests {
         assert_eq!((error.sheet.as_str(), error.cell.as_str()), ("2026", "C5"));
         assert!(error.message.contains("=SUM(B3:B5)"), "{}", error.message);
         assert_eq!(parsed.years[0].rows, vec![row("2026-01-01", Income, "100")]);
-        assert_eq!(parsed.years[0].savings, vec![saved(1, "50")]);
     }
 
     #[test]
@@ -521,39 +447,5 @@ mod tests {
         let cells: Vec<&str> = errors.iter().map(|error| error.cell.as_str()).collect();
         assert_eq!(cells, vec!["B4", "C4", "D4", "B5"]);
         assert!(errors.iter().all(|error| error.sheet == "2026"));
-    }
-
-    #[test]
-    fn economia_tables_without_a_year_are_skipped_and_a_bad_year_is_an_error() {
-        let mut economia = sheet("Economia");
-        economia
-            .values
-            .set_value((3, 1), Data::String("ano".into())); // B4
-        economia.values.set_value((4, 3), Data::Float(10.0)); // D5
-        economia.values.set_value((3, 7), Data::Int(2027)); // H4
-        economia.formulas.set_value((15, 9), "=20 + 0.5".into()); // J16: dez
-        economia.values.set_value((14, 9), Data::Float(0.0)); // J15: nov
-        let mut errors = Vec::new();
-
-        assert_eq!(
-            economia.savings(&mut errors),
-            vec![(2027, saved(12, "20.5"))]
-        );
-        assert_eq!(errors.len(), 1, "{errors:?}");
-        assert_eq!(errors[0].cell, "B4");
-    }
-
-    #[test]
-    fn a_year_repeated_in_economia_is_an_error() {
-        let mut economia = sheet("Economia");
-        economia.values.set_value((3, 1), Data::Int(2026)); // B4
-        economia.values.set_value((4, 3), Data::Float(10.0)); // D5
-        economia.values.set_value((3, 7), Data::Int(2026)); // H4
-        economia.values.set_value((4, 9), Data::Float(20.0)); // J5
-        let mut errors = Vec::new();
-
-        assert_eq!(economia.savings(&mut errors), vec![(2026, saved(1, "10"))]);
-        assert_eq!(errors.len(), 1, "{errors:?}");
-        assert_eq!(errors[0].cell, "H4");
     }
 }

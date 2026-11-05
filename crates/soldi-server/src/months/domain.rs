@@ -3,12 +3,13 @@ use std::collections::BTreeMap;
 use chrono::{Datelike, NaiveDate};
 use rust_decimal::Decimal;
 use soldi_types::categories::CategoryKind;
-use soldi_types::months::{BillOfMonth, Day, MonthView, Tier, Totals};
+use soldi_types::months::{BillOfMonth, Day, MonthSavings, MonthView, Tier, Totals};
 use soldi_types::settings::Settings;
 use uuid::Uuid;
 
 use crate::bills::domain::due_date;
 use crate::error::AppError;
+use crate::reports::domain::percent;
 
 /// What the ledger holds for one kind on one date.
 pub struct DaySum {
@@ -34,14 +35,15 @@ pub struct Payment {
     pub amount: Decimal,
 }
 
-/// `month` is its first day; `sums` cover `opening_date` to the month's end.
+/// `month` is its first day; `sums` cover `opening_date` to the month's end; `saved` is the
+/// month's bills under `Economia` minus its resgates.
 pub struct MonthInput {
     pub month: NaiveDate,
     pub settings: Settings,
     pub sums: Vec<DaySum>,
     pub bills: Vec<MonthBill>,
     pub payments: Vec<Payment>,
-    pub saved: Option<Decimal>,
+    pub saved: Decimal,
     pub today: NaiveDate,
 }
 
@@ -161,11 +163,15 @@ pub fn month_view(input: MonthInput) -> MonthView {
             daily: totals.daily,
             outflow: totals.bills + totals.daily,
             performance: totals.net(),
+            saved,
         },
         projected_balance: projected,
         projected_tier: tier(projected, &settings),
         bills_of_month,
-        savings: crate::savings::domain::month_savings(saved, totals.income),
+        savings: MonthSavings {
+            saved,
+            rate_pct: percent(saved, totals.income),
+        },
     }
 }
 
@@ -242,7 +248,6 @@ mod tests {
             tier_zero: money("0"),
             tier_yellow: money("1000"),
             tier_green: money("2000"),
-            savings_goal_pct: None,
             currency: soldi_types::settings::Currency::Brl,
         }
     }
@@ -273,7 +278,7 @@ mod tests {
             sums,
             bills,
             payments,
-            saved: None,
+            saved: Decimal::ZERO,
             today: date(today),
         })
     }
@@ -452,10 +457,46 @@ mod tests {
                 daily: money("50"),
                 outflow: money("350"),
                 performance: money("150"),
+                saved: money("0"),
             }
         );
         assert!(view.bills_of_month.is_empty());
-        assert_eq!(view.savings, None);
+        assert_eq!(
+            view.savings,
+            MonthSavings {
+                saved: money("0"),
+                rate_pct: Some(money("0.0"))
+            }
+        );
+    }
+
+    #[test]
+    fn the_saving_rate_is_saved_over_income_with_one_decimal() {
+        let at = |saved: &str, income: &str| {
+            month_view(MonthInput {
+                month: date("2026-11-01"),
+                settings: settings("0", "2026-11-01"),
+                sums: vec![
+                    sum("2026-11-02", Income, income),
+                    sum("2026-11-03", Bill, "400.55"),
+                ],
+                bills: vec![],
+                payments: vec![],
+                saved: money(saved),
+                today: date("2026-11-05"),
+            })
+        };
+
+        let view = at("400.55", "3000");
+
+        assert_eq!(view.totals.saved, money("400.55"));
+        assert_eq!(view.totals.outflow, money("400.55"));
+        assert_eq!(view.savings.rate_pct.unwrap().to_string(), "13.4");
+        assert_eq!(at("1", "8").savings.rate_pct.unwrap().to_string(), "12.5");
+        assert_eq!(
+            at("-50", "1000").savings.rate_pct.unwrap().to_string(),
+            "-5.0"
+        );
     }
 
     #[test]
@@ -625,7 +666,7 @@ mod tests {
         assert_eq!(view.totals.income, money("0"));
         assert_eq!(view.totals.outflow, money("150"));
         assert_eq!(view.totals.performance, money("-150"));
-        assert_eq!(view.savings, None);
+        assert_eq!(view.savings.rate_pct, None);
     }
 
     #[test]

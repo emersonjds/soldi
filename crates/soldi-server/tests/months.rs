@@ -54,14 +54,50 @@ async fn the_sheets_first_days_come_back_with_balances_tiers_and_totals(pool: Pg
     );
     assert_eq!(
         view["totals"],
-        json!({ "income": "500.00", "bills": "300.00", "daily": "50.00", "outflow": "350.00", "performance": "150.00" })
+        json!({ "income": "500.00", "bills": "300.00", "daily": "50.00", "outflow": "350.00", "performance": "150.00", "saved": "0.00" })
     );
     assert_eq!(view["projected_balance"], "1150.00");
     assert_eq!(view["projected_tier"], "light_green");
     assert_eq!(view["bills_of_month"], json!([]));
-    assert_eq!(view["savings"], Value::Null);
+    assert_eq!(
+        view["savings"],
+        json!({ "saved": "0.00", "rate_pct": "0.0" })
+    );
     let (_, december) = user.get("/api/months/2026-12").await;
     assert_eq!(balances(&december, 1), ["1150.00"]);
+    assert_eq!(
+        december["savings"],
+        json!({ "saved": "0.00", "rate_pct": null })
+    );
+}
+
+#[sqlx::test]
+async fn bills_under_economia_are_the_months_savings_and_still_leave_the_balance(pool: PgPool) {
+    let user = TestApp::signed_in(pool, "ana@example.com").await;
+    open_at(&user, "0", "2026-10-01").await;
+    let economia = user.category_id("Economia").await;
+    let (_, reserva) = user
+        .post(
+            "/api/categories",
+            json!({ "name": "Reserva", "kind": "bill", "parent_id": economia }),
+        )
+        .await;
+    assert!(reserva["id"].is_string(), "{reserva}");
+    log(&user, "2026-11-02", "income", "3000", "Salário").await;
+    log(&user, "2026-11-03", "bill", "300", "Reserva").await;
+    log(&user, "2026-11-04", "bill", "100.55", "Economia").await;
+    log(&user, "2026-11-04", "bill", "1000", "Aluguel").await;
+    log(&user, "2026-10-31", "bill", "999", "Reserva").await;
+
+    let (_, view) = user.get("/api/months/2026-11").await;
+
+    assert_eq!(view["totals"]["saved"], "400.55");
+    assert_eq!(view["totals"]["outflow"], "1400.55");
+    assert_eq!(view["totals"]["performance"], "1599.45");
+    assert_eq!(
+        view["savings"],
+        json!({ "saved": "400.55", "rate_pct": "13.4" })
+    );
 }
 
 #[sqlx::test]
