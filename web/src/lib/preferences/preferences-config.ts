@@ -54,21 +54,21 @@ function defineSSRPreference<
 export const PREFERENCE_REGISTRY = {
   theme_mode: definePreference({
     values: THEME_MODE_VALUES,
-    defaultValue: "light",
+    defaultValue: "system",
     persistence: "client-cookie",
     attribute: "data-theme-mode",
   }),
 
   theme_preset: definePreference({
     values: THEME_PRESET_VALUES,
-    defaultValue: "default",
+    defaultValue: "soldi",
     persistence: "client-cookie",
     attribute: "data-theme-preset",
   }),
 
   font: definePreference({
     values: fontKeys,
-    defaultValue: "geist",
+    defaultValue: "inter",
     persistence: "client-cookie",
     attribute: "data-font",
   }),

@@ -12,11 +12,11 @@ export type ResolvedThemeMode = "light" | "dark";
 
 export const THEME_PRESET_OPTIONS = [
   {
-    label: "Default",
-    value: "default",
+    label: "Soldi",
+    value: "soldi",
     primary: {
-      light: "oklch(0.205 0 0)",
-      dark: "oklch(0.922 0 0)",
+      light: "#5341cd",
+      dark: "#8b7cf6",
     },
   },
 ] as const;
