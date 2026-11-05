@@ -34,12 +34,13 @@ const MAX_DIGITS = 12;
 
 /**
  * Bank-style entry: the digits of what is in the field fill the cents from the right (`123456` → `1234.56`).
- * With `negative`, an odd number of `-` makes it negative; a sign without digits stays `-`.
+ * Zeros alone are `0.00`, a real opening balance. With `negative`, an odd number of `-` makes it negative;
+ * a sign without digits stays `-`.
  */
 export const maskAmount = (typed: string, negative = false): string => {
   const sign = negative && (typed.match(/-/g)?.length ?? 0) % 2 === 1 ? "-" : "";
-  const digits = typed.replace(/\D/g, "").replace(/^0+/, "").slice(0, MAX_DIGITS);
+  const digits = typed.replace(/\D/g, "");
   if (!digits) return sign;
-  const padded = digits.padStart(3, "0");
+  const padded = digits.replace(/^0+/, "").slice(0, MAX_DIGITS).padStart(3, "0");
   return `${sign}${padded.slice(0, -2)}.${padded.slice(-2)}`;
 };

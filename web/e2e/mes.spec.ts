@@ -74,3 +74,43 @@ test("a bill from onboarding shows under Contas do Mês, pays in one tap and mov
   await expect(bill.getByRole("button", { name: "Pago: desfazer Aluguel" })).toBeVisible();
   await expect(summary).toContainText("R$ 650,00");
 });
+
+test("Lançar fills the cents from the right and a category created from the picker comes selected", async ({
+  page,
+  request,
+}) => {
+  const health = await request.get(`${API}/api/health`).catch(() => null);
+  test.skip(!health?.ok(), `Soldi server unreachable at ${API}/api/health; start it to run this flow.`);
+
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto("/criar-conta");
+  await page.getByLabel("E-mail").fill(`e2e-mask-${Date.now()}@example.com`);
+  await page.getByLabel("Senha").fill("uma-senha-bem-longa");
+  await page.getByRole("button", { name: "Criar conta" }).click();
+
+  await page.getByLabel("Saldo de hoje").fill("1.000,00");
+  await page.getByRole("button", { name: "Continuar" }).click();
+  await page.getByRole("button", { name: "Pular por agora" }).click();
+  await page.getByRole("button", { name: "Ver meu mês" }).click();
+
+  const tabs = page.getByRole("navigation", { name: "Navegação principal" });
+  await tabs.getByRole("button", { name: "Lançar" }).click();
+  await expect(page.getByRole("radio", { name: "Mercado" })).toBeChecked();
+  await page.keyboard.type("12345");
+  await expect(page.getByLabel("Valor")).toHaveValue("123,45");
+  await page.getByRole("button", { name: "Salvar" }).click();
+
+  const ledger = page.getByRole("region", { name: "Lançamentos" });
+  await expect(ledger.getByRole("button", { name: /Mercado/ })).toContainText("R$ 123,45");
+
+  await tabs.getByRole("button", { name: "Lançar" }).click();
+  await page.getByRole("button", { name: "Nova categoria" }).click();
+  const create = page.getByRole("dialog", { name: "Nova categoria" });
+  await create.getByLabel("Nome").fill("Feira");
+  await create.getByRole("radio", { name: "Compras" }).check({ force: true });
+  await create.getByRole("button", { name: "Criar" }).click();
+
+  await expect(page.getByText("Categoria criada")).toBeVisible();
+  await expect(create).toBeHidden();
+  await expect(page.getByRole("radio", { name: "Feira" })).toBeChecked();
+});
