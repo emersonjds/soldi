@@ -9,10 +9,38 @@ use soldi_types::categories::CategoryKind;
 use soldi_types::imports::{ImportError, ImportPreview, ImportYear};
 use uuid::Uuid;
 
+use crate::error::AppError;
 use crate::savings::domain::MonthAmount;
 use crate::settings::domain::check_money;
 
 pub const MAX_FILE_BYTES: usize = 5 * 1024 * 1024;
+
+/// Created on the first import; icon `file-spreadsheet`, color `cat-12`.
+pub const CATEGORIES: [(&str, CategoryKind); 3] = [
+    ("Importado (entrada)", CategoryKind::Income),
+    ("Importado (conta)", CategoryKind::Bill),
+    ("Importado (diário)", CategoryKind::Daily),
+];
+
+/// The opening date may not come after the first imported entry.
+pub fn check_opening_date(
+    parsed: &ParsedWorkbook,
+    opening_date: NaiveDate,
+) -> Result<(), AppError> {
+    let earliest = parsed
+        .years
+        .iter()
+        .flat_map(|year| &year.rows)
+        .map(|row| row.date)
+        .min();
+    match earliest {
+        Some(earliest) if opening_date > earliest => Err(AppError::invalid(
+            "opening_date",
+            &format!("must be on or before {earliest}, the first imported date"),
+        )),
+        _ => Ok(()),
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Row {
@@ -166,6 +194,11 @@ impl Sheet {
                 errors.push(self.error(3, column, "must be a year from 2000 to 2100".into()));
                 continue;
             };
+            let year = year as i16;
+            if saved.iter().any(|(seen, _)| *seen == year) {
+                errors.push(self.error(3, column, format!("{year} is in another table")));
+                continue;
+            }
             for month in 1..=12 {
                 let (row, column) = (3 + month, column + 2);
                 let total = self
@@ -174,7 +207,7 @@ impl Sheet {
                 match total {
                     Ok(amount) if amount.is_zero() => {}
                     Ok(amount) => saved.push((
-                        year as i16,
+                        year,
                         MonthAmount {
                             month: month as i16,
                             amount,
@@ -462,5 +495,19 @@ mod tests {
         );
         assert_eq!(errors.len(), 1, "{errors:?}");
         assert_eq!(errors[0].cell, "B4");
+    }
+
+    #[test]
+    fn a_year_repeated_in_economia_is_an_error() {
+        let mut economia = sheet("Economia");
+        economia.values.set_value((3, 1), Data::Int(2026)); // B4
+        economia.values.set_value((4, 3), Data::Float(10.0)); // D5
+        economia.values.set_value((3, 7), Data::Int(2026)); // H4
+        economia.values.set_value((4, 9), Data::Float(20.0)); // J5
+        let mut errors = Vec::new();
+
+        assert_eq!(economia.savings(&mut errors), vec![(2026, saved(1, "10"))]);
+        assert_eq!(errors.len(), 1, "{errors:?}");
+        assert_eq!(errors[0].cell, "H4");
     }
 }

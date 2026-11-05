@@ -3,7 +3,7 @@ use axum::extract::multipart::{Multipart, MultipartRejection};
 use axum::extract::{DefaultBodyLimit, State};
 use axum::http::StatusCode;
 use soldi_types::Problem;
-use soldi_types::imports::{ImportPreview, XlsxUpload};
+use soldi_types::imports::{ConfirmImport, ImportPreview, ImportResult, XlsxUpload};
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
 
@@ -11,7 +11,7 @@ use super::domain::MAX_FILE_BYTES;
 use super::service;
 use crate::AppState;
 use crate::error::AppError;
-use crate::extract::CurrentUser;
+use crate::extract::{CurrentUser, JsonBody};
 
 /// Room for the multipart framing around a 5 MB file; past it the body is cut.
 const MAX_BODY_BYTES: usize = MAX_FILE_BYTES + 64 * 1024;
@@ -19,6 +19,7 @@ const MAX_BODY_BYTES: usize = MAX_FILE_BYTES + 64 * 1024;
 pub fn router() -> OpenApiRouter<AppState> {
     OpenApiRouter::new()
         .routes(routes!(preview_xlsx))
+        .routes(routes!(confirm_xlsx))
         .layer(DefaultBodyLimit::max(MAX_BODY_BYTES))
 }
 
@@ -52,4 +53,19 @@ pub async fn preview_xlsx(
 ) -> Result<Json<ImportPreview>, AppError> {
     let file = read_file(upload).await?;
     Ok(Json(service::preview(&state.pool, &user, file).await?))
+}
+
+#[utoipa::path(post, path = "/api/imports/xlsx/confirm", tag = "imports", request_body = ConfirmImport,
+    responses(
+        (status = 200, body = ImportResult, description = "Opening balance and date saved, the preview's rows and saved months written under the `Importado` categories with note `Planilha {year}`, replacing an earlier import of the same years; the user is onboarded"),
+        (status = 401, body = Problem, content_type = "application/problem+json"),
+        (status = 404, body = Problem, content_type = "application/problem+json", description = "No preview of the caller with this token, or it was confirmed already"),
+        (status = 410, body = Problem, content_type = "application/problem+json", description = "`import-expired`: the preview is older than 15 minutes"),
+        (status = 422, body = Problem, content_type = "application/problem+json", description = "`import-has-errors` when the preview listed errors; `opening_date` after the earliest imported date; `opening_balance` with more than two places")))]
+pub async fn confirm_xlsx(
+    State(state): State<AppState>,
+    user: CurrentUser,
+    JsonBody(input): JsonBody<ConfirmImport>,
+) -> Result<Json<ImportResult>, AppError> {
+    Ok(Json(service::confirm(&state.pool, &user, input).await?))
 }

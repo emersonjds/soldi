@@ -1,0 +1,32 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO categories (user_id, name, kind, icon, color) VALUES ($1, $2, $3, $4, $5)\n         ON CONFLICT (user_id, kind, lower(name)) WHERE archived_at IS NULL\n         DO UPDATE SET name = categories.name\n         RETURNING id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "categories",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "0c74ad9cd2e6107e4b5a50c2c4fea9f52be482d747d49d40057e21d6513bc0e9"
+}

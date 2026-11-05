@@ -1,3 +1,4 @@
+use chrono::NaiveDate;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -42,4 +43,25 @@ pub struct XlsxUpload {
     /// The Termômetro workbook, at most 5 MB.
     #[schema(value_type = String, format = Binary)]
     pub file: Vec<u8>,
+}
+
+/// Replaces what an earlier import wrote for the same years; entries made by hand stay.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ConfirmImport {
+    /// The preview's token.
+    pub token: Uuid,
+    /// The balance before the first imported day; may be negative.
+    #[serde(with = "rust_decimal::serde::str")]
+    #[schema(value_type = String)]
+    pub opening_balance: Decimal,
+    /// On or before the earliest imported date.
+    pub opening_date: NaiveDate,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+pub struct ImportResult {
+    pub transactions: u32,
+    pub savings_months: u32,
+    pub years: Vec<i16>,
 }

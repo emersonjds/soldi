@@ -128,3 +128,144 @@ async fn importing_requires_a_session(pool: PgPool) {
 
     assert_eq!(status, StatusCode::UNAUTHORIZED);
 }
+
+async fn token_of(user: &TestApp, bytes: &[u8]) -> Value {
+    let (status, preview) = upload(user, bytes).await;
+    assert_eq!(status, StatusCode::OK, "{preview}");
+    preview["token"].clone()
+}
+
+async fn confirm(user: &TestApp, token: &Value, date: &str) -> (StatusCode, Value) {
+    user.post(
+        "/api/imports/xlsx/confirm",
+        json!({ "token": token, "opening_balance": "1000", "opening_date": date }),
+    )
+    .await
+}
+
+async fn import_sample(user: &TestApp) -> Value {
+    let token = token_of(user, SAMPLE).await;
+    let (status, result) = confirm(user, &token, "2025-02-28").await;
+    assert_eq!(status, StatusCode::OK, "{result}");
+    result
+}
+
+async fn balance_of_january(user: &TestApp) -> (Value, Value) {
+    let (status, month) = user.get("/api/months/2026-01").await;
+    assert_eq!(status, StatusCode::OK, "{month}");
+    (
+        month["balance_today"].clone(),
+        month["totals"]["daily"].clone(),
+    )
+}
+
+#[sqlx::test]
+async fn confirming_writes_the_rows_and_a_second_import_of_the_year_replaces_them(pool: PgPool) {
+    let ana = TestApp::signed_in(pool.clone(), "ana@example.com").await;
+    let bia = ana.another_user("bia@example.com").await;
+    ana.open_at("0", "2025-01-01").await;
+    let mercado = ana.category_id("Mercado").await;
+    let (status, manual) = ana
+        .post(
+            "/api/transactions",
+            json!({ "date": "2026-01-15", "amount": "10", "kind": "daily", "category_id": mercado }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{manual}");
+    let (status, _) = ana
+        .put("/api/savings/2026/5", json!({ "amount": "70" }))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let result = import_sample(&ana).await;
+
+    assert_eq!(
+        result,
+        json!({ "transactions": 12, "savings_months": 2, "years": [2025, 2026] })
+    );
+    // 1000 + 2025 (6383 - 368 - 133.44) + January (715 - 94.88 - 210) - 10 by hand.
+    let expected = (json!("7281.68"), json!("220.00"));
+    assert_eq!(balance_of_january(&ana).await, expected);
+    let (_, march) = ana.get("/api/transactions?month=2026-03").await;
+    assert_eq!(march.as_array().unwrap().len(), 1, "{march}");
+    assert_eq!(march[0]["note"], "Planilha 2026");
+    assert_eq!(march[0]["amount"], "2259.56");
+    assert_eq!(march[0]["category"]["name"], "Importado (conta)");
+    assert_eq!(march[0]["category"]["icon"], "file-spreadsheet");
+    assert_eq!(march[0]["category"]["color"], "cat-12");
+    let (_, savings) = ana.get("/api/savings?year=2025").await;
+    assert_eq!(savings["months"][1]["saved"], "300.00");
+    let (_, me) = ana.get("/api/auth/me").await;
+    assert_eq!(me["onboarded"], true);
+
+    import_sample(&bia).await;
+    import_sample(&ana).await;
+
+    assert_eq!(balance_of_january(&ana).await, expected);
+    let (_, categories) = ana.get("/api/categories").await;
+    let imported = categories
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|category| category["name"].as_str().unwrap().starts_with("Importado"))
+        .count();
+    assert_eq!(imported, 3);
+    let (_, savings) = ana.get("/api/savings?year=2026").await;
+    assert_eq!(savings["months"][4]["saved"], "70.00");
+    let (_, settings) = ana.get("/api/settings").await;
+    assert_eq!(
+        (&settings["opening_balance"], &settings["opening_date"]),
+        (&json!("1000.00"), &json!("2025-02-28"))
+    );
+}
+
+#[sqlx::test]
+async fn a_token_confirms_once_for_its_owner_within_15_minutes(pool: PgPool) {
+    let ana = TestApp::signed_in(pool.clone(), "ana@example.com").await;
+    let bia = ana.another_user("bia@example.com").await;
+    let token = token_of(&ana, SAMPLE).await;
+
+    let (status, _) = confirm(&bia, &token, "2025-02-28").await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let (status, _) = confirm(&ana, &json!(uuid::Uuid::new_v4()), "2025-02-28").await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+
+    let (status, problem) = confirm(&ana, &token, "2025-03-01").await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+    assert_eq!(field_of(&problem), "opening_date");
+    let (status, problem) = ana
+        .post(
+            "/api/imports/xlsx/confirm",
+            json!({ "token": token, "opening_balance": "1.001", "opening_date": "2025-01-01" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+    assert_eq!(field_of(&problem), "opening_balance");
+
+    let (status, _) = confirm(&ana, &token, "2025-02-28").await;
+    assert_eq!(status, StatusCode::OK);
+    let (status, _) = confirm(&ana, &token, "2025-02-28").await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+
+    let token = token_of(&ana, SAMPLE).await;
+    sqlx::query("UPDATE import_previews SET expires_at = now() - interval '1 minute'")
+        .execute(&pool)
+        .await
+        .unwrap();
+    let (status, problem) = confirm(&ana, &token, "2025-02-28").await;
+    assert_eq!(status, StatusCode::GONE, "{problem}");
+    assert_eq!(problem["type"], "urn:soldi:error:import-expired");
+}
+
+#[sqlx::test]
+async fn a_preview_with_errors_cannot_be_confirmed(pool: PgPool) {
+    let ana = TestApp::signed_in(pool, "ana@example.com").await;
+    let token = token_of(&ana, BAD).await;
+
+    let (status, problem) = confirm(&ana, &token, "2026-01-01").await;
+
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+    assert_eq!(problem["type"], "urn:soldi:error:import-has-errors");
+    let (_, entries) = ana.get("/api/transactions?month=2026-01").await;
+    assert_eq!(entries, json!([]));
+}
