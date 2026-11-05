@@ -9,7 +9,7 @@ Saving money is just a `Saída` the user never gets to spend, exactly as the own
 ## Model
 
 - Seed at sign-up (and backfill for existing users in the migration): category `Economia`, kind `bill`, icon `piggy-bank`, color `cat-11`, `is_savings = true` (new boolean column, true only for this row per user; cannot be archived, renamed to something else is fine, cannot get a parent).
-- A **cofrinho** is a child category of `Economia` (kind `bill`). `categories` gains optional `target NUMERIC(12,2) > 0` and `deadline DATE` (both only meaningful under `Economia`; 422 elsewhere). Default seeded children: `Reserva de emergência` (`shield`), `Viagem` (`plane`).
+- A **cofrinho** is a child category of `Economia` (kind `bill`). `categories` gains optional `target NUMERIC(12,2) > 0` and `deadline DATE` (both only meaningful under `Economia`; 422 elsewhere). No children are seeded: the owner decided (2026-11-05) that every cofrinho is created by the user; the screen offers name suggestions as chips only.
 - **Guardar** = a `bill` transaction whose category is a cofrinho (or `Economia` itself for "sem objetivo"). Nothing new in `Lançar`.
 - **Resgatar** = an `income` transaction with the seeded income category `Resgate` (kind income, icon `piggy-bank`, `is_savings = true`) and the new nullable `transactions.cofrinho_id` pointing at the cofrinho category. Created from the Cofrinhos screen only; `Lançar` hides `Resgate` from the income chips.
 - Balance of a cofrinho = Σ bill entries in it − Σ resgates with its `cofrinho_id`, since `opening_date`. Rule: a resgate above the balance → 422 `insufficient-cofrinho`.
