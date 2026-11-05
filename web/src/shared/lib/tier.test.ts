@@ -17,7 +17,6 @@ describe("tier", () => {
     expect(TIER_STYLE.light_red).toEqual({
       pill: "bg-tier-light-red-soft text-tier-light-red-foreground",
       dot: "bg-tier-light-red",
-      text: "text-tier-light-red-foreground",
     });
     expect(new Set(TIER_ORDER.map((tier) => TIER_STYLE[tier].dot)).size).toBe(5);
   });

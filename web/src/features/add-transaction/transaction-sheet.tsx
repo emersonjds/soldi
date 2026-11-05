@@ -35,6 +35,19 @@ const KINDS: { value: Kind; label: string }[] = [
   { value: "daily", label: "Diário" },
 ];
 
+/** The chip that comes first and preselected; the API sorts by name. */
+const FIRST: Record<Kind, string> = { income: "Salário", bill: "Aluguel", daily: "Mercado" };
+
+const useChips = (kind: Kind) => {
+  const categories = useCategories(kind);
+  const list = categories.data ?? [];
+  const first = list.filter((category) => category.name === FIRST[kind]);
+  return {
+    ...categories,
+    data: categories.data && [...first, ...list.filter((category) => !first.includes(category))],
+  };
+};
+
 /** A decimal above zero, or `null`. */
 const positiveAmount = (input: string) => {
   const amount = parseBRL(input);
@@ -53,7 +66,7 @@ const CategoryChips = ({
   chosen: Schemas["Category"] | undefined;
   onChoose: (category: Schemas["Category"]) => void;
 }) => {
-  const categories = useCategories(kind);
+  const categories = useChips(kind);
 
   if (categories.isError)
     return <PageError message="Não foi possível carregar as categorias." onRetry={() => categories.refetch()} />;
@@ -103,7 +116,7 @@ type Draft = { kind: Kind; amount: string; category?: Schemas["Category"]; date:
 const TransactionForm = ({ initial, onSave }: { initial: Draft; onSave: (draft: NewTransaction) => void }) => {
   const [draft, setDraft] = useState(initial);
   const [submitted, setSubmitted] = useState(false);
-  const categories = useCategories(draft.kind);
+  const categories = useChips(draft.kind);
   const category = draft.category ?? categories.data?.[0];
   const amount = positiveAmount(draft.amount);
   const today = todayISO();
@@ -262,7 +275,10 @@ const Surface = ({
   if (useIsLg())
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent showCloseButton={false} className="max-h-[90dvh] overflow-y-auto rounded-3xl p-8 sm:max-w-lg">
+        <DialogContent
+          showCloseButton={false}
+          className="flex max-h-[90dvh] flex-col gap-6 overflow-y-auto rounded-3xl p-8 sm:max-w-lg"
+        >
           <DialogTitle className={heading}>{title}</DialogTitle>
           <DialogDescription className="sr-only">Entrada, conta ou gasto do dia.</DialogDescription>
           {close}

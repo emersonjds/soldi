@@ -62,7 +62,8 @@ export const LUZ = category("c1000000-0000-4000-8000-000000000004", "Luz", "bill
 export const MERCADO = category("c1000000-0000-4000-8000-000000000005", "Mercado", "daily", "shopping-cart", "cat-1");
 export const COMIDA = category("c1000000-0000-4000-8000-000000000006", "Comida fora", "daily", "utensils", "cat-2");
 
-export const CATEGORIES = [SALARIO, EXTRA, ALUGUEL, LUZ, MERCADO, COMIDA];
+/** In the API's order: kind, then name. */
+export const CATEGORIES = [EXTRA, SALARIO, ALUGUEL, LUZ, COMIDA, MERCADO];
 
 /** Ana's November: 1.842,10 on the 1st, salary on the 3rd, rent on the 4th, groceries today (the 5th). */
 export const TRANSACTIONS: Schemas["Transaction"][] = [

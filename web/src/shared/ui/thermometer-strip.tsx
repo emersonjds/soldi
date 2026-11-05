@@ -20,15 +20,15 @@ export const ThermometerStrip = ({ tier, className }: { tier: Tier; className?: 
             <span
               aria-hidden
               className={cn(
-                "w-full rounded-full transition-[height,opacity] duration-200 motion-reduce:transition-none",
+                "h-2.5 w-full rounded-full transition-[scale,opacity] duration-200 motion-reduce:transition-none",
                 TIER_STYLE[segment].dot,
-                current ? "h-2.5" : "h-1.5 opacity-35",
+                !current && "scale-y-60 opacity-35",
               )}
             />
             <span
               className={cn(
-                "max-w-full truncate text-[11px] leading-4",
-                current ? cn("font-bold", TIER_STYLE[segment].text) : "font-medium text-muted-foreground",
+                "whitespace-nowrap text-[11px] leading-4",
+                current ? "font-bold text-foreground" : "font-medium text-muted-foreground",
               )}
             >
               {TIER_LABEL[segment]}

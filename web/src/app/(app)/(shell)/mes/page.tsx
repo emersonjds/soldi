@@ -54,7 +54,7 @@ const MonthScreen = () => {
         />
         <MonthSummary view={view.data} />
       </div>
-      <div className="grid gap-6 lg:grid-cols-3 lg:items-start">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3 lg:items-start">
         <ThermometerCard view={view.data} className="lg:sticky lg:top-6 lg:col-start-3 lg:row-start-1" />
         <Ledger
           view={view.data}

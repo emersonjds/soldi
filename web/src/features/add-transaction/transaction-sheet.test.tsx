@@ -4,7 +4,7 @@ import { Toaster } from "sonner";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { renderWithQuery } from "@/test/render";
-import { CATEGORIES, problem, SALARIO, stubApi, TRANSACTIONS } from "@/test/stub-api";
+import { CATEGORIES, EXTRA, MERCADO, problem, SALARIO, stubApi, TRANSACTIONS } from "@/test/stub-api";
 
 import { TransactionSheet } from "./transaction-sheet";
 
@@ -56,7 +56,7 @@ describe("TransactionSheet", () => {
       date: "2026-11-05",
       amount: "35.90",
       kind: "daily",
-      category_id: CATEGORIES[4].id,
+      category_id: MERCADO.id,
       note: null,
     });
     expect(onOpenChange).toHaveBeenCalledWith(false);
@@ -78,7 +78,7 @@ describe("TransactionSheet", () => {
       date: "2026-11-04",
       amount: "1250.00",
       kind: "income",
-      category_id: CATEGORIES[1].id,
+      category_id: EXTRA.id,
       note: "Freela",
     });
   });
