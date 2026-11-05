@@ -1,6 +1,7 @@
 pub mod auth;
 pub mod error;
 pub mod extract;
+pub mod settings;
 
 use std::path::Path;
 use std::time::Duration;
@@ -48,6 +49,7 @@ fn api() -> OpenApiRouter<AppState> {
     OpenApiRouter::with_openapi(ApiDoc::openapi())
         .routes(routes!(health))
         .merge(auth::handler::router())
+        .merge(settings::handler::router())
 }
 
 /// The API contract, built without a database; `web/openapi.json` is its committed snapshot.

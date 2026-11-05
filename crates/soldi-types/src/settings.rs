@@ -8,11 +8,16 @@ use utoipa::ToSchema;
 /// `tier_red < tier_zero < tier_yellow < tier_green`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct Settings {
+    #[serde(serialize_with = "crate::money")]
     pub opening_balance: Decimal,
     pub opening_date: NaiveDate,
+    #[serde(serialize_with = "crate::money")]
     pub tier_red: Decimal,
+    #[serde(serialize_with = "crate::money")]
     pub tier_zero: Decimal,
+    #[serde(serialize_with = "crate::money")]
     pub tier_yellow: Decimal,
+    #[serde(serialize_with = "crate::money")]
     pub tier_green: Decimal,
     /// 0 to 100.
     pub savings_goal_pct: Option<i16>,

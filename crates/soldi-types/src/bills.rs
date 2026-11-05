@@ -9,6 +9,7 @@ pub struct Bill {
     pub id: Uuid,
     pub category_id: Uuid,
     pub name: String,
+    #[serde(serialize_with = "crate::money")]
     pub amount: Decimal,
     pub due_day: i16,
     pub active: bool,

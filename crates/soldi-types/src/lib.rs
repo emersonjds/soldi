@@ -51,6 +51,15 @@ pub struct FieldError {
     pub message: String,
 }
 
+/// Money leaves as a string with two places, `"0.00"` included: PostgreSQL hands zero back
+/// without its scale. Use with `#[serde(serialize_with = "crate::money")]`.
+pub fn money<S: serde::Serializer>(
+    value: &rust_decimal::Decimal,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    serializer.collect_str(&format_args!("{value:.2}"))
+}
+
 /// For PATCH bodies: a missing field deserializes to `None`, an explicit `null` to `Some(None)`.
 /// Use with `#[serde(default, deserialize_with = "crate::nullable_field")]`.
 pub fn nullable_field<'de, D, T>(deserializer: D) -> Result<Option<Option<T>>, D::Error>
@@ -59,4 +68,22 @@ where
     T: serde::Deserialize<'de>,
 {
     Option::<T>::deserialize(deserializer).map(Some)
+}
+
+#[cfg(test)]
+mod tests {
+    #[derive(serde::Serialize)]
+    struct Amount(#[serde(serialize_with = "crate::money")] rust_decimal::Decimal);
+
+    #[test]
+    fn money_always_has_two_places() {
+        for (value, text) in [
+            ("0", "\"0.00\""),
+            ("-120.5", "\"-120.50\""),
+            ("7.25", "\"7.25\""),
+        ] {
+            let amount = Amount(value.parse().unwrap());
+            assert_eq!(serde_json::to_string(&amount).unwrap(), text);
+        }
+    }
 }
