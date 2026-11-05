@@ -40,6 +40,22 @@ pub async fn list(conn: &mut PgConnection, user_id: Uuid) -> Result<Vec<Category
     .await
 }
 
+pub async fn find_active(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    id: Uuid,
+) -> Result<Option<Category>, sqlx::Error> {
+    sqlx::query_as!(
+        Category,
+        r#"SELECT id, name, kind AS "kind: CategoryKind", icon, color FROM categories
+           WHERE user_id = $1 AND id = $2 AND archived_at IS NULL"#,
+        user_id,
+        id
+    )
+    .fetch_optional(&mut *conn)
+    .await
+}
+
 /// Archived ones included, so a new category does not reuse a recent color.
 pub async fn count_of_kind(
     conn: &mut PgConnection,

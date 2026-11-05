@@ -1,0 +1,79 @@
+use soldi_types::categories::Category;
+use soldi_types::transactions::{CreateTransaction, Transaction, UpdateTransaction};
+use sqlx::{PgConnection, PgPool};
+use uuid::Uuid;
+
+use super::{domain, repo};
+use crate::error::AppError;
+use crate::extract::CurrentUser;
+use crate::{categories, months};
+
+pub async fn list(
+    pool: &PgPool,
+    user: &CurrentUser,
+    month: &str,
+) -> Result<Vec<Transaction>, AppError> {
+    let first = months::domain::parse_month(month)?;
+    let mut conn = pool.acquire().await?;
+    let to = months::domain::month_end(first);
+    Ok(repo::list(&mut conn, user.id, first, to).await?)
+}
+
+async fn active_category(
+    conn: &mut PgConnection,
+    user: &CurrentUser,
+    id: Uuid,
+) -> Result<Category, AppError> {
+    categories::repo::find_active(conn, user.id, id)
+        .await?
+        .ok_or(AppError::NotFound)
+}
+
+pub async fn create(
+    pool: &PgPool,
+    user: &CurrentUser,
+    input: CreateTransaction,
+) -> Result<Transaction, AppError> {
+    let input = domain::check(input)?;
+    let mut conn = pool.acquire().await?;
+    let category = active_category(&mut conn, user, input.category_id).await?;
+    domain::check_kind(input.kind, &category)?;
+    let id = repo::insert(&mut conn, user.id, &input).await?;
+    Ok(domain::transaction(id, input, category))
+}
+
+pub async fn update(
+    pool: &PgPool,
+    user: &CurrentUser,
+    id: Uuid,
+    patch: UpdateTransaction,
+) -> Result<Transaction, AppError> {
+    let mut conn = pool.acquire().await?;
+    let current = repo::find(&mut conn, user.id, id)
+        .await?
+        .ok_or(AppError::NotFound)?;
+    let category = match patch.category_id {
+        Some(category_id) => active_category(&mut conn, user, category_id).await?,
+        None => current.category,
+    };
+    let next = domain::check(CreateTransaction {
+        date: patch.date.unwrap_or(current.date),
+        amount: patch.amount.unwrap_or(current.amount),
+        kind: patch.kind.unwrap_or(current.kind),
+        category_id: category.id,
+        note: patch.note.unwrap_or(current.note),
+    })?;
+    domain::check_kind(next.kind, &category)?;
+    if !repo::update(&mut conn, user.id, id, &next).await? {
+        return Err(AppError::NotFound);
+    }
+    Ok(domain::transaction(id, next, category))
+}
+
+pub async fn delete(pool: &PgPool, user: &CurrentUser, id: Uuid) -> Result<(), AppError> {
+    let mut conn = pool.acquire().await?;
+    match repo::delete(&mut conn, user.id, id).await? {
+        true => Ok(()),
+        false => Err(AppError::NotFound),
+    }
+}

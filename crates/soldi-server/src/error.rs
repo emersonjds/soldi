@@ -1,5 +1,5 @@
 use axum::Json;
-use axum::extract::rejection::{JsonRejection, PathRejection};
+use axum::extract::rejection::{JsonRejection, PathRejection, QueryRejection};
 use axum::http::StatusCode;
 use axum::http::header::{CONTENT_TYPE, RETRY_AFTER};
 use axum::response::{IntoResponse, Response};
@@ -224,6 +224,12 @@ pub(crate) fn wrong_shape(text: &str) -> AppError {
 
 impl From<PathRejection> for AppError {
     fn from(rejection: PathRejection) -> Self {
+        AppError::BadRequest(rejection.body_text())
+    }
+}
+
+impl From<QueryRejection> for AppError {
+    fn from(rejection: QueryRejection) -> Self {
         AppError::BadRequest(rejection.body_text())
     }
 }

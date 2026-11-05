@@ -570,6 +570,239 @@
           }
         }
       }
+    },
+    "/api/transactions": {
+      "get": {
+        "tags": [
+          "transactions"
+        ],
+        "operationId": "list_transactions",
+        "parameters": [
+          {
+            "name": "month",
+            "in": "query",
+            "description": "The month, `YYYY-MM`",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "2026-11"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The month's entries: newest date first, then by id descending",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Transaction"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "No `month`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`month` is not `YYYY-MM`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "transactions"
+        ],
+        "operationId": "create_transaction",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTransaction"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Transaction"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The category is missing, archived or another user's",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Amount not above zero or with more than two places, note over 500 characters, or a kind other than the category's (`category_id`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/transactions/{id}": {
+      "delete": {
+        "tags": [
+          "transactions"
+        ],
+        "operationId": "delete_transaction",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Transaction id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Missing or another user's",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "transactions"
+        ],
+        "operationId": "update_transaction",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Transaction id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTransaction"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The entry after the change; absent fields stay as they are",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Transaction"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The entry is missing or another user's, or the new category is missing, archived or another user's",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Same rules as create, on the entry after the change",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -703,6 +936,42 @@
           },
           "name": {
             "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "CreateTransaction": {
+        "type": "object",
+        "required": [
+          "date",
+          "amount",
+          "kind",
+          "category_id"
+        ],
+        "properties": {
+          "amount": {
+            "type": "string",
+            "description": "Greater than zero, up to two decimal places; never rounded."
+          },
+          "category_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "One of the caller's active categories."
+          },
+          "date": {
+            "type": "string",
+            "format": "date"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/CategoryKind",
+            "description": "Must equal the category's kind."
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Up to 500 characters; blank means none."
           }
         },
         "additionalProperties": false
@@ -876,6 +1145,42 @@
         },
         "additionalProperties": false
       },
+      "Transaction": {
+        "type": "object",
+        "description": "`category` is the entry's category as it is now, archived or not.",
+        "required": [
+          "id",
+          "date",
+          "amount",
+          "kind",
+          "category"
+        ],
+        "properties": {
+          "amount": {
+            "type": "string"
+          },
+          "category": {
+            "$ref": "#/components/schemas/Category"
+          },
+          "date": {
+            "type": "string",
+            "format": "date"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/CategoryKind"
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
       "UpdateCategory": {
         "type": "object",
         "description": "Absent fields stay as they are; the kind never changes.",
@@ -944,6 +1249,49 @@
             ]
           },
           "tier_zero": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "UpdateTransaction": {
+        "type": "object",
+        "description": "Absent fields stay as they are; `\"note\": null` clears the note.",
+        "properties": {
+          "amount": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "category_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "date": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date"
+          },
+          "kind": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/CategoryKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "note": {
             "type": [
               "string",
               "null"

@@ -30,6 +30,11 @@ impl<T: DeserializeOwned, S: Send + Sync> FromRequest<S> for JsonBody<T> {
 #[from_request(via(axum::extract::Path), rejection(AppError))]
 pub struct PathParams<T>(pub T);
 
+/// Query parameters; a missing or unparsable one answers with problem+json.
+#[derive(FromRequestParts)]
+#[from_request(via(axum::extract::Query), rejection(AppError))]
+pub struct QueryParams<T>(pub T);
+
 /// The signed-in caller, from the session cookie.
 #[derive(Debug, Clone)]
 pub struct CurrentUser {
