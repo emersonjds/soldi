@@ -14,6 +14,7 @@ test("a new user imports the Termômetro workbook and finds March's bill in Mês
   await page.getByLabel("E-mail").fill(`e2e-import-${Date.now()}@example.com`);
   await page.getByLabel("Senha").fill("uma-senha-bem-longa");
   await page.getByRole("button", { name: "Criar conta" }).click();
+  await page.getByRole("button", { name: "Continuar" }).click();
   await page.getByLabel("Saldo de hoje").fill("0,00");
   await page.getByRole("button", { name: "Continuar" }).click();
   await page.getByRole("button", { name: "Pular por agora" }).click();

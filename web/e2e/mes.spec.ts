@@ -12,6 +12,7 @@ test("a new user logs a Diário in three taps and sees it with the day balance",
   await page.getByLabel("Senha").fill("uma-senha-bem-longa");
   await page.getByRole("button", { name: "Criar conta" }).click();
 
+  await page.getByRole("button", { name: "Continuar" }).click();
   await page.getByLabel("Saldo de hoje").fill("1.000,00");
   await page.getByRole("button", { name: "Continuar" }).click();
   await page.getByRole("button", { name: "Pular por agora" }).click();
@@ -43,6 +44,7 @@ test("a bill from onboarding shows under Contas do Mês, pays in one tap and mov
   await page.getByLabel("Senha").fill("uma-senha-bem-longa");
   await page.getByRole("button", { name: "Criar conta" }).click();
 
+  await page.getByRole("button", { name: "Continuar" }).click();
   await page.getByLabel("Saldo de hoje").fill("1.000,00");
   await page.getByRole("button", { name: "Continuar" }).click();
   await page.getByLabel("Nome").fill("Aluguel");
@@ -88,6 +90,7 @@ test("Lançar fills the cents from the right and a category created from the pic
   await page.getByLabel("Senha").fill("uma-senha-bem-longa");
   await page.getByRole("button", { name: "Criar conta" }).click();
 
+  await page.getByRole("button", { name: "Continuar" }).click();
   await page.getByLabel("Saldo de hoje").fill("1.000,00");
   await page.getByRole("button", { name: "Continuar" }).click();
   await page.getByRole("button", { name: "Pular por agora" }).click();

@@ -15,6 +15,7 @@ test("a subcategory is created under Pets, renamed, and archived with its parent
   await page.getByLabel("E-mail").fill(`e2e-categories-${Date.now()}@example.com`);
   await page.getByLabel("Senha").fill("uma-senha-bem-longa");
   await page.getByRole("button", { name: "Criar conta" }).click();
+  await page.getByRole("button", { name: "Continuar" }).click();
   await page.getByLabel("Saldo de hoje").fill("1.000,00");
   await page.getByRole("button", { name: "Continuar" }).click();
   await page.getByRole("button", { name: "Pular por agora" }).click();
