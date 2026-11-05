@@ -77,8 +77,40 @@ export interface paths {
         };
         get: operations["list_bills"];
         put?: never;
-        post?: never;
+        post: operations["create_bill"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/bills/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["archive_bill"];
+        options?: never;
+        head?: never;
+        patch: operations["update_bill"];
+        trace?: never;
+    };
+    "/api/bills/{id}/pay": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["pay_bill"];
+        delete: operations["unpay_bill"];
         options?: never;
         head?: never;
         patch?: never;
@@ -228,13 +260,21 @@ export interface components {
             id: string;
             name: string;
         };
-        /** @description A recurring bill in the month (SOL-4). */
+        /**
+         * @description An active recurring bill in the month. `amount` is what was paid, or the bill's amount while
+         *     unpaid; `due_date` clamps a late due day to the month's last day; `overdue` is unpaid with
+         *     `due_date` before today in São Paulo.
+         */
         BillOfMonth: {
             amount: string;
             /** Format: uuid */
             bill_id: string;
+            /** @description The category's palette token. */
+            color: string;
             /** Format: date */
             due_date: string;
+            /** @description The category's lucide icon. */
+            icon: string;
             name: string;
             overdue: boolean;
             paid: boolean;
@@ -317,7 +357,8 @@ export interface components {
         };
         /**
          * @description `month` is `YYYY-MM`. `balance_today` is the balance at today, or at the month's last day
-         *     when the month is past. `projected_balance` is the balance at the month's end.
+         *     when the month is past. `projected_balance` is the balance at the month's end minus the
+         *     unpaid `bills_of_month`.
          */
         MonthView: {
             balance_today: string;
@@ -337,6 +378,12 @@ export interface components {
             opening_balance: string;
             /** Format: date */
             opening_date: string;
+        };
+        /** @description `amount` defaults to the bill's amount; the bill itself never changes. */
+        PayBill: {
+            amount?: string | null;
+            /** Format: date */
+            date: string;
         };
         /** @description RFC 9457 problem details, the body of every error response. */
         Problem: {
@@ -400,6 +447,21 @@ export interface components {
             id: string;
             kind: components["schemas"]["CategoryKind"];
             note?: string | null;
+            /**
+             * Format: uuid
+             * @description The recurring bill this entry pays, if any.
+             */
+            recurring_bill_id?: string | null;
+        };
+        /** @description Absent fields stay as they are. `active: false` keeps the bill out of the month. */
+        UpdateBill: {
+            active?: boolean | null;
+            amount?: string | null;
+            /** Format: uuid */
+            category_id?: string | null;
+            /** Format: int32 */
+            due_day?: number | null;
+            name?: string | null;
         };
         /** @description Absent fields stay as they are; the kind never changes. */
         UpdateCategory: {
@@ -601,14 +663,17 @@ export interface operations {
     };
     list_bills: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Also list bills with `active: false` */
+                include_inactive?: boolean;
+            };
             header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Active recurring bills by due day, then name */
+            /** @description Unarchived recurring bills by due day, then name */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -617,7 +682,277 @@ export interface operations {
                     "application/json": components["schemas"]["Bill"][];
                 };
             };
+            /** @description `include_inactive` is not a boolean */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    create_bill: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateBill"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Bill"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Name not 1 to 100 characters, amount not above zero or with more than two places, due day not 1 to 31, or `category_id` not one of the caller's active bill categories */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    archive_bill: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Bill id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Archived: out of every list and month; its payments stay */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Missing, already archived or another user's */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    update_bill: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Bill id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateBill"];
+            };
+        };
+        responses: {
+            /** @description The bill after the change; absent fields stay as they are */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Bill"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Missing, archived or another user's */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Same rules as create, on the bill after the change */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    pay_bill: {
+        parameters: {
+            query?: {
+                /**
+                 * @description The month being paid, `YYYY-MM`; `date` must fall in it
+                 * @example 2026-11
+                 */
+                month?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Bill id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PayBill"];
+            };
+        };
+        responses: {
+            /** @description The `bill` entry, linked by `recurring_bill_id` */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Transaction"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Missing, paused, archived or another user's */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Already paid in the date's month (`bill-already-paid`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description `date` outside `month`, `month` not `YYYY-MM`, amount not above zero or with more than two places, or a date before the opening date (`before-opening-date`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    unpay_bill: {
+        parameters: {
+            query: {
+                /**
+                 * @description The month, `YYYY-MM`
+                 * @example 2026-11
+                 */
+                month: string;
+            };
+            header?: never;
+            path: {
+                /** @description Bill id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The month's payment entry is deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No `month` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not paid that month, or another user's bill */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description `month` is not `YYYY-MM` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -996,7 +1331,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The month's entries: newest date first, then by id descending */
+            /** @description The month's entries: newest date first, then newest entry first */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1071,7 +1406,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Amount not above zero or with more than two places, note over 500 characters, or a kind other than the category's (`category_id`) */
+            /** @description Amount not above zero or with more than two places, note over 500 characters, a kind other than the category's (`category_id`), or a date before the opening date (`before-opening-date`) */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -1162,7 +1497,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Same rules as create, on the entry after the change */
+            /** @description Same rules as create, on the entry after the change, `before-opening-date` included */
             422: {
                 headers: {
                     [name: string]: unknown;
