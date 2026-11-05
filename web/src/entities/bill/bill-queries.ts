@@ -27,7 +27,9 @@ const refresh = (client: QueryClient) =>
 export const useCreateBill = () => {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: async (body: Schemas["CreateBill"]) => dataOrThrow(await api.POST("/api/bills", { body })),
+    /** `transactionId`: a standalone Saída entry that becomes this bill's payment. */
+    mutationFn: async ({ transactionId, ...body }: Schemas["CreateBill"] & { transactionId?: string }) =>
+      dataOrThrow(await api.POST("/api/bills", { params: { query: { transaction_id: transactionId } }, body })),
     onSettled: () => refresh(client),
   });
 };

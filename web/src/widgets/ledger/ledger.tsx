@@ -109,25 +109,28 @@ export const Ledger = ({ view, transactions, onLaunch, className }: LedgerProps)
 
   const destroy = (transaction: Transaction) => {
     setActing(false);
-    remove.mutate(transaction.id, {
-      onSuccess: () =>
-        toast("Lançamento excluído", {
-          duration: 5000,
-          action: {
-            label: "Desfazer",
-            onClick: () =>
-              create.mutate({
-                date: transaction.date,
-                amount: transaction.amount,
-                kind: transaction.kind,
-                category_id: transaction.category.id,
-                note: transaction.note ?? null,
-                category: transaction.category,
-              }),
-          },
-        }),
-      onError: () => toast.error("Não foi possível excluir o lançamento."),
-    });
+    remove.mutate(
+      { id: transaction.id },
+      {
+        onSuccess: () =>
+          toast("Lançamento excluído", {
+            duration: 5000,
+            action: {
+              label: "Desfazer",
+              onClick: () =>
+                create.mutate({
+                  date: transaction.date,
+                  amount: transaction.amount,
+                  kind: transaction.kind,
+                  category_id: transaction.category.id,
+                  note: transaction.note ?? null,
+                  category: transaction.category,
+                }),
+            },
+          }),
+        onError: () => toast.error("Não foi possível excluir o lançamento."),
+      },
+    );
   };
 
   return (

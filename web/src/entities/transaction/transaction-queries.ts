@@ -5,6 +5,8 @@ import { api, dataOrThrow, okOrThrow, type Schemas } from "@/shared/api/client";
 export type Transaction = Schemas["Transaction"];
 
 /** What the API takes, plus the chosen category so the optimistic row can draw its icon. */
+export type Scope = Schemas["Scope"];
+
 export type NewTransaction = Schemas["CreateTransaction"] & { category: Schemas["Category"] };
 
 /** `month` is `YYYY-MM`; `categoryId` narrows the list to one category. */
@@ -46,8 +48,8 @@ export const useCreateTransaction = () => {
 export const useUpdateTransaction = () => {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, ...body }: Schemas["UpdateTransaction"] & { id: string }) =>
-      dataOrThrow(await api.PATCH("/api/transactions/{id}", { params: { path: { id } }, body })),
+    mutationFn: async ({ id, scope, ...body }: Schemas["UpdateTransaction"] & { id: string; scope?: Scope }) =>
+      dataOrThrow(await api.PATCH("/api/transactions/{id}", { params: { path: { id }, query: { scope } }, body })),
     onSettled: () => refresh(client),
   });
 };
@@ -55,9 +57,10 @@ export const useUpdateTransaction = () => {
 export const useDeleteTransaction = () => {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: async (id: string) =>
-      okOrThrow(await api.DELETE("/api/transactions/{id}", { params: { path: { id } } })),
-    onMutate: async (id) => {
+    mutationFn: async ({ id, scope }: { id: string; scope?: Scope }) =>
+      okOrThrow(await api.DELETE("/api/transactions/{id}", { params: { path: { id }, query: { scope } } })),
+    // A series has one member per month, so only this row can be in a cached month list.
+    onMutate: async ({ id }) => {
       await client.cancelQueries({ queryKey: ["transactions"] });
       client.setQueriesData<Transaction[]>({ queryKey: ["transactions"] }, (list) =>
         list?.filter((transaction) => transaction.id !== id),
