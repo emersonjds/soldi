@@ -1,0 +1,101 @@
+pub mod error;
+pub mod extract;
+
+use std::path::Path;
+use std::time::Duration;
+
+use axum::extract::State;
+use axum::http::header::{
+    REFERRER_POLICY, STRICT_TRANSPORT_SECURITY, X_CONTENT_TYPE_OPTIONS, X_FRAME_OPTIONS,
+};
+use axum::http::{HeaderValue, StatusCode};
+use axum::{Json, Router};
+use soldi_types::{Health, Problem};
+use sqlx::PgPool;
+use tower_http::compression::CompressionLayer;
+use tower_http::set_header::SetResponseHeaderLayer;
+use tower_http::timeout::TimeoutLayer;
+use utoipa::OpenApi;
+use utoipa_axum::router::OpenApiRouter;
+use utoipa_axum::routes;
+use utoipa_swagger_ui::SwaggerUi;
+
+use crate::error::AppError;
+
+#[derive(Clone)]
+pub struct AppState {
+    pub pool: PgPool,
+}
+
+impl AppState {
+    pub fn new(pool: PgPool) -> Self {
+        AppState { pool }
+    }
+}
+
+#[derive(OpenApi)]
+#[openapi(
+    info(
+        title = "soldi",
+        description = "Personal-finance thermometer API. Authenticate with the `__Host-soldi_session` cookie (`soldi_session` over plain HTTP). Money is a decimal string. Errors are RFC 9457 `application/problem+json`."
+    ),
+    components(schemas(Problem))
+)]
+struct ApiDoc;
+
+fn api() -> OpenApiRouter<AppState> {
+    OpenApiRouter::with_openapi(ApiDoc::openapi()).routes(routes!(health))
+}
+
+/// The API contract, built without a database; `web/openapi.json` is its committed snapshot.
+pub fn openapi() -> utoipa::openapi::OpenApi {
+    api().split_for_parts().1
+}
+
+/// `web_dir` holds the Next.js export; without an `index.html` there only the API answers.
+pub fn app(state: AppState, web_dir: Option<&Path>) -> Router {
+    let (router, api) = api().split_for_parts();
+    let router = router
+        .layer(TimeoutLayer::with_status_code(
+            StatusCode::SERVICE_UNAVAILABLE,
+            Duration::from_secs(30),
+        ))
+        .merge(SwaggerUi::new("/api/docs").url("/api/openapi.json", api));
+    let _ = web_dir;
+    router
+        .fallback(not_found)
+        .layer(SetResponseHeaderLayer::if_not_present(
+            X_CONTENT_TYPE_OPTIONS,
+            HeaderValue::from_static("nosniff"),
+        ))
+        .layer(SetResponseHeaderLayer::if_not_present(
+            REFERRER_POLICY,
+            HeaderValue::from_static("strict-origin-when-cross-origin"),
+        ))
+        // Browsers ignore this header over plain HTTP (RFC 6797), so localhost is unaffected.
+        .layer(SetResponseHeaderLayer::if_not_present(
+            STRICT_TRANSPORT_SECURITY,
+            HeaderValue::from_static("max-age=31536000; includeSubDomains"),
+        ))
+        .layer(SetResponseHeaderLayer::if_not_present(
+            X_FRAME_OPTIONS,
+            HeaderValue::from_static("DENY"),
+        ))
+        .layer(CompressionLayer::new())
+        .with_state(state)
+}
+
+#[utoipa::path(get, path = "/api/health", tag = "health", responses((status = 200, body = Health)))]
+async fn health(State(state): State<AppState>) -> Result<Json<Health>, AppError> {
+    sqlx::query_scalar!(r#"SELECT 1 AS "one!""#)
+        .fetch_one(&state.pool)
+        .await?;
+    Ok(Json(Health {
+        status: "ok".into(),
+        version: env!("CARGO_PKG_VERSION").into(),
+    }))
+}
+
+async fn not_found() -> AppError {
+    AppError::NotFound
+}
