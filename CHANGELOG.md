@@ -20,14 +20,19 @@ versions. This file covers the server and the web app together.
 - `POST /api/cofrinhos/{category_id}/withdraw` `{ date, amount, note? }` writes a resgate: a 201 income entry in `Resgate` with `cofrinho_id` (422 `insufficient-cofrinho` above the balance, `before-opening-date`, `not-a-cofrinho`; 404 for another user's).
 - `GET /api/cofrinhos/{category_id}/movements?limit=50` lists a cofrinho's entries and resgates, newest first (`limit` 1 to 200).
 - `Transaction` carries `cofrinho_id`.
+- Web: the `Economia` tab is now `Cofrinhos`: the saved total with this month's share, a card per cofrinho (balance against the goal, a progress bar in its color, what is left and per month until the deadline, `Meta batida` once done) and `Sem objetivo` for money kept straight in `Economia`. `Novo cofrinho` takes a name (with suggestions), an optional goal and deadline, icon and color.
+- Web: a cofrinho's sheet saves into it (`Guardar` opens `Lançar` as a Saída in it), takes money back (`Resgatar`, refused above the balance), lists its movements and edits or archives it (`Resgate tudo antes de arquivar` while it holds money).
 
 ### Changed
+
+- Web: on `Mês`, entries under `Economia` read `Economia › name` with `Guardado` and resgates `Resgate › name` with `Resgatado`; the thermometer adds `Guardou … este mês.`; `Lançar` never offers `Resgate`. `Ajustes › Categorias` marks `Economia` and its `+` creates a cofrinho.
 
 - `MonthView.savings` is `{ saved, rate_pct }` and `totals.saved` is added: the month's bills under `Economia` minus its resgates; `rate_pct` is `saved / income` with one decimal, null without income. Those bills stay in `bills` and `outflow`.
 
 ### Removed
 
 - `GET /api/savings`, `PUT /api/savings/{year}/{month}`, `Settings.savings_goal_pct` (now an unknown field, 422) and the imports' `savings_months`: the workbook import no longer reads the `Economia` sheet.
+- Web: the yearly savings table, its goal and the import preview's months of savings.
 
 ### Upgrade notes
 

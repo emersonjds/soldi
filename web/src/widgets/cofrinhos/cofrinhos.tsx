@@ -90,7 +90,7 @@ const Status = ({ cofrinho }: { cofrinho: Cofrinho }) => {
 };
 
 const CofrinhoCard = ({ cofrinho, onOpen }: { cofrinho: Cofrinho; onOpen: () => void }) => (
-  <li>
+  <li className="min-w-0">
     <button
       type="button"
       onClick={onOpen}

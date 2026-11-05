@@ -167,9 +167,25 @@ describe("Cofrinhos", () => {
   });
 
   it("retries the movements", async () => {
-    open({ [MOVES]: { status: 500, body: problem(500, "Falhou.") } });
+    const requests = open({ [MOVES]: { status: 500, body: problem(500, "Falhou.") } });
     const sheet = await detail("Reserva");
     expect(await within(sheet).findByText("Não foi possível carregar os movimentos.")).toBeInTheDocument();
+    await userEvent.click(within(sheet).getByRole("button", { name: "Tentar de novo" }));
+
+    await waitFor(() => expect(requests.filter((request) => request.url.includes("/movements"))).toHaveLength(2));
+  });
+
+  it("closes the cofrinho's sheet and Lançar with Fechar", async () => {
+    open();
+
+    await userEvent.click(within(await detail("Reserva")).getByRole("button", { name: "Fechar" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+
+    await userEvent.click(within(await detail("Reserva")).getByRole("button", { name: "Guardar" }));
+    await userEvent.click(
+      within(await screen.findByRole("dialog", { name: "Lançar" })).getByRole("button", { name: "Fechar" }),
+    );
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   });
 
   it("Guardar opens Lançar as a Saída in the cofrinho", async () => {
@@ -236,6 +252,18 @@ describe("Cofrinhos", () => {
 
     const sheet = await screen.findByRole("dialog", { name: "Editar cofrinho" });
     expect(within(sheet).getByLabelText("Nome")).toHaveValue("Reserva");
+  });
+
+  it("Arquivar inside Editar follows the same rule", async () => {
+    const requests = open();
+
+    await userEvent.click(within(await detail("Reserva")).getByRole("button", { name: "Editar" }));
+    await userEvent.click(
+      within(await screen.findByRole("dialog", { name: "Editar cofrinho" })).getByRole("button", { name: "Arquivar" }),
+    );
+
+    expect(await screen.findByText("Resgate tudo antes de arquivar")).toBeInTheDocument();
+    expect(sent(requests, "DELETE")).toHaveLength(0);
   });
 
   it("offers neither Editar nor Arquivar on Sem objetivo", async () => {

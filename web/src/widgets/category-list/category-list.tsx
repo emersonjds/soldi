@@ -113,7 +113,7 @@ export const CategoryList = ({ kind, onKindChange }: { kind: Kind; onKindChange:
                   {parent.is_savings && (
                     <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-secondary px-2.5 py-1 font-medium text-primary text-xs">
                       <PiggyBank className="size-3.5" aria-hidden />
-                      Cofrinhos
+                      <span className="hidden sm:inline">Cofrinhos</span>
                     </span>
                   )}
                   <ChevronRight className="size-5 shrink-0 text-muted-foreground" aria-hidden />

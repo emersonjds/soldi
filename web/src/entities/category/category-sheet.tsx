@@ -133,7 +133,7 @@ const CategoryForm = ({ kind, category, parentId: presetParent, onSaved, onArchi
           id="category-name"
           value={name}
           onChange={(event) => setName(event.target.value)}
-          placeholder="Ex.: Academia"
+          placeholder={cofrinho ? "Ex.: Viagem" : "Ex.: Academia"}
           maxLength={40}
           autoComplete="off"
           className={field}
