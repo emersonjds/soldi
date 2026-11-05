@@ -48,3 +48,13 @@ pub struct UpdateBill {
     #[serde(default)]
     pub active: Option<bool>,
 }
+
+/// `amount` defaults to the bill's amount; the bill itself never changes.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct PayBill {
+    pub date: chrono::NaiveDate,
+    #[serde(default, with = "rust_decimal::serde::str_option")]
+    #[schema(value_type = Option<String>)]
+    pub amount: Option<Decimal>,
+}

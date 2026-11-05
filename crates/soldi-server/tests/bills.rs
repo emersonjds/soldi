@@ -223,3 +223,178 @@ async fn another_users_bill_is_not_found(pool: PgPool) {
     );
     assert_eq!(ana.get("/api/bills").await.1[0]["amount"], "2259.56");
 }
+
+async fn opened_with_rent(pool: PgPool) -> (TestApp, serde_json::Value) {
+    let ana = TestApp::signed_in(pool, "ana@example.com").await;
+    ana.open_at("1000", "2026-11-01").await;
+    let created = create(&ana, rent(category_id(&ana, "Aluguel").await)).await;
+    (ana, created)
+}
+
+fn pay_uri(bill: &serde_json::Value) -> String {
+    format!("{}/pay", bill_uri(bill))
+}
+
+#[sqlx::test]
+async fn rules_2_and_3_paying_creates_a_linked_bill_entry(pool: PgPool) {
+    let (ana, bill) = opened_with_rent(pool).await;
+
+    let (status, paid) = ana
+        .post(&pay_uri(&bill), json!({ "date": "2026-11-05" }))
+        .await;
+
+    assert_eq!(status, StatusCode::CREATED, "{paid}");
+    assert_eq!(paid["kind"], "bill");
+    assert_eq!(paid["amount"], "2259.56");
+    assert_eq!(paid["date"], "2026-11-05");
+    assert_eq!(paid["recurring_bill_id"], bill["id"]);
+    assert_eq!(paid["category"]["name"], "Aluguel");
+    let (_, listed) = ana.get("/api/transactions?month=2026-11").await;
+    assert_eq!(listed, json!([paid]));
+
+    let (status, december) = ana
+        .post(
+            &format!("{}?month=2026-12", pay_uri(&bill)),
+            json!({ "date": "2026-12-04", "amount": "2300.00" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{december}");
+    assert_eq!(december["amount"], "2300.00");
+    assert_eq!(ana.get("/api/bills").await.1[0]["amount"], "2259.56");
+}
+
+#[sqlx::test]
+async fn rule_4_a_bill_is_paid_once_a_month(pool: PgPool) {
+    let (ana, bill) = opened_with_rent(pool).await;
+    ana.post(&pay_uri(&bill), json!({ "date": "2026-11-05" }))
+        .await;
+
+    let (status, problem) = ana
+        .post(&pay_uri(&bill), json!({ "date": "2026-11-30" }))
+        .await;
+
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert_eq!(problem["type"], "urn:soldi:error:bill-already-paid");
+    let (_, december) = ana
+        .post(&pay_uri(&bill), json!({ "date": "2026-12-01" }))
+        .await;
+    let (status, problem) = ana
+        .patch(
+            &format!("/api/transactions/{}", december["id"].as_str().unwrap()),
+            json!({ "date": "2026-11-20" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert_eq!(problem["type"], "urn:soldi:error:bill-already-paid");
+}
+
+#[sqlx::test]
+async fn rule_5_unpaying_deletes_the_months_entry(pool: PgPool) {
+    let (ana, bill) = opened_with_rent(pool).await;
+    ana.post(&pay_uri(&bill), json!({ "date": "2026-11-05" }))
+        .await;
+    ana.post(&pay_uri(&bill), json!({ "date": "2026-12-05" }))
+        .await;
+    let unpay = format!("{}?month=2026-11", pay_uri(&bill));
+
+    assert_eq!(ana.delete(&unpay).await.0, StatusCode::NO_CONTENT);
+
+    assert_eq!(
+        ana.get("/api/transactions?month=2026-11").await.1,
+        json!([])
+    );
+    assert_eq!(
+        ana.get("/api/transactions?month=2026-12")
+            .await
+            .1
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(ana.delete(&unpay).await.0, StatusCode::NOT_FOUND);
+    let (status, again) = ana
+        .post(&pay_uri(&bill), json!({ "date": "2026-11-06" }))
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{again}");
+}
+
+#[sqlx::test]
+async fn rule_12_and_the_entry_rules_guard_a_payment(pool: PgPool) {
+    let (ana, bill) = opened_with_rent(pool).await;
+    let november = format!("{}?month=2026-11", pay_uri(&bill));
+
+    for (uri, body, field) in [
+        (&november, json!({ "date": "2026-12-01" }), "date"),
+        (&november, json!({ "date": "2026-10-31" }), "date"),
+        (
+            &november,
+            json!({ "date": "2026-11-05", "amount": "0" }),
+            "amount",
+        ),
+        (
+            &november,
+            json!({ "date": "2026-11-05", "amount": "1.001" }),
+            "amount",
+        ),
+        (
+            &format!("{}?month=11-2026", pay_uri(&bill)),
+            json!({ "date": "2026-11-05" }),
+            "month",
+        ),
+    ] {
+        let (status, problem) = ana.post(uri, body.clone()).await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{uri} {body}");
+        assert_eq!(problem["errors"][0]["field"], field, "{uri} {body}");
+    }
+    let (status, problem) = ana
+        .post(&pay_uri(&bill), json!({ "date": "2026-10-31" }))
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(problem["type"], "urn:soldi:error:before-opening-date");
+    let (status, problem) = ana
+        .delete(&format!("{}?month=2026-1", pay_uri(&bill)))
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(problem["errors"][0]["field"], "month");
+    assert_eq!(ana.delete(&pay_uri(&bill)).await.0, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        ana.get("/api/transactions?month=2026-11").await.1,
+        json!([])
+    );
+}
+
+#[sqlx::test]
+async fn only_the_owner_pays_an_active_bill(pool: PgPool) {
+    let (ana, bill) = opened_with_rent(pool).await;
+    let bia = ana.another_user("bia@example.com").await;
+    bia.open_at("0", "2026-11-01").await;
+    let pay = |date: &str| json!({ "date": date });
+
+    assert_eq!(
+        bia.post(&pay_uri(&bill), pay("2026-11-05")).await.0,
+        StatusCode::NOT_FOUND
+    );
+    ana.post(&pay_uri(&bill), pay("2026-11-05")).await;
+    assert_eq!(
+        bia.delete(&format!("{}?month=2026-11", pay_uri(&bill)))
+            .await
+            .0,
+        StatusCode::NOT_FOUND
+    );
+    ana.patch(&bill_uri(&bill), json!({ "active": false }))
+        .await;
+    assert_eq!(
+        ana.post(&pay_uri(&bill), pay("2026-12-05")).await.0,
+        StatusCode::NOT_FOUND
+    );
+    ana.delete(&bill_uri(&bill)).await;
+    assert_eq!(
+        ana.post(&pay_uri(&bill), pay("2026-12-05")).await.0,
+        StatusCode::NOT_FOUND
+    );
+    assert_eq!(
+        ana.get("/api/transactions?month=2026-11").await.1[0]["recurring_bill_id"],
+        bill["id"]
+    );
+}

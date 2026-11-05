@@ -390,6 +390,169 @@
         }
       }
     },
+    "/api/bills/{id}/pay": {
+      "post": {
+        "tags": [
+          "bills"
+        ],
+        "operationId": "pay_bill",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Bill id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "month",
+            "in": "query",
+            "description": "The month being paid, `YYYY-MM`; `date` must fall in it",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "example": "2026-11"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PayBill"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "The `bill` entry, linked by `recurring_bill_id`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Transaction"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Missing, paused, archived or another user's",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Already paid in the date's month (`bill-already-paid`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`date` outside `month`, `month` not `YYYY-MM`, amount not above zero or with more than two places, or a date before the opening date (`before-opening-date`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "bills"
+        ],
+        "operationId": "unpay_bill",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Bill id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "month",
+            "in": "query",
+            "description": "The month, `YYYY-MM`",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "2026-11"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "The month's payment entry is deleted"
+          },
+          "400": {
+            "description": "No `month`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not paid that month, or another user's bill",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`month` is not `YYYY-MM`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/categories": {
       "get": {
         "tags": [
@@ -1419,6 +1582,26 @@
         },
         "additionalProperties": false
       },
+      "PayBill": {
+        "type": "object",
+        "description": "`amount` defaults to the bill's amount; the bill itself never changes.",
+        "required": [
+          "date"
+        ],
+        "properties": {
+          "amount": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "date": {
+            "type": "string",
+            "format": "date"
+          }
+        },
+        "additionalProperties": false
+      },
       "Problem": {
         "type": "object",
         "description": "RFC 9457 problem details, the body of every error response.",
@@ -1604,6 +1787,14 @@
               "string",
               "null"
             ]
+          },
+          "recurring_bill_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "The recurring bill this entry pays, if any."
           }
         }
       },

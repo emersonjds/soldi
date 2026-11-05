@@ -16,6 +16,8 @@ pub struct Transaction {
     pub kind: CategoryKind,
     pub category: Category,
     pub note: Option<String>,
+    /// The recurring bill this entry pays, if any.
+    pub recurring_bill_id: Option<Uuid>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]

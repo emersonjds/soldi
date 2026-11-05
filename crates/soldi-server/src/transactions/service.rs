@@ -29,6 +29,16 @@ async fn active_category(
         .ok_or(AppError::NotFound)
 }
 
+/// The one unique index on entries holds a bill to one payment a month.
+pub fn paid_once(error: sqlx::Error) -> AppError {
+    match AppError::from(error) {
+        AppError::Conflict { .. } => {
+            AppError::conflict("bill-already-paid", "This bill is already paid this month.")
+        }
+        other => other,
+    }
+}
+
 pub async fn check_opening(
     conn: &mut PgConnection,
     user: &CurrentUser,
@@ -53,8 +63,8 @@ pub async fn create(
     let category = active_category(&mut conn, user, input.category_id).await?;
     domain::check_kind(input.kind, &category)?;
     check_opening(&mut conn, user, input.date).await?;
-    let id = repo::insert(&mut conn, user.id, &input).await?;
-    Ok(domain::transaction(id, input, category))
+    let id = repo::insert(&mut conn, user.id, &input, None).await?;
+    Ok(domain::transaction(id, input, category, None))
 }
 
 pub async fn update(
@@ -80,10 +90,18 @@ pub async fn update(
     })?;
     domain::check_kind(next.kind, &category)?;
     check_opening(&mut conn, user, next.date).await?;
-    if !repo::update(&mut conn, user.id, id, &next).await? {
+    if !repo::update(&mut conn, user.id, id, &next)
+        .await
+        .map_err(paid_once)?
+    {
         return Err(AppError::NotFound);
     }
-    Ok(domain::transaction(id, next, category))
+    Ok(domain::transaction(
+        id,
+        next,
+        category,
+        current.recurring_bill_id,
+    ))
 }
 
 pub async fn delete(pool: &PgPool, user: &CurrentUser, id: Uuid) -> Result<(), AppError> {
