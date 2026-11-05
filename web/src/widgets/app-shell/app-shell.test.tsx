@@ -32,6 +32,15 @@ describe("AppShell", () => {
     expect(screen.getByText("conteúdo")).toBeInTheDocument();
   });
 
+  it("keeps Ajustes marked on its sub-screens", () => {
+    setPathname("/ajustes/contas");
+    renderWithQuery(<AppShell>conteúdo</AppShell>);
+
+    const tabs = screen.getByRole("navigation", { name: "Navegação principal" });
+    expect(within(tabs).getByRole("link", { name: "Ajustes" })).toHaveAttribute("aria-current", "page");
+    expect(within(tabs).getByRole("link", { name: "Mês" })).not.toHaveAttribute("aria-current");
+  });
+
   it("opens the Lançar sheet from the floating button at 375px", async () => {
     renderWithQuery(<AppShell>conteúdo</AppShell>);
 

@@ -49,6 +49,7 @@ const TabLink = ({ item, active }: { item: NavItem; active: boolean }) => (
 
 export const AppShell = ({ children }: { children: ReactNode }) => {
   const pathname = usePathname();
+  const isAt = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
   const me = useMe();
   const [launching, setLaunching] = useState(false);
   const name = me.data?.name ?? "";
@@ -74,7 +75,7 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
             <nav aria-label="Menu lateral">
               <SidebarMenu className="gap-1">
                 {NAV.map((item) => {
-                  const active = pathname === item.href;
+                  const active = isAt(item.href);
                   return (
                     <SidebarMenuItem key={item.href}>
                       <SidebarMenuButton asChild isActive={active} className="h-11 gap-3 px-3 text-base">
@@ -126,8 +127,8 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
         className="fixed inset-x-0 bottom-0 z-40 border-t bg-card pb-[env(safe-area-inset-bottom)] lg:hidden"
       >
         <div className="mx-auto grid max-w-lg grid-cols-5 items-end">
-          <TabLink item={mes} active={pathname === mes.href} />
-          <TabLink item={paraOndeVai} active={pathname === paraOndeVai.href} />
+          <TabLink item={mes} active={isAt(mes.href)} />
+          <TabLink item={paraOndeVai} active={isAt(paraOndeVai.href)} />
           <div className="flex justify-center">
             <button
               type="button"
@@ -138,8 +139,8 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
               <Plus className="size-7" aria-hidden />
             </button>
           </div>
-          <TabLink item={economia} active={pathname === economia.href} />
-          <TabLink item={ajustes} active={pathname === ajustes.href} />
+          <TabLink item={economia} active={isAt(economia.href)} />
+          <TabLink item={ajustes} active={isAt(ajustes.href)} />
         </div>
       </nav>
 

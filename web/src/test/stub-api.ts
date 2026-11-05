@@ -123,3 +123,58 @@ export const MONTH: Schemas["MonthView"] = {
   bills_of_month: [],
   savings: null,
 };
+
+export const BILL_ALUGUEL: Schemas["Bill"] = {
+  id: "b1000000-0000-4000-8000-000000000001",
+  category_id: ALUGUEL.id,
+  name: "Aluguel Residencial",
+  amount: "2259.56",
+  due_day: 10,
+  active: true,
+};
+
+export const BILL_LUZ: Schemas["Bill"] = {
+  id: "b1000000-0000-4000-8000-000000000002",
+  category_id: LUZ.id,
+  name: "Luz (Enel)",
+  amount: "284.10",
+  due_day: 2,
+  active: true,
+};
+
+export const BILL_PAUSED: Schemas["Bill"] = {
+  id: "b1000000-0000-4000-8000-000000000003",
+  category_id: LUZ.id,
+  name: "Academia",
+  amount: "99.90",
+  due_day: 15,
+  active: false,
+};
+
+export const BILLS = [BILL_ALUGUEL, BILL_LUZ, BILL_PAUSED];
+
+/** Today is 2026-11-05: the rent is due on the 10th, the power bill went overdue on the 2nd. */
+export const BILLS_OF_MONTH: Schemas["BillOfMonth"][] = [
+  {
+    bill_id: BILL_LUZ.id,
+    name: BILL_LUZ.name,
+    icon: LUZ.icon,
+    color: LUZ.color,
+    amount: "284.10",
+    due_date: "2026-11-02",
+    paid: false,
+    transaction_id: null,
+    overdue: true,
+  },
+  {
+    bill_id: BILL_ALUGUEL.id,
+    name: BILL_ALUGUEL.name,
+    icon: ALUGUEL.icon,
+    color: ALUGUEL.color,
+    amount: "2259.56",
+    due_date: "2026-11-10",
+    paid: false,
+    transaction_id: null,
+    overdue: false,
+  },
+];

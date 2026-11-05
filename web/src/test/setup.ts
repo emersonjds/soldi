@@ -28,3 +28,10 @@ Object.defineProperty(window, "matchMedia", {
 Element.prototype.setPointerCapture ??= () => undefined;
 Element.prototype.releasePointerCapture ??= () => undefined;
 Element.prototype.hasPointerCapture ??= () => false;
+
+// jsdom has no ResizeObserver; the Radix switch measures its thumb with it.
+globalThis.ResizeObserver ??= class {
+  observe = () => undefined;
+  unobserve = () => undefined;
+  disconnect = () => undefined;
+};

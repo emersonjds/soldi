@@ -11,6 +11,22 @@ import AjustesPage from "./page";
 vi.mock("next/navigation", () => import("@/test/next-navigation"));
 
 describe("Ajustes", () => {
+  it("groups the settings, each one a link to its screen", () => {
+    signedIn();
+    renderWithQuery(<AjustesPage />);
+
+    expect(screen.getByRole("heading", { level: 1, name: "Ajustes" })).toBeInTheDocument();
+    for (const [name, href] of [
+      ["Categorias", "/ajustes/categorias"],
+      ["Contas fixas", "/ajustes/contas"],
+      ["Termômetro", "/ajustes/termometro"],
+      ["Saldo inicial", "/ajustes/saldo-inicial"],
+    ])
+      expect(screen.getByRole("link", { name: new RegExp(`^${name}`) })).toHaveAttribute("href", href);
+    expect(screen.getAllByRole("link")).toHaveLength(4);
+    expect(screen.getByRole("button", { name: "Sair" })).toHaveClass("text-destructive");
+  });
+
   it("signs out and goes to sign-in", async () => {
     const requests = signedIn({ "POST /api/auth/sign-out": { status: 204 } });
     renderWithQuery(<AjustesPage />);

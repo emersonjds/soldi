@@ -22,18 +22,20 @@ export const SignOutButton = () => {
   });
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col">
       <Button
-        variant="destructive"
-        className="min-h-11 w-full sm:w-auto"
+        variant="ghost"
+        className="min-h-16 w-full justify-start gap-3 rounded-none px-4 font-medium text-base text-destructive hover:bg-muted hover:text-destructive"
         disabled={signOut.isPending}
         onClick={() => signOut.mutate()}
       >
-        <LogOut />
+        <span className="flex size-10 items-center justify-center rounded-full bg-expense/10">
+          <LogOut className="size-5" />
+        </span>
         Sair
       </Button>
       {signOut.isError && (
-        <p role="alert" className="text-destructive text-sm">
+        <p role="alert" className="px-4 pb-3 text-destructive text-sm">
           Não foi possível sair. Tente de novo.
         </p>
       )}
