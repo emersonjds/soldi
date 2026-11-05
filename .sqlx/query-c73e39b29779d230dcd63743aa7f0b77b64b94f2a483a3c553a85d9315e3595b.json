@@ -1,0 +1,94 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE recurring_bills\n         SET name = $3, amount = $4, due_day = $5, category_id = $6, active = $7,\n             updated_at = now()\n         WHERE user_id = $1 AND id = $2 AND archived_at IS NULL\n         RETURNING id, category_id, name, amount, due_day, active",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "recurring_bills",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "category_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "recurring_bills",
+            "name": "category_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "recurring_bills",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "amount",
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "recurring_bills",
+            "name": "amount"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "due_day",
+        "type_info": "Int2",
+        "origin": {
+          "Table": {
+            "table": "recurring_bills",
+            "name": "due_day"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "active",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "recurring_bills",
+            "name": "active"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Numeric",
+        "Int2",
+        "Uuid",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "c73e39b29779d230dcd63743aa7f0b77b64b94f2a483a3c553a85d9315e3595b"
+}

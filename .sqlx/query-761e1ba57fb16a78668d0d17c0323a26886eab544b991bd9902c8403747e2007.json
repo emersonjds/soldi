@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE recurring_bills SET archived_at = now(), updated_at = now()\n         WHERE user_id = $1 AND id = $2 AND archived_at IS NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "761e1ba57fb16a78668d0d17c0323a26886eab544b991bd9902c8403747e2007"
+}

@@ -30,3 +30,21 @@ pub struct CreateBill {
     /// One of the caller's active `bill` categories.
     pub category_id: Uuid,
 }
+
+/// Absent fields stay as they are. `active: false` keeps the bill out of the month.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct UpdateBill {
+    #[serde(default)]
+    pub name: Option<String>,
+    #[serde(default, with = "rust_decimal::serde::str_option")]
+    #[schema(value_type = Option<String>)]
+    pub amount: Option<Decimal>,
+    #[serde(default)]
+    #[schema(minimum = 1, maximum = 31)]
+    pub due_day: Option<i16>,
+    #[serde(default)]
+    pub category_id: Option<Uuid>,
+    #[serde(default)]
+    pub active: Option<bool>,
+}

@@ -184,9 +184,20 @@
           "bills"
         ],
         "operationId": "list_bills",
+        "parameters": [
+          {
+            "name": "include_inactive",
+            "in": "query",
+            "description": "Also list bills with `active: false`",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
         "responses": {
           "200": {
-            "description": "Active recurring bills by due day, then name",
+            "description": "Unarchived recurring bills by due day, then name",
             "content": {
               "application/json": {
                 "schema": {
@@ -198,7 +209,176 @@
               }
             }
           },
+          "400": {
+            "description": "`include_inactive` is not a boolean",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
           "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "bills"
+        ],
+        "operationId": "create_bill",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateBill"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Bill"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Name not 1 to 100 characters, amount not above zero or with more than two places, due day not 1 to 31, or `category_id` not one of the caller's active bill categories",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/bills/{id}": {
+      "delete": {
+        "tags": [
+          "bills"
+        ],
+        "operationId": "archive_bill",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Bill id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Archived: out of every list and month; its payments stay"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Missing, already archived or another user's",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "bills"
+        ],
+        "operationId": "update_bill",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Bill id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateBill"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The bill after the change; absent fields stay as they are",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Bill"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Missing, archived or another user's",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Same rules as create, on the bill after the change",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -1426,6 +1606,47 @@
             ]
           }
         }
+      },
+      "UpdateBill": {
+        "type": "object",
+        "description": "Absent fields stay as they are. `active: false` keeps the bill out of the month.",
+        "properties": {
+          "active": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "amount": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "category_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "due_day": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "maximum": 31,
+            "minimum": 1
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false
       },
       "UpdateCategory": {
         "type": "object",
