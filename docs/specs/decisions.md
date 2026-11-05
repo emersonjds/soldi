@@ -53,3 +53,7 @@ Panel (`product`, `ux`, `finance`, `architect`) votes are recorded in the card b
 ## D13 — "Today" is the São Paulo calendar day (2026-11-05, architect + finance)
 
 pt-BR only product (D3): the server computes `today` in `America/Sao_Paulo` (chrono-tz) for `is_today`, `balance_today` and overdue checks; the web sends nothing. Found in SOL-3: UTC flipped the day at 21:00 local. A per-user time zone setting is a future card if the product ever leaves Brazil. Same panel: entries within a day are ordered by `created_at desc` (random v4 ids made `id desc` meaningless); a transaction dated before `opening_date` is refused with 422 `before-opening-date` instead of being silently ignored.
+
+## D14 — Repeated entries are real rows grouped by `series_id` (2026-11-05, SOL-21 panel, architect arbitrated)
+
+"Repetir por N meses" (2..60, N counts the original) inserts all N rows at once, sharing a nullable `transactions.series_id`; position and total are counted at read time, never stored. A series action reaches only `this` row or `following` rows (date ≥ the edited one); past members are never rewritten, and a date change never propagates. Bill payments and resgates cannot repeat: an open-ended repeat is a recurring bill (D8), offered as "Transformar em conta fixa". Trade-off: D8's "no rows ahead of time" holds for bills only; a finite user-chosen repeat writes future rows, bounded by 60. Options: lazy generation (breaks D8's single ledger), a third "Toda a série" scope (rewrites reconciled months).
