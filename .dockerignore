@@ -1,0 +1,16 @@
+.git
+.github
+.claude
+target
+data
+docs
+**/node_modules
+**/*.md
+!web/**/*.md
+web/.next
+web/out
+web/coverage
+web/test-results
+web/playwright-report
+.env
+**/.DS_Store
