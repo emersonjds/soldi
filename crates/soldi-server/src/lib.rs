@@ -1,3 +1,4 @@
+pub mod auth;
 pub mod error;
 pub mod extract;
 
@@ -9,7 +10,7 @@ use axum::http::header::{
     REFERRER_POLICY, STRICT_TRANSPORT_SECURITY, X_CONTENT_TYPE_OPTIONS, X_FRAME_OPTIONS,
 };
 use axum::http::{HeaderValue, StatusCode};
-use axum::{Json, Router};
+use axum::{Json, Router, middleware};
 use soldi_types::{Health, Problem};
 use sqlx::PgPool;
 use tower_http::compression::CompressionLayer;
@@ -44,7 +45,9 @@ impl AppState {
 struct ApiDoc;
 
 fn api() -> OpenApiRouter<AppState> {
-    OpenApiRouter::with_openapi(ApiDoc::openapi()).routes(routes!(health))
+    OpenApiRouter::with_openapi(ApiDoc::openapi())
+        .routes(routes!(health))
+        .merge(auth::handler::router())
 }
 
 /// The API contract, built without a database; `web/openapi.json` is its committed snapshot.
@@ -64,6 +67,7 @@ pub fn app(state: AppState, web_dir: Option<&Path>) -> Router {
     let _ = web_dir;
     router
         .fallback(not_found)
+        .layer(middleware::from_fn(extract::reject_cross_site_writes))
         .layer(SetResponseHeaderLayer::if_not_present(
             X_CONTENT_TYPE_OPTIONS,
             HeaderValue::from_static("nosniff"),
