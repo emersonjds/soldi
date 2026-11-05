@@ -21,9 +21,11 @@ describe("Ajustes", () => {
       ["Contas fixas", "/ajustes/contas"],
       ["Termômetro", "/ajustes/termometro"],
       ["Saldo inicial", "/ajustes/saldo-inicial"],
+      ["Importar planilha", "/ajustes/importar"],
     ])
       expect(screen.getByRole("link", { name: new RegExp(`^${name}`) })).toHaveAttribute("href", href);
-    expect(screen.getAllByRole("link")).toHaveLength(4);
+    expect(screen.getAllByRole("link")).toHaveLength(5);
+    expect(screen.getByText("Traga seu Termômetro.xlsx")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Sair" })).toHaveClass("text-destructive");
   });
 
