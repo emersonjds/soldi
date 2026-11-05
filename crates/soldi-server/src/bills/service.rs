@@ -112,7 +112,7 @@ pub async fn pay(
     }
     transactions::service::check_opening(&mut conn, user, entry.date).await?;
     let transaction_id =
-        transactions::repo::insert(&mut conn, user.id, &entry, Some(bill.id), None)
+        transactions::repo::insert(&mut conn, user.id, &entry, Some(bill.id), None, None)
             .await
             .map_err(transactions::service::paid_once)?;
     transactions::repo::find(&mut conn, user.id, transaction_id)

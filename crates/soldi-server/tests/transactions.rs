@@ -320,3 +320,289 @@ async fn the_list_filters_by_category_and_a_foreign_category_lists_nothing(pool:
         .await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
 }
+
+async fn repeat(user: &TestApp, date: &str, amount: &str, months: i64) -> Value {
+    let category_id = user.category_id("Mercado").await;
+    let (status, created) = user
+        .post(
+            "/api/transactions",
+            json!({ "date": date, "amount": amount, "kind": "daily", "category_id": category_id, "repeat_months": months }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{created}");
+    created
+}
+
+async fn month(user: &TestApp, month: &str) -> Vec<Value> {
+    let (status, listed) = user.get(&format!("/api/transactions?month={month}")).await;
+    assert_eq!(status, StatusCode::OK, "{listed}");
+    listed.as_array().unwrap().clone()
+}
+
+/// The single entry of `month`.
+async fn only(user: &TestApp, of: &str) -> Value {
+    let entries = month(user, of).await;
+    assert_eq!(entries.len(), 1, "{of}: {entries:?}");
+    entries[0].clone()
+}
+
+fn place(entry: &Value) -> (i64, i64) {
+    let series = &entry["series"];
+    (
+        series["position"].as_i64().unwrap(),
+        series["total"].as_i64().unwrap(),
+    )
+}
+
+#[sqlx::test]
+async fn r1_r2_r7_twelve_months_write_twelve_exact_entries_on_clamped_dates(pool: PgPool) {
+    let user = opened(pool, "ana@example.com").await;
+
+    let created = repeat(&user, "2027-01-31", "1234.57", 12).await;
+
+    assert_eq!(place(&created), (1, 12));
+    assert_eq!(created["amount"], "1234.57");
+    assert_eq!(created["date"], "2027-01-31");
+    let series = created["series"]["id"].clone();
+    let months = [
+        ("2027-01", "2027-01-31"),
+        ("2027-02", "2027-02-28"),
+        ("2027-03", "2027-03-31"),
+        ("2027-04", "2027-04-30"),
+        ("2027-12", "2027-12-31"),
+    ];
+    for (of, date) in months {
+        let entry = only(&user, of).await;
+        assert_eq!(entry["date"], date);
+        assert_eq!(entry["amount"], "1234.57");
+        assert_eq!(entry["category"]["name"], "Mercado");
+        assert_eq!(entry["series"]["id"], series);
+    }
+    assert_eq!(place(&only(&user, "2027-03").await), (3, 12));
+    assert_eq!(place(&only(&user, "2027-12").await), (12, 12));
+    assert!(month(&user, "2028-01").await.is_empty());
+    let mut total = 0;
+    for of in 1..=12 {
+        total += month(&user, &format!("2027-{of:02}")).await.len();
+    }
+    assert_eq!(total, 12);
+}
+
+#[sqlx::test]
+async fn r3_copies_leave_the_originals_month_as_a_single_entry_would(pool: PgPool) {
+    let ana = opened(pool.clone(), "ana@example.com").await;
+    let bia = opened(pool, "bia@example.com").await;
+    spend(&ana, "2026-11-05", "50", "Mercado").await;
+    repeat(&bia, "2026-11-05", "50", 6).await;
+
+    let (_, alone) = ana.get("/api/months/2026-11").await;
+    let (_, repeated) = bia.get("/api/months/2026-11").await;
+
+    assert_eq!(alone, repeated);
+    assert_eq!(place(&only(&bia, "2027-04").await), (6, 6));
+    assert_eq!(only(&ana, "2026-11").await["series"], Value::Null);
+}
+
+#[sqlx::test]
+async fn repeat_months_outside_2_to_60_is_refused(pool: PgPool) {
+    let user = opened(pool, "ana@example.com").await;
+    let market = user.category_id("Mercado").await;
+
+    for months in [1, 61, 0] {
+        let (status, problem) = user
+            .post(
+                "/api/transactions",
+                json!({ "date": "2026-11-05", "amount": "10", "kind": "daily", "category_id": market, "repeat_months": months }),
+            )
+            .await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{months}");
+        assert_eq!(problem["errors"][0]["field"], "repeat_months");
+    }
+    assert!(month(&user, "2026-11").await.is_empty());
+    assert_eq!(place(&repeat(&user, "2026-11-05", "10", 60).await), (1, 60));
+}
+
+#[sqlx::test]
+async fn a_failing_copy_leaves_no_entry_at_all(pool: PgPool) {
+    let user = opened(pool.clone(), "ana@example.com").await;
+    sqlx::query("ALTER TABLE transactions ADD CONSTRAINT before_march CHECK (date < '2027-03-01')")
+        .execute(&pool)
+        .await
+        .unwrap();
+    let market = user.category_id("Mercado").await;
+
+    let (status, _) = user
+        .post(
+            "/api/transactions",
+            json!({ "date": "2026-11-05", "amount": "10", "kind": "daily", "category_id": market, "repeat_months": 12 }),
+        )
+        .await;
+
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert!(month(&user, "2026-11").await.is_empty());
+    assert!(month(&user, "2027-02").await.is_empty());
+}
+
+#[sqlx::test]
+async fn r6_this_keeps_the_series_and_following_rewrites_later_members_but_not_dates(pool: PgPool) {
+    let user = opened(pool, "ana@example.com").await;
+    repeat(&user, "2026-11-05", "99.90", 4).await;
+    let second = only(&user, "2026-12").await;
+    let third = only(&user, "2027-01").await;
+
+    let (status, alone) = user
+        .patch(
+            &format!("{}?scope=this", uri(&third)),
+            json!({ "amount": "120" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{alone}");
+    assert_eq!(alone["amount"], "120.00");
+    assert_eq!(place(&alone), (3, 4));
+    assert_eq!(only(&user, "2027-02").await["amount"], "99.90");
+
+    let food = user.category_id("Comida fora").await;
+    let (status, edited) = user
+        .patch(
+            &format!("{}?scope=following", uri(&second)),
+            json!({ "amount": "109.90", "note": "nova", "category_id": food, "date": "2026-12-10" }),
+        )
+        .await;
+
+    assert_eq!(status, StatusCode::OK, "{edited}");
+    assert_eq!(edited["date"], "2026-12-10");
+    assert_eq!(edited["amount"], "109.90");
+    assert_eq!(place(&edited), (2, 4));
+    for (of, date) in [("2027-01", "2027-01-05"), ("2027-02", "2027-02-05")] {
+        let later = only(&user, of).await;
+        assert_eq!(later["date"], date);
+        assert_eq!(later["amount"], "109.90");
+        assert_eq!(later["note"], "nova");
+        assert_eq!(later["category"]["name"], "Comida fora");
+    }
+    let first = only(&user, "2026-11").await;
+    assert_eq!(first["amount"], "99.90");
+    assert_eq!(first["category"]["name"], "Mercado");
+    let (status, _) = user
+        .patch(&format!("{}?scope=all", uri(&second)), json!({}))
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+}
+
+#[sqlx::test]
+async fn delete_following_removes_this_and_later_members_only(pool: PgPool) {
+    let user = opened(pool, "ana@example.com").await;
+    let first = repeat(&user, "2026-11-05", "10", 4).await;
+    let third = only(&user, "2027-01").await;
+
+    let (status, _) = user
+        .delete(&format!("{}?scope=following", uri(&third)))
+        .await;
+
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    assert!(month(&user, "2027-01").await.is_empty());
+    assert!(month(&user, "2027-02").await.is_empty());
+    assert_eq!(place(&only(&user, "2026-11").await), (1, 2));
+    assert_eq!(place(&only(&user, "2026-12").await), (2, 2));
+    assert_eq!(user.delete(&uri(&first)).await.0, StatusCode::NO_CONTENT);
+    assert_eq!(place(&only(&user, "2026-12").await), (1, 1));
+}
+
+#[sqlx::test]
+async fn repeat_months_on_patch_turns_a_standalone_entry_into_the_first_member(pool: PgPool) {
+    let user = opened(pool, "ana@example.com").await;
+    let created = spend(&user, "2026-11-30", "10", "Mercado").await;
+
+    let (status, repeated) = user
+        .patch(&uri(&created), json!({ "repeat_months": 3 }))
+        .await;
+
+    assert_eq!(status, StatusCode::OK, "{repeated}");
+    assert_eq!(place(&repeated), (1, 3));
+    assert_eq!(only(&user, "2026-12").await["date"], "2026-12-30");
+    assert_eq!(place(&only(&user, "2027-01").await), (3, 3));
+    for entry in [created, only(&user, "2026-12").await] {
+        let (status, problem) = user
+            .patch(&uri(&entry), json!({ "repeat_months": 2 }))
+            .await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+        assert_eq!(problem["type"], "urn:soldi:error:already-repeated");
+    }
+    let (status, problem) = user
+        .patch(
+            &uri(&spend(&user, "2026-11-01", "5", "Mercado").await),
+            json!({ "repeat_months": 61 }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(problem["errors"][0]["field"], "repeat_months");
+}
+
+#[sqlx::test]
+async fn r3_r4_bill_payments_and_resgates_do_not_repeat_but_deposits_do(pool: PgPool) {
+    let user = opened(pool, "ana@example.com").await;
+    let rent = user.category_id("Aluguel").await;
+    let (_, bill) = user
+        .post(
+            "/api/bills",
+            json!({ "name": "Aluguel", "amount": "1500", "due_day": 5, "category_id": rent }),
+        )
+        .await;
+    let (status, payment) = user
+        .post(
+            &format!("/api/bills/{}/pay", bill["id"].as_str().unwrap()),
+            json!({ "date": "2026-11-05" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{payment}");
+    let economia = user.category_id("Economia").await;
+    let (_, deposit) = user
+        .post(
+            "/api/transactions",
+            json!({ "date": "2026-11-01", "amount": "100", "kind": "bill", "category_id": economia }),
+        )
+        .await;
+    let (status, resgate) = user
+        .post(
+            &format!("/api/cofrinhos/{economia}/withdraw"),
+            json!({ "date": "2026-11-02", "amount": "50" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{resgate}");
+
+    for (entry, slug) in [
+        (&payment, "repeat-not-allowed-on-bill-payment"),
+        (&resgate, "repeat-not-allowed-on-cofrinho-withdrawal"),
+    ] {
+        let (status, problem) = user.patch(&uri(entry), json!({ "repeat_months": 2 })).await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{slug}");
+        assert_eq!(problem["type"], format!("urn:soldi:error:{slug}"));
+    }
+    let (status, repeated) = user
+        .patch(&uri(&deposit), json!({ "repeat_months": 12 }))
+        .await;
+    assert_eq!(status, StatusCode::OK, "{repeated}");
+    assert_eq!(place(&repeated), (1, 12));
+}
+
+#[sqlx::test]
+async fn another_users_series_member_is_not_found(pool: PgPool) {
+    let ana = opened(pool, "ana@example.com").await;
+    let bia = ana.another_user("bia@example.com").await;
+    let first = repeat(&ana, "2026-11-05", "10", 3).await;
+    let following = format!("{}?scope=following", uri(&first));
+
+    assert_eq!(
+        bia.patch(&following, json!({ "amount": "1" })).await.0,
+        StatusCode::NOT_FOUND
+    );
+    assert_eq!(
+        bia.patch(&uri(&first), json!({ "repeat_months": 2 }))
+            .await
+            .0,
+        StatusCode::NOT_FOUND
+    );
+    assert_eq!(bia.delete(&following).await.0, StatusCode::NOT_FOUND);
+    assert_eq!(place(&only(&ana, "2027-01").await), (3, 3));
+    assert_eq!(only(&ana, "2027-01").await["amount"], "10.00");
+}
