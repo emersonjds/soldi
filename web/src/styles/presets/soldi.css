@@ -66,6 +66,20 @@ value: soldi
   --tier-green-soft: #dcfce7;
   --tier-green-foreground: #14532d;
 
+  /* Category circles, white icon on top; same in dark. */
+  --cat-1: #f59e0b;
+  --cat-2: #f97316;
+  --cat-3: #3b82f6;
+  --cat-4: #ef4444;
+  --cat-5: #a855f7;
+  --cat-6: #6366f1;
+  --cat-7: #eab308;
+  --cat-8: #06b6d4;
+  --cat-9: #ec4899;
+  --cat-10: #8b5cf6;
+  --cat-11: #16a34a;
+  --cat-12: #22c55e;
+
   --shadow-2xs: 0 1px 2px rgb(30 27 75 / 0.04);
   --shadow-xs: 0 1px 2px rgb(30 27 75 / 0.06);
   --shadow-sm: 0 4px 16px rgb(30 27 75 / 0.08);

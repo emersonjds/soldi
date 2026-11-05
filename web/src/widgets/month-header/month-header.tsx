@@ -1,7 +1,8 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 import { formatBRL } from "@/shared/lib/money";
-import { type Tier, TierBadge } from "@/shared/ui/tier-badge";
+import type { Tier } from "@/shared/lib/tier";
+import { TierPill } from "@/shared/ui/tier-pill";
 
 const monthName = new Intl.DateTimeFormat("pt-BR", { month: "long", timeZone: "UTC" });
 
@@ -57,7 +58,7 @@ export const MonthHeader = ({ month, balance, tier, onMonthChange }: MonthHeader
           {formatBRL(balance)}
         </p>
       </div>
-      <TierBadge tier={tier} className="lg:mb-1.5" />
+      <TierPill tier={tier} className="lg:mb-1.5" />
     </div>
   </section>
 );

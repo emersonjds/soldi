@@ -6,7 +6,7 @@ import { MonthHeader } from "./month-header";
 
 describe("MonthHeader", () => {
   it("shows the month, today's balance and its tier label", () => {
-    render(<MonthHeader month="2026-11" balance="1842.10" tier="light-green" onMonthChange={vi.fn()} />);
+    render(<MonthHeader month="2026-11" balance="1842.10" tier="light_green" onMonthChange={vi.fn()} />);
 
     expect(screen.getByText("Novembro 2026")).toBeInTheDocument();
     expect(screen.getByText("Saldo hoje")).toBeInTheDocument();

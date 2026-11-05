@@ -70,6 +70,18 @@
   --color-tier-green: var(--tier-green);
   --color-tier-green-soft: var(--tier-green-soft);
   --color-tier-green-foreground: var(--tier-green-foreground);
+  --color-cat-1: var(--cat-1);
+  --color-cat-2: var(--cat-2);
+  --color-cat-3: var(--cat-3);
+  --color-cat-4: var(--cat-4);
+  --color-cat-5: var(--cat-5);
+  --color-cat-6: var(--cat-6);
+  --color-cat-7: var(--cat-7);
+  --color-cat-8: var(--cat-8);
+  --color-cat-9: var(--cat-9);
+  --color-cat-10: var(--cat-10);
+  --color-cat-11: var(--cat-11);
+  --color-cat-12: var(--cat-12);
   --font-heading: var(--font-sans);
   --font-sans: var(--font-sans);
 }
