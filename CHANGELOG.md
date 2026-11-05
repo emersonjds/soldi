@@ -7,6 +7,14 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.5.1
+
+> Headline: light theme only
+
+### Removed
+
+- Dark mode and the template's theme preferences: the `.dark` tokens, the `theme_mode` preference and its `data-theme-mode` attribute, the boot script that followed the system color scheme, the preferences store, and the `next-themes`, `zustand` and `ts-node` dependencies. Soldi always renders the light Soldi palette, whatever the system setting; toasts are light too.
+
 ## 0.5.0
 
 > Headline: import the Termômetro spreadsheet
