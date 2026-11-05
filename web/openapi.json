@@ -7,7 +7,7 @@
       "name": "AGPL-3.0-only",
       "identifier": "AGPL-3.0-only"
     },
-    "version": "0.1.0"
+    "version": "0.2.0"
   },
   "paths": {
     "/api/auth/me": {
@@ -642,7 +642,7 @@
         ],
         "responses": {
           "200": {
-            "description": "The month's entries: newest date first, then by id descending",
+            "description": "The month's entries: newest date first, then newest entry first",
             "content": {
               "application/json": {
                 "schema": {
@@ -730,7 +730,7 @@
             }
           },
           "422": {
-            "description": "Amount not above zero or with more than two places, note over 500 characters, or a kind other than the category's (`category_id`)",
+            "description": "Amount not above zero or with more than two places, note over 500 characters, a kind other than the category's (`category_id`), or a date before the opening date (`before-opening-date`)",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -843,7 +843,7 @@
             }
           },
           "422": {
-            "description": "Same rules as create, on the entry after the change",
+            "description": "Same rules as create, on the entry after the change, `before-opening-date` included",
             "content": {
               "application/problem+json": {
                 "schema": {

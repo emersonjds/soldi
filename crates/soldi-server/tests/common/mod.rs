@@ -41,6 +41,16 @@ impl TestApp {
         }
     }
 
+    pub async fn open_at(&self, balance: &str, date: &str) {
+        let (status, settings) = self
+            .patch(
+                "/api/settings",
+                json!({ "opening_balance": balance, "opening_date": date }),
+            )
+            .await;
+        assert_eq!(status, StatusCode::OK, "{settings}");
+    }
+
     /// The id of the caller's active category with this name.
     pub async fn category_id(&self, name: &str) -> String {
         let (_, categories) = self.get("/api/categories").await;

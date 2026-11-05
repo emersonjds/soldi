@@ -21,9 +21,15 @@ fn uri(transaction: &Value) -> String {
     format!("/api/transactions/{}", transaction["id"].as_str().unwrap())
 }
 
+async fn opened(pool: PgPool, email: &str) -> TestApp {
+    let user = TestApp::signed_in(pool, email).await;
+    user.open_at("0", "2026-10-01").await;
+    user
+}
+
 #[sqlx::test]
 async fn create_answers_the_entry_with_its_category_and_list_orders_the_month(pool: PgPool) {
-    let user = TestApp::signed_in(pool, "ana@example.com").await;
+    let user = opened(pool, "ana@example.com").await;
     let salary = user.category_id("Salário").await;
 
     let (status, created) = user
@@ -65,14 +71,13 @@ async fn create_answers_the_entry_with_its_category_and_list_orders_the_month(po
 }
 
 #[sqlx::test]
-async fn entries_of_one_day_come_by_id_descending(pool: PgPool) {
-    let user = TestApp::signed_in(pool, "ana@example.com").await;
+async fn entries_of_one_day_come_newest_first(pool: PgPool) {
+    let user = opened(pool, "ana@example.com").await;
     let mut ids = Vec::new();
-    for amount in ["1", "2", "3"] {
+    for amount in ["1", "2", "3", "4", "5"] {
         let created = spend(&user, "2026-11-05", amount, "Mercado").await;
         ids.push(created["id"].as_str().unwrap().to_string());
     }
-    ids.sort();
     ids.reverse();
 
     let (_, listed) = user.get("/api/transactions?month=2026-11").await;
@@ -87,8 +92,29 @@ async fn entries_of_one_day_come_by_id_descending(pool: PgPool) {
 }
 
 #[sqlx::test]
-async fn create_refuses_bad_amounts_notes_and_kinds(pool: PgPool) {
+async fn an_entry_before_the_opening_date_is_refused(pool: PgPool) {
     let user = TestApp::signed_in(pool, "ana@example.com").await;
+    user.open_at("0", "2026-11-05").await;
+    let market = user.category_id("Mercado").await;
+    let body = |date: &str| json!({ "date": date, "amount": "10", "kind": "daily", "category_id": market });
+
+    let (status, problem) = user.post("/api/transactions", body("2026-11-04")).await;
+
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(problem["type"], "urn:soldi:error:before-opening-date");
+    let created = spend(&user, "2026-11-05", "10", "Mercado").await;
+    let (status, problem) = user
+        .patch(&uri(&created), json!({ "date": "2026-10-31" }))
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(problem["type"], "urn:soldi:error:before-opening-date");
+    let (_, listed) = user.get("/api/transactions?month=2026-11").await;
+    assert_eq!(listed[0]["date"], "2026-11-05");
+}
+
+#[sqlx::test]
+async fn create_refuses_bad_amounts_notes_and_kinds(pool: PgPool) {
+    let user = opened(pool, "ana@example.com").await;
     let market = user.category_id("Mercado").await;
     let body = |amount: Value, kind: &str, note: Value| json!({ "date": "2026-11-05", "amount": amount, "kind": kind, "category_id": market, "note": note });
 
@@ -120,7 +146,7 @@ async fn create_refuses_bad_amounts_notes_and_kinds(pool: PgPool) {
 
 #[sqlx::test]
 async fn an_archived_unknown_or_foreign_category_is_not_found(pool: PgPool) {
-    let ana = TestApp::signed_in(pool, "ana@example.com").await;
+    let ana = opened(pool, "ana@example.com").await;
     let bia = ana.another_user("bia@example.com").await;
     let pets = ana.category_id("Pets").await;
     assert_eq!(
@@ -142,7 +168,7 @@ async fn an_archived_unknown_or_foreign_category_is_not_found(pool: PgPool) {
 
 #[sqlx::test]
 async fn patch_changes_only_the_given_fields_and_keeps_kind_and_category_together(pool: PgPool) {
-    let user = TestApp::signed_in(pool, "ana@example.com").await;
+    let user = opened(pool, "ana@example.com").await;
     let created = spend(&user, "2026-11-05", "12", "Mercado").await;
     let uri = uri(&created);
 
@@ -184,7 +210,7 @@ async fn patch_changes_only_the_given_fields_and_keeps_kind_and_category_togethe
 
 #[sqlx::test]
 async fn an_entry_keeps_its_archived_category_until_moved(pool: PgPool) {
-    let user = TestApp::signed_in(pool, "ana@example.com").await;
+    let user = opened(pool, "ana@example.com").await;
     let created = spend(&user, "2026-11-05", "12", "Pets").await;
     let pets = created["category"]["id"].as_str().unwrap().to_string();
     user.delete(&format!("/api/categories/{pets}")).await;
@@ -200,7 +226,7 @@ async fn an_entry_keeps_its_archived_category_until_moved(pool: PgPool) {
 
 #[sqlx::test]
 async fn delete_removes_the_entry(pool: PgPool) {
-    let user = TestApp::signed_in(pool, "ana@example.com").await;
+    let user = opened(pool, "ana@example.com").await;
     let created = spend(&user, "2026-11-05", "12", "Mercado").await;
 
     assert_eq!(user.delete(&uri(&created)).await.0, StatusCode::NO_CONTENT);
@@ -216,7 +242,7 @@ async fn delete_removes_the_entry(pool: PgPool) {
 
 #[sqlx::test]
 async fn another_users_entry_is_not_found(pool: PgPool) {
-    let ana = TestApp::signed_in(pool, "ana@example.com").await;
+    let ana = opened(pool, "ana@example.com").await;
     let bia = ana.another_user("bia@example.com").await;
     let created = spend(&ana, "2026-11-05", "12", "Mercado").await;
 

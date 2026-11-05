@@ -12,6 +12,7 @@ axum.workspace = true
 tokio.workspace = true
 sqlx.workspace = true
 chrono.workspace = true
+chrono-tz.workspace = true
 rust_decimal.workspace = true
 uuid.workspace = true
 utoipa.workspace = true

@@ -24,6 +24,6 @@ pub async fn get(pool: &PgPool, user: &CurrentUser, month: &str) -> Result<Month
         month,
         settings,
         sums,
-        today: chrono::Utc::now().date_naive(),
+        today: crate::today_sao_paulo(),
     }))
 }

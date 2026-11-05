@@ -6,13 +6,7 @@ use serde_json::{Value, json};
 use sqlx::PgPool;
 
 async fn open_at(user: &TestApp, balance: &str, date: &str) {
-    let (status, settings) = user
-        .patch(
-            "/api/settings",
-            json!({ "opening_balance": balance, "opening_date": date }),
-        )
-        .await;
-    assert_eq!(status, StatusCode::OK, "{settings}");
+    user.open_at(balance, date).await;
 }
 
 async fn log(user: &TestApp, date: &str, kind: &str, amount: &str, category: &str) {
@@ -73,7 +67,7 @@ async fn the_sheets_first_days_come_back_with_balances_tiers_and_totals(pool: Pg
 #[sqlx::test]
 async fn a_new_entry_moves_todays_balance_and_tier(pool: PgPool) {
     let user = TestApp::signed_in(pool, "ana@example.com").await;
-    let today = chrono::Utc::now().date_naive();
+    let today = soldi_server::today_sao_paulo();
     let month = today.format("%Y-%m").to_string();
     let uri = format!("/api/months/{month}");
 

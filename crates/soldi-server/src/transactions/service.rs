@@ -6,7 +6,7 @@ use uuid::Uuid;
 use super::{domain, repo};
 use crate::error::AppError;
 use crate::extract::CurrentUser;
-use crate::{categories, months};
+use crate::{categories, months, settings};
 
 pub async fn list(
     pool: &PgPool,
@@ -29,6 +29,20 @@ async fn active_category(
         .ok_or(AppError::NotFound)
 }
 
+pub async fn check_opening(
+    conn: &mut PgConnection,
+    user: &CurrentUser,
+    date: chrono::NaiveDate,
+) -> Result<(), AppError> {
+    if date < settings::repo::find(conn, user.id).await?.opening_date {
+        return Err(AppError::rule(
+            "before-opening-date",
+            "The date is before the opening date.",
+        ));
+    }
+    Ok(())
+}
+
 pub async fn create(
     pool: &PgPool,
     user: &CurrentUser,
@@ -38,6 +52,7 @@ pub async fn create(
     let mut conn = pool.acquire().await?;
     let category = active_category(&mut conn, user, input.category_id).await?;
     domain::check_kind(input.kind, &category)?;
+    check_opening(&mut conn, user, input.date).await?;
     let id = repo::insert(&mut conn, user.id, &input).await?;
     Ok(domain::transaction(id, input, category))
 }
@@ -64,6 +79,7 @@ pub async fn update(
         note: patch.note.unwrap_or(current.note),
     })?;
     domain::check_kind(next.kind, &category)?;
+    check_opening(&mut conn, user, next.date).await?;
     if !repo::update(&mut conn, user.id, id, &next).await? {
         return Err(AppError::NotFound);
     }

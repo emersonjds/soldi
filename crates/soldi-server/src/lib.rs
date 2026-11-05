@@ -124,3 +124,32 @@ async fn health(State(state): State<AppState>) -> Result<Json<Health>, AppError>
 async fn not_found() -> AppError {
     AppError::NotFound
 }
+
+/// The calendar day in São Paulo (D13).
+pub fn today_sao_paulo() -> chrono::NaiveDate {
+    sao_paulo_date(chrono::Utc::now())
+}
+
+fn sao_paulo_date(at: chrono::DateTime<chrono::Utc>) -> chrono::NaiveDate {
+    at.with_timezone(&chrono_tz::America::Sao_Paulo)
+        .date_naive()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::sao_paulo_date;
+
+    #[test]
+    fn the_day_turns_at_midnight_in_sao_paulo() {
+        let at = |text: &str| text.parse().unwrap();
+
+        assert_eq!(
+            sao_paulo_date(at("2026-11-06T02:59:59Z")).to_string(),
+            "2026-11-05"
+        );
+        assert_eq!(
+            sao_paulo_date(at("2026-11-06T03:00:00Z")).to_string(),
+            "2026-11-06"
+        );
+    }
+}
