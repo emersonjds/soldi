@@ -2,7 +2,16 @@ import type { ReactNode } from "react";
 
 import Link from "next/link";
 
-import { ChevronRight, FileSpreadsheet, type LucideIcon, ReceiptText, Tags, Thermometer, Wallet } from "lucide-react";
+import {
+  ChevronRight,
+  Coins,
+  FileSpreadsheet,
+  type LucideIcon,
+  ReceiptText,
+  Tags,
+  Thermometer,
+  Wallet,
+} from "lucide-react";
 
 import { SignOutButton } from "@/features/sign-out/sign-out-button";
 
@@ -21,6 +30,7 @@ const GROUPS: { title: string; items: Item[] }[] = [
     items: [
       { href: "/ajustes/termometro", label: "Termômetro", hint: "Faixas de cor do saldo", icon: Thermometer },
       { href: "/ajustes/saldo-inicial", label: "Saldo inicial", hint: "De onde o saldo parte", icon: Wallet },
+      { href: "/ajustes/moeda", label: "Moeda", hint: "Real, dólar, libra ou euro", icon: Coins },
     ],
   },
   {

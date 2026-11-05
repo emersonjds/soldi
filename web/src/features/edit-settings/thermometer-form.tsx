@@ -8,8 +8,9 @@ import { Field, FieldLabel } from "@/components/ui/field";
 import { useMonth } from "@/entities/month/month-query";
 import { useUpdateSettings } from "@/entities/settings/settings-query";
 import type { Schemas } from "@/shared/api/client";
+import { useCurrency } from "@/shared/lib/currency";
 import { todayISO } from "@/shared/lib/date";
-import { formatBRL, parseBRL } from "@/shared/lib/money";
+import { formatMoney, parseBRL } from "@/shared/lib/money";
 import { boundsRise, type TierBounds, tierOf } from "@/shared/lib/tier";
 import { AmountInput } from "@/shared/ui/amount-input";
 import { BrandButton } from "@/shared/ui/brand-button";
@@ -41,6 +42,7 @@ export const ThermometerForm = ({ settings }: { settings: Schemas["Settings"] })
   const bounds = parseAll(draft);
   const rising = bounds !== null && boundsRise(bounds);
   const balance = month.data?.balance_today;
+  const currency = useCurrency();
   const problem = bounds ? "Cada faixa precisa ser maior que a anterior." : "Informe valores como 1.250,00.";
 
   const submit = (event: FormEvent) => {
@@ -57,8 +59,8 @@ export const ThermometerForm = ({ settings }: { settings: Schemas["Settings"] })
       <section aria-label="Prévia" className="flex flex-col gap-4 rounded-2xl bg-card p-4 shadow-sm lg:p-6">
         {balance !== undefined && (
           <p className="text-muted-foreground text-sm">
-            Com o saldo de hoje, <strong className="font-bold text-foreground">{formatBRL(balance)}</strong>, o
-            termômetro fica assim:
+            Com o saldo de hoje, <strong className="font-bold text-foreground">{formatMoney(balance, currency)}</strong>
+            , o termômetro fica assim:
           </p>
         )}
         <ThermometerStrip

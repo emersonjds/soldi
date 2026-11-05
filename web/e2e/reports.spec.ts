@@ -13,6 +13,7 @@ test("an entry shows up in Para onde vai and a month's savings is kept in Econom
   await page.getByLabel("E-mail").fill(`e2e-reports-${Date.now()}@example.com`);
   await page.getByLabel("Senha").fill("uma-senha-bem-longa");
   await page.getByRole("button", { name: "Criar conta" }).click();
+  await page.getByRole("button", { name: "Continuar" }).click();
   await page.getByLabel("Saldo de hoje").fill("1.000,00");
   await page.getByRole("button", { name: "Continuar" }).click();
   await page.getByRole("button", { name: "Pular por agora" }).click();

@@ -12,8 +12,9 @@ import { type BillOfMonth, payDateFor, usePayBill, useUnpayBill } from "@/entiti
 import { PayBillSheet } from "@/features/pay-bill/pay-bill-sheet";
 import { cn } from "@/lib/utils";
 import type { Schemas } from "@/shared/api/client";
+import { useCurrency } from "@/shared/lib/currency";
 import { todayISO } from "@/shared/lib/date";
-import { formatBRL } from "@/shared/lib/money";
+import { formatMoney } from "@/shared/lib/money";
 import { CategoryIcon } from "@/shared/ui/category-icon";
 import { Money } from "@/shared/ui/money";
 
@@ -113,6 +114,7 @@ const Row = ({
   onUnpay: () => void;
   onAdjust: () => void;
 }) => {
+  const currency = useCurrency();
   const amount = (
     <Money
       amount={bill.amount}
@@ -144,7 +146,7 @@ const Row = ({
       ) : (
         <button
           type="button"
-          aria-label={`${formatBRL(bill.amount)}: ajustar pagamento de ${bill.name}`}
+          aria-label={`${formatMoney(bill.amount, currency)}: ajustar pagamento de ${bill.name}`}
           onClick={onAdjust}
           className="min-h-11 shrink-0 rounded-lg transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"
         >

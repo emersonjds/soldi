@@ -13,8 +13,9 @@ import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, Table
 import { useSaveSavings, useSavingsGoal, useSavingsYear } from "@/entities/savings/savings-queries";
 import { cn } from "@/lib/utils";
 import type { Schemas } from "@/shared/api/client";
+import { useCurrency } from "@/shared/lib/currency";
 import { todayISO } from "@/shared/lib/date";
-import { formatBRL, parseBRL } from "@/shared/lib/money";
+import { formatMoney, parseBRL } from "@/shared/lib/money";
 import { formatPct } from "@/shared/lib/percent";
 import { TIER_STYLE, type Tier } from "@/shared/lib/tier";
 import { amountMask } from "@/shared/ui/amount-input";
@@ -59,6 +60,7 @@ const SavedCell = ({ year, row }: { year: number; row: SavingsMonth }) => {
   const [draft, setDraft] = useState<string | null>(null);
   const cancelled = useRef(false);
   const save = useSaveSavings();
+  const currency = useCurrency();
   const name = MONTH_NAMES[row.month - 1];
 
   if (row.saved === null || row.saved === undefined) return <Dash />;
@@ -68,7 +70,7 @@ const SavedCell = ({ year, row }: { year: number; row: SavingsMonth }) => {
     return (
       <button
         type="button"
-        aria-label={`Guardado em ${name}: ${formatBRL(saved)}. Editar`}
+        aria-label={`Guardado em ${name}: ${formatMoney(saved, currency)}. Editar`}
         onClick={() => {
           cancelled.current = false;
           setDraft(saved);

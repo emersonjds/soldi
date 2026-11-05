@@ -28,6 +28,7 @@ export const ANA: Schemas["User"] = {
 };
 
 export const SETTINGS: Schemas["Settings"] = {
+  currency: "BRL",
   opening_balance: "1842.10",
   opening_date: "2026-11-01",
   tier_red: "-500.00",

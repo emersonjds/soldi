@@ -1,7 +1,8 @@
 import { cn } from "@/lib/utils";
-import { formatBRL } from "@/shared/lib/money";
+import { useCurrency } from "@/shared/lib/currency";
+import { formatMoney } from "@/shared/lib/money";
 
-/** An API decimal in BRL with tabular figures; income gets `+` and green, a negative amount red. */
+/** An API decimal in the user's currency with tabular figures; income gets `+` and green, a negative amount red. */
 export const Money = ({
   amount,
   income = false,
@@ -10,15 +11,18 @@ export const Money = ({
   amount: string;
   income?: boolean;
   className?: string;
-}) => (
-  <span
-    className={cn(
-      "whitespace-nowrap tabular-nums",
-      income && "text-income",
-      amount.startsWith("-") && "text-expense",
-      className,
-    )}
-  >
-    {income ? `+ ${formatBRL(amount)}` : formatBRL(amount)}
-  </span>
-);
+}) => {
+  const currency = useCurrency();
+  return (
+    <span
+      className={cn(
+        "whitespace-nowrap tabular-nums",
+        income && "text-income",
+        amount.startsWith("-") && "text-expense",
+        className,
+      )}
+    >
+      {income ? `+ ${formatMoney(amount, currency)}` : formatMoney(amount, currency)}
+    </span>
+  );
+};

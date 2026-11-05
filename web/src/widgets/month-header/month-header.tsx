@@ -2,7 +2,8 @@ import type { KeyboardEvent, ReactNode } from "react";
 
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
-import { formatBRL } from "@/shared/lib/money";
+import { useCurrency } from "@/shared/lib/currency";
+import { formatMoney } from "@/shared/lib/money";
 import type { Tier } from "@/shared/lib/tier";
 import { TierPill } from "@/shared/ui/tier-pill";
 
@@ -87,6 +88,7 @@ const CompactHeader = ({ title, children }: { title: string; children: ReactNode
 );
 
 export const MonthHeader = ({ month, minMonth, balance, tier, title, onMonthChange }: MonthHeaderProps) => {
+  const currency = useCurrency();
   const switcher = (
     <Switcher
       legend="Mês"
@@ -107,7 +109,7 @@ export const MonthHeader = ({ month, minMonth, balance, tier, title, onMonthChan
         <div className="flex flex-col items-center gap-1 lg:items-start">
           <p className="font-semibold text-[11px] text-white/80 uppercase leading-4 tracking-[0.12em]">Saldo hoje</p>
           <p className="font-bold text-[34px] tabular-nums leading-10 tracking-[-0.02em] lg:text-5xl">
-            {formatBRL(balance)}
+            {formatMoney(balance, currency)}
           </p>
         </div>
         <TierPill tier={tier} className="lg:mb-1.5" />

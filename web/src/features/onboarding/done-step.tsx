@@ -9,7 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { meQuery } from "@/entities/user/session";
 import { api, dataOrThrow, hasStatus, type Schemas } from "@/shared/api/client";
-import { formatBRL } from "@/shared/lib/money";
+import { useCurrency } from "@/shared/lib/currency";
+import { formatMoney } from "@/shared/lib/money";
 import { BrandButton } from "@/shared/ui/brand-button";
 
 const dateLabel = new Intl.DateTimeFormat("pt-BR", { timeZone: "UTC" });
@@ -17,6 +18,7 @@ const dateLabel = new Intl.DateTimeFormat("pt-BR", { timeZone: "UTC" });
 export const DoneStep = ({ onboarding, onBack }: { onboarding: Schemas["Onboarding"]; onBack: () => void }) => {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const currency = useCurrency();
   const bills = onboarding.bills?.length ?? 0;
   const save = useMutation({
     mutationFn: async () => dataOrThrow(await api.POST("/api/onboarding", { body: onboarding })),
@@ -38,7 +40,7 @@ export const DoneStep = ({ onboarding, onBack }: { onboarding: Schemas["Onboardi
         <h1 className="font-bold text-[22px] leading-7">Tudo pronto</h1>
         <p className="text-muted-foreground">Seu mês começa com</p>
         <p className="font-bold text-[34px] tabular-nums leading-10 tracking-[-0.02em]">
-          {formatBRL(onboarding.opening_balance)}
+          {formatMoney(onboarding.opening_balance, currency)}
         </p>
         <p className="text-muted-foreground">
           em {dateLabel.format(new Date(onboarding.opening_date))}

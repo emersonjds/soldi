@@ -16,6 +16,12 @@ versions. This file covers the server and the web app together.
 - `Settings` carries `currency`, one of `BRL`, `USD`, `GBP` or `EUR`; `BRL` for every account until changed.
 - `POST /api/onboarding` takes an optional `currency` (`BRL` when absent) and `PATCH /api/settings` changes it. Any other code, lowercase included, answers 422 on `currency`.
 
+### Web
+
+- Onboarding opens with `Qual moeda você usa?`: four cards (Real BRL, Dólar USD, Libra GBP, Euro EUR), Real preselected; four progress dots, `Voltar` from the balance keeps the choice, and the onboarding sends `currency`.
+- Every amount, the `Lançar`/`Pagar` hero prefix and the onboarding summary show the user's currency in pt-BR (`R$ 1.234,56`, `US$ 1.234,56`, `£ 1.234,56`, `€ 1.234,56`); pasting `US$`, `£` or `€` amounts reads them.
+- `Ajustes › Moeda` changes the currency with the same cards (`Moeda salva`).
+
 ### Upgrade notes
 
 - Migration `0012_currency` adds `settings.currency CHAR(3) NOT NULL DEFAULT 'BRL'` with a check limiting it to the four codes; existing users get `BRL`. It runs on start-up with the others; no manual step.
