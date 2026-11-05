@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 const API = process.env.E2E_API_URL ?? "http://localhost:8080";
 
-test("an entry shows up in Para onde vai and a month's savings is kept in Economia", async ({ page, request }) => {
+test("an entry shows up in Para onde vai and Cofrinhos starts empty", async ({ page, request }) => {
   const health = await request.get(`${API}/api/health`).catch(() => null);
   test.skip(!health?.ok(), `Soldi server unreachable at ${API}/api/health; start it to run this flow.`);
   // The dev server compiles both report screens on first visit.
@@ -40,17 +40,8 @@ test("an entry shows up in Para onde vai and a month's savings is kept in Econom
   await mercado.click();
   await expect(page.getByRole("region", { name: "Lançamentos de Mercado" })).toContainText("R$ 80,00");
 
-  await nav.getByRole("link", { name: "Economia" }).click();
-  const monthName = new Intl.DateTimeFormat("pt-BR", { month: "long" }).format(new Date());
-  const name = `${monthName.charAt(0).toUpperCase()}${monthName.slice(1)}`;
-  await page.getByRole("button", { name: new RegExp(`^Guardado em ${name}`) }).click();
-  const field = page.getByRole("textbox", { name: `Guardado em ${name}` });
-  await field.fill("300,00");
-  await field.press("Enter");
-
-  await expect(page.getByText("Salvo")).toBeVisible();
-  const row = page.getByRole("row", { name: new RegExp(`^${name}`) });
-  await expect(row.getByRole("button", { name: /R\$\s300,00/ })).toBeVisible();
-  await expect(row).toContainText("15,0%");
-  await expect(page.getByRole("region", { name: "Guardado no ano" })).toContainText("R$ 300,00");
+  await nav.getByRole("link", { name: "Cofrinhos" }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Cofrinhos" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Guardado" })).toContainText("R$ 0,00");
+  await expect(page.getByText("Nenhum cofrinho ainda. Comece pela reserva de emergência.")).toBeVisible();
 });

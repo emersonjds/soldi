@@ -21,3 +21,6 @@ export const shortDay = (date: string) => {
   const [, month, day] = date.split("-").map(Number);
   return `${day} ${MONTHS[month - 1]}`;
 };
+
+/** `2027-06-30` → `jun 2027`. */
+export const monthYear = (date: string) => `${MONTHS[Number(date.slice(5, 7)) - 1]} ${date.slice(0, 4)}`;

@@ -1,4 +1,4 @@
-import { queryOptions, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { type QueryClient, queryOptions, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, dataOrThrow, okOrThrow, type Schemas } from "@/shared/api/client";
 
@@ -10,6 +10,10 @@ export const categoriesQuery = queryOptions({
 export const useCategories = (kind: Schemas["CategoryKind"]) =>
   useQuery({ ...categoriesQuery, select: (categories) => categories.filter((category) => category.kind === kind) });
 
+// Cofrinhos are the subcategories of Economia; the cofrinho entity owns that key.
+const refresh = (client: QueryClient) =>
+  Promise.all(["categories", "cofrinhos"].map((key) => client.invalidateQueries({ queryKey: [key] })));
+
 /** Shows the new category at once, then refetches the list in the API's order. */
 export const useCreateCategory = () => {
   const client = useQueryClient();
@@ -17,7 +21,7 @@ export const useCreateCategory = () => {
     mutationFn: async (body: Schemas["CreateCategory"]) => dataOrThrow(await api.POST("/api/categories", { body })),
     onSuccess: (created) => {
       client.setQueryData(categoriesQuery.queryKey, (list) => list && [...list, created]);
-      client.invalidateQueries({ queryKey: categoriesQuery.queryKey });
+      void refresh(client);
     },
   });
 };
@@ -48,7 +52,7 @@ export const useUpdateCategory = () => {
       return () => client.setQueryData(queryKey, previous);
     },
     onError: (_error, _body, rollback) => rollback?.(),
-    onSettled: () => client.invalidateQueries({ queryKey }),
+    onSettled: () => refresh(client),
   });
 };
 
@@ -57,7 +61,7 @@ export const useArchiveCategory = () => {
   const client = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => okOrThrow(await api.DELETE("/api/categories/{id}", { params: { path: { id } } })),
-    onSettled: () => client.invalidateQueries({ queryKey: categoriesQuery.queryKey }),
+    onSettled: () => refresh(client),
   });
 };
 

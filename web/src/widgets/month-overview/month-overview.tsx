@@ -5,6 +5,7 @@ import { ArrowDown, ArrowUp, Thermometer, TrendingDown, TrendingUp } from "lucid
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import type { Schemas } from "@/shared/api/client";
+import { positiveAmount } from "@/shared/lib/money";
 import { Money } from "@/shared/ui/money";
 import { ThermometerStrip } from "@/shared/ui/thermometer-strip";
 import { TierPill } from "@/shared/ui/tier-pill";
@@ -118,6 +119,12 @@ const Insight = ({ totals, projected }: { totals: MonthView["totals"]; projected
       )}{" "}
       Com as contas em aberto, seu mês termina em{" "}
       <Money amount={projected} className={cn("font-bold", !projected.startsWith("-") && "text-foreground")} />.
+      {positiveAmount(totals.saved) && (
+        <>
+          {" "}
+          Guardou <Money amount={totals.saved} className="font-bold text-foreground" /> este mês.
+        </>
+      )}
     </>
   );
 };

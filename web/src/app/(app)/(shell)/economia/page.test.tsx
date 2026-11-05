@@ -1,25 +1,52 @@
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Toaster } from "sonner";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Schemas } from "@/shared/api/client";
-import { router, setSearch } from "@/test/next-navigation";
 import { renderWithQuery } from "@/test/render";
-import { problem, SAVINGS, SETTINGS, signedIn } from "@/test/stub-api";
+import {
+  COFRINHO_RESERVA,
+  COFRINHO_SEM_OBJETIVO,
+  COFRINHO_VIAGEM,
+  COFRINHOS,
+  ECONOMIA,
+  MOVEMENTS,
+  problem,
+  RESERVA,
+  signedIn,
+  VIAGEM,
+  WITH_COFRINHOS,
+} from "@/test/stub-api";
 
 import EconomiaPage from "./page";
 
-vi.mock("next/navigation", () => import("@/test/next-navigation"));
-
 type Reply = { status: number; body?: unknown };
 
-const OCTOBER_OPENING = { ...SETTINGS, opening_date: "2026-10-01" };
+const CARRO: Schemas["Cofrinho"] = {
+  ...COFRINHO_VIAGEM,
+  category_id: "c1000000-0000-4000-8000-000000000031",
+  name: "Carro",
+  icon: "car",
+  target: "500.00",
+  balance: "500.00",
+  progress_pct: "100.0",
+  done: true,
+};
+const LOOSE = { ...COFRINHO_SEM_OBJETIVO, balance: "120.00" };
+const EMPTY_VIAGEM = { ...COFRINHO_VIAGEM, balance: "0.00" };
+
+const MOVES = `GET /api/cofrinhos/${RESERVA.id}/movements`;
+const WITHDRAW = `POST /api/cofrinhos/${RESERVA.id}/withdraw`;
 
 const open = (replies: Record<string, Reply> = {}) => {
   const requests = signedIn({
-    "GET /api/settings": { status: 200, body: OCTOBER_OPENING },
-    "GET /api/savings": { status: 200, body: SAVINGS },
+    "GET /api/cofrinhos": {
+      status: 200,
+      body: { ...COFRINHOS, items: [COFRINHO_RESERVA, COFRINHO_VIAGEM, CARRO, LOOSE] },
+    },
+    "GET /api/categories": { status: 200, body: WITH_COFRINHOS },
+    [MOVES]: { status: 200, body: MOVEMENTS },
     ...replies,
   });
   renderWithQuery(
@@ -31,217 +58,294 @@ const open = (replies: Record<string, Reply> = {}) => {
   return requests;
 };
 
-const withMonth = (month: number, rest: Partial<Schemas["SavingsMonth"]>): Schemas["SavingsYear"] => ({
-  ...SAVINGS,
-  months: SAVINGS.months.map((row) => (row.month === month ? { ...row, ...rest } : row)),
-});
+const card = (name: string) => screen.findByRole("button", { name: new RegExp(`^${name}`) });
+const sent = (requests: Request[], method: string) => requests.filter((request) => request.method === method);
+const detail = async (name: string) => {
+  await userEvent.click(await card(name));
+  return screen.findByRole("dialog", { name });
+};
 
-const hero = () => screen.getByRole("region", { name: "Guardado no ano" });
-const row = (name: string) => screen.getByRole("row", { name: new RegExp(`^${name}`) });
-const puts = (requests: Request[]) => requests.filter((request) => request.method === "PUT");
-
-describe("Economia", () => {
+describe("Cofrinhos", () => {
   beforeEach(() => {
+    window.innerWidth = 375;
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date(2026, 10, 5, 12));
-    setSearch("");
-    router.replace.mockClear();
   });
 
-  it("shows the year's savings, its share of income and the progress to the goal", async () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("shows what is saved, this month's share and a card per cofrinho", async () => {
     open();
 
-    expect(screen.getByRole("heading", { level: 1, name: "Economia" })).toBeInTheDocument();
-    expect(
-      await within(await screen.findByRole("region", { name: "Guardado no ano" })).findByText("R$ 500,00"),
-    ).toBeInTheDocument();
-    expect(hero()).toHaveTextContent("5,6% das entradas");
-    expect(hero()).toHaveTextContent("Meta 20%");
-    expect(within(hero()).getByRole("progressbar", { name: "Progresso da meta" })).toHaveAttribute(
-      "aria-valuenow",
-      "27.8",
-    );
+    expect(screen.getByRole("heading", { level: 1, name: "Cofrinhos" })).toBeInTheDocument();
+    const total = await screen.findByRole("region", { name: "Guardado" });
+    expect(total).toHaveTextContent("R$ 1.300,00");
+    expect(total).toHaveTextContent("Este mês +R$ 500,00");
+
+    const reserva = await card("Reserva");
+    expect(reserva).toHaveTextContent("R$ 300,00 de R$ 10.000,00");
+    expect(reserva).toHaveTextContent("Faltam R$ 9.700,00 · R$ 1.212,50/mês até jun 2027");
+    expect(within(reserva).getByRole("progressbar")).toHaveAttribute("aria-valuenow", "3");
+
+    const viagem = await card("Viagem");
+    expect(viagem).toHaveTextContent("R$ 1.000,00");
+    expect(viagem).not.toHaveTextContent(" de ");
+    expect(within(viagem).queryByRole("progressbar")).not.toBeInTheDocument();
+
+    const carro = await card("Carro");
+    expect(carro).toHaveTextContent("Meta batida");
+    expect(carro).not.toHaveTextContent("Faltam");
+    expect(await card("Sem objetivo")).toHaveTextContent("R$ 120,00");
   });
 
-  it("lists the twelve months with a colored dot by share, dashes before the opening and a total", async () => {
-    open();
-
-    await screen.findByRole("region", { name: "Guardado no ano" });
-    expect(within(screen.getByRole("table")).getAllByRole("row")).toHaveLength(14);
-    expect(row("Janeiro")).toHaveTextContent("—");
-    expect(within(row("Janeiro")).queryByRole("button")).not.toBeInTheDocument();
-    expect(row("Novembro")).toHaveTextContent("R$ 5.000,00");
-    expect(
-      within(row("Novembro")).getByRole("button", { name: /^Guardado em Novembro: R\$\s400,00\. Editar$/ }),
-    ).toBeInTheDocument();
-    expect(within(row("Novembro")).getAllByText("8,0%")[0].previousSibling).toHaveClass("bg-tier-yellow");
-    expect(within(row("Outubro")).getAllByText("2,5%")[0].previousSibling).toHaveClass("bg-tier-red");
-    expect(row("Dezembro")).toHaveTextContent("—");
-    expect(row("Total")).toHaveTextContent("R$ 9.000,00");
-    expect(row("Total")).toHaveTextContent("R$ 500,00");
-    expect(row("Total")).toHaveTextContent("5,6%");
-  });
-
-  it("paints a share above 15% green and exactly 15% yellow", async () => {
-    open({ "GET /api/savings": { status: 200, body: withMonth(12, { pct: "15.0" }) } });
-    await screen.findByRole("region", { name: "Guardado no ano" });
-    expect(within(row("Dezembro")).getAllByText("15,0%")[0].previousSibling).toHaveClass("bg-tier-yellow");
-    expect(within(row("Novembro")).getAllByText("8,0%")[0].previousSibling).toHaveClass("bg-tier-yellow");
-  });
-
-  it("paints a share above 15% green", async () => {
-    open({ "GET /api/savings": { status: 200, body: withMonth(12, { pct: "16.2" }) } });
-    await screen.findByRole("region", { name: "Guardado no ano" });
-    expect(within(row("Dezembro")).getAllByText("16,2%")[0].previousSibling).toHaveClass("bg-tier-green");
-  });
-
-  it("edits a month's savings inline, shows it at once and says Salvo", async () => {
-    const saved = withMonth(11, { saved: "650.00", pct: "13.0" });
-    open();
-    await userEvent.click(await screen.findByRole("button", { name: /^Guardado em Novembro/ }));
-    const requests = signedIn({
-      "GET /api/settings": { status: 200, body: OCTOBER_OPENING },
-      "GET /api/savings": { status: 200, body: saved },
-      "PUT /api/savings/2026/11": { status: 200, body: { year: 2026, month: 11, amount: "650.00" } },
+  it("says Sem prazo for a goal without a deadline and a minus this month", async () => {
+    open({
+      "GET /api/cofrinhos": {
+        status: 200,
+        body: {
+          ...COFRINHOS,
+          saved_this_month: "-50.00",
+          items: [{ ...COFRINHO_RESERVA, deadline: null, monthly_suggestion: null }],
+        },
+      },
     });
 
-    const input = screen.getByRole("textbox", { name: "Guardado em Novembro" });
-    expect(input).toHaveValue("400,00");
-    await userEvent.clear(input);
-    await userEvent.type(input, "R$ 650,00{Enter}");
-
-    expect(await screen.findByText("Salvo")).toBeInTheDocument();
-    expect(within(row("Novembro")).getByRole("button", { name: /R\$\s650,00/ })).toBeInTheDocument();
-    expect((await within(row("Novembro")).findAllByText("13,0%"))[0]).toBeInTheDocument();
-    expect(await puts(requests)[0].json()).toEqual({ amount: "650.00" });
+    expect(await card("Reserva")).toHaveTextContent("Faltam R$ 9.700,00 · Sem prazo");
+    expect(screen.getByRole("region", { name: "Guardado" })).toHaveTextContent("Este mês -R$ 50,00");
   });
 
-  it("fills the cents from the right as digits are typed and saves on blur", async () => {
-    const requests = open({
-      "PUT /api/savings/2026/10": { status: 200, body: { year: 2026, month: 10, amount: "1234.50" } },
-    });
-    await userEvent.click(await screen.findByRole("button", { name: /^Guardado em Outubro/ }));
-    const input = screen.getByRole("textbox", { name: "Guardado em Outubro" });
-    await userEvent.clear(input);
-    await userEvent.type(input, "12345");
-    expect(input).toHaveValue("123,45");
-    fireEvent.blur(input);
+  it("starts empty with the reserva suggestion and opens Novo cofrinho under Economia", async () => {
+    open({ "GET /api/cofrinhos": { status: 200, body: { total_saved: "0.00", saved_this_month: "0.00", items: [] } } });
 
-    await waitFor(() => expect(puts(requests)).toHaveLength(1));
-    expect(await puts(requests)[0].json()).toEqual({ amount: "123.45" });
+    expect(await screen.findByText("Nenhum cofrinho ainda. Comece pela reserva de emergência.")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Criar cofrinho" }));
+
+    const sheet = await screen.findByRole("dialog", { name: "Novo cofrinho" });
+    expect(await within(sheet).findByLabelText("Meta")).toBeInTheDocument();
   });
 
-  it("Escape cancels and an unchanged value saves nothing", async () => {
-    const requests = open();
-    await userEvent.click(await screen.findByRole("button", { name: /^Guardado em Novembro/ }));
-    await userEvent.type(screen.getByRole("textbox", { name: "Guardado em Novembro" }), "9{Escape}");
+  it("creates from the header button", async () => {
+    const requests = open({ "POST /api/categories": { status: 201, body: VIAGEM } });
 
-    expect(screen.getByRole("button", { name: /^Guardado em Novembro: R\$\s400,00/ })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Novo cofrinho" }));
+    const sheet = await screen.findByRole("dialog", { name: "Novo cofrinho" });
+    await userEvent.click(await within(sheet).findByRole("button", { name: "Casa" }));
+    await userEvent.click(within(sheet).getByRole("button", { name: "Criar" }));
 
-    await userEvent.click(screen.getByRole("button", { name: /^Guardado em Novembro/ }));
-    await userEvent.type(screen.getByRole("textbox", { name: "Guardado em Novembro" }), "{Enter}");
-    expect(screen.getByRole("button", { name: /^Guardado em Novembro/ })).toBeInTheDocument();
-    expect(puts(requests)).toHaveLength(0);
-  });
-
-  it("refuses an empty amount and puts the old value back when the server fails", async () => {
-    const requests = open({ "PUT /api/savings/2026/11": { status: 500, body: problem(500, "Falhou.") } });
-    await userEvent.click(await screen.findByRole("button", { name: /^Guardado em Novembro/ }));
-    await userEvent.clear(screen.getByRole("textbox", { name: "Guardado em Novembro" }));
-    await userEvent.keyboard("{Enter}");
-
-    expect(await screen.findByText("Informe um valor como 250,00.")).toBeInTheDocument();
-    expect(puts(requests)).toHaveLength(0);
-
-    await userEvent.click(screen.getByRole("button", { name: /^Guardado em Novembro/ }));
-    await userEvent.type(
-      screen.getByRole("textbox", { name: "Guardado em Novembro" }),
-      "{Backspace}{Backspace}{Backspace}{Enter}",
-    );
-
-    expect(await screen.findByText("Não foi possível salvar.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /^Guardado em Novembro: R\$\s400,00/ })).toBeInTheDocument();
-  });
-
-  it("edits the goal inline", async () => {
-    const requests = open({
-      "PATCH /api/settings": { status: 200, body: { ...OCTOBER_OPENING, savings_goal_pct: 15 } },
-    });
-    await userEvent.click(await screen.findByRole("button", { name: "Editar meta" }));
-    const input = screen.getByRole("spinbutton", { name: "Meta (% das entradas)" });
-    expect(input).toHaveValue(20);
-
-    await userEvent.clear(input);
-    await userEvent.type(input, "101");
-    expect(screen.getByRole("button", { name: "Salvar" })).toBeDisabled();
-    expect(screen.getByText("De 1 a 100.")).toBeInTheDocument();
-
-    await userEvent.clear(input);
-    await userEvent.type(input, "15{Enter}");
-
-    await waitFor(() => expect(requests.some((request) => request.method === "PATCH")).toBe(true));
-    const patch = requests.find((request) => request.method === "PATCH");
-    expect(await patch?.json()).toEqual({ savings_goal_pct: 15 });
-    expect(await screen.findByText("Meta salva")).toBeInTheDocument();
-  });
-
-  it("offers a goal when there is none, and Cancelar or Escape closes the editor", async () => {
-    open({ "GET /api/savings": { status: 200, body: { ...SAVINGS, goal_pct: null, goal_progress_pct: null } } });
-
-    expect(await screen.findByText("Sem meta")).toBeInTheDocument();
-    expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "Definir meta" }));
-    expect(screen.getByRole("spinbutton", { name: "Meta (% das entradas)" })).toHaveValue(null);
-    await userEvent.click(screen.getByRole("button", { name: "Cancelar" }));
-    await userEvent.click(screen.getByRole("button", { name: "Definir meta" }));
-    await userEvent.keyboard("{Escape}");
-
-    expect(screen.getByText("Sem meta")).toBeInTheDocument();
-  });
-
-  it("clears the goal when saved empty, and says when it cannot", async () => {
-    const requests = open({ "PATCH /api/settings": { status: 500, body: problem(500, "Falhou.") } });
-    await userEvent.click(await screen.findByRole("button", { name: "Editar meta" }));
-    await userEvent.clear(screen.getByRole("spinbutton", { name: "Meta (% das entradas)" }));
-    await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
-
-    expect(await screen.findByText("Não foi possível salvar a meta.")).toBeInTheDocument();
-    const patch = requests.find((request) => request.method === "PATCH");
-    expect(await patch?.json()).toEqual({ savings_goal_pct: null });
-  });
-
-  it("hides the share of income when the year has none", async () => {
-    open({ "GET /api/savings": { status: 200, body: { ...SAVINGS, pct: null } } });
-
-    await screen.findByRole("region", { name: "Guardado no ano" });
-    expect(hero()).not.toHaveTextContent("das entradas");
+    await waitFor(() => expect(sent(requests, "POST")).toHaveLength(1));
+    expect(await sent(requests, "POST")[0].json()).toMatchObject({ name: "Casa", parent_id: ECONOMIA.id });
   });
 
   it("shows a skeleton while loading, then an error with a retry", async () => {
-    const requests = open({ "GET /api/savings": { status: 500, body: problem(500, "Falhou.") } });
+    const requests = open({ "GET /api/cofrinhos": { status: 500, body: problem(500, "Falhou.") } });
 
     expect(screen.getByRole("status", { name: "Carregando" })).toBeInTheDocument();
     await userEvent.click(await screen.findByRole("button", { name: "Tentar de novo" }));
 
-    await waitFor(() => expect(requests.filter((request) => request.url.includes("/api/savings"))).toHaveLength(2));
+    await waitFor(() => expect(requests.filter((request) => request.url.endsWith("/api/cofrinhos"))).toHaveLength(2));
   });
 
-  it("opens the year in the address, moves with the switcher and stops at the opening year", async () => {
-    setSearch("y=2027");
-    const requests = open();
-
-    expect(await screen.findByText("2027")).toBeInTheDocument();
-    const year = requests.find((request) => request.url.includes("/api/savings"));
-    expect(new URL(year?.url ?? "http://x").searchParams.get("year")).toBe("2027");
-    await userEvent.click(screen.getByRole("button", { name: "Ano anterior" }));
-    expect(router.replace).toHaveBeenLastCalledWith("/economia?y=2026", { scroll: false });
-  });
-
-  it("ignores a malformed year and cannot go before the opening year", async () => {
-    setSearch("y=20x6");
+  it("opens a cofrinho with its deposits and resgates", async () => {
     open();
 
-    expect(await screen.findByText("2026")).toBeInTheDocument();
-    await waitFor(() => expect(screen.getByRole("button", { name: "Ano anterior" })).toBeDisabled());
+    const sheet = await detail("Reserva");
+    const moves = await within(sheet).findByRole("list", { name: "Movimentos" });
+    const rows = within(moves).getAllByRole("listitem");
+    expect(rows).toHaveLength(3);
+    expect(rows[0]).toHaveTextContent("Resgatado");
+    expect(rows[0]).toHaveTextContent("+ R$ 50,00");
+    expect(rows[2]).toHaveTextContent("Guardado");
+    expect(rows[2]).toHaveTextContent("3 nov · Décimo terceiro");
+    expect(rows[2]).toHaveTextContent("R$ 200,00");
+  });
+
+  it("says when nothing went in yet, and when the movements fail", async () => {
+    open({ [MOVES]: { status: 200, body: [] } });
+    expect(await within(await detail("Reserva")).findByText("Nada guardado aqui ainda")).toBeInTheDocument();
+  });
+
+  it("retries the movements", async () => {
+    const requests = open({ [MOVES]: { status: 500, body: problem(500, "Falhou.") } });
+    const sheet = await detail("Reserva");
+    expect(await within(sheet).findByText("Não foi possível carregar os movimentos.")).toBeInTheDocument();
+    await userEvent.click(within(sheet).getByRole("button", { name: "Tentar de novo" }));
+
+    await waitFor(() => expect(requests.filter((request) => request.url.includes("/movements"))).toHaveLength(2));
+  });
+
+  it("closes the cofrinho's sheet and Lançar with Fechar", async () => {
+    open();
+
+    await userEvent.click(within(await detail("Reserva")).getByRole("button", { name: "Fechar" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+
+    await userEvent.click(within(await detail("Reserva")).getByRole("button", { name: "Guardar" }));
+    await userEvent.click(
+      within(await screen.findByRole("dialog", { name: "Lançar" })).getByRole("button", { name: "Fechar" }),
+    );
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+
+  it("Guardar opens Lançar as a Saída in the cofrinho", async () => {
+    open();
+
+    await userEvent.click(within(await detail("Reserva")).getByRole("button", { name: "Guardar" }));
+
+    await screen.findByRole("dialog", { name: "Lançar" });
+    expect(await screen.findByRole("combobox", { name: "Categoria" })).toHaveTextContent("Reserva");
+    expect(screen.getByRole("radio", { name: "Saída" })).toBeChecked();
+  });
+
+  it("Resgatar takes an amount, a day and a note", async () => {
+    const requests = open({ [WITHDRAW]: { status: 201, body: MOVEMENTS[0] } });
+
+    const sheet = await detail("Reserva");
+    await userEvent.click(within(sheet).getByRole("button", { name: "Resgatar" }));
+    await userEvent.click(within(sheet).getByRole("button", { name: "Confirmar resgate" }));
+    expect(within(sheet).getByText("Informe um valor")).toBeInTheDocument();
+    await userEvent.type(within(sheet).getByLabelText("Valor"), "5000");
+    await userEvent.click(within(sheet).getByRole("button", { name: "Ontem" }));
+    await userEvent.type(within(sheet).getByLabelText("Observação"), " Conserto ");
+    await userEvent.click(within(sheet).getByRole("button", { name: "Confirmar resgate" }));
+
+    await waitFor(() => expect(sent(requests, "POST")).toHaveLength(1));
+    expect(await sent(requests, "POST")[0].json()).toEqual({ date: "2026-11-04", amount: "50.00", note: "Conserto" });
+    expect(await screen.findByText("Resgate feito")).toBeInTheDocument();
+    expect(within(sheet).queryByRole("button", { name: "Confirmar resgate" })).not.toBeInTheDocument();
+  });
+
+  it("refuses a resgate above the balance, says what is there, and Cancelar goes back", async () => {
+    open({
+      [WITHDRAW]: {
+        status: 422,
+        body: { ...problem(422, "No."), type: "urn:soldi:error:insufficient-cofrinho" },
+      },
+    });
+
+    const sheet = await detail("Reserva");
+    await userEvent.click(within(sheet).getByRole("button", { name: "Resgatar" }));
+    await userEvent.type(within(sheet).getByLabelText("Valor"), "99900");
+    await userEvent.click(within(sheet).getByRole("button", { name: "Confirmar resgate" }));
+
+    expect(await within(sheet).findByText("Você só tem R$ 300,00 guardado aqui")).toBeInTheDocument();
+    await userEvent.click(within(sheet).getByRole("button", { name: "Cancelar" }));
+    expect(within(sheet).getByRole("button", { name: "Guardar" })).toBeInTheDocument();
+  });
+
+  it("says when a resgate fails otherwise", async () => {
+    open({ [WITHDRAW]: { status: 500, body: problem(500, "Falhou.") } });
+
+    const sheet = await detail("Reserva");
+    await userEvent.click(within(sheet).getByRole("button", { name: "Resgatar" }));
+    await userEvent.type(within(sheet).getByLabelText("Valor"), "100");
+    fireEvent.submit(within(sheet).getByRole("button", { name: "Confirmar resgate" }));
+
+    expect(await within(sheet).findByText("Não foi possível resgatar.")).toBeInTheDocument();
+  });
+
+  it("Editar opens the cofrinho's sheet", async () => {
+    open();
+
+    await userEvent.click(within(await detail("Reserva")).getByRole("button", { name: "Editar" }));
+
+    const sheet = await screen.findByRole("dialog", { name: "Editar cofrinho" });
+    expect(within(sheet).getByLabelText("Nome")).toHaveValue("Reserva");
+  });
+
+  it("Arquivar inside Editar follows the same rule", async () => {
+    const requests = open();
+
+    await userEvent.click(within(await detail("Reserva")).getByRole("button", { name: "Editar" }));
+    await userEvent.click(
+      within(await screen.findByRole("dialog", { name: "Editar cofrinho" })).getByRole("button", { name: "Arquivar" }),
+    );
+
+    expect(await screen.findByText("Resgate tudo antes de arquivar")).toBeInTheDocument();
+    expect(sent(requests, "DELETE")).toHaveLength(0);
+  });
+
+  it("offers neither Editar nor Arquivar on Sem objetivo", async () => {
+    open({ [`GET /api/cofrinhos/${ECONOMIA.id}/movements`]: { status: 200, body: [] } });
+
+    const sheet = await detail("Sem objetivo");
+    expect(within(sheet).getByRole("button", { name: "Guardar" })).toBeInTheDocument();
+    expect(within(sheet).queryByRole("button", { name: "Editar" })).not.toBeInTheDocument();
+    expect(within(sheet).queryByRole("button", { name: "Arquivar" })).not.toBeInTheDocument();
+  });
+
+  it("will not archive a cofrinho that still holds money", async () => {
+    const requests = open();
+
+    await userEvent.click(within(await detail("Reserva")).getByRole("button", { name: "Arquivar" }));
+
+    expect(await screen.findByText("Resgate tudo antes de arquivar")).toBeInTheDocument();
+    expect(sent(requests, "DELETE")).toHaveLength(0);
+  });
+
+  describe("archiving an empty one", () => {
+    const VIAGEM_MOVES = `GET /api/cofrinhos/${VIAGEM.id}/movements`;
+    const replies = (deleted: Reply) => ({
+      "GET /api/cofrinhos": { status: 200, body: { ...COFRINHOS, items: [COFRINHO_RESERVA, EMPTY_VIAGEM] } },
+      [VIAGEM_MOVES]: { status: 200, body: [] },
+      [`DELETE /api/categories/${VIAGEM.id}`]: deleted,
+    });
+
+    beforeEach(() => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+    });
+
+    const archive = async () => {
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+      await user.click(await card("Viagem"));
+      await user.click(
+        within(await screen.findByRole("dialog", { name: "Viagem" })).getByRole("button", { name: "Arquivar" }),
+      );
+      return user;
+    };
+
+    it("hides it at once and archives once Desfazer is gone", async () => {
+      const requests = open(replies({ status: 204 }));
+
+      await archive();
+
+      expect(await screen.findByText("Cofrinho arquivado")).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /^Viagem/ })).not.toBeInTheDocument();
+      act(() => vi.advanceTimersByTime(6000));
+      await waitFor(() => expect(sent(requests, "DELETE")).toHaveLength(1));
+    });
+
+    it("brings it back when undone", async () => {
+      const requests = open(replies({ status: 204 }));
+
+      const user = await archive();
+      await user.click(await screen.findByRole("button", { name: "Desfazer" }));
+
+      expect(await card("Viagem")).toBeInTheDocument();
+      act(() => vi.advanceTimersByTime(6000));
+      expect(sent(requests, "DELETE")).toHaveLength(0);
+    });
+
+    it("brings it back with the reason when the server refuses", async () => {
+      open(replies({ status: 422, body: { ...problem(422, "No."), type: "urn:soldi:error:cofrinho-not-empty" } }));
+
+      await archive();
+      await screen.findByText("Cofrinho arquivado");
+      act(() => vi.advanceTimersByTime(6000));
+
+      expect(await screen.findByText("Resgate tudo antes de arquivar")).toBeInTheDocument();
+      expect(await card("Viagem")).toBeInTheDocument();
+    });
+
+    it("says when archiving fails otherwise", async () => {
+      open(replies({ status: 500, body: problem(500, "Falhou.") }));
+
+      await archive();
+      await screen.findByText("Cofrinho arquivado");
+      act(() => vi.advanceTimersByTime(6000));
+
+      expect(await screen.findByText("Não foi possível arquivar o cofrinho.")).toBeInTheDocument();
+    });
   });
 });

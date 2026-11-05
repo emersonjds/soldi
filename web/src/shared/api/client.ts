@@ -16,22 +16,25 @@ export const api = createClient<paths>({
 export class ApiError extends Error {
   readonly status: number;
   readonly errors: Schemas["FieldError"][];
+  /** The problem `type`, `urn:soldi:error:<slug>` for a business rule. */
+  readonly type?: string;
 
-  constructor(status: number, detail: string, errors: Schemas["FieldError"][] = []) {
+  constructor(status: number, detail: string, errors: Schemas["FieldError"][] = [], type?: string) {
     super(detail);
     this.status = status;
     this.errors = errors;
+    this.type = type;
   }
 }
 
 type Result<Data> = {
   data?: Data;
-  error?: { detail?: string; errors?: Schemas["FieldError"][] };
+  error?: { detail?: string; errors?: Schemas["FieldError"][]; type?: string };
   response: Response;
 };
 
 const problemOf = ({ error, response }: Result<unknown>) =>
-  new ApiError(response.status, error?.detail ?? response.statusText, error?.errors);
+  new ApiError(response.status, error?.detail ?? response.statusText, error?.errors, error?.type);
 
 export const dataOrThrow = <Data>(result: Result<Data>): Data => {
   if (result.data !== undefined) return result.data;
@@ -44,3 +47,7 @@ export const okOrThrow = (result: Result<unknown>) => {
 };
 
 export const hasStatus = (error: unknown, status: number) => error instanceof ApiError && error.status === status;
+
+/** A refused business rule by its slug (`insufficient-cofrinho`). */
+export const hasProblem = (error: unknown, slug: string) =>
+  error instanceof ApiError && error.type === `urn:soldi:error:${slug}`;

@@ -17,10 +17,10 @@ export const transactionsQuery = (month: string, categoryId?: string) =>
 
 export const useTransactions = (month: string, categoryId?: string) => useQuery(transactionsQuery(month, categoryId));
 
-// Balances carry into every later month, so every cached month goes stale; reports and savings read the same rows.
+// Balances carry into every later month, so every cached month goes stale; reports and cofrinhos read the same rows.
 const refresh = (client: QueryClient) =>
   Promise.all(
-    ["month", "transactions", "report", "savings"].map((key) => client.invalidateQueries({ queryKey: [key] })),
+    ["month", "transactions", "report", "cofrinhos"].map((key) => client.invalidateQueries({ queryKey: [key] })),
   );
 
 export const useCreateTransaction = () => {

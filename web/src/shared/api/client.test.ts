@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { ApiError, dataOrThrow, hasStatus, okOrThrow } from "./client";
+import { ApiError, dataOrThrow, hasProblem, hasStatus, okOrThrow } from "./client";
 
 describe("api results", () => {
   it("hands back the data of a success", () => {
@@ -40,5 +40,20 @@ describe("api results", () => {
     expect(hasStatus(new ApiError(401, "Entre."), 401)).toBe(true);
     expect(hasStatus(new ApiError(404, "Sumiu."), 401)).toBe(false);
     expect(hasStatus(new Error("offline"), 401)).toBe(false);
+  });
+
+  it("tells business rules apart by the problem type's slug", () => {
+    const failure = (type?: string) => {
+      try {
+        dataOrThrow({ error: { detail: "No.", type }, response: new Response(null, { status: 422 }) });
+      } catch (error) {
+        return error;
+      }
+    };
+
+    expect(hasProblem(failure("urn:soldi:error:insufficient-cofrinho"), "insufficient-cofrinho")).toBe(true);
+    expect(hasProblem(failure("urn:soldi:error:before-opening-date"), "insufficient-cofrinho")).toBe(false);
+    expect(hasProblem(failure(), "insufficient-cofrinho")).toBe(false);
+    expect(hasProblem(new Error("offline"), "insufficient-cofrinho")).toBe(false);
   });
 });

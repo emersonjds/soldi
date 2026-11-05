@@ -2,12 +2,13 @@
 
 import { useState } from "react";
 
+import { useQuery } from "@tanstack/react-query";
 import { Pencil, ReceiptText, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
-import { useCategoryLabel } from "@/entities/category/categories-query";
+import { categoriesQuery, categoryLabel } from "@/entities/category/categories-query";
 import {
   type Transaction,
   useCreateTransaction,
@@ -31,9 +32,22 @@ const dayLabel = (date: string) => {
   return short;
 };
 
-type Label = (category: Pick<Schemas["Category"], "name" | "parent_id">) => string;
+type Entry = { label: string; caption: string };
 
-const titleOf = (transaction: Transaction, label: Label) => transaction.note || label(transaction.category);
+/** `Economia › Reserva` with `Guardado` for money put away, `Resgate › Reserva` with `Resgatado` for money taken back. */
+const entryOf = (transaction: Transaction, categories: Schemas["Category"][] = []): Entry => {
+  const { category } = transaction;
+  const byId = (id?: string | null) => categories.find((each) => each.id === id);
+  if (transaction.kind === "income" && category.is_savings) {
+    const from = byId(transaction.cofrinho_id)?.name;
+    return { label: from ? `${category.name} › ${from}` : category.name, caption: "Resgatado" };
+  }
+  const label = categoryLabel(category, categories);
+  if (category.is_savings || byId(category.parent_id)?.is_savings) return { label, caption: "Guardado" };
+  return { label, caption: KIND_LABEL[transaction.kind] };
+};
+
+const titleOf = (transaction: Transaction, entry: Entry) => transaction.note || entry.label;
 
 /** Days that have entries and are not in the future, newest first. */
 const groupByDay = (days: Schemas["Day"][], transactions: Transaction[]) => {
@@ -48,7 +62,7 @@ const groupByDay = (days: Schemas["Day"][], transactions: Transaction[]) => {
   return [...groups].map(([date, entries]) => ({ day: byDate.get(date) as Schemas["Day"], entries }));
 };
 
-const Row = ({ transaction, label, onOpen }: { transaction: Transaction; label: Label; onOpen: () => void }) => (
+const Row = ({ transaction, entry, onOpen }: { transaction: Transaction; entry: Entry; onOpen: () => void }) => (
   <li>
     <button
       type="button"
@@ -57,8 +71,8 @@ const Row = ({ transaction, label, onOpen }: { transaction: Transaction; label: 
     >
       <CategoryIcon icon={transaction.category.icon} color={transaction.category.color} />
       <span className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate font-medium text-base">{titleOf(transaction, label)}</span>
-        <span className="text-muted-foreground text-xs">{KIND_LABEL[transaction.kind]}</span>
+        <span className="truncate font-medium text-base">{titleOf(transaction, entry)}</span>
+        <span className="text-muted-foreground text-xs">{entry.caption}</span>
       </span>
       <Money amount={transaction.amount} income={transaction.kind === "income"} className="font-bold text-base" />
     </button>
@@ -74,7 +88,8 @@ type LedgerProps = {
 
 /** `Lançamentos`: entries grouped by day; a row opens Editar / Excluir, and Excluir can be undone for 5 s. */
 export const Ledger = ({ view, transactions, onLaunch, className }: LedgerProps) => {
-  const label = useCategoryLabel();
+  const categories = useQuery(categoriesQuery).data;
+  const describe = (transaction: Transaction) => entryOf(transaction, categories);
   const [selected, setSelected] = useState<Transaction>();
   const [acting, setActing] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -142,7 +157,12 @@ export const Ledger = ({ view, transactions, onLaunch, className }: LedgerProps)
             </h3>
             <ul className="flex flex-col">
               {entries.map((transaction) => (
-                <Row key={transaction.id} label={label} transaction={transaction} onOpen={() => open(transaction)} />
+                <Row
+                  key={transaction.id}
+                  entry={describe(transaction)}
+                  transaction={transaction}
+                  onOpen={() => open(transaction)}
+                />
               ))}
             </ul>
           </div>
@@ -154,9 +174,11 @@ export const Ledger = ({ view, transactions, onLaunch, className }: LedgerProps)
           side="bottom"
           className="mx-auto max-w-lg gap-2 rounded-t-3xl px-4 pt-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))]"
         >
-          <SheetTitle className="pr-12 font-bold text-lg">{selected && titleOf(selected, label)}</SheetTitle>
+          <SheetTitle className="pr-12 font-bold text-lg">
+            {selected && titleOf(selected, describe(selected))}
+          </SheetTitle>
           <SheetDescription>
-            {selected && `${KIND_LABEL[selected.kind]} · ${label(selected.category)}`}
+            {selected && `${describe(selected).caption} · ${describe(selected).label}`}
           </SheetDescription>
           <Button variant="ghost" className="mt-2 min-h-12 justify-start gap-3 text-base" onClick={edit}>
             <Pencil className="size-5" />

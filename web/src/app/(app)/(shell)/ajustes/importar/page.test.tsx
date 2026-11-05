@@ -13,7 +13,7 @@ vi.mock("next/navigation", () => import("@/test/next-navigation"));
 
 type Reply = { status: number; body?: unknown };
 
-const RESULT = { transactions: 51, savings_months: 12, years: [2025, 2026], skipped: [] };
+const RESULT = { transactions: 51, years: [2025, 2026], skipped: [] };
 
 const workbook = () =>
   new File([new Uint8Array(3)], "Termômetro.xlsx", {
@@ -52,7 +52,7 @@ describe("Ajustes › Importar planilha", () => {
     expect(year2025).toHaveTextContent("Entradas+ R$ 60.000,00");
     expect(year2025).toHaveTextContent("ContasR$ 27.114,72");
     expect(year2025).toHaveTextContent("DiárioR$ 18.240,55");
-    expect(year2025).toHaveTextContent("12 meses de economia");
+    expect(year2025).not.toHaveTextContent("economia");
     expect(screen.getByRole("region", { name: "2026" })).toHaveTextContent("9 lançamentos");
     expect(screen.getByText("Células que não deram para ler")).toBeInTheDocument();
     expect(screen.getByText("2026!D14: fórmula que não é soma")).toBeInTheDocument();

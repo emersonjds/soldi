@@ -6,10 +6,10 @@ import { Toaster } from "sonner";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import type { Schemas } from "@/shared/api/client";
-import { renderWithQuery } from "@/test/render";
-import { CATEGORIES, MERCADO, problem, stubApi } from "@/test/stub-api";
+import { renderHookWithQuery, renderWithQuery } from "@/test/render";
+import { CATEGORIES, MERCADO, problem, RESGATE, SALARIO, stubApi } from "@/test/stub-api";
 
-import { CategoryChips } from "./category-chips";
+import { CategoryChips, useCategoryChips } from "./category-chips";
 
 const CARRO: Schemas["Category"] = {
   id: "c1000000-0000-4000-8000-000000000099",
@@ -17,6 +17,7 @@ const CARRO: Schemas["Category"] = {
   kind: "daily",
   icon: "car",
   color: "cat-3",
+  is_savings: false,
 };
 
 const PETS: Schemas["Category"] = {
@@ -25,6 +26,7 @@ const PETS: Schemas["Category"] = {
   kind: "daily",
   icon: "paw-print",
   color: "cat-5",
+  is_savings: false,
 };
 const RACAO: Schemas["Category"] = {
   id: "c1000000-0000-4000-8000-000000000011",
@@ -32,6 +34,7 @@ const RACAO: Schemas["Category"] = {
   kind: "daily",
   icon: "bone",
   color: "cat-5",
+  is_savings: false,
   parent_id: PETS.id,
 };
 /** In the API's order: kind, parent name, then the children by name. */
@@ -209,5 +212,14 @@ describe("CategoryChips", () => {
     await userEvent.type(within(sheet).getByLabelText("Nome"), "Feira{Enter}");
 
     expect(await within(sheet).findByText("Não foi possível criar a categoria.")).toBeInTheDocument();
+  });
+});
+
+describe("useCategoryChips", () => {
+  it("never offers Resgate, which only the Cofrinhos screen writes", async () => {
+    stubApi({ "GET /api/categories": { status: 200, body: [...CATEGORIES, RESGATE] } });
+    const { result } = renderHookWithQuery(() => useCategoryChips("income"));
+
+    await waitFor(() => expect(result.current.data?.map((each) => each.name)).toEqual([SALARIO.name, "Extra"]));
   });
 });

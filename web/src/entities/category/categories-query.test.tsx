@@ -90,4 +90,20 @@ describe("useArchiveCategory", () => {
     expect(requests.filter((request) => request.method === "DELETE")).toHaveLength(1);
     await waitFor(() => expect(gets(requests)).toBe(2));
   });
+
+  it("refreshes the cofrinhos, which are the subcategories of Economia", async () => {
+    stubApi({
+      "GET /api/categories": { status: 200, body: CATEGORIES },
+      [`DELETE /api/categories/${MERCADO.id}`]: { status: 204 },
+      [`PATCH /api/categories/${MERCADO.id}`]: { status: 200, body: MERCADO },
+    });
+    const { result, client } = await loaded();
+    client.setQueryData(["cofrinhos"], {});
+
+    await act(() => result.current.archive.mutateAsync(MERCADO.id));
+    expect(client.getQueryState(["cofrinhos"])?.isInvalidated).toBe(true);
+    client.setQueryData(["cofrinhos"], {});
+    await act(() => result.current.update.mutateAsync({ id: MERCADO.id, target: "100.00" }));
+    expect(client.getQueryState(["cofrinhos"])?.isInvalidated).toBe(true);
+  });
 });

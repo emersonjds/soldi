@@ -11,6 +11,8 @@ import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { cn } from "@/lib/utils";
 import { hasStatus, type Schemas } from "@/shared/api/client";
+import { positiveAmount } from "@/shared/lib/money";
+import { AmountInput } from "@/shared/ui/amount-input";
 import { BrandButton } from "@/shared/ui/brand-button";
 import { categoryBg } from "@/shared/ui/category-icon";
 import { ResponsiveSheet } from "@/shared/ui/responsive-sheet";
@@ -41,6 +43,20 @@ export const COLOR_NAMES: [token: string, name: string][] = [
 const nextColor = (taken: Category[]) =>
   COLOR_NAMES.find(([token]) => !taken.some((category) => category.color === token))?.[0] ?? "cat-12";
 
+/** Names a new cofrinho can start from, with their icons. */
+const SUGGESTIONS: [name: string, icon: string][] = [
+  ["Reserva de emergência", "shield"],
+  ["Viagem", "plane"],
+  ["Carro", "car"],
+  ["Casa", "home"],
+  ["Estudos", "graduation-cap"],
+];
+
+const chip =
+  "inline-flex min-h-11 items-center rounded-full bg-muted px-4 font-medium text-base transition-colors hover:bg-secondary hover:text-primary focus-visible:outline-2 focus-visible:outline-ring";
+
+const field = "h-12 text-base md:text-base";
+
 const problemOf = (error: Error | null, editing: boolean) => {
   if (!error) return undefined;
   if (hasStatus(error, 409)) return "Já existe uma categoria com esse nome";
@@ -65,11 +81,17 @@ const CategoryForm = ({ kind, category, parentId: presetParent, onSaved, onArchi
   const categories = useCategories(kind);
   const list = categories.data ?? [];
   const [color, setColor] = useState(category?.color);
+  const [target, setTarget] = useState(category?.target ?? "");
+  const [deadline, setDeadline] = useState(category?.deadline ?? "");
   const parent = list.find((each) => each.id === parentId);
+  const cofrinho = Boolean(parent?.is_savings);
   const chosenIcon = icon ?? parent?.icon ?? "circle-dashed";
-  const chosenColor = color ?? parent?.color ?? nextColor(list);
+  // Cofrinhos tell themselves apart by color, so a new one takes a free color instead of Economia's.
+  const chosenColor = color ?? (cofrinho ? undefined : parent?.color) ?? nextColor(list);
   const parents = list.filter((each) => !each.parent_id && each.id !== category?.id);
   const hasChildren = Boolean(category) && list.some((each) => each.parent_id === category?.id);
+  // Economia cannot get a parent, and a cofrinho made from Cofrinhos stays under it.
+  const fixedParent = category?.is_savings || list.find((each) => each.id === presetParent)?.is_savings;
   const create = useCreateCategory();
   const update = useUpdateCategory();
   const mutation = category ? update : create;
@@ -83,13 +105,22 @@ const CategoryForm = ({ kind, category, parentId: presetParent, onSaved, onArchi
     event.stopPropagation();
     setSubmitted(true);
     if (!trimmed) return;
+    // Outside Economia the API refuses a goal, so only a cofrinho sends one.
+    const goal = cofrinho ? { target: positiveAmount(target), deadline: deadline || null } : {};
     if (category)
       return update.mutate(
-        { id: category.id, name: trimmed, icon: chosenIcon, color: chosenColor, parent_id: parentId || null },
+        { id: category.id, name: trimmed, icon: chosenIcon, color: chosenColor, parent_id: parentId || null, ...goal },
         { onSuccess: onSaved },
       );
     create.mutate(
-      { name: trimmed, kind, icon: chosenIcon, color: chosenColor, ...(parentId ? { parent_id: parentId } : {}) },
+      {
+        name: trimmed,
+        kind,
+        icon: chosenIcon,
+        color: chosenColor,
+        ...(parentId ? { parent_id: parentId } : {}),
+        ...goal,
+      },
       { onSuccess: onSaved },
     );
   };
@@ -102,15 +133,56 @@ const CategoryForm = ({ kind, category, parentId: presetParent, onSaved, onArchi
           id="category-name"
           value={name}
           onChange={(event) => setName(event.target.value)}
-          placeholder="Ex.: Academia"
+          placeholder={cofrinho ? "Ex.: Viagem" : "Ex.: Academia"}
           maxLength={40}
           autoComplete="off"
-          className="h-12 text-base md:text-base"
+          className={field}
           aria-invalid={Boolean(nameError)}
         />
         {nameError && <FieldError>{nameError}</FieldError>}
       </Field>
-      {!hasChildren && (
+      {cofrinho && !category && (
+        <fieldset aria-label="Sugestões" className="-mt-2 flex flex-wrap gap-2">
+          {SUGGESTIONS.map(([suggestion, suggestedIcon]) => (
+            <button
+              key={suggestion}
+              type="button"
+              className={chip}
+              onClick={() => {
+                setName(suggestion);
+                setIcon(suggestedIcon);
+              }}
+            >
+              {suggestion}
+            </button>
+          ))}
+        </fieldset>
+      )}
+      {cofrinho && (
+        <div className="grid grid-cols-2 gap-3">
+          <Field className="gap-1.5">
+            <FieldLabel htmlFor="category-target">Meta</FieldLabel>
+            <AmountInput
+              id="category-target"
+              value={target}
+              onValueChange={setTarget}
+              placeholder="Opcional"
+              className={field}
+            />
+          </Field>
+          <Field className="gap-1.5">
+            <FieldLabel htmlFor="category-deadline">Prazo</FieldLabel>
+            <Input
+              id="category-deadline"
+              type="date"
+              value={deadline}
+              onChange={(event) => setDeadline(event.target.value)}
+              className={field}
+            />
+          </Field>
+        </div>
+      )}
+      {!hasChildren && !fixedParent && (
         <Field className="gap-1.5">
           <FieldLabel htmlFor="category-parent">Subcategoria de</FieldLabel>
           <NativeSelect
@@ -164,7 +236,7 @@ const CategoryForm = ({ kind, category, parentId: presetParent, onSaved, onArchi
       <BrandButton type="submit" disabled={mutation.isPending}>
         {category ? "Salvar" : "Criar"}
       </BrandButton>
-      {category && (
+      {category && !category.is_savings && (
         <Button
           type="button"
           variant="ghost"
@@ -186,26 +258,40 @@ type CategorySheetProps = Omit<FormProps, "onSaved" | "onArchive"> & {
   onArchive?: (category: Category) => void;
 };
 
-/** `Nova categoria` or `Editar categoria`: name, optional parent, any lucide icon and a palette color; the kind is fixed. */
-export const CategorySheet = ({ open, onOpenChange, onSaved, onArchive, ...form }: CategorySheetProps) => (
-  <ResponsiveSheet
-    open={open}
-    onOpenChange={onOpenChange}
-    title={form.category ? "Editar categoria" : "Nova categoria"}
-    description="Nome, ícone e cor; subcategoria se quiser agrupar."
-  >
-    <CategoryForm
-      key={form.category?.id ?? form.parentId ?? "new"}
-      {...form}
-      onSaved={(category) => {
-        onOpenChange(false);
-        toast.success(form.category ? "Categoria salva" : "Categoria criada");
-        onSaved?.(category);
-      }}
-      onArchive={(category) => {
-        onOpenChange(false);
-        onArchive?.(category);
-      }}
-    />
-  </ResponsiveSheet>
-);
+/**
+ * `Nova categoria` or `Editar categoria`: name, optional parent, any lucide icon and a palette color; the kind is fixed.
+ * Under Economia it is a cofrinho: `Novo cofrinho` or `Editar cofrinho`, with an optional goal and deadline.
+ */
+export const CategorySheet = ({ open, onOpenChange, onSaved, onArchive, ...form }: CategorySheetProps) => {
+  const categories = useCategories(form.kind);
+  const parentId = form.category?.parent_id ?? form.parentId;
+  const cofrinho = Boolean(categories.data?.find((each) => each.id === parentId)?.is_savings);
+  const done = form.category ? "salv" : "criad";
+  const saved = cofrinho ? `Cofrinho ${done}o` : `Categoria ${done}a`;
+  const title = cofrinho
+    ? `${form.category ? "Editar" : "Novo"} cofrinho`
+    : `${form.category ? "Editar" : "Nova"} categoria`;
+
+  return (
+    <ResponsiveSheet
+      open={open}
+      onOpenChange={onOpenChange}
+      title={title}
+      description="Nome, ícone e cor; subcategoria se quiser agrupar."
+    >
+      <CategoryForm
+        key={form.category?.id ?? form.parentId ?? "new"}
+        {...form}
+        onSaved={(category) => {
+          onOpenChange(false);
+          toast.success(saved);
+          onSaved?.(category);
+        }}
+        onArchive={(category) => {
+          onOpenChange(false);
+          onArchive?.(category);
+        }}
+      />
+    </ResponsiveSheet>
+  );
+};
