@@ -4,7 +4,17 @@ import { Toaster } from "sonner";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { renderWithQuery } from "@/test/render";
-import { CATEGORIES, EXTRA, MERCADO, problem, SALARIO, stubApi, TRANSACTIONS } from "@/test/stub-api";
+import {
+  CATEGORIES,
+  EXTRA,
+  MERCADO,
+  problem,
+  RESERVA,
+  SALARIO,
+  stubApi,
+  TRANSACTIONS,
+  WITH_COFRINHOS,
+} from "@/test/stub-api";
 
 import { TransactionSheet } from "./transaction-sheet";
 
@@ -82,6 +92,20 @@ describe("TransactionSheet", () => {
       category_id: EXTRA.id,
       note: "Freela",
     });
+  });
+
+  it("opens as a Saída in the given cofrinho, labelled under Economia", async () => {
+    const { sent } = setup(
+      { initialKind: "bill", initialCategory: RESERVA },
+      { "GET /api/categories": { status: 200, body: WITH_COFRINHOS } },
+    );
+
+    expect(await screen.findByRole("combobox", { name: "Categoria" })).toHaveTextContent("Reserva");
+    expect(screen.getByRole("radio", { name: "Saída" })).toBeChecked();
+    await userEvent.keyboard("200,00");
+    await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
+
+    expect(await sent("POST")).toMatchObject({ amount: "200.00", kind: "bill", category_id: RESERVA.id });
   });
 
   it("takes any date from the date input", async () => {

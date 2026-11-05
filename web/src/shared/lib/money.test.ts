@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { currencySymbol, formatMoney, maskAmount, parseBRL, toInput } from "./money";
+import { currencySymbol, formatMoney, maskAmount, minusMoney, parseBRL, toInput } from "./money";
 
 describe("formatMoney", () => {
   it.each([
@@ -94,5 +94,16 @@ describe("toInput", () => {
     ["-", "-"],
   ])("shows %j as %j", (amount, expected) => {
     expect(toInput(amount)).toBe(expected);
+  });
+});
+
+describe("minusMoney", () => {
+  it.each([
+    ["10000.00", "300.00", "9700.00"],
+    ["1000", "0.5", "999.50"],
+    ["0.10", "0.20", "-0.10"],
+    ["-5.5", "1", "-6.50"],
+  ])("%j minus %j is %j, in cents", (a, b, expected) => {
+    expect(minusMoney(a, b)).toBe(expected);
   });
 });

@@ -1,5 +1,7 @@
 "use client";
 
-const EconomiaPage = () => <h1 className="font-bold text-[22px] leading-7">Cofrinhos</h1>;
+import { CofrinhosView } from "@/widgets/cofrinhos/cofrinhos";
+
+const EconomiaPage = () => <CofrinhosView />;
 
 export default EconomiaPage;

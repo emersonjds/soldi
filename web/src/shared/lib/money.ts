@@ -61,3 +61,16 @@ export const maskAmount = (typed: string, negative = false): string => {
   const padded = digits.replace(/^0+/, "").slice(0, MAX_DIGITS).padStart(3, "0");
   return `${sign}${padded.slice(0, -2)}.${padded.slice(-2)}`;
 };
+
+const cents = (amount: string) => {
+  const [whole, fraction = ""] = amount.replace("-", "").split(".");
+  const value = BigInt(whole + fraction.padEnd(2, "0"));
+  return amount.startsWith("-") ? -value : value;
+};
+
+/** `a − b` of two API decimals, exact in cents. */
+export const minusMoney = (a: string, b: string) => {
+  const value = cents(a) - cents(b);
+  const digits = (value < 0 ? -value : value).toString().padStart(3, "0");
+  return `${value < 0 ? "-" : ""}${digits.slice(0, -2)}.${digits.slice(-2)}`;
+};

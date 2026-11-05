@@ -1,11 +1,21 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Toaster } from "sonner";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Schemas } from "@/shared/api/client";
 import { renderWithQuery } from "@/test/render";
-import { CATEGORIES, COMIDA, MERCADO, problem, stubApi } from "@/test/stub-api";
+import {
+  CATEGORIES,
+  COMIDA,
+  ECONOMIA,
+  MERCADO,
+  problem,
+  RESERVA,
+  stubApi,
+  VIAGEM,
+  WITH_COFRINHOS,
+} from "@/test/stub-api";
 
 import { CategorySheet } from "./category-sheet";
 
@@ -25,7 +35,10 @@ const LIST = [...CATEGORIES, PETS, RACAO, VET];
 
 type Reply = { status: number; body?: unknown };
 
-const open = (props: { category?: Category; parentId?: string }, replies: Record<string, Reply> = {}) => {
+const open = (
+  props: { category?: Category; parentId?: string; kind?: Category["kind"] },
+  replies: Record<string, Reply> = {},
+) => {
   const requests = stubApi({ "GET /api/categories": { status: 200, body: LIST }, ...replies });
   const onSaved = vi.fn();
   const onArchive = vi.fn();
@@ -147,5 +160,94 @@ describe("CategorySheet", () => {
     });
     await userEvent.click(within(sheet).getByRole("button", { name: "Salvar" }));
     expect(await within(sheet).findByText("Não foi possível salvar a categoria.")).toBeInTheDocument();
+  });
+
+  describe("as a cofrinho, under Economia", () => {
+    const cofrinhos = (replies: Record<string, Reply> = {}) => ({
+      "GET /api/categories": { status: 200, body: WITH_COFRINHOS },
+      ...replies,
+    });
+
+    it("creates one with a suggested name, a goal and a deadline", async () => {
+      const created = { ...RESERVA, id: "c1000000-0000-4000-8000-000000000030", name: "Viagem" };
+      const { requests } = open(
+        { kind: "bill", parentId: ECONOMIA.id },
+        cofrinhos({ "POST /api/categories": { status: 201, body: created } }),
+      );
+
+      const sheet = await screen.findByRole("dialog", { name: "Novo cofrinho" });
+      await waitFor(() => expect(within(sheet).getByLabelText("Meta")).toBeInTheDocument());
+      expect(within(sheet).queryByLabelText("Subcategoria de")).not.toBeInTheDocument();
+      for (const name of ["Reserva de emergência", "Viagem", "Carro", "Casa", "Estudos"])
+        expect(within(sheet).getByRole("button", { name })).toBeInTheDocument();
+      await userEvent.click(within(sheet).getByRole("button", { name: "Viagem" }));
+      expect(within(sheet).getByLabelText("Nome")).toHaveValue("Viagem");
+      expect(within(sheet).getByRole("radio", { name: "Ícone plane" })).toBeChecked();
+      await userEvent.type(within(sheet).getByLabelText("Meta"), "500000");
+      fireEvent.change(within(sheet).getByLabelText("Prazo"), { target: { value: "2027-06-30" } });
+      await userEvent.click(within(sheet).getByRole("button", { name: "Criar" }));
+
+      await waitFor(() => expect(requests.some((request) => request.method === "POST")).toBe(true));
+      expect(await requests.find((request) => request.method === "POST")?.json()).toEqual({
+        name: "Viagem",
+        kind: "bill",
+        icon: "plane",
+        color: "cat-1",
+        parent_id: ECONOMIA.id,
+        target: "5000.00",
+        deadline: "2027-06-30",
+      });
+      expect(await screen.findByText("Cofrinho criado")).toBeInTheDocument();
+    });
+
+    it("leaves the goal and the deadline out when they are blank", async () => {
+      const { requests } = open(
+        { kind: "bill", parentId: ECONOMIA.id },
+        cofrinhos({ "POST /api/categories": { status: 201, body: VIAGEM } }),
+      );
+
+      const sheet = await screen.findByRole("dialog", { name: "Novo cofrinho" });
+      await userEvent.type(within(sheet).getByLabelText("Nome"), "Carro novo{Enter}");
+
+      await waitFor(() => expect(requests.some((request) => request.method === "POST")).toBe(true));
+      expect(await requests.find((request) => request.method === "POST")?.json()).toMatchObject({
+        target: null,
+        deadline: null,
+      });
+    });
+
+    it("edits one with its goal filled in and clears the deadline", async () => {
+      const { requests } = open(
+        { kind: "bill", category: RESERVA },
+        cofrinhos({ [`PATCH /api/categories/${RESERVA.id}`]: { status: 200, body: RESERVA } }),
+      );
+
+      const sheet = await screen.findByRole("dialog", { name: "Editar cofrinho" });
+      await waitFor(() => expect(within(sheet).getByLabelText("Meta")).toHaveValue("10.000,00"));
+      expect(within(sheet).getByLabelText("Prazo")).toHaveValue("2027-06-30");
+      expect(within(sheet).queryByRole("button", { name: "Viagem" })).not.toBeInTheDocument();
+      fireEvent.change(within(sheet).getByLabelText("Prazo"), { target: { value: "" } });
+      await userEvent.click(within(sheet).getByRole("button", { name: "Salvar" }));
+
+      expect(await patched(requests)).toEqual({
+        name: "Reserva",
+        icon: "shield",
+        color: "cat-3",
+        parent_id: ECONOMIA.id,
+        target: "10000.00",
+        deadline: null,
+      });
+      expect(await screen.findByText("Cofrinho salvo")).toBeInTheDocument();
+    });
+
+    it("keeps Economia itself at the top and never archives it", async () => {
+      open({ kind: "bill", category: ECONOMIA }, cofrinhos());
+
+      const sheet = await screen.findByRole("dialog", { name: "Editar categoria" });
+      await waitFor(() => expect(within(sheet).getByLabelText("Nome")).toHaveValue("Economia"));
+      expect(within(sheet).queryByLabelText("Subcategoria de")).not.toBeInTheDocument();
+      expect(within(sheet).queryByLabelText("Meta")).not.toBeInTheDocument();
+      expect(within(sheet).queryByRole("button", { name: "Arquivar" })).not.toBeInTheDocument();
+    });
   });
 });

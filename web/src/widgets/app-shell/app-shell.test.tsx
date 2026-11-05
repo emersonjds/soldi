@@ -23,7 +23,7 @@ describe("AppShell", () => {
     const tabs = screen.getByRole("navigation", { name: "Navegação principal" });
     expect(within(tabs).getByRole("link", { name: "Mês" })).toHaveAttribute("aria-current", "page");
     expect(within(tabs).getByRole("link", { name: "Ajustes" })).not.toHaveAttribute("aria-current");
-    for (const label of ["Para onde vai", "Economia"]) {
+    for (const label of ["Para onde vai", "Cofrinhos"]) {
       expect(within(tabs).getByRole("link", { name: label })).toBeInTheDocument();
     }
 

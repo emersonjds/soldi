@@ -29,7 +29,7 @@ import { Wordmark } from "@/shared/ui/wordmark";
 const NAV = [
   { href: "/mes", label: "Mês", icon: CalendarDays },
   { href: "/para-onde-vai", label: "Para onde vai", icon: ChartPie },
-  { href: "/economia", label: "Economia", icon: PiggyBank },
+  { href: "/economia", label: "Cofrinhos", icon: PiggyBank },
   { href: "/ajustes", label: "Ajustes", icon: Settings },
 ] as const;
 
