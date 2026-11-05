@@ -17,12 +17,15 @@ versions. This file covers the server and the web app together.
 - `POST /api/bills/{id}/pay` `{ date, amount? }` records a `bill` entry linked by `recurring_bill_id`, with the bill's amount unless another is given; an optional `?month=YYYY-MM` keeps the date inside the month being paid. A second payment in the same month answers 409 `bill-already-paid`. `DELETE /api/bills/{id}/pay?month=YYYY-MM` removes that month's payment.
 - `GET /api/months/{YYYY-MM}` fills `bills_of_month` (category icon and color, due date clamped to short months, paid, payment entry, overdue) and `projected_balance` is now the month-end balance minus the unpaid bills, with its own tier.
 - Transactions carry `recurring_bill_id`.
+- Web: `Contas do Mês` on Mês, between the summary and the thermometer (top of the main column on desktop): each bill with its due day, amount and a pill. `Pagar` marks it paid in one tap, dated today; `Pago` undoes it (`Pagamento desfeito`); an overdue bill shows `Vencido` on a tinted row with `Venceu dia dd/mm`. A tap on the amount opens the `Pagar` sheet to change the amount or the date. Desktop filters `Todas / Pendentes / Pagas`, footer with the next due date, empty state with `Cadastrar contas`.
+- Web: Ajustes is a grouped list. `Contas fixas` lists active and paused bills, adds and edits them in a sheet (nome, valor, dia, categoria, Ativa) and archives with a 5 s `Desfazer`. `Termômetro` edits the four tier bounds with a live preview of today's balance; `Saldo inicial` edits the opening balance and date. `Categorias` is a placeholder.
 
 ### Changed
 
 - "Today" is the São Paulo calendar day for the month view, overdue bills and the default opening date.
 - Entries of one day list newest first by creation time.
 - A transaction dated before the opening date answers 422 `before-opening-date`.
+- Web: the Projetado figure and the thermometer sentence use the projection: `Com as contas em aberto, seu mês termina em {valor}.`
 - New accounts seed Mercado, Comida fora, Transporte, Saúde, Lazer, Aluguel, Luz, Internet, Cartão, Assinaturas, Salário and Extra with `cat-1` to `cat-12`; the other defaults share the palette in turn. Existing categories keep their colors.
 
 ### Security
