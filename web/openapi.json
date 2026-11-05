@@ -1042,6 +1042,16 @@
               "type": "string"
             },
             "example": "2026-11"
+          },
+          {
+            "name": "category_id",
+            "in": "query",
+            "description": "Only this category's entries; another user's category lists nothing",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
@@ -1059,7 +1069,7 @@
             }
           },
           "400": {
-            "description": "No `month`",
+            "description": "No `month`, or `category_id` is not a UUID",
             "content": {
               "application/problem+json": {
                 "schema": {
