@@ -65,9 +65,9 @@ pub fn apply(current: Settings, patch: UpdateSettings) -> Result<Settings, AppEr
     )?;
     if next
         .savings_goal_pct
-        .is_some_and(|pct| !(0..=100).contains(&pct))
+        .is_some_and(|pct| !(1..=100).contains(&pct))
     {
-        return Err(AppError::invalid("savings_goal_pct", "must be 0 to 100"));
+        return Err(AppError::invalid("savings_goal_pct", "must be 1 to 100"));
     }
     Ok(next)
 }
@@ -174,6 +174,11 @@ mod tests {
             ..UpdateSettings::default()
         };
         assert!(apply(defaults(), negative_goal).is_err());
+        let no_goal = UpdateSettings {
+            savings_goal_pct: Some(Some(0)),
+            ..UpdateSettings::default()
+        };
+        assert_eq!(field(apply(defaults(), no_goal)), "savings_goal_pct");
         let cents = UpdateSettings {
             tier_red: Some(money("-500.001")),
             ..UpdateSettings::default()

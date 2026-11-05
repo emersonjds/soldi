@@ -79,6 +79,10 @@ impl TestApp {
         self.call(Method::POST, uri, Some(body)).await
     }
 
+    pub async fn put(&self, uri: &str, body: Value) -> (StatusCode, Value) {
+        self.call(Method::PUT, uri, Some(body)).await
+    }
+
     pub async fn patch(&self, uri: &str, body: Value) -> (StatusCode, Value) {
         self.call(Method::PATCH, uri, Some(body)).await
     }

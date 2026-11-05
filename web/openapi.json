@@ -951,6 +951,151 @@
         }
       }
     },
+    "/api/savings": {
+      "get": {
+        "tags": [
+          "savings"
+        ],
+        "operationId": "get_savings_year",
+        "parameters": [
+          {
+            "name": "year",
+            "in": "query",
+            "description": "2000 to 2100",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "example": 2026
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Twelve months of income and savings with the year totals and the goal",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavingsYear"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "No `year`, or not a number",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`year` outside 2000..2100",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/savings/{year}/{month}": {
+      "put": {
+        "tags": [
+          "savings"
+        ],
+        "operationId": "set_savings",
+        "parameters": [
+          {
+            "name": "year",
+            "in": "path",
+            "description": "2000 to 2100",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "example": 2026
+          },
+          {
+            "name": "month",
+            "in": "path",
+            "description": "1 to 12",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "example": 11
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetSavings"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The month's savings, created or replaced",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Savings"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`year` or `month` is not a number",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Amount below zero or with more than two places, `year` outside 2000..2100, `month` outside 1..12, or a month before the opening date's month (`month-before-opening`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/settings": {
       "get": {
         "tags": [
@@ -1014,7 +1159,7 @@
             }
           },
           "422": {
-            "description": "Money with more than two places, tiers out of order (names the upper tier of the first pair), goal outside 0..100",
+            "description": "Money with more than two places, tiers out of order (names the upper tier of the first pair), goal outside 1..100",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -1798,6 +1943,120 @@
           }
         }
       },
+      "Savings": {
+        "type": "object",
+        "required": [
+          "year",
+          "month",
+          "amount"
+        ],
+        "properties": {
+          "amount": {
+            "type": "string"
+          },
+          "month": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "year": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "SavingsMonth": {
+        "type": "object",
+        "description": "One month of the year. `income` and `saved` are null before the opening month; `pct` is\n`saved / income` as a percentage with one decimal, null when income is 0.",
+        "required": [
+          "month"
+        ],
+        "properties": {
+          "income": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "month": {
+            "type": "integer",
+            "format": "int32",
+            "description": "1 to 12."
+          },
+          "pct": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "example": "8.4"
+          },
+          "saved": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "SavingsYear": {
+        "type": "object",
+        "description": "`pct` is `total_saved / total_income`; `goal_progress_pct` is `pct / goal_pct`, capped at\n100, null without a goal or without income.",
+        "required": [
+          "year",
+          "months",
+          "total_income",
+          "total_saved"
+        ],
+        "properties": {
+          "goal_pct": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "goal_progress_pct": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "months": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SavingsMonth"
+            }
+          },
+          "pct": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "total_income": {
+            "type": "string"
+          },
+          "total_saved": {
+            "type": "string"
+          },
+          "year": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "SetSavings": {
+        "type": "object",
+        "required": [
+          "amount"
+        ],
+        "properties": {
+          "amount": {
+            "type": "string",
+            "description": "Zero or more, up to two decimal places."
+          }
+        },
+        "additionalProperties": false
+      },
       "Settings": {
         "type": "object",
         "description": "Money is a decimal string with up to two places (`\"-500.00\"`). The tiers are the lower\nbounds of the thermometer colors and are strictly increasing:\n`tier_red < tier_zero < tier_yellow < tier_green`.",
@@ -1823,7 +2082,7 @@
               "null"
             ],
             "format": "int32",
-            "description": "0 to 100."
+            "description": "1 to 100; null is no goal."
           },
           "tier_green": {
             "type": "string"
@@ -2050,7 +2309,9 @@
               "integer",
               "null"
             ],
-            "format": "int32"
+            "format": "int32",
+            "maximum": 100,
+            "minimum": 1
           },
           "tier_green": {
             "type": [

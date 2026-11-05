@@ -41,6 +41,7 @@ pub struct MonthInput {
     pub sums: Vec<DaySum>,
     pub bills: Vec<MonthBill>,
     pub payments: Vec<Payment>,
+    pub saved: Option<Decimal>,
     pub today: NaiveDate,
 }
 
@@ -79,6 +80,7 @@ pub fn month_view(input: MonthInput) -> MonthView {
         sums,
         bills,
         payments,
+        saved,
         today,
     } = input;
     let mut flows: BTreeMap<NaiveDate, Flows> = BTreeMap::new();
@@ -163,7 +165,7 @@ pub fn month_view(input: MonthInput) -> MonthView {
         projected_balance: projected,
         projected_tier: tier(projected, &settings),
         bills_of_month,
-        savings: None,
+        savings: crate::savings::domain::month_savings(saved, totals.income),
     }
 }
 
@@ -270,6 +272,7 @@ mod tests {
             sums,
             bills,
             payments,
+            saved: None,
             today: date(today),
         })
     }
