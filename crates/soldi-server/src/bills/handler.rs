@@ -53,17 +53,26 @@ pub async fn list_bills(
     ))
 }
 
+#[derive(Deserialize)]
+pub struct CreateQuery {
+    transaction_id: Option<Uuid>,
+}
+
 #[utoipa::path(post, path = "/api/bills", tag = "bills", request_body = CreateBill,
+    params(("transaction_id" = Option<Uuid>, Query, description = "A `bill` entry outside any series that becomes this bill's payment, moved to its category")),
     responses(
         (status = 201, body = Bill),
+        (status = 400, body = Problem, content_type = "application/problem+json", description = "`transaction_id` is not a UUID"),
         (status = 401, body = Problem, content_type = "application/problem+json"),
-        (status = 422, body = Problem, content_type = "application/problem+json", description = "Name not 1 to 100 characters, amount not above zero or with more than two places, due day not 1 to 31, or `category_id` not one of the caller's active bill categories")))]
+        (status = 404, body = Problem, content_type = "application/problem+json", description = "The `transaction_id` entry is missing or another user's"),
+        (status = 422, body = Problem, content_type = "application/problem+json", description = "Name not 1 to 100 characters, amount not above zero or with more than two places, due day not 1 to 31, `category_id` not one of the caller's active bill categories, or `cannot-become-bill` when the entry is not a `bill` entry, already a bill's payment, a resgate or a series member")))]
 pub async fn create_bill(
     State(state): State<AppState>,
     user: CurrentUser,
+    QueryParams(query): QueryParams<CreateQuery>,
     JsonBody(input): JsonBody<CreateBill>,
 ) -> Result<(StatusCode, Json<Bill>), AppError> {
-    let bill = service::create(&state.pool, &user, input).await?;
+    let bill = service::create(&state.pool, &user, input, query.transaction_id).await?;
     Ok((StatusCode::CREATED, Json(bill)))
 }
 

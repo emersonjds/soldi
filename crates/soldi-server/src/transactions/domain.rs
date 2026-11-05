@@ -80,12 +80,16 @@ pub fn check_convertible(entry: &Transaction) -> Result<(), AppError> {
     let standalone =
         entry.recurring_bill_id.is_none() && entry.cofrinho_id.is_none() && entry.series.is_none();
     if entry.kind != CategoryKind::Bill || !standalone {
-        return Err(AppError::rule(
-            "cannot-become-bill",
-            "Only a standalone Saída entry can become a recurring bill.",
-        ));
+        return Err(cannot_become_bill());
     }
     Ok(())
+}
+
+pub fn cannot_become_bill() -> AppError {
+    AppError::rule(
+        "cannot-become-bill",
+        "Only a standalone Saída entry can become a recurring bill.",
+    )
 }
 
 pub fn check_kind(kind: CategoryKind, category: &Category) -> Result<(), AppError> {
