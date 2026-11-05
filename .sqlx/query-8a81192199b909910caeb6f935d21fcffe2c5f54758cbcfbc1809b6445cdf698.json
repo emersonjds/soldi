@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM transactions\n         WHERE user_id = $1 AND recurring_bill_id = $2 AND date BETWEEN $3 AND $4",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Date",
+        "Date"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8a81192199b909910caeb6f935d21fcffe2c5f54758cbcfbc1809b6445cdf698"
+}

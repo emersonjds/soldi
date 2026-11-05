@@ -1,26 +1,140 @@
 use axum::Json;
 use axum::extract::State;
+use axum::http::StatusCode;
+use serde::Deserialize;
 use soldi_types::Problem;
-use soldi_types::bills::Bill;
+use soldi_types::bills::{Bill, CreateBill, PayBill, UpdateBill};
+use soldi_types::transactions::Transaction;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
+use uuid::Uuid;
 
 use super::service;
 use crate::AppState;
 use crate::error::AppError;
-use crate::extract::CurrentUser;
+use crate::extract::{CurrentUser, JsonBody, PathParams, QueryParams};
 
 pub fn router() -> OpenApiRouter<AppState> {
-    OpenApiRouter::new().routes(routes!(list_bills))
+    OpenApiRouter::new()
+        .routes(routes!(list_bills, create_bill))
+        .routes(routes!(update_bill, archive_bill))
+        .routes(routes!(pay_bill, unpay_bill))
+}
+
+#[derive(Deserialize)]
+pub struct PayQuery {
+    month: Option<String>,
+}
+
+#[derive(Deserialize)]
+pub struct MonthQuery {
+    month: String,
+}
+
+#[derive(Deserialize)]
+pub struct ListQuery {
+    #[serde(default)]
+    include_inactive: bool,
 }
 
 #[utoipa::path(get, path = "/api/bills", tag = "bills",
+    params(("include_inactive" = Option<bool>, Query, description = "Also list bills with `active: false`")),
     responses(
-        (status = 200, body = Vec<Bill>, description = "Active recurring bills by due day, then name"),
+        (status = 200, body = Vec<Bill>, description = "Unarchived recurring bills by due day, then name"),
+        (status = 400, body = Problem, content_type = "application/problem+json", description = "`include_inactive` is not a boolean"),
         (status = 401, body = Problem, content_type = "application/problem+json")))]
 pub async fn list_bills(
     State(state): State<AppState>,
     user: CurrentUser,
+    QueryParams(query): QueryParams<ListQuery>,
 ) -> Result<Json<Vec<Bill>>, AppError> {
-    Ok(Json(service::list(&state.pool, &user).await?))
+    Ok(Json(
+        service::list(&state.pool, &user, query.include_inactive).await?,
+    ))
+}
+
+#[utoipa::path(post, path = "/api/bills", tag = "bills", request_body = CreateBill,
+    responses(
+        (status = 201, body = Bill),
+        (status = 401, body = Problem, content_type = "application/problem+json"),
+        (status = 422, body = Problem, content_type = "application/problem+json", description = "Name not 1 to 100 characters, amount not above zero or with more than two places, due day not 1 to 31, or `category_id` not one of the caller's active bill categories")))]
+pub async fn create_bill(
+    State(state): State<AppState>,
+    user: CurrentUser,
+    JsonBody(input): JsonBody<CreateBill>,
+) -> Result<(StatusCode, Json<Bill>), AppError> {
+    let bill = service::create(&state.pool, &user, input).await?;
+    Ok((StatusCode::CREATED, Json(bill)))
+}
+
+#[utoipa::path(patch, path = "/api/bills/{id}", tag = "bills", request_body = UpdateBill,
+    params(("id" = Uuid, Path, description = "Bill id")),
+    responses(
+        (status = 200, body = Bill, description = "The bill after the change; absent fields stay as they are"),
+        (status = 401, body = Problem, content_type = "application/problem+json"),
+        (status = 404, body = Problem, content_type = "application/problem+json", description = "Missing, archived or another user's"),
+        (status = 422, body = Problem, content_type = "application/problem+json", description = "Same rules as create, on the bill after the change")))]
+pub async fn update_bill(
+    State(state): State<AppState>,
+    user: CurrentUser,
+    PathParams(id): PathParams<Uuid>,
+    JsonBody(patch): JsonBody<UpdateBill>,
+) -> Result<Json<Bill>, AppError> {
+    Ok(Json(service::update(&state.pool, &user, id, patch).await?))
+}
+
+#[utoipa::path(delete, path = "/api/bills/{id}", tag = "bills",
+    params(("id" = Uuid, Path, description = "Bill id")),
+    responses(
+        (status = 204, description = "Archived: out of every list and month; its payments stay"),
+        (status = 401, body = Problem, content_type = "application/problem+json"),
+        (status = 404, body = Problem, content_type = "application/problem+json", description = "Missing, already archived or another user's")))]
+pub async fn archive_bill(
+    State(state): State<AppState>,
+    user: CurrentUser,
+    PathParams(id): PathParams<Uuid>,
+) -> Result<StatusCode, AppError> {
+    service::archive(&state.pool, &user, id).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[utoipa::path(post, path = "/api/bills/{id}/pay", tag = "bills", request_body = PayBill,
+    params(
+        ("id" = Uuid, Path, description = "Bill id"),
+        ("month" = Option<String>, Query, description = "The month being paid, `YYYY-MM`; `date` must fall in it", example = "2026-11")),
+    responses(
+        (status = 201, body = Transaction, description = "The `bill` entry, linked by `recurring_bill_id`"),
+        (status = 401, body = Problem, content_type = "application/problem+json"),
+        (status = 404, body = Problem, content_type = "application/problem+json", description = "Missing, paused, archived or another user's"),
+        (status = 409, body = Problem, content_type = "application/problem+json", description = "Already paid in the date's month (`bill-already-paid`)"),
+        (status = 422, body = Problem, content_type = "application/problem+json", description = "`date` outside `month`, `month` not `YYYY-MM`, amount not above zero or with more than two places, or a date before the opening date (`before-opening-date`)")))]
+pub async fn pay_bill(
+    State(state): State<AppState>,
+    user: CurrentUser,
+    PathParams(id): PathParams<Uuid>,
+    QueryParams(query): QueryParams<PayQuery>,
+    JsonBody(input): JsonBody<PayBill>,
+) -> Result<(StatusCode, Json<Transaction>), AppError> {
+    let paid = service::pay(&state.pool, &user, id, query.month.as_deref(), input).await?;
+    Ok((StatusCode::CREATED, Json(paid)))
+}
+
+#[utoipa::path(delete, path = "/api/bills/{id}/pay", tag = "bills",
+    params(
+        ("id" = Uuid, Path, description = "Bill id"),
+        ("month" = String, Query, description = "The month, `YYYY-MM`", example = "2026-11")),
+    responses(
+        (status = 204, description = "The month's payment entry is deleted"),
+        (status = 400, body = Problem, content_type = "application/problem+json", description = "No `month`"),
+        (status = 401, body = Problem, content_type = "application/problem+json"),
+        (status = 404, body = Problem, content_type = "application/problem+json", description = "Not paid that month, or another user's bill"),
+        (status = 422, body = Problem, content_type = "application/problem+json", description = "`month` is not `YYYY-MM`")))]
+pub async fn unpay_bill(
+    State(state): State<AppState>,
+    user: CurrentUser,
+    PathParams(id): PathParams<Uuid>,
+    QueryParams(query): QueryParams<MonthQuery>,
+) -> Result<StatusCode, AppError> {
+    service::unpay(&state.pool, &user, id, &query.month).await?;
+    Ok(StatusCode::NO_CONTENT)
 }

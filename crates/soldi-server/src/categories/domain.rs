@@ -48,15 +48,34 @@ pub struct Seed {
     pub color: String,
 }
 
-/// The defaults with their colors, `cat-1..cat-12` round-robin within each kind.
+/// `cat-1..cat-12` in order (docs/design/tokens.md).
+const PALETTE: [&str; 12] = [
+    "Mercado",
+    "Comida fora",
+    "Transporte",
+    "Saúde",
+    "Lazer",
+    "Aluguel",
+    "Luz",
+    "Internet",
+    "Cartão",
+    "Assinaturas",
+    "Salário",
+    "Extra",
+];
+
+/// The defaults with their colors: the palette's twelve take their own token, the others
+/// share the palette round-robin in list order.
 pub fn defaults() -> Vec<Seed> {
-    let mut seen = std::collections::HashMap::new();
+    let mut others = 0;
     DEFAULTS
         .iter()
         .map(|&(name, kind, icon)| {
-            let index = seen.entry(kind).or_insert(0);
-            let color = color_for(*index);
-            *index += 1;
+            let index = PALETTE.iter().position(|&owner| owner == name);
+            let color = color_for(index.unwrap_or_else(|| {
+                others += 1;
+                others - 1
+            }));
             Seed {
                 name,
                 kind,
@@ -130,7 +149,7 @@ mod tests {
         assert_eq!(count(CategoryKind::Daily), 15);
         assert_eq!(
             (seeds[0].name, seeds[0].icon, seeds[0].color.as_str()),
-            ("Salário", "briefcase", "cat-1")
+            ("Salário", "briefcase", "cat-11")
         );
         let outros = seeds.iter().find(|seed| seed.name == "Outros").unwrap();
         assert_eq!(
@@ -143,21 +162,38 @@ mod tests {
     }
 
     #[test]
-    fn colors_go_round_robin_per_kind() {
+    fn the_twelve_named_defaults_own_the_palette_and_the_rest_share_it() {
         let seeds = defaults();
-        let colors = |kind| {
+        let color = |name: &str| {
             seeds
                 .iter()
-                .filter(|seed| seed.kind == kind)
-                .map(|seed| seed.color.clone())
-                .collect::<Vec<_>>()
+                .find(|seed| seed.name == name)
+                .unwrap()
+                .color
+                .clone()
         };
 
-        assert_eq!(colors(CategoryKind::Income), ["cat-1", "cat-2", "cat-3"]);
-        assert_eq!(colors(CategoryKind::Bill)[10], "cat-11");
-        assert_eq!(colors(CategoryKind::Bill)[11], "cat-12");
-        assert_eq!(colors(CategoryKind::Daily)[11], "cat-12");
-        assert_eq!(colors(CategoryKind::Daily)[12], "cat-1");
+        for (name, token) in [
+            ("Mercado", "cat-1"),
+            ("Comida fora", "cat-2"),
+            ("Transporte", "cat-3"),
+            ("Saúde", "cat-4"),
+            ("Lazer", "cat-5"),
+            ("Aluguel", "cat-6"),
+            ("Luz", "cat-7"),
+            ("Internet", "cat-8"),
+            ("Cartão", "cat-9"),
+            ("Assinaturas", "cat-10"),
+            ("Salário", "cat-11"),
+            ("Extra", "cat-12"),
+        ] {
+            assert_eq!(color(name), token, "{name}");
+        }
+        assert_eq!(color("Reembolso"), "cat-1");
+        assert_eq!(color("Condomínio"), "cat-2");
+        assert_eq!(color("Casa"), "cat-12");
+        assert_eq!(color("Pets"), "cat-1");
+        assert_eq!(color("Outros"), "cat-6");
         assert_eq!(color_for(3), "cat-4");
     }
 

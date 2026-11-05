@@ -27,7 +27,7 @@ pub struct MonthQuery {
 #[utoipa::path(get, path = "/api/transactions", tag = "transactions",
     params(("month" = String, Query, description = "The month, `YYYY-MM`", example = "2026-11")),
     responses(
-        (status = 200, body = Vec<Transaction>, description = "The month's entries: newest date first, then by id descending"),
+        (status = 200, body = Vec<Transaction>, description = "The month's entries: newest date first, then newest entry first"),
         (status = 400, body = Problem, content_type = "application/problem+json", description = "No `month`"),
         (status = 401, body = Problem, content_type = "application/problem+json"),
         (status = 422, body = Problem, content_type = "application/problem+json", description = "`month` is not `YYYY-MM`")))]
@@ -44,7 +44,7 @@ pub async fn list_transactions(
         (status = 201, body = Transaction),
         (status = 401, body = Problem, content_type = "application/problem+json"),
         (status = 404, body = Problem, content_type = "application/problem+json", description = "The category is missing, archived or another user's"),
-        (status = 422, body = Problem, content_type = "application/problem+json", description = "Amount not above zero or with more than two places, note over 500 characters, or a kind other than the category's (`category_id`)")))]
+        (status = 422, body = Problem, content_type = "application/problem+json", description = "Amount not above zero or with more than two places, note over 500 characters, a kind other than the category's (`category_id`), or a date before the opening date (`before-opening-date`)")))]
 pub async fn create_transaction(
     State(state): State<AppState>,
     user: CurrentUser,
@@ -60,7 +60,7 @@ pub async fn create_transaction(
         (status = 200, body = Transaction, description = "The entry after the change; absent fields stay as they are"),
         (status = 401, body = Problem, content_type = "application/problem+json"),
         (status = 404, body = Problem, content_type = "application/problem+json", description = "The entry is missing or another user's, or the new category is missing, archived or another user's"),
-        (status = 422, body = Problem, content_type = "application/problem+json", description = "Same rules as create, on the entry after the change")))]
+        (status = 422, body = Problem, content_type = "application/problem+json", description = "Same rules as create, on the entry after the change, `before-opening-date` included")))]
 pub async fn update_transaction(
     State(state): State<AppState>,
     user: CurrentUser,

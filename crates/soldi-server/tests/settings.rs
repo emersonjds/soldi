@@ -12,7 +12,7 @@ async fn sign_up_creates_the_spreadsheet_defaults(pool: PgPool) {
     let (status, settings) = user.get("/api/settings").await;
 
     assert_eq!(status, StatusCode::OK);
-    let today = chrono::Utc::now().date_naive().to_string();
+    let today = soldi_server::today_sao_paulo().to_string();
     assert_eq!(
         settings,
         json!({

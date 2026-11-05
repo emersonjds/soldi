@@ -3,9 +3,13 @@ use sqlx::PgConnection;
 use uuid::Uuid;
 
 pub async fn insert_defaults(conn: &mut PgConnection, user_id: Uuid) -> Result<(), sqlx::Error> {
-    sqlx::query!("INSERT INTO settings (user_id) VALUES ($1)", user_id)
-        .execute(&mut *conn)
-        .await?;
+    sqlx::query!(
+        "INSERT INTO settings (user_id, opening_date) VALUES ($1, $2)",
+        user_id,
+        crate::today_sao_paulo()
+    )
+    .execute(&mut *conn)
+    .await?;
     Ok(())
 }
 

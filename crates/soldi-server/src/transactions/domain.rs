@@ -42,7 +42,12 @@ pub fn check_kind(kind: CategoryKind, category: &Category) -> Result<(), AppErro
     Ok(())
 }
 
-pub fn transaction(id: Uuid, input: CreateTransaction, category: Category) -> Transaction {
+pub fn transaction(
+    id: Uuid,
+    input: CreateTransaction,
+    category: Category,
+    recurring_bill_id: Option<Uuid>,
+) -> Transaction {
     Transaction {
         id,
         date: input.date,
@@ -50,6 +55,7 @@ pub fn transaction(id: Uuid, input: CreateTransaction, category: Category) -> Tr
         kind: input.kind,
         category,
         note: input.note,
+        recurring_bill_id,
     }
 }
 
