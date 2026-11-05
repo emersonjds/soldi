@@ -47,7 +47,7 @@ async fn create_answers_the_entry_with_its_category_and_list_orders_the_month(po
     assert_eq!(created["category"]["id"], salary.as_str());
     assert_eq!(created["category"]["name"], "Salário");
     assert_eq!(created["category"]["icon"], "briefcase");
-    assert_eq!(created["category"]["color"], "cat-1");
+    assert_eq!(created["category"]["color"], "cat-11");
     assert_eq!(created["category"]["kind"], "income");
     let market = spend(&user, "2026-11-05", "12", "Mercado").await;
     assert_eq!(market["note"], Value::Null);

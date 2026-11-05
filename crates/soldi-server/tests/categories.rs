@@ -31,7 +31,7 @@ async fn sign_up_seeds_the_default_categories(pool: PgPool) {
     assert_eq!(kinds[29], "daily");
     let salary = find(&categories, "Salário");
     assert_eq!(salary["icon"], "briefcase");
-    assert_eq!(salary["color"], "cat-1");
+    assert_eq!(salary["color"], "cat-11");
 }
 
 #[sqlx::test]
