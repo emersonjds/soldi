@@ -23,7 +23,7 @@ const MonthScreen = () => {
   const view = useMonth(month);
   const transactions = useTransactions(month);
   const settings = useQuery(settingsQuery);
-  const [launching, setLaunching] = useState(false);
+  const [launching, setLaunching] = useState<"income" | "bill" | "daily" | null>(null);
 
   if (view.isError || transactions.isError)
     return (
@@ -50,7 +50,7 @@ const MonthScreen = () => {
           tier={view.data.balance_today_tier}
           onMonthChange={(next) => router.replace(`/mes?m=${next}`, { scroll: false })}
         />
-        <MonthSummary view={view.data} />
+        <MonthSummary view={view.data} onLaunch={setLaunching} />
       </div>
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3 lg:items-start">
         <BillsOfMonth view={view.data} className="lg:col-span-2 lg:col-start-1 lg:row-start-1" />
@@ -58,11 +58,15 @@ const MonthScreen = () => {
         <Ledger
           view={view.data}
           transactions={transactions.data}
-          onLaunch={() => setLaunching(true)}
+          onLaunch={() => setLaunching("daily")}
           className="lg:col-span-2 lg:col-start-1 lg:row-start-2"
         />
       </div>
-      <TransactionSheet open={launching} onOpenChange={setLaunching} />
+      <TransactionSheet
+        open={launching !== null}
+        onOpenChange={(open) => !open && setLaunching(null)}
+        initialKind={launching ?? "daily"}
+      />
     </div>
   );
 };

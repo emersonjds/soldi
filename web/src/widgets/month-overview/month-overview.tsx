@@ -11,27 +11,61 @@ import { TierPill } from "@/shared/ui/tier-pill";
 
 type MonthView = Schemas["MonthView"];
 
-const Figure = ({ icon, label, children }: { icon: ReactNode; label: string; children: ReactNode }) => (
-  <div className="flex min-w-0 flex-col items-center gap-1 text-center lg:flex-row-reverse lg:items-center lg:justify-between lg:gap-4 lg:rounded-2xl lg:bg-card lg:p-6 lg:text-left lg:shadow-sm">
-    {icon}
-    <div className="flex min-w-0 flex-col items-center gap-1 lg:items-start">
-      <span className="text-muted-foreground text-xs lg:text-sm">{label}</span>
-      {children}
-    </div>
-  </div>
-);
+const figure =
+  "flex min-w-0 flex-col items-center gap-1 text-center lg:flex-row-reverse lg:items-center lg:justify-between lg:gap-4 lg:rounded-2xl lg:bg-card lg:p-6 lg:text-left lg:shadow-sm";
+
+/** With `onClick` the figure is a button that opens Lançar on its kind (`Lançar entrada`, `Lançar saída`). */
+const Figure = ({
+  icon,
+  label,
+  action,
+  onClick,
+  children,
+}: {
+  icon: ReactNode;
+  label: string;
+  action?: string;
+  onClick?: () => void;
+  children: ReactNode;
+}) => {
+  const body = (
+    <>
+      {icon}
+      <div className="flex min-w-0 flex-col items-center gap-1 lg:items-start">
+        <span className="text-muted-foreground text-xs lg:text-sm">{label}</span>
+        {children}
+      </div>
+    </>
+  );
+  if (!onClick) return <div className={figure}>{body}</div>;
+  return (
+    <button
+      type="button"
+      aria-label={action}
+      onClick={onClick}
+      className={cn(
+        figure,
+        "min-h-11 cursor-pointer rounded-xl transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring lg:hover:bg-card lg:hover:shadow-md",
+      )}
+    >
+      {body}
+    </button>
+  );
+};
 
 const circle = "flex size-10 shrink-0 items-center justify-center rounded-full lg:size-12 lg:rounded-xl";
 const amount = "font-bold text-sm leading-5 sm:text-base lg:text-2xl";
 
 /** Entradas, Saídas (bills + daily) and Projetado, overlapping the hero. */
-export const MonthSummary = ({ view }: { view: MonthView }) => (
+export const MonthSummary = ({ view, onLaunch }: { view: MonthView; onLaunch?: (kind: "income" | "bill") => void }) => (
   <section
     aria-label="Resumo do mês"
     className="relative -mt-10 grid grid-cols-3 gap-2 rounded-2xl bg-card p-4 shadow-sm lg:-mt-16 lg:gap-6 lg:bg-transparent lg:p-0 lg:px-6 lg:shadow-none"
   >
     <Figure
       label="Entradas"
+      action="Lançar entrada"
+      onClick={onLaunch && (() => onLaunch("income"))}
       icon={
         <span className={cn(circle, "bg-income-soft text-income")}>
           <ArrowUp className="size-5" aria-hidden />
@@ -42,6 +76,8 @@ export const MonthSummary = ({ view }: { view: MonthView }) => (
     </Figure>
     <Figure
       label="Saídas"
+      action="Lançar saída"
+      onClick={onLaunch && (() => onLaunch("bill"))}
       icon={
         <span className={cn(circle, "bg-expense-soft text-expense")}>
           <ArrowDown className="size-5" aria-hidden />

@@ -105,6 +105,13 @@ describe("Mês", () => {
     expect(await screen.findByRole("dialog", { name: "Lançar" })).toBeInTheDocument();
   });
 
+  it("opens Lançar on Entrada from the Entradas card", async () => {
+    open();
+    await userEvent.click(await screen.findByRole("button", { name: "Lançar entrada" }));
+    expect(await screen.findByRole("dialog", { name: "Lançar" })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "Entrada" })).toBeChecked();
+  });
+
   it("puts Contas do Mês between the summary and the thermometer, and a negative projection in red", async () => {
     open({
       "GET /api/months/2026-11": {
