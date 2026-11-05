@@ -2,7 +2,6 @@
  * How each preference should be saved.
  *
  * "client-cookie"  → write cookie on the browser only.
- * "server-cookie"  → write cookie through a Server Action.
  * "localStorage"   → save only on the client (non-layout stuff).
  * "none"           → no saving, resets on reload.
  *
@@ -21,7 +20,7 @@ import {
 } from "./layout";
 import { THEME_MODE_VALUES, THEME_PRESET_VALUES } from "./theme";
 
-export type PreferencePersistence = "none" | "client-cookie" | "server-cookie" | "localStorage";
+export type PreferencePersistence = "none" | "client-cookie" | "localStorage";
 
 type LayoutPersistence = Exclude<PreferencePersistence, "localStorage">;
 
@@ -55,21 +54,21 @@ function defineSSRPreference<
 export const PREFERENCE_REGISTRY = {
   theme_mode: definePreference({
     values: THEME_MODE_VALUES,
-    defaultValue: "light",
+    defaultValue: "system",
     persistence: "client-cookie",
     attribute: "data-theme-mode",
   }),
 
   theme_preset: definePreference({
     values: THEME_PRESET_VALUES,
-    defaultValue: "default",
+    defaultValue: "soldi",
     persistence: "client-cookie",
     attribute: "data-theme-preset",
   }),
 
   font: definePreference({
     values: fontKeys,
-    defaultValue: "geist",
+    defaultValue: "inter",
     persistence: "client-cookie",
     attribute: "data-font",
   }),

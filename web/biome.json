@@ -34,13 +34,13 @@
     "includes": [
       "**",
       "!.github",
-      "!.husky",
       "!node_modules",
       "!.next",
       "!dist",
       "!out",
       "!src/components/ui",
-      "!src/components/calendar"
+      "!openapi.json",
+      "!src/shared/api/schema.d.ts"
     ]
   },
   "formatter": {

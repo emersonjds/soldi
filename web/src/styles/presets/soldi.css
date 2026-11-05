@@ -1,0 +1,115 @@
+/*
+label: Soldi
+value: soldi
+*/
+
+/* The one place raw color lives (docs/design/tokens.md). Components use the semantic names. */
+:root[data-theme-preset="soldi"] {
+  --radius: 1rem;
+  --background: #fbf8ff;
+  --foreground: #151935;
+  --card: #ffffff;
+  --card-foreground: #151935;
+  --popover: #ffffff;
+  --popover-foreground: #151935;
+  --primary: #5341cd;
+  --primary-foreground: #ffffff;
+  --secondary: #edecff;
+  --secondary-foreground: #151935;
+  --muted: #f4f2ff;
+  --muted-foreground: #474554;
+  --accent: #edecff;
+  --accent-foreground: #151935;
+  --destructive: #ba1a1a;
+  --border: #e6e6ff;
+  --input: #c8c4d7;
+  --ring: #6c5ce7;
+  --chart-1: #6c5ce7;
+  --chart-2: #16a34a;
+  --chart-3: #f59e0b;
+  --chart-4: #dc2626;
+  --chart-5: #06b6d4;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #151935;
+  --sidebar-primary: #5341cd;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #edecff;
+  --sidebar-accent-foreground: #5341cd;
+  --sidebar-border: #e6e6ff;
+  --sidebar-ring: #6c5ce7;
+
+  --brand: #6c5ce7;
+  --brand-hover: #5a4bd1;
+  --brand-foreground: #ffffff;
+  --hero-from: #1e1b4b;
+  --hero-to: #312e81;
+  --hero-foreground: #ffffff;
+  --income: #16a34a;
+  --income-soft: #dcfce7;
+  --expense: #dc2626;
+  --expense-soft: #fee2e2;
+
+  /* Tier: strong color for strips and dots, soft background and AA text for pills. */
+  --tier-red: #dc2626;
+  --tier-red-soft: #fee2e2;
+  --tier-red-foreground: #991b1b;
+  --tier-light-red: #f87171;
+  --tier-light-red-soft: #fee2e2;
+  --tier-light-red-foreground: #b91c1c;
+  --tier-yellow: #f59e0b;
+  --tier-yellow-soft: #fef3c7;
+  --tier-yellow-foreground: #92400e;
+  --tier-light-green: #4ade80;
+  --tier-light-green-soft: #dcfce7;
+  --tier-light-green-foreground: #166534;
+  --tier-green: #16a34a;
+  --tier-green-soft: #dcfce7;
+  --tier-green-foreground: #14532d;
+
+  --shadow-2xs: 0 1px 2px rgb(30 27 75 / 0.04);
+  --shadow-xs: 0 1px 2px rgb(30 27 75 / 0.06);
+  --shadow-sm: 0 4px 16px rgb(30 27 75 / 0.08);
+  --shadow: 0 4px 16px rgb(30 27 75 / 0.08);
+  --shadow-md: 0 8px 24px rgb(30 27 75 / 0.12);
+  --shadow-lg: 0 12px 32px rgb(83 65 205 / 0.28);
+  --shadow-xl: 0 16px 40px rgb(30 27 75 / 0.16);
+  --shadow-2xl: 0 24px 56px rgb(30 27 75 / 0.2);
+}
+
+.dark:root[data-theme-preset="soldi"] {
+  --background: #0f1222;
+  --foreground: #f0efff;
+  --card: #1a1e36;
+  --card-foreground: #f0efff;
+  --popover: #1a1e36;
+  --popover-foreground: #f0efff;
+  --primary: #8b7cf6;
+  --primary-foreground: #0f1222;
+  --secondary: #262a47;
+  --secondary-foreground: #f0efff;
+  --muted: #20243f;
+  --muted-foreground: #b4b2cc;
+  --accent: #262a47;
+  --accent-foreground: #f0efff;
+  --destructive: #f87171;
+  --border: #2c3050;
+  --input: #3a3f63;
+  --sidebar: #141734;
+  --sidebar-foreground: #f0efff;
+  --sidebar-primary: #8b7cf6;
+  --sidebar-primary-foreground: #0f1222;
+  --sidebar-accent: #262a47;
+  --sidebar-accent-foreground: #f0efff;
+  --sidebar-border: #2c3050;
+  --hero-from: #141734;
+  --hero-to: #1e1b4b;
+
+  --shadow-2xs: 0 1px 2px rgb(0 0 0 / 0.2);
+  --shadow-xs: 0 1px 2px rgb(0 0 0 / 0.24);
+  --shadow-sm: 0 4px 16px rgb(0 0 0 / 0.32);
+  --shadow: 0 4px 16px rgb(0 0 0 / 0.32);
+  --shadow-md: 0 8px 24px rgb(0 0 0 / 0.4);
+  --shadow-lg: 0 12px 32px rgb(0 0 0 / 0.48);
+  --shadow-xl: 0 16px 40px rgb(0 0 0 / 0.5);
+  --shadow-2xl: 0 24px 56px rgb(0 0 0 / 0.56);
+}

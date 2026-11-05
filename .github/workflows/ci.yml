@@ -162,6 +162,8 @@ jobs:
       - if: steps.suite.outputs.present == 'true'
         run: pnpm e2e
         working-directory: web
+        env:
+          E2E_BASE_URL: http://localhost:8089
 
   docker:
     runs-on: ubuntu-latest
