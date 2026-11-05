@@ -3,6 +3,8 @@ pub mod bills;
 pub mod categories;
 pub mod months;
 pub mod onboarding;
+pub mod reports;
+pub mod savings;
 pub mod settings;
 pub mod transactions;
 
@@ -60,6 +62,17 @@ pub fn money<S: serde::Serializer>(
     serializer: S,
 ) -> Result<S::Ok, S::Error> {
     serializer.collect_str(&format_args!("{value:.2}"))
+}
+
+/// [`money`] for an optional amount; `None` stays null.
+pub fn optional_money<S: serde::Serializer>(
+    value: &Option<rust_decimal::Decimal>,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    match value {
+        Some(value) => money(value, serializer),
+        None => serializer.serialize_none(),
+    }
 }
 
 /// For PATCH bodies: a missing field deserializes to `None`, an explicit `null` to `Some(None)`.

@@ -7,6 +7,26 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.4.0
+
+> Headline: where the money goes and the savings year
+
+### Added
+
+- `GET /api/reports/categories?month=YYYY-MM`: the month's outflow (bills and daily) and income by category, each with its share of the group's total and its change against the previous month as percentages with one decimal (`delta_pct` null when the previous month had nothing), largest first.
+- `GET /api/transactions?month=YYYY-MM&category_id=…` lists one category's entries; another user's category lists nothing.
+- `GET /api/savings?year=YYYY`: twelve months of income, savings and their percentage (null without income; income and savings null before the opening month), the year totals and the progress towards the savings goal, capped at 100%.
+- `PUT /api/savings/{year}/{month}` `{ amount }` sets a month's savings (zero or more, two decimal places; a month before the opening date answers 422 `month-before-opening`).
+- `GET /api/months/{YYYY-MM}` fills `savings` with the month's amount and its percentage of the month's income.
+
+### Changed
+
+- `savings_goal_pct` in `PATCH /api/settings` is 1 to 100; `null` clears the goal and `0` is refused.
+
+### Upgrade notes
+
+- Migration `0009_savings_goal` turns a stored goal of 0 into no goal and narrows the `settings.savings_goal_pct` check to 1..100. It runs on start-up with the others; no manual step.
+
 ## 0.3.0
 
 > Headline: recurring bills, one-tap payment and the projected balance

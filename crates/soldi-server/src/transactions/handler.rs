@@ -20,23 +20,28 @@ pub fn router() -> OpenApiRouter<AppState> {
 }
 
 #[derive(Deserialize)]
-pub struct MonthQuery {
+pub struct ListQuery {
     month: String,
+    category_id: Option<Uuid>,
 }
 
 #[utoipa::path(get, path = "/api/transactions", tag = "transactions",
-    params(("month" = String, Query, description = "The month, `YYYY-MM`", example = "2026-11")),
+    params(
+        ("month" = String, Query, description = "The month, `YYYY-MM`", example = "2026-11"),
+        ("category_id" = Option<Uuid>, Query, description = "Only this category's entries; another user's category lists nothing")),
     responses(
         (status = 200, body = Vec<Transaction>, description = "The month's entries: newest date first, then newest entry first"),
-        (status = 400, body = Problem, content_type = "application/problem+json", description = "No `month`"),
+        (status = 400, body = Problem, content_type = "application/problem+json", description = "No `month`, or `category_id` is not a UUID"),
         (status = 401, body = Problem, content_type = "application/problem+json"),
         (status = 422, body = Problem, content_type = "application/problem+json", description = "`month` is not `YYYY-MM`")))]
 pub async fn list_transactions(
     State(state): State<AppState>,
     user: CurrentUser,
-    QueryParams(query): QueryParams<MonthQuery>,
+    QueryParams(query): QueryParams<ListQuery>,
 ) -> Result<Json<Vec<Transaction>>, AppError> {
-    Ok(Json(service::list(&state.pool, &user, &query.month).await?))
+    Ok(Json(
+        service::list(&state.pool, &user, &query.month, query.category_id).await?,
+    ))
 }
 
 #[utoipa::path(post, path = "/api/transactions", tag = "transactions", request_body = CreateTransaction,

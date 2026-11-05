@@ -69,6 +69,20 @@ async fn patch_refuses_unordered_tiers_and_numbers_for_money(pool: PgPool) {
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
     assert_eq!(problem["errors"][0]["field"], "opening_balance");
 
+    for goal in [0, 101] {
+        let (status, problem) = user
+            .patch("/api/settings", json!({ "savings_goal_pct": goal }))
+            .await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{goal}");
+        assert_eq!(problem["errors"][0]["field"], "savings_goal_pct");
+    }
+    assert_eq!(
+        user.patch("/api/settings", json!({ "savings_goal_pct": 100 }))
+            .await
+            .1["savings_goal_pct"],
+        100
+    );
+
     assert_eq!(user.get("/api/settings").await.1["tier_yellow"], "1000.00");
 }
 

@@ -12,11 +12,12 @@ pub async fn list(
     pool: &PgPool,
     user: &CurrentUser,
     month: &str,
+    category_id: Option<Uuid>,
 ) -> Result<Vec<Transaction>, AppError> {
     let first = months::domain::parse_month(month)?;
     let mut conn = pool.acquire().await?;
     let to = months::domain::month_end(first);
-    Ok(repo::list(&mut conn, user.id, first, to).await?)
+    Ok(repo::list(&mut conn, user.id, first, to, category_id).await?)
 }
 
 async fn active_category(

@@ -290,3 +290,33 @@ async fn a_bad_month_is_422_a_missing_one_400_and_no_session_401(pool: PgPool) {
         StatusCode::UNAUTHORIZED
     );
 }
+
+#[sqlx::test]
+async fn the_list_filters_by_category_and_a_foreign_category_lists_nothing(pool: PgPool) {
+    let ana = opened(pool.clone(), "ana@example.com").await;
+    let bia = opened(pool, "bia@example.com").await;
+    let market = spend(&ana, "2026-11-05", "12", "Mercado").await;
+    spend(&ana, "2026-11-06", "30", "Comida fora").await;
+    spend(&ana, "2026-10-06", "9", "Mercado").await;
+    spend(&bia, "2026-11-05", "40", "Mercado").await;
+    let category = market["category"]["id"].as_str().unwrap();
+
+    let (status, listed) = ana
+        .get(&format!(
+            "/api/transactions?month=2026-11&category_id={category}"
+        ))
+        .await;
+
+    assert_eq!(status, StatusCode::OK, "{listed}");
+    assert_eq!(listed, json!([market]));
+    let (status, theirs) = bia
+        .get(&format!(
+            "/api/transactions?month=2026-11&category_id={category}"
+        ))
+        .await;
+    assert_eq!((status, theirs), (StatusCode::OK, json!([])));
+    let (status, _) = ana
+        .get("/api/transactions?month=2026-11&category_id=nope")
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+}
