@@ -112,10 +112,12 @@ type TransactionSheetProps = {
   onOpenChange: (open: boolean) => void;
   /** Given: the sheet edits it. */
   transaction?: Transaction;
+  /** Preselected kind when creating; Diário otherwise. */
+  initialKind?: Draft["kind"];
 };
 
 /** `Lançar`: bottom sheet below 1024px, dialog from there; closes at once and the row appears optimistically. */
-export const TransactionSheet = ({ open, onOpenChange, transaction }: TransactionSheetProps) => {
+export const TransactionSheet = ({ open, onOpenChange, transaction, initialKind = "daily" }: TransactionSheetProps) => {
   const create = useCreateTransaction();
   const update = useUpdateTransaction();
   const failed = () => toast.error("Não foi possível salvar o lançamento.");
@@ -138,7 +140,7 @@ export const TransactionSheet = ({ open, onOpenChange, transaction }: Transactio
         date: transaction.date,
         note: transaction.note ?? "",
       }
-    : { kind: "daily", amount: "", date: todayISO(), note: "" };
+    : { kind: initialKind, amount: "", date: todayISO(), note: "" };
 
   return (
     <ResponsiveSheet
@@ -147,7 +149,7 @@ export const TransactionSheet = ({ open, onOpenChange, transaction }: Transactio
       title={transaction ? "Editar lançamento" : "Lançar"}
       description="Entrada, conta ou gasto do dia."
     >
-      <TransactionForm initial={initial} onSave={save} />
+      <TransactionForm key={transaction?.id ?? initialKind} initial={initial} onSave={save} />
     </ResponsiveSheet>
   );
 };
