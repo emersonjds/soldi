@@ -57,6 +57,12 @@ export const useDeleteTransaction = () => {
   return useMutation({
     mutationFn: async (id: string) =>
       okOrThrow(await api.DELETE("/api/transactions/{id}", { params: { path: { id } } })),
+    onMutate: async (id) => {
+      await client.cancelQueries({ queryKey: ["transactions"] });
+      client.setQueriesData<Transaction[]>({ queryKey: ["transactions"] }, (list) =>
+        list?.filter((transaction) => transaction.id !== id),
+      );
+    },
     onSettled: () => refresh(client),
   });
 };

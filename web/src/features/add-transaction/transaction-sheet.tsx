@@ -21,7 +21,7 @@ import {
 import { useIsLg } from "@/hooks/use-lg";
 import { cn } from "@/lib/utils";
 import type { Schemas } from "@/shared/api/client";
-import { todayISO } from "@/shared/lib/date";
+import { todayISO, yesterdayISO } from "@/shared/lib/date";
 import { parseBRL } from "@/shared/lib/money";
 import { BrandButton } from "@/shared/ui/brand-button";
 import { CategoryIcon } from "@/shared/ui/category-icon";
@@ -34,12 +34,6 @@ const KINDS: { value: Kind; label: string }[] = [
   { value: "bill", label: "Conta" },
   { value: "daily", label: "Diário" },
 ];
-
-const yesterdayISO = () => {
-  const date = new Date();
-  date.setDate(date.getDate() - 1);
-  return todayISO(date);
-};
 
 /** A decimal above zero, or `null`. */
 const positiveAmount = (input: string) => {

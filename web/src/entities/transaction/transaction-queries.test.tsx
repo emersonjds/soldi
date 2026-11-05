@@ -106,14 +106,15 @@ describe("useUpdateTransaction and useDeleteTransaction", () => {
     expect(isStale(view, ["month", "2026-11"])).toBe(true);
   });
 
-  it("deletes and refreshes; a refusal surfaces as an error", async () => {
+  it("drops the row at once, deletes and refreshes; a refusal surfaces as an error", async () => {
     stubApi({
-      "DELETE /api/transactions/t1": { status: 204 },
+      [`DELETE /api/transactions/${TRANSACTIONS[1].id}`]: { status: 204 },
       "DELETE /api/transactions/t2": { status: 404, body: problem(404, "Não encontrado.") },
     });
     const view = seeded();
 
-    await act(() => view.result.current.remove.mutateAsync("t1"));
+    await act(() => view.result.current.remove.mutateAsync(TRANSACTIONS[1].id));
+    expect(view.client.getQueryData(transactionsQuery("2026-11").queryKey)).toEqual([TRANSACTIONS[0], TRANSACTIONS[2]]);
     expect(isStale(view, ["transactions", "2026-11"])).toBe(true);
 
     await expect(view.result.current.remove.mutateAsync("t2")).rejects.toThrow("Não encontrado.");
