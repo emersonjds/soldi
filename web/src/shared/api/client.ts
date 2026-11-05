@@ -42,3 +42,5 @@ export const dataOrThrow = <Data>(result: Result<Data>): Data => {
 export const okOrThrow = (result: Result<unknown>) => {
   if (!result.response.ok) throw problemOf(result);
 };
+
+export const hasStatus = (error: unknown, status: number) => error instanceof ApiError && error.status === status;

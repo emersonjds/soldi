@@ -1,3 +1,10 @@
-const OnboardingPage = () => <h1 className="font-bold text-2xl">Quanto você tem hoje?</h1>;
+import { OnboardingWizard } from "@/features/onboarding/onboarding-wizard";
+import { HeroFrame } from "@/shared/ui/hero-frame";
+
+const OnboardingPage = () => (
+  <HeroFrame>
+    <OnboardingWizard />
+  </HeroFrame>
+);
 
 export default OnboardingPage;
