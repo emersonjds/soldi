@@ -127,7 +127,9 @@ pub async fn update(
     }
     if let Some(months) = next.repeat_months {
         let series_id = Uuid::new_v4();
-        repo::set_series(&mut tx, user.id, id, series_id).await?;
+        if !repo::set_series(&mut tx, user.id, id, series_id).await? {
+            return Err(domain::already_repeated());
+        }
         let dates = domain::repeat_dates(next.date, months);
         repo::insert_copies(&mut tx, user.id, &next, series_id, &dates).await?;
     }

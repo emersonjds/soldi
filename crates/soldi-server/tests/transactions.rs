@@ -606,3 +606,63 @@ async fn another_users_series_member_is_not_found(pool: PgPool) {
     assert_eq!(place(&only(&ana, "2027-01").await), (3, 3));
     assert_eq!(only(&ana, "2027-01").await["amount"], "10.00");
 }
+
+#[sqlx::test]
+async fn two_concurrent_repeats_of_one_entry_make_one_series(pool: PgPool) {
+    let user = opened(pool.clone(), "ana@example.com").await;
+    let created = spend(&user, "2026-11-05", "10", "Mercado").await;
+    let entry = uri(&created);
+    let mut lock = pool.begin().await.unwrap();
+    sqlx::query("SELECT 1 FROM transactions WHERE id = $1::uuid FOR UPDATE")
+        .bind(created["id"].as_str().unwrap())
+        .execute(&mut *lock)
+        .await
+        .unwrap();
+
+    let (first, second, ()) = tokio::join!(
+        user.patch(&entry, json!({ "repeat_months": 3 })),
+        user.patch(&entry, json!({ "repeat_months": 3 })),
+        async {
+            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+            lock.commit().await.unwrap();
+        },
+    );
+
+    let mut statuses = [first.0, second.0];
+    statuses.sort();
+    assert_eq!(
+        statuses,
+        [StatusCode::OK, StatusCode::UNPROCESSABLE_ENTITY],
+        "{} {}",
+        first.1,
+        second.1
+    );
+    let refused = if first.0 == StatusCode::OK {
+        second.1
+    } else {
+        first.1
+    };
+    assert_eq!(refused["type"], "urn:soldi:error:already-repeated");
+    assert_eq!(place(&only(&user, "2026-11").await), (1, 3));
+    assert_eq!(place(&only(&user, "2026-12").await), (2, 3));
+    assert_eq!(place(&only(&user, "2027-01").await), (3, 3));
+}
+
+#[sqlx::test]
+async fn members_on_the_same_date_keep_distinct_positions(pool: PgPool) {
+    let user = opened(pool, "ana@example.com").await;
+    repeat(&user, "2026-11-05", "10", 3).await;
+    let second = only(&user, "2026-12").await;
+
+    let (status, moved) = user
+        .patch(
+            &format!("{}?scope=this", uri(&second)),
+            json!({ "date": "2026-11-05" }),
+        )
+        .await;
+
+    assert_eq!(status, StatusCode::OK, "{moved}");
+    let mut places: Vec<(i64, i64)> = month(&user, "2026-11").await.iter().map(place).collect();
+    places.sort();
+    assert_eq!(places, [(1, 3), (2, 3)]);
+}

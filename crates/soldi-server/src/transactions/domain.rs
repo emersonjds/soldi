@@ -67,12 +67,13 @@ pub fn check_repeatable(entry: &Transaction) -> Result<(), AppError> {
         ));
     }
     if entry.series.is_some() {
-        return Err(AppError::rule(
-            "already-repeated",
-            "This entry already repeats.",
-        ));
+        return Err(already_repeated());
     }
     Ok(())
+}
+
+pub fn already_repeated() -> AppError {
+    AppError::rule("already-repeated", "This entry already repeats.")
 }
 
 /// R8: only a `bill` entry outside any series, not yet a bill's payment, becomes a bill.
