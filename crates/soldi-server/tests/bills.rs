@@ -410,3 +410,104 @@ async fn only_the_owner_pays_an_active_bill(pool: PgPool) {
         bill["id"]
     );
 }
+
+async fn entry(app: &TestApp, body: serde_json::Value) -> serde_json::Value {
+    let (status, created) = app.post("/api/transactions", body).await;
+    assert_eq!(status, StatusCode::CREATED, "{created}");
+    created
+}
+
+fn from_entry(entry: &serde_json::Value) -> String {
+    format!(
+        "/api/bills?transaction_id={}",
+        entry["id"].as_str().unwrap()
+    )
+}
+
+#[sqlx::test]
+async fn r8_a_saida_entry_becomes_a_bill_and_its_payment(pool: PgPool) {
+    let ana = TestApp::signed_in(pool, "ana@example.com").await;
+    ana.open_at("0", "2026-11-01").await;
+    let rent = category_id(&ana, "Aluguel").await;
+    let light = category_id(&ana, "Luz").await;
+    let saida = entry(
+        &ana,
+        json!({ "date": "2026-11-07", "amount": "2259.56", "kind": "bill", "category_id": rent }),
+    )
+    .await;
+    let body =
+        json!({ "name": "Aluguel", "amount": "2259.56", "due_day": 7, "category_id": light });
+
+    let (status, bill) = ana.post(&from_entry(&saida), body.clone()).await;
+
+    assert_eq!(status, StatusCode::CREATED, "{bill}");
+    assert_eq!(
+        (&bill["due_day"], &bill["amount"]),
+        (&json!(7), &json!("2259.56"))
+    );
+    let (_, listed) = ana.get("/api/transactions?month=2026-11").await;
+    assert_eq!(listed[0]["recurring_bill_id"], bill["id"]);
+    assert_eq!(listed[0]["category"]["id"], light.to_string());
+    assert_eq!(listed[0]["amount"], "2259.56");
+    let (status, problem) = ana.post(&from_entry(&saida), body).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(problem["type"], "urn:soldi:error:cannot-become-bill");
+    assert_eq!(ana.get("/api/bills").await.1.as_array().unwrap().len(), 1);
+}
+
+#[sqlx::test]
+async fn r8_only_the_callers_standalone_saida_becomes_a_bill(pool: PgPool) {
+    let ana = TestApp::signed_in(pool, "ana@example.com").await;
+    let bia = ana.another_user("bia@example.com").await;
+    ana.open_at("0", "2026-11-01").await;
+    bia.open_at("0", "2026-11-01").await;
+    let rent = category_id(&ana, "Aluguel").await;
+    let market = category_id(&ana, "Mercado").await;
+    let economia = category_id(&ana, "Economia").await;
+    let daily = entry(
+        &ana,
+        json!({ "date": "2026-11-07", "amount": "10", "kind": "daily", "category_id": market }),
+    )
+    .await;
+    let member = entry(
+        &ana,
+        json!({ "date": "2026-11-07", "amount": "10", "kind": "bill", "category_id": rent, "repeat_months": 2 }),
+    )
+    .await;
+    entry(
+        &ana,
+        json!({ "date": "2026-11-01", "amount": "100", "kind": "bill", "category_id": economia }),
+    )
+    .await;
+    let (_, resgate) = ana
+        .post(
+            &format!("/api/cofrinhos/{economia}/withdraw"),
+            json!({ "date": "2026-11-02", "amount": "50" }),
+        )
+        .await;
+    let theirs = entry(
+        &bia,
+        json!({ "date": "2026-11-07", "amount": "10", "kind": "bill", "category_id": category_id(&bia, "Aluguel").await }),
+    )
+    .await;
+    let body = json!({ "name": "Aluguel", "amount": "10", "due_day": 7, "category_id": rent });
+
+    for refused in [&daily, &member, &resgate] {
+        let (status, problem) = ana.post(&from_entry(refused), body.clone()).await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{refused}");
+        assert_eq!(problem["type"], "urn:soldi:error:cannot-become-bill");
+    }
+    for missing in [&theirs, &json!({ "id": Uuid::nil() })] {
+        let (status, _) = ana.post(&from_entry(missing), body.clone()).await;
+        assert_eq!(status, StatusCode::NOT_FOUND);
+    }
+    let (status, _) = ana
+        .post("/api/bills?transaction_id=nope", body.clone())
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(ana.get("/api/bills").await.1, json!([]));
+    assert_eq!(
+        ana.get("/api/transactions?month=2026-11").await.1[0]["recurring_bill_id"],
+        serde_json::Value::Null
+    );
+}

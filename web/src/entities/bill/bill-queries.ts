@@ -6,6 +6,7 @@ import { todayISO } from "@/shared/lib/date";
 
 export type Bill = Schemas["Bill"];
 export type BillOfMonth = Schemas["BillOfMonth"];
+export type BillPrefill = Schemas["CreateBill"];
 
 export const billsQuery = (includeInactive = false) =>
   queryOptions({
@@ -27,8 +28,15 @@ const refresh = (client: QueryClient) =>
 export const useCreateBill = () => {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: async (body: Schemas["CreateBill"]) => dataOrThrow(await api.POST("/api/bills", { body })),
-    onSettled: () => refresh(client),
+    /** `transactionId`: a standalone Saída entry that becomes this bill's payment. */
+    mutationFn: async ({ transactionId, ...body }: Schemas["CreateBill"] & { transactionId?: string }) =>
+      dataOrThrow(await api.POST("/api/bills", { params: { query: { transaction_id: transactionId } }, body })),
+    // The linked entry becomes a bill payment; reports and cofrinhos read it.
+    onSettled: (_bill, _error, { transactionId }) =>
+      Promise.all([
+        refresh(client),
+        ...(transactionId ? ["report", "cofrinhos"] : []).map((key) => client.invalidateQueries({ queryKey: [key] })),
+      ]),
   });
 };
 

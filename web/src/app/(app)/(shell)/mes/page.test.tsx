@@ -255,6 +255,76 @@ describe("Mês", () => {
     });
   });
 
+  it("marks a series member with its place in the series", async () => {
+    open({
+      "GET /api/transactions": {
+        status: 200,
+        body: [{ ...TRANSACTIONS[1], series: { id: "s1", position: 3, total: 12 } }],
+      },
+    });
+
+    const row = await within(await screen.findByRole("region", { name: "Lançamentos" })).findByRole("button", {
+      name: /Aluguel/,
+    });
+    expect(row).toHaveTextContent(/^AluguelSaída · 3\/12/);
+    expect(within(row).queryByRole("img")).not.toBeInTheDocument();
+    expect(within(row).getByText("· 3/12")).toHaveAttribute("aria-hidden", "true");
+    expect(within(row).getByText("3 de 12")).toHaveClass("sr-only");
+  });
+
+  it("asks how much of a series to delete, then deletes without Desfazer", async () => {
+    const member = { ...TRANSACTIONS[1], series: { id: "s1", position: 3, total: 12 } };
+    const requests = open({
+      "GET /api/transactions": { status: 200, body: [member] },
+      [`DELETE /api/transactions/${member.id}`]: { status: 204 },
+    });
+
+    await userEvent.click(
+      await within(await screen.findByRole("region", { name: "Lançamentos" })).findByRole("button", {
+        name: /Aluguel/,
+      }),
+    );
+    const actions = await screen.findByRole("dialog", { name: "Aluguel" });
+    await userEvent.click(within(actions).getByRole("button", { name: "Excluir" }));
+    expect(within(actions).getByRole("radiogroup", { name: "Excluir quais?" })).toBeInTheDocument();
+    expect(within(actions).getByText("Excluir quais?")).toBeVisible();
+    expect(within(actions).getByRole("radio", { name: "Só este" })).toBeChecked();
+    await userEvent.click(within(actions).getByRole("button", { name: "Cancelar" }));
+    expect(requests.some((request) => request.method === "DELETE")).toBe(false);
+
+    await userEvent.click(within(ledger()).getByRole("button", { name: /Aluguel/ }));
+    const again = await screen.findByRole("dialog", { name: "Aluguel" });
+    await userEvent.click(within(again).getByRole("button", { name: "Excluir" }));
+    await userEvent.click(within(again).getByRole("radio", { name: "Este e os próximos" }));
+    await userEvent.click(within(again).getByRole("button", { name: "Excluir" }));
+
+    expect(await screen.findByText("Série excluída")).toBeInTheDocument();
+    const deleted = requests.find((request) => request.method === "DELETE");
+    expect(new URL(deleted?.url ?? "").searchParams.get("scope")).toBe("following");
+    expect(screen.queryByRole("button", { name: "Desfazer" })).not.toBeInTheDocument();
+  });
+
+  it("deletes only this member by default", async () => {
+    const member = { ...TRANSACTIONS[1], series: { id: "s1", position: 1, total: 2 } };
+    open({
+      "GET /api/transactions": { status: 200, body: [member] },
+      [`DELETE /api/transactions/${member.id}`]: { status: 204 },
+    });
+
+    await userEvent.click(
+      await within(await screen.findByRole("region", { name: "Lançamentos" })).findByRole("button", {
+        name: /Aluguel/,
+      }),
+    );
+    const actions = await screen.findByRole("dialog", { name: "Aluguel" });
+    await userEvent.click(within(actions).getByRole("button", { name: "Excluir" }));
+    expect(within(actions).getByRole("radio", { name: "Toda a série" })).not.toBeChecked();
+    await userEvent.click(within(actions).getByRole("button", { name: "Excluir" }));
+
+    expect(await screen.findByText("Lançamento excluído")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Desfazer" })).not.toBeInTheDocument();
+  });
+
   it("opens the entry in the Lançar sheet to edit it", async () => {
     open();
 
@@ -269,5 +339,23 @@ describe("Mês", () => {
 
     const edit = await screen.findByRole("dialog", { name: "Editar lançamento" });
     expect(within(edit).getByLabelText("Valor")).toHaveValue("1.200,00");
+  });
+
+  it("turns the edited Saída into a bill in the bill sheet, prefilled from it", async () => {
+    open();
+
+    await userEvent.click(
+      await within(await screen.findByRole("region", { name: "Lançamentos" })).findByRole("button", {
+        name: /Aluguel/,
+      }),
+    );
+    await userEvent.click(
+      within(await screen.findByRole("dialog", { name: "Aluguel" })).getByRole("button", { name: "Editar" }),
+    );
+    await userEvent.click(await screen.findByRole("button", { name: "Transformar em conta fixa" }));
+
+    const bill = await screen.findByRole("dialog", { name: "Nova conta" });
+    expect(within(bill).getByLabelText("Nome")).toHaveValue("Aluguel");
+    expect(within(bill).getByLabelText("Vence dia")).toHaveValue("4");
   });
 });

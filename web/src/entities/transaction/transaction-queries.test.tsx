@@ -87,6 +87,17 @@ describe("useCreateTransaction", () => {
     expect(await requests[0].json()).toEqual(NEW);
   });
 
+  it("sends repeat_months and refreshes every cached month the series reaches", async () => {
+    const requests = stubApi({ "POST /api/transactions": { status: 201, body: CREATED } });
+    const view = seeded();
+    view.client.setQueryData(transactionsQuery("2027-01").queryKey, []);
+
+    await act(() => view.result.current.create.mutateAsync({ ...NEW, repeat_months: 3, category: MERCADO }));
+
+    expect(await requests[0].json()).toEqual({ ...NEW, repeat_months: 3 });
+    expect(isStale(view, ["transactions", "2027-01"])).toBe(true);
+  });
+
   it("rolls the optimistic row back when the server refuses", async () => {
     stubApi({ "POST /api/transactions": { status: 422, body: problem(422, "amount") } });
     const view = seeded();
@@ -119,6 +130,21 @@ describe("useUpdateTransaction and useDeleteTransaction", () => {
     expect(isStale(view, ["cofrinhos"])).toBe(true);
   });
 
+  it("sends the scope in the query, not in the body", async () => {
+    const requests = stubApi({
+      "PATCH /api/transactions/t1": { status: 200, body: CREATED },
+      "DELETE /api/transactions/t1": { status: 204 },
+    });
+    const view = seeded();
+
+    await act(() => view.result.current.update.mutateAsync({ id: "t1", amount: "40.00", scope: "following" }));
+    await act(() => view.result.current.remove.mutateAsync({ id: "t1", scope: "following" }));
+
+    expect(new URL(requests[0].url).searchParams.get("scope")).toBe("following");
+    expect(await requests[0].json()).toEqual({ amount: "40.00" });
+    expect(new URL(requests[1].url).searchParams.get("scope")).toBe("following");
+  });
+
   it("drops the row at once, deletes and refreshes; a refusal surfaces as an error", async () => {
     stubApi({
       [`DELETE /api/transactions/${TRANSACTIONS[1].id}`]: { status: 204 },
@@ -126,10 +152,10 @@ describe("useUpdateTransaction and useDeleteTransaction", () => {
     });
     const view = seeded();
 
-    await act(() => view.result.current.remove.mutateAsync(TRANSACTIONS[1].id));
+    await act(() => view.result.current.remove.mutateAsync({ id: TRANSACTIONS[1].id }));
     expect(view.client.getQueryData(transactionsQuery("2026-11").queryKey)).toEqual([TRANSACTIONS[0], TRANSACTIONS[2]]);
     expect(isStale(view, ["transactions", "2026-11"])).toBe(true);
 
-    await expect(view.result.current.remove.mutateAsync("t2")).rejects.toThrow("Não encontrado.");
+    await expect(view.result.current.remove.mutateAsync({ id: "t2" })).rejects.toThrow("Não encontrado.");
   });
 });

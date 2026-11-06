@@ -78,6 +78,22 @@ describe("bill edits", () => {
     expect(requests[2].method).toBe("DELETE");
   });
 
+  it("links an entry as the new bill's payment through transaction_id", async () => {
+    const requests = stubApi({ "POST /api/bills": { status: 201, body: BILL_ALUGUEL } });
+    const view = seeded();
+    view.client.setQueryData(["report", "2026-11"], {});
+    view.client.setQueryData(["cofrinhos"], []);
+    const fields = { name: "Aluguel", amount: "2259.56", due_day: 7, category_id: BILL_ALUGUEL.category_id };
+
+    await act(() => view.result.current.create.mutateAsync({ ...fields, transactionId: "t1" }));
+
+    expect(new URL(requests[0].url).searchParams.get("transaction_id")).toBe("t1");
+    expect(await requests[0].json()).toEqual(fields);
+    expect(isStale(view, ["transactions", "2026-11"])).toBe(true);
+    expect(isStale(view, ["report", "2026-11"])).toBe(true);
+    expect(isStale(view, ["cofrinhos"])).toBe(true);
+  });
+
   it("surfaces the server's refusal", async () => {
     stubApi({ "POST /api/bills": { status: 422, body: problem(422, "category_id") } });
     const view = seeded();
