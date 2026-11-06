@@ -5,6 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { renderWithQuery } from "@/test/render";
 import {
+  ALUGUEL,
+  BILL_ALUGUEL,
   CATEGORIES,
   EXTRA,
   MERCADO,
@@ -274,6 +276,98 @@ describe("TransactionSheet", () => {
     setup({ transaction: { ...MEMBER, series: { id: "s1", position: 1, total: 12 } } });
 
     expect(await screen.findByRole("radio", { name: "Toda a série" })).toBeInTheDocument();
+  });
+
+  it("offers Transformar em conta fixa only for a Saída without Repetir", async () => {
+    setup();
+
+    const link = "Transformar em conta fixa";
+    expect(await screen.findByRole("switch", { name: "Repetir" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: link })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("radio", { name: "Saída" }));
+    expect(screen.getByText(/Prefere uma conta fixa, sem data pra acabar\?/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("switch", { name: "Repetir" }));
+    expect(screen.queryByRole("button", { name: link })).not.toBeInTheDocument();
+  });
+
+  it("launches the Saída, then turns it into a bill prefilled from it", async () => {
+    const { requests, onOpenChange } = setup(
+      {},
+      {
+        "POST /api/transactions": { status: 201, body: ALUGUEL_ROW },
+        "POST /api/bills": { status: 201, body: BILL_ALUGUEL },
+      },
+    );
+
+    await userEvent.click(await screen.findByRole("radio", { name: "Saída" }));
+    expect(await screen.findByRole("combobox", { name: "Categoria" })).toHaveTextContent("Aluguel");
+    await userEvent.type(screen.getByLabelText("Valor"), "120000");
+    await userEvent.click(screen.getByRole("button", { name: "Transformar em conta fixa" }));
+
+    const bill = await screen.findByRole("dialog", { name: "Nova conta" });
+    expect(within(bill).getByLabelText("Nome")).toHaveValue("Aluguel");
+    expect(within(bill).getByLabelText("Vence dia")).toHaveValue("5");
+    await userEvent.click(within(bill).getByRole("button", { name: "Salvar" }));
+
+    expect(await screen.findByText("Conta fixa criada")).toBeInTheDocument();
+    const posts = requests.filter((request) => request.method === "POST");
+    expect(posts.map((request) => new URL(request.url).pathname)).toEqual(["/api/transactions", "/api/bills"]);
+    expect(await posts[0].json()).toMatchObject({ amount: "1200.00", kind: "bill", category_id: ALUGUEL.id });
+    expect(new URL(posts[1].url).searchParams.get("transaction_id")).toBe(ALUGUEL_ROW.id);
+    expect(await posts[1].json()).toEqual({ name: "Aluguel", amount: "1200.00", due_day: 5, category_id: ALUGUEL.id });
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it("says the entry was launched when the bill is refused", async () => {
+    setup(
+      { initialKind: "bill" },
+      {
+        "POST /api/transactions": { status: 201, body: ALUGUEL_ROW },
+        "POST /api/bills": { status: 422, body: problem(422, "cannot-become-bill") },
+      },
+    );
+
+    await userEvent.type(await screen.findByLabelText("Valor"), "100");
+    await userEvent.type(screen.getByLabelText("Observação"), "Internet");
+    await userEvent.click(screen.getByRole("button", { name: "Transformar em conta fixa" }));
+    const bill = await screen.findByRole("dialog", { name: "Nova conta" });
+    expect(within(bill).getByLabelText("Nome")).toHaveValue("Internet");
+    await userEvent.click(within(bill).getByRole("button", { name: "Salvar" }));
+
+    expect(await screen.findByText("Lançado, mas a conta fixa não foi criada.")).toBeInTheDocument();
+  });
+
+  it("does not ask for a bill when the launch itself fails", async () => {
+    const { requests } = setup(
+      { initialKind: "bill" },
+      { "POST /api/transactions": { status: 422, body: problem(422, "amount") } },
+    );
+
+    await userEvent.type(await screen.findByLabelText("Valor"), "100");
+    await userEvent.click(screen.getByRole("button", { name: "Transformar em conta fixa" }));
+    await userEvent.click(
+      within(await screen.findByRole("dialog", { name: "Nova conta" })).getByRole("button", { name: "Salvar" }),
+    );
+
+    expect(await screen.findByText("Não foi possível salvar o lançamento.")).toBeInTheDocument();
+    expect(requests.some((request) => request.url.includes("/api/bills"))).toBe(false);
+  });
+
+  it("turns an existing Saída into a bill with the bills call only", async () => {
+    const { requests } = setup(
+      { transaction: ALUGUEL_ROW },
+      { "POST /api/bills": { status: 422, body: problem(422, "cannot-become-bill") } },
+    );
+
+    await userEvent.click(await screen.findByRole("button", { name: "Transformar em conta fixa" }));
+    await userEvent.click(
+      within(await screen.findByRole("dialog", { name: "Nova conta" })).getByRole("button", { name: "Salvar" }),
+    );
+
+    expect(await screen.findByText("Não foi possível criar a conta fixa.")).toBeInTheDocument();
+    const posts = requests.filter((request) => request.method === "POST");
+    expect(posts).toHaveLength(1);
+    expect(new URL(posts[0].url).searchParams.get("transaction_id")).toBe(ALUGUEL_ROW.id);
   });
 
   it("is a centered dialog from 1024px", async () => {

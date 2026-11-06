@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { useCreateBill } from "@/entities/bill/bill-queries";
 import { CategoryChips, useCategoryChips } from "@/entities/category/category-chips";
 import { ScopeRadio } from "@/entities/transaction/scope-radio";
 import {
@@ -17,6 +18,7 @@ import {
   useCreateTransaction,
   useUpdateTransaction,
 } from "@/entities/transaction/transaction-queries";
+import { EditBillSheet } from "@/features/edit-bill/edit-bill-sheet";
 import type { Schemas } from "@/shared/api/client";
 import { useCurrency } from "@/shared/lib/currency";
 import { monthYear, todayISO } from "@/shared/lib/date";
@@ -61,10 +63,12 @@ const TransactionForm = ({
   initial,
   transaction,
   onSave,
+  onConvert,
 }: {
   initial: Draft;
   transaction?: Transaction;
   onSave: (fields: NewTransaction, scope?: Scope) => void;
+  onConvert: (fields: NewTransaction) => void;
 }) => {
   const [draft, setDraft] = useState(initial);
   const [submitted, setSubmitted] = useState(false);
@@ -79,23 +83,30 @@ const TransactionForm = ({
 
   const set = (patch: Partial<Draft>) => setDraft((current) => ({ ...current, ...patch }));
 
-  const submit = (event: FormEvent) => {
-    event.preventDefault();
+  const fields = (): NewTransaction | undefined => {
     setSubmitted(true);
     if (!amount || !category || (draft.repeat && !monthsValid)) return;
     const note = draft.note.trim();
-    onSave(
-      {
-        date: draft.date,
-        amount,
-        kind: draft.kind,
-        category_id: category.id,
-        note: note || null,
-        repeat_months: draft.repeat ? months : undefined,
-        category,
-      },
-      series ? draft.scope : undefined,
-    );
+    return {
+      date: draft.date,
+      amount,
+      kind: draft.kind,
+      category_id: category.id,
+      note: note || null,
+      repeat_months: draft.repeat ? months : undefined,
+      category,
+    };
+  };
+
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    const valid = fields();
+    if (valid) onSave(valid, series ? draft.scope : undefined);
+  };
+
+  const convert = () => {
+    const valid = fields();
+    if (valid) onConvert(valid);
   };
 
   return (
@@ -203,6 +214,18 @@ const TransactionForm = ({
               )}
             </>
           )}
+          {draft.kind === "bill" && !draft.repeat && (
+            <p className="text-muted-foreground text-sm">
+              Prefere uma conta fixa, sem data pra acabar?{" "}
+              <button
+                type="button"
+                onClick={convert}
+                className="inline-flex min-h-11 items-center font-semibold text-primary underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring"
+              >
+                Transformar em conta fixa
+              </button>
+            </p>
+          )}
         </div>
       )}
 
@@ -251,6 +274,8 @@ export const TransactionSheet = ({
 }: TransactionSheetProps) => {
   const create = useCreateTransaction();
   const update = useUpdateTransaction();
+  const createBill = useCreateBill();
+  const [converting, setConverting] = useState<NewTransaction>();
   const failed = () => toast.error("Não foi possível salvar o lançamento.");
 
   const save = (fields: NewTransaction, scope?: Scope) => {
@@ -264,6 +289,29 @@ export const TransactionSheet = ({
       {
         onSuccess: () => done(scope === "following" ? "Série atualizada" : "Lançamento atualizado"),
         onError: failed,
+      },
+    );
+  };
+
+  // Lançar posts the entry first; Editar links the one that exists.
+  const convert = async (entry: NewTransaction, bill: Schemas["CreateBill"]) => {
+    onOpenChange(false);
+    let transactionId = transaction?.id;
+    if (!transactionId) {
+      try {
+        transactionId = (await create.mutateAsync(entry)).id;
+      } catch {
+        return failed();
+      }
+    }
+    createBill.mutate(
+      { ...bill, transactionId },
+      {
+        onSuccess: () => toast.success("Conta fixa criada"),
+        onError: () =>
+          toast.error(
+            transaction ? "Não foi possível criar a conta fixa." : "Lançado, mas a conta fixa não foi criada.",
+          ),
       },
     );
   };
@@ -293,7 +341,21 @@ export const TransactionSheet = ({
         initial={initial}
         transaction={transaction}
         onSave={save}
+        onConvert={setConverting}
       />
+      {converting && (
+        <EditBillSheet
+          open
+          onOpenChange={(open) => open || setConverting(undefined)}
+          prefill={{
+            name: (converting.note ?? converting.category.name).slice(0, 100),
+            amount: converting.amount,
+            due_day: Number(converting.date.slice(8)),
+            category_id: converting.category_id,
+          }}
+          onCreate={(bill) => void convert(converting, bill)}
+        />
+      )}
     </ResponsiveSheet>
   );
 };
