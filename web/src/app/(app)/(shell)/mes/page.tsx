@@ -10,6 +10,7 @@ import { useMonth } from "@/entities/month/month-query";
 import { settingsQuery } from "@/entities/settings/settings-query";
 import { useTransactions } from "@/entities/transaction/transaction-queries";
 import { TransactionSheet } from "@/features/add-transaction/transaction-sheet";
+import { EditBillSheet } from "@/features/edit-bill/edit-bill-sheet";
 import { monthParam } from "@/shared/lib/date";
 import { PageError } from "@/shared/ui/page-state";
 import { BillsOfMonth } from "@/widgets/bills-of-month/bills-of-month";
@@ -78,6 +79,7 @@ const MonthScreen = () => {
         }}
         initialKind={launching ?? "daily"}
         hint={hint ? "Comece pela sua primeira entrada do mês" : undefined}
+        billSheet={(props) => <EditBillSheet open {...props} />}
       />
     </div>
   );

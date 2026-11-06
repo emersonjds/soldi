@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, useState } from "react";
+import { type FormEvent, type ReactNode, useState } from "react";
 
 import { Repeat } from "lucide-react";
 import { toast } from "sonner";
@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { useCreateBill } from "@/entities/bill/bill-queries";
+import { type BillPrefill, useCreateBill } from "@/entities/bill/bill-queries";
 import { CategoryChips, useCategoryChips } from "@/entities/category/category-chips";
 import { ScopeRadio } from "@/entities/transaction/scope-radio";
 import {
@@ -18,7 +18,6 @@ import {
   useCreateTransaction,
   useUpdateTransaction,
 } from "@/entities/transaction/transaction-queries";
-import { EditBillSheet } from "@/features/edit-bill/edit-bill-sheet";
 import type { Schemas } from "@/shared/api/client";
 import { useCurrency } from "@/shared/lib/currency";
 import { monthYear, todayISO } from "@/shared/lib/date";
@@ -59,6 +58,15 @@ const lastMonth = (date: string, months: number) => {
   return monthYear(`${Math.floor(index / 12)}-${String((index % 12) + 1).padStart(2, "0")}`);
 };
 
+type Source = Transaction | NewTransaction;
+
+const prefillOf = ({ note, category, amount, date }: Source): BillPrefill => ({
+  name: (note ?? category.name).slice(0, 100),
+  amount,
+  due_day: Number(date.slice(8)),
+  category_id: category.id,
+});
+
 const TransactionForm = ({
   initial,
   transaction,
@@ -68,7 +76,8 @@ const TransactionForm = ({
   initial: Draft;
   transaction?: Transaction;
   onSave: (fields: NewTransaction, scope?: Scope) => void;
-  onConvert: (fields: NewTransaction) => void;
+  /** Absent: no Transformar em conta fixa. */
+  onConvert?: (source: Source) => void;
 }) => {
   const [draft, setDraft] = useState(initial);
   const [submitted, setSubmitted] = useState(false);
@@ -104,9 +113,12 @@ const TransactionForm = ({
     if (valid) onSave(valid, series ? draft.scope : undefined);
   };
 
+  const convertible = onConvert && (transaction?.kind ?? draft.kind) === "bill" && !draft.repeat;
+
+  // Editar converts the stored entry; its unsaved edits stay out.
   const convert = () => {
-    const valid = fields();
-    if (valid) onConvert(valid);
+    const source = transaction ?? fields();
+    if (source) onConvert?.(source);
   };
 
   return (
@@ -214,7 +226,7 @@ const TransactionForm = ({
               )}
             </>
           )}
-          {draft.kind === "bill" && !draft.repeat && (
+          {convertible && (
             <p className="text-muted-foreground text-sm">
               Prefere uma conta fixa, sem data pra acabar?{" "}
               <button
@@ -261,6 +273,12 @@ type TransactionSheetProps = {
   initialCategory?: Schemas["Category"];
   /** A line above the form. */
   hint?: string;
+  /** The bill sheet that Transformar em conta fixa opens; absent, the link is not offered. */
+  billSheet?: (props: {
+    prefill: BillPrefill;
+    onOpenChange: (open: boolean) => void;
+    onCreate: (bill: BillPrefill) => void;
+  }) => ReactNode;
 };
 
 /** `Lançar`: bottom sheet below 1024px, dialog from there; closes at once and the row appears optimistically. */
@@ -271,11 +289,12 @@ export const TransactionSheet = ({
   initialKind = "daily",
   initialCategory,
   hint,
+  billSheet,
 }: TransactionSheetProps) => {
   const create = useCreateTransaction();
   const update = useUpdateTransaction();
   const createBill = useCreateBill();
-  const [converting, setConverting] = useState<NewTransaction>();
+  const [converting, setConverting] = useState<Source>();
   const failed = () => toast.error("Não foi possível salvar o lançamento.");
 
   const save = (fields: NewTransaction, scope?: Scope) => {
@@ -294,15 +313,13 @@ export const TransactionSheet = ({
   };
 
   // Lançar posts the entry first; Editar links the one that exists.
-  const convert = async (entry: NewTransaction, bill: Schemas["CreateBill"]) => {
+  const convert = async (source: Source, bill: BillPrefill) => {
     onOpenChange(false);
-    let transactionId = transaction?.id;
-    if (!transactionId) {
-      try {
-        transactionId = (await create.mutateAsync(entry)).id;
-      } catch {
-        return failed();
-      }
+    let transactionId: string;
+    try {
+      transactionId = "id" in source ? source.id : (await create.mutateAsync(source)).id;
+    } catch {
+      return failed();
     }
     createBill.mutate(
       { ...bill, transactionId },
@@ -341,21 +358,14 @@ export const TransactionSheet = ({
         initial={initial}
         transaction={transaction}
         onSave={save}
-        onConvert={setConverting}
+        onConvert={billSheet && setConverting}
       />
-      {converting && (
-        <EditBillSheet
-          open
-          onOpenChange={(open) => open || setConverting(undefined)}
-          prefill={{
-            name: (converting.note ?? converting.category.name).slice(0, 100),
-            amount: converting.amount,
-            due_day: Number(converting.date.slice(8)),
-            category_id: converting.category_id,
-          }}
-          onCreate={(bill) => void convert(converting, bill)}
-        />
-      )}
+      {converting &&
+        billSheet?.({
+          prefill: prefillOf(converting),
+          onOpenChange: (open) => open || setConverting(undefined),
+          onCreate: (bill) => void convert(converting, bill),
+        })}
     </ResponsiveSheet>
   );
 };

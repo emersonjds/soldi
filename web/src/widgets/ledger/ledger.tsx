@@ -17,6 +17,7 @@ import {
   useDeleteTransaction,
 } from "@/entities/transaction/transaction-queries";
 import { TransactionSheet } from "@/features/add-transaction/transaction-sheet";
+import { EditBillSheet } from "@/features/edit-bill/edit-bill-sheet";
 import { cn } from "@/lib/utils";
 import type { Schemas } from "@/shared/api/client";
 import { shortDay, todayISO, yesterdayISO } from "@/shared/lib/date";
@@ -228,7 +229,12 @@ export const Ledger = ({ view, transactions, onLaunch, className }: LedgerProps)
           )}
         </SheetContent>
       </Sheet>
-      <TransactionSheet open={editing} onOpenChange={setEditing} transaction={selected} />
+      <TransactionSheet
+        open={editing}
+        onOpenChange={setEditing}
+        transaction={selected}
+        billSheet={(props) => <EditBillSheet open {...props} />}
+      />
     </section>
   );
 };

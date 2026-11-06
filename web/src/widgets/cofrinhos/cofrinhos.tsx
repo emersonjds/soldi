@@ -12,6 +12,7 @@ import { useArchiveCategory, useCategories } from "@/entities/category/categorie
 import { CategorySheet } from "@/entities/category/category-sheet";
 import { type Cofrinho, useCofrinhos, useMovements } from "@/entities/cofrinho/cofrinho-queries";
 import { TransactionSheet } from "@/features/add-transaction/transaction-sheet";
+import { EditBillSheet } from "@/features/edit-bill/edit-bill-sheet";
 import { WithdrawForm } from "@/features/withdraw-cofrinho/withdraw-form";
 import { cn } from "@/lib/utils";
 import { hasProblem, type Schemas } from "@/shared/api/client";
@@ -389,6 +390,7 @@ export const CofrinhosView = () => {
         onOpenChange={(open) => !open && setSaving(undefined)}
         initialKind="bill"
         initialCategory={saving}
+        billSheet={(props) => <EditBillSheet open {...props} />}
       />
       <CategorySheet
         kind="bill"

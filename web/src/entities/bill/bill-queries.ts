@@ -6,6 +6,7 @@ import { todayISO } from "@/shared/lib/date";
 
 export type Bill = Schemas["Bill"];
 export type BillOfMonth = Schemas["BillOfMonth"];
+export type BillPrefill = Schemas["CreateBill"];
 
 export const billsQuery = (includeInactive = false) =>
   queryOptions({

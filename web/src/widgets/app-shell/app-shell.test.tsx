@@ -67,6 +67,19 @@ describe("AppShell", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   });
 
+  it("hands Transformar em conta fixa to the bill sheet", async () => {
+    signedIn({ "GET /api/categories": { status: 200, body: CATEGORIES } });
+    renderWithQuery(<AppShell>conteúdo</AppShell>);
+
+    const tabs = screen.getByRole("navigation", { name: "Navegação principal" });
+    await userEvent.click(within(tabs).getByRole("button", { name: "Lançar" }));
+    await userEvent.click(await screen.findByRole("radio", { name: "Saída" }));
+    await userEvent.type(screen.getByLabelText("Valor"), "12");
+    await userEvent.click(await screen.findByRole("button", { name: "Transformar em conta fixa" }));
+
+    expect(await screen.findByRole("dialog", { name: "Nova conta" })).toBeInTheDocument();
+  });
+
   it("opens the Lançar sheet from the sidebar and closes it", async () => {
     renderWithQuery(<AppShell>conteúdo</AppShell>);
 

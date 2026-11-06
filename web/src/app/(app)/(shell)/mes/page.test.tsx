@@ -336,4 +336,22 @@ describe("Mês", () => {
     const edit = await screen.findByRole("dialog", { name: "Editar lançamento" });
     expect(within(edit).getByLabelText("Valor")).toHaveValue("1.200,00");
   });
+
+  it("turns the edited Saída into a bill in the bill sheet, prefilled from it", async () => {
+    open();
+
+    await userEvent.click(
+      await within(await screen.findByRole("region", { name: "Lançamentos" })).findByRole("button", {
+        name: /Aluguel/,
+      }),
+    );
+    await userEvent.click(
+      within(await screen.findByRole("dialog", { name: "Aluguel" })).getByRole("button", { name: "Editar" }),
+    );
+    await userEvent.click(await screen.findByRole("button", { name: "Transformar em conta fixa" }));
+
+    const bill = await screen.findByRole("dialog", { name: "Nova conta" });
+    expect(within(bill).getByLabelText("Nome")).toHaveValue("Aluguel");
+    expect(within(bill).getByLabelText("Vence dia")).toHaveValue("4");
+  });
 });
