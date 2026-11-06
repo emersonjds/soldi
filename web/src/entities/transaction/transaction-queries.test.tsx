@@ -7,7 +7,9 @@ import { MERCADO, MONTH, problem, stubApi, TRANSACTIONS } from "@/test/stub-api"
 import {
   transactionsQuery,
   useCreateTransaction,
+  useDeletePeriod,
   useDeleteTransaction,
+  useTransactionCount,
   useTransactions,
   useUpdateTransaction,
 } from "./transaction-queries";
@@ -157,5 +159,51 @@ describe("useUpdateTransaction and useDeleteTransaction", () => {
     expect(isStale(view, ["transactions", "2026-11"])).toBe(true);
 
     await expect(view.result.current.remove.mutateAsync({ id: "t2" })).rejects.toThrow("Não encontrado.");
+  });
+});
+
+describe("useTransactionCount", () => {
+  it("counts the period's entries", async () => {
+    const requests = stubApi({ "GET /api/transactions/count": { status: 200, body: { count: 37 } } });
+    const { result } = renderHookWithQuery(() => useTransactionCount("2026-11"));
+
+    await waitFor(() => expect(result.current.data).toBe(37));
+    expect(new URL(requests[0].url).searchParams.get("period")).toBe("2026-11");
+  });
+
+  it.each(["", "20", "1999", "2101", "2026-13", "everything"])("asks nothing for a malformed period %j", (period) => {
+    const requests = stubApi({});
+    const { result } = renderHookWithQuery(() => useTransactionCount(period));
+
+    expect(result.current.fetchStatus).toBe("idle");
+    expect(requests).toHaveLength(0);
+  });
+});
+
+describe("useDeletePeriod", () => {
+  it("deletes the period and refreshes everything that reads entries", async () => {
+    const requests = stubApi({ "DELETE /api/transactions": { status: 200, body: { deleted: 2 } } });
+    const view = seeded();
+    view.client.setQueryData(["bills", true], []);
+    const { result } = renderHookWithQuery(() => useDeletePeriod(), view.client);
+
+    await act(async () => expect(await result.current.mutateAsync("all")).toEqual({ deleted: 2 }));
+
+    expect(new URL(requests[0].url).searchParams.get("period")).toBe("all");
+    for (const key of [
+      ["transactions", "2026-11"],
+      ["month", "2026-11"],
+      ["report", "categories", "2026-11"],
+      ["cofrinhos"],
+      ["bills", true],
+    ])
+      expect(isStale(view, key)).toBe(true);
+  });
+
+  it("surfaces a refusal as an error", async () => {
+    stubApi({ "DELETE /api/transactions": { status: 400, body: problem(400, "Período inválido.") } });
+    const { result } = renderHookWithQuery(() => useDeletePeriod());
+
+    await expect(result.current.mutateAsync("x")).rejects.toThrow("Período inválido.");
   });
 });
