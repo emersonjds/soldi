@@ -69,7 +69,7 @@ export const useDeleteTransaction = () => {
   });
 };
 
-const PERIOD = /^((20\d\d|2100)(-(0[1-9]|1[0-2]))?|all)$/;
+export const PERIOD = /^((20\d\d|2100)(-(0[1-9]|1[0-2]))?|all)$/;
 
 /** `period` is `YYYY-MM`, `YYYY` (2000 to 2100) or `all`; a half-typed one asks nothing. */
 export const useTransactionCount = (period: string) =>
@@ -84,6 +84,6 @@ export const useDeletePeriod = () => {
   return useMutation({
     mutationFn: async (period: string) =>
       dataOrThrow(await api.DELETE("/api/transactions", { params: { query: { period } } })),
-    onSuccess: () => Promise.all([refresh(client), client.invalidateQueries({ queryKey: ["bills"] })]),
+    onSettled: () => Promise.all([refresh(client), client.invalidateQueries({ queryKey: ["bills"] })]),
   });
 };

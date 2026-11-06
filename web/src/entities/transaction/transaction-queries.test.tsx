@@ -200,10 +200,14 @@ describe("useDeletePeriod", () => {
       expect(isStale(view, key)).toBe(true);
   });
 
-  it("surfaces a refusal as an error", async () => {
+  it("surfaces a refusal as an error and still refreshes", async () => {
     stubApi({ "DELETE /api/transactions": { status: 400, body: problem(400, "Período inválido.") } });
-    const { result } = renderHookWithQuery(() => useDeletePeriod());
+    const view = seeded();
+    view.client.setQueryData(["bills", true], []);
+    const { result } = renderHookWithQuery(() => useDeletePeriod(), view.client);
 
-    await expect(result.current.mutateAsync("x")).rejects.toThrow("Período inválido.");
+    await act(() => expect(result.current.mutateAsync("x")).rejects.toThrow("Período inválido."));
+    expect(isStale(view, ["transactions", "2026-11"])).toBe(true);
+    expect(isStale(view, ["bills", true])).toBe(true);
   });
 });
