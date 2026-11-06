@@ -281,6 +281,8 @@ describe("TransactionSheet", () => {
 
     expect(await screen.findByText("Parte de uma série de 12")).toBeInTheDocument();
     expect(screen.queryByRole("switch", { name: "Repetir" })).not.toBeInTheDocument();
+    expect(screen.getByRole("radiogroup", { name: "Aplicar em" })).toBeInTheDocument();
+    expect(screen.getByText("Aplicar em")).toBeVisible();
     expect(screen.getByRole("radio", { name: "Só este" })).toBeChecked();
     await userEvent.click(screen.getByRole("radio", { name: "Este e os próximos" }));
     await userEvent.click(screen.getByRole("button", { name: "Salvar" }));

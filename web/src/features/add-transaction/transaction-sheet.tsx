@@ -256,7 +256,9 @@ const TransactionForm = ({
         />
       </div>
 
-      {series && <ScopeRadio series={series} value={draft.scope} onChange={(scope) => set({ scope })} />}
+      {series && (
+        <ScopeRadio legend="Aplicar em" series={series} value={draft.scope} onChange={(scope) => set({ scope })} />
+      )}
 
       <BrandButton type="submit">Salvar</BrandButton>
     </form>

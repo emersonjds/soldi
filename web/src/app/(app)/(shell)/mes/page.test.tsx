@@ -266,8 +266,10 @@ describe("Mês", () => {
     const row = await within(await screen.findByRole("region", { name: "Lançamentos" })).findByRole("button", {
       name: /Aluguel/,
     });
-    expect(row).toHaveTextContent("AluguelSaída · 3/12R$ 1.200,00");
-    expect(within(row).getByLabelText("3 de 12")).toBeInTheDocument();
+    expect(row).toHaveTextContent(/^AluguelSaída · 3\/12/);
+    expect(within(row).queryByRole("img")).not.toBeInTheDocument();
+    expect(within(row).getByText("· 3/12")).toHaveAttribute("aria-hidden", "true");
+    expect(within(row).getByText("3 de 12")).toHaveClass("sr-only");
   });
 
   it("asks how much of a series to delete, then deletes without Desfazer", async () => {
@@ -284,6 +286,8 @@ describe("Mês", () => {
     );
     const actions = await screen.findByRole("dialog", { name: "Aluguel" });
     await userEvent.click(within(actions).getByRole("button", { name: "Excluir" }));
+    expect(within(actions).getByRole("radiogroup", { name: "Excluir quais?" })).toBeInTheDocument();
+    expect(within(actions).getByText("Excluir quais?")).toBeVisible();
     expect(within(actions).getByRole("radio", { name: "Só este" })).toBeChecked();
     await userEvent.click(within(actions).getByRole("button", { name: "Cancelar" }));
     expect(requests.some((request) => request.method === "DELETE")).toBe(false);

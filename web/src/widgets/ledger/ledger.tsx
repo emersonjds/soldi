@@ -79,9 +79,10 @@ const Row = ({ transaction, entry, onOpen }: { transaction: Transaction; entry: 
           {transaction.series && <Repeat className="size-4" aria-hidden />}
           {entry.caption}
           {transaction.series && (
-            <span role="img" aria-label={`${transaction.series.position} de ${transaction.series.total}`}>
-              {` · ${transaction.series.position}/${transaction.series.total}`}
-            </span>
+            <>
+              <span aria-hidden>{` · ${transaction.series.position}/${transaction.series.total}`}</span>
+              <span className="sr-only">{`${transaction.series.position} de ${transaction.series.total}`}</span>
+            </>
           )}
         </span>
       </span>
@@ -203,7 +204,7 @@ export const Ledger = ({ view, transactions, onLaunch, className }: LedgerProps)
           </SheetDescription>
           {confirming && selected?.series ? (
             <>
-              <ScopeRadio series={selected.series} value={scope} onChange={setScope} />
+              <ScopeRadio legend="Excluir quais?" series={selected.series} value={scope} onChange={setScope} />
               <Button variant="destructive" className="mt-2 min-h-12 text-base" onClick={() => destroy(selected)}>
                 Excluir
               </Button>
