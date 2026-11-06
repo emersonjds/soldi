@@ -334,6 +334,22 @@ export interface paths {
         get: operations["list_transactions"];
         put?: never;
         post: operations["create_transaction"];
+        delete: operations["delete_transactions"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/transactions/count": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["count_transactions"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -594,6 +610,11 @@ export interface components {
             tier: components["schemas"]["Tier"];
             withdrawn: string;
         };
+        /** @description How many of the caller's entries a period deletion removed. */
+        DeletedTransactions: {
+            /** Format: int64 */
+            deleted: number;
+        };
         FieldError: {
             field: string;
             message: string;
@@ -756,6 +777,11 @@ export interface components {
              */
             recurring_bill_id?: string | null;
             series?: components["schemas"]["TransactionSeries"] | null;
+        };
+        /** @description How many of the caller's entries a period holds. */
+        TransactionCount: {
+            /** Format: int64 */
+            count: number;
         };
         /** @description Entries sharing `id` were launched together by `repeat_months`; counted at read time. */
         TransactionSeries: {
@@ -2141,6 +2167,92 @@ export interface operations {
             };
             /** @description Amount not above zero or with more than two places, note over 500 characters, a kind other than the category's (`category_id`), `repeat_months` not 2 to 60, or a date before the opening date (`before-opening-date`) */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    delete_transactions: {
+        parameters: {
+            query: {
+                /**
+                 * @description `YYYY-MM` or `YYYY` (years 2000 to 2100), or `all`
+                 * @example 2026-11
+                 */
+                period: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted the caller's entries dated in the period, bill payments and resgates included; nothing else changes */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeletedTransactions"];
+                };
+            };
+            /** @description No `period`, or not `YYYY-MM`, `YYYY` or `all` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    count_transactions: {
+        parameters: {
+            query: {
+                /**
+                 * @description `YYYY-MM` or `YYYY` (years 2000 to 2100), or `all`
+                 * @example 2026-11
+                 */
+                period: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The caller's entries dated in the period, bill payments and resgates included */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransactionCount"];
+                };
+            };
+            /** @description No `period`, or not `YYYY-MM`, `YYYY` or `all` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };
