@@ -53,10 +53,11 @@ test("an entry repeated 3x shows in three months; edit and delete reach this one
   await launch.getByRole("button", { name: "Salvar" }).click();
   await expect(page.getByText("3 lançamentos criados")).toBeVisible();
 
+  // The badge reads `1/3` on screen and `1 de 3` to screen readers.
   for (const [month, place] of [
-    [first, "1/3"],
-    [second, "2/3"],
-    [third, "3/3"],
+    [first, "1/31 de 3"],
+    [second, "2/32 de 3"],
+    [third, "3/33 de 3"],
   ]) {
     await visit(month);
     await expect(internet).toContainText(`Saída · ${place}R$ 100,00`);
@@ -74,9 +75,9 @@ test("an entry repeated 3x shows in three months; edit and delete reach this one
   await expect(internet).toContainText("R$ 120,00");
 
   await visit(third);
-  await expect(internet).toContainText("Saída · 3/3R$ 120,00");
+  await expect(internet).toContainText("Saída · 3/33 de 3R$ 120,00");
   await visit(first);
-  await expect(internet).toContainText("Saída · 1/3R$ 100,00");
+  await expect(internet).toContainText("Saída · 1/31 de 3R$ 100,00");
 
   await visit(second);
   await internet.click();
@@ -90,5 +91,5 @@ test("an entry repeated 3x shows in three months; edit and delete reach this one
   await visit(third);
   await expect(ledger).toContainText("Nenhum lançamento ainda");
   await visit(first);
-  await expect(internet).toContainText("Saída · 1/1R$ 100,00");
+  await expect(internet).toContainText("Saída · 1/11 de 1R$ 100,00");
 });
