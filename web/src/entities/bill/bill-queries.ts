@@ -31,7 +31,12 @@ export const useCreateBill = () => {
     /** `transactionId`: a standalone Saída entry that becomes this bill's payment. */
     mutationFn: async ({ transactionId, ...body }: Schemas["CreateBill"] & { transactionId?: string }) =>
       dataOrThrow(await api.POST("/api/bills", { params: { query: { transaction_id: transactionId } }, body })),
-    onSettled: () => refresh(client),
+    // The linked entry becomes a bill payment; reports and cofrinhos read it.
+    onSettled: (_bill, _error, { transactionId }) =>
+      Promise.all([
+        refresh(client),
+        ...(transactionId ? ["report", "cofrinhos"] : []).map((key) => client.invalidateQueries({ queryKey: [key] })),
+      ]),
   });
 };
 
