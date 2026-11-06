@@ -19,6 +19,8 @@ import {
 import { TransactionSheet } from "./transaction-sheet";
 
 const MERCADO_ROW = TRANSACTIONS[0];
+const ALUGUEL_ROW = TRANSACTIONS[1];
+const MEMBER = { ...ALUGUEL_ROW, series: { id: "s1", position: 3, total: 12 } };
 
 const setup = (props: Partial<Parameters<typeof TransactionSheet>[0]> = {}, replies = {}) => {
   const requests = stubApi({
@@ -180,6 +182,98 @@ describe("TransactionSheet", () => {
     expect(await screen.findByRole("combobox", { name: "Categoria" })).toHaveTextContent("Carro");
     expect(screen.getByRole("dialog", { name: "Lançar" })).toBeInTheDocument();
     expect(requests.filter((request) => request.url.endsWith("/api/transactions"))).toHaveLength(0);
+  });
+
+  it("repeats a launch: Repetir on preselects 12x, a preset changes the count and the last month", async () => {
+    const { sent } = setup();
+
+    const repeat = await screen.findByRole("switch", { name: "Repetir" });
+    expect(repeat).not.toBeChecked();
+    expect(screen.queryByRole("radio", { name: "12x" })).not.toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText("Valor"), "15000");
+    await userEvent.click(repeat);
+
+    expect(screen.getByRole("radio", { name: "12x" })).toBeChecked();
+    expect(screen.getByText("12× R$ 150,00 · até out 2027")).toBeInTheDocument();
+    expect(screen.queryByText("Em meses mais curtos, cai no último dia.")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("radio", { name: "3x" }));
+    expect(screen.getByText("3× R$ 150,00 · até jan 2027")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
+
+    expect(await sent("POST")).toMatchObject({ amount: "150.00", repeat_months: 3 });
+    expect(await screen.findByText("3 lançamentos criados")).toBeInTheDocument();
+  });
+
+  it("takes Outro from 2 to 60 months, inline error otherwise, and warns about short months from day 29", async () => {
+    const { requests, sent } = setup();
+
+    await userEvent.type(await screen.findByLabelText("Valor"), "1000");
+    fireEvent.change(screen.getByLabelText("Outra data"), { target: { value: "2026-10-31" } });
+    await userEvent.click(screen.getByRole("switch", { name: "Repetir" }));
+    expect(screen.getByText("Em meses mais curtos, cai no último dia.")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("radio", { name: "Outro" }));
+    const months = screen.getByLabelText("Meses");
+    await userEvent.type(months, "61");
+    await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
+
+    expect(screen.getByText("Escolha de 2 a 60 meses.")).toBeInTheDocument();
+    expect(requests.filter((request) => request.method === "POST")).toHaveLength(0);
+    await userEvent.clear(months);
+    await userEvent.type(months, "24");
+    expect(screen.getByText("24× R$ 10,00 · até set 2028")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
+
+    expect(await sent("POST")).toMatchObject({ date: "2026-10-31", repeat_months: 24 });
+  });
+
+  it("turns a standalone entry into a series from Editar", async () => {
+    const { sent } = setup({ transaction: MERCADO_ROW });
+
+    await userEvent.click(await screen.findByRole("switch", { name: "Repetir" }));
+    await userEvent.click(screen.getByRole("radio", { name: "2x" }));
+    await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
+
+    expect(await sent("PATCH")).toMatchObject({ repeat_months: 2 });
+    expect(await screen.findByText("2 lançamentos criados")).toBeInTheDocument();
+  });
+
+  it("offers no Repetir for a bill payment, saying why", async () => {
+    setup({ transaction: { ...ALUGUEL_ROW, recurring_bill_id: "b1" } });
+
+    expect(await screen.findByText("Já é uma conta fixa recorrente.")).toBeInTheDocument();
+    expect(screen.queryByRole("switch", { name: "Repetir" })).not.toBeInTheDocument();
+  });
+
+  it("offers no Repetir for a resgate", async () => {
+    setup({ transaction: { ...TRANSACTIONS[2], cofrinho_id: "c1" } });
+
+    expect(await screen.findByRole("dialog", { name: "Editar lançamento" })).toBeInTheDocument();
+    expect(screen.queryByRole("switch", { name: "Repetir" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Já é uma conta fixa recorrente.")).not.toBeInTheDocument();
+  });
+
+  it("edits a series member: Só este by default, Este e os próximos sends the scope", async () => {
+    const { requests } = setup(
+      { transaction: MEMBER },
+      { [`PATCH /api/transactions/${MEMBER.id}`]: { status: 200, body: MEMBER } },
+    );
+
+    expect(await screen.findByText("Parte de uma série de 12")).toBeInTheDocument();
+    expect(screen.queryByRole("switch", { name: "Repetir" })).not.toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "Só este" })).toBeChecked();
+    await userEvent.click(screen.getByRole("radio", { name: "Este e os próximos" }));
+    await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
+
+    await waitFor(() => expect(requests.some((request) => request.method === "PATCH")).toBe(true));
+    const patch = requests.find((request) => request.method === "PATCH");
+    expect(new URL(patch?.url ?? "").searchParams.get("scope")).toBe("following");
+    expect(await screen.findByText("Série atualizada")).toBeInTheDocument();
+  });
+
+  it("reads Toda a série on the first member", async () => {
+    setup({ transaction: { ...MEMBER, series: { id: "s1", position: 1, total: 12 } } });
+
+    expect(await screen.findByRole("radio", { name: "Toda a série" })).toBeInTheDocument();
   });
 
   it("is a centered dialog from 1024px", async () => {
