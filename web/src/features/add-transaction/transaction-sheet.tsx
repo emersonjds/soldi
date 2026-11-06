@@ -207,10 +207,11 @@ const TransactionForm = ({
                     value={draft.custom}
                     onChange={(event) => set({ custom: event.target.value.replace(/\D/g, "").slice(0, 2) })}
                     aria-invalid={submitted && !monthsValid}
+                    aria-describedby={submitted && !monthsValid ? "transaction-months-error" : undefined}
                     className="h-12 rounded-xl bg-muted text-base tabular-nums md:text-base"
                   />
                   {submitted && !monthsValid && (
-                    <p role="alert" className="text-destructive text-sm">
+                    <p id="transaction-months-error" role="alert" className="text-destructive text-sm">
                       Escolha de 2 a 60 meses.
                     </p>
                   )}
@@ -218,7 +219,7 @@ const TransactionForm = ({
               )}
               {monthsValid && (
                 <p className="text-muted-foreground text-sm">
-                  {months}× {formatMoney(amount ?? "0", currency)} · até {lastMonth(draft.date, months)}
+                  {amount && `${months}× ${formatMoney(amount, currency)} · `}até {lastMonth(draft.date, months)}
                 </p>
               )}
               {Number(draft.date.slice(8)) >= 29 && (

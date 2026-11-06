@@ -215,6 +215,15 @@ describe("TransactionSheet", () => {
     expect(await screen.findByText("3 lançamentos criados")).toBeInTheDocument();
   });
 
+  it("tells only the last month while the amount is missing", async () => {
+    setup();
+
+    await userEvent.click(await screen.findByRole("switch", { name: "Repetir" }));
+
+    expect(screen.getByText("até out 2027")).toBeInTheDocument();
+    expect(screen.queryByText(/12×/)).not.toBeInTheDocument();
+  });
+
   it("takes Outro from 2 to 60 months, inline error otherwise, and warns about short months from day 29", async () => {
     const { requests, sent } = setup();
 
@@ -227,7 +236,8 @@ describe("TransactionSheet", () => {
     await userEvent.type(months, "61");
     await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
 
-    expect(screen.getByText("Escolha de 2 a 60 meses.")).toBeInTheDocument();
+    expect(months).toHaveAccessibleDescription("Escolha de 2 a 60 meses.");
+    expect(months).toHaveAttribute("aria-invalid", "true");
     expect(requests.filter((request) => request.method === "POST")).toHaveLength(0);
     await userEvent.clear(months);
     await userEvent.type(months, "24");
