@@ -666,3 +666,161 @@ async fn members_on_the_same_date_keep_distinct_positions(pool: PgPool) {
     places.sort();
     assert_eq!(places, [(1, 3), (2, 3)]);
 }
+
+async fn count(user: &TestApp, period: &str) -> Value {
+    let (status, body) = user
+        .get(&format!("/api/transactions/count?period={period}"))
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    body["count"].clone()
+}
+
+async fn wipe(user: &TestApp, period: &str) -> Value {
+    let (status, body) = user
+        .delete(&format!("/api/transactions?period={period}"))
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    body["deleted"].clone()
+}
+
+#[sqlx::test]
+async fn sol30_a_month_counts_and_deletes_only_its_days_bill_payments_included(pool: PgPool) {
+    let ana = opened(pool, "ana@example.com").await;
+    let bia = ana.another_user("bia@example.com").await;
+    bia.open_at("0", "2026-10-01").await;
+    spend(&ana, "2026-10-31", "1", "Mercado").await;
+    spend(&ana, "2026-11-01", "2", "Mercado").await;
+    spend(&ana, "2026-11-30", "3", "Mercado").await;
+    spend(&ana, "2026-12-01", "4", "Mercado").await;
+    let rent = ana.category_id("Aluguel").await;
+    let (_, bill) = ana
+        .post(
+            "/api/bills",
+            json!({ "name": "Aluguel", "amount": "100", "due_day": 5, "category_id": rent }),
+        )
+        .await;
+    let pay = format!("/api/bills/{}/pay", bill["id"].as_str().unwrap());
+    let (status, paid) = ana.post(&pay, json!({ "date": "2026-11-05" })).await;
+    assert_eq!(status, StatusCode::CREATED, "{paid}");
+    spend(&bia, "2026-11-10", "9", "Mercado").await;
+
+    assert_eq!(count(&ana, "2026-11").await, 3);
+    assert_eq!(wipe(&ana, "2026-11").await, 3);
+
+    assert_eq!(count(&ana, "2026-11").await, 0);
+    assert_eq!(month(&ana, "2026-10").await.len(), 1);
+    assert_eq!(month(&ana, "2026-12").await.len(), 1);
+    assert_eq!(count(&bia, "2026-11").await, 1);
+    assert_eq!(ana.get("/api/bills").await.1.as_array().unwrap().len(), 1);
+    assert_eq!(wipe(&ana, "2026-11").await, 0);
+}
+
+#[sqlx::test]
+async fn sol30_a_year_spans_january_to_december_and_all_takes_every_date(pool: PgPool) {
+    let ana = TestApp::signed_in(pool, "ana@example.com").await;
+    ana.open_at("0", "2025-12-31").await;
+    let bia = ana.another_user("bia@example.com").await;
+    bia.open_at("0", "2026-10-01").await;
+    for date in ["2025-12-31", "2026-01-01", "2026-12-31", "2027-01-01"] {
+        spend(&ana, date, "1", "Mercado").await;
+    }
+    spend(&bia, "2026-11-10", "9", "Mercado").await;
+
+    assert_eq!(count(&ana, "2026").await, 2);
+    assert_eq!(count(&ana, "2025").await, 1);
+    assert_eq!(count(&ana, "all").await, 4);
+    assert_eq!(wipe(&ana, "2026").await, 2);
+    assert_eq!(count(&ana, "all").await, 2);
+    assert_eq!(wipe(&ana, "all").await, 2);
+
+    assert_eq!(count(&ana, "all").await, 0);
+    assert_eq!(wipe(&ana, "all").await, 0);
+    assert_eq!(count(&bia, "all").await, 1);
+}
+
+#[sqlx::test]
+async fn sol30_a_bad_or_missing_period_is_400(pool: PgPool) {
+    let user = opened(pool, "ana@example.com").await;
+    spend(&user, "2026-11-05", "1", "Mercado").await;
+
+    for query in [
+        "?period=2026-13",
+        "?period=99",
+        "?period=",
+        "?period=1999",
+        "?period=2101",
+        "?period=1999-01",
+        "?period=2101-01",
+        "?period=ALL",
+        "?period=2026-1",
+        "",
+    ] {
+        let (status, problem) = user.get(&format!("/api/transactions/count{query}")).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "count {query}");
+        assert_eq!(problem["type"], "urn:soldi:error:bad-request");
+        let (status, _) = user.delete(&format!("/api/transactions{query}")).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "delete {query}");
+    }
+    assert_eq!(count(&user, "2100").await, 0);
+    assert_eq!(count(&user, "2100-12").await, 0);
+    assert_eq!(wipe(&user, "2100-12").await, 0);
+    assert_eq!(count(&user, "all").await, 1);
+}
+
+#[sqlx::test]
+async fn sol30_cofrinho_deposits_and_resgates_go_but_the_cofrinho_and_categories_stay(
+    pool: PgPool,
+) {
+    let user = opened(pool, "ana@example.com").await;
+    let economia = user.category_id("Economia").await;
+    let (status, reserva) = user
+        .post(
+            "/api/categories",
+            json!({ "name": "Reserva", "kind": "bill", "parent_id": economia, "target": "1000" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{reserva}");
+    let reserva = reserva["id"].as_str().unwrap();
+    for (date, amount) in [("2026-10-15", "100"), ("2026-11-03", "500")] {
+        let (status, deposit) = user
+            .post(
+                "/api/transactions",
+                json!({ "date": date, "amount": amount, "kind": "bill", "category_id": reserva }),
+            )
+            .await;
+        assert_eq!(status, StatusCode::CREATED, "{deposit}");
+    }
+    let (status, resgate) = user
+        .post(
+            &format!("/api/cofrinhos/{reserva}/withdraw"),
+            json!({ "date": "2026-11-04", "amount": "200" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{resgate}");
+    let (_, categories) = user.get("/api/categories").await;
+
+    assert_eq!(count(&user, "2026-11").await, 2);
+    assert_eq!(wipe(&user, "2026-11").await, 2);
+
+    let (_, cofrinhos) = user.get("/api/cofrinhos").await;
+    let items = cofrinhos["items"].as_array().unwrap();
+    let item = items.iter().find(|item| item["category_id"] == reserva);
+    assert_eq!(
+        item.map(|item| &item["balance"]),
+        Some(&json!("100.00")),
+        "{cofrinhos}"
+    );
+    assert_eq!(user.get("/api/categories").await.1, categories);
+}
+
+#[sqlx::test]
+async fn sol30_a_leap_day_counts_under_its_month_and_year(pool: PgPool) {
+    let user = opened(pool, "ana@example.com").await;
+    spend(&user, "2028-02-29", "1", "Mercado").await;
+    spend(&user, "2028-03-01", "2", "Mercado").await;
+
+    assert_eq!(count(&user, "2028-02").await, 1);
+    assert_eq!(count(&user, "2028").await, 2);
+    assert_eq!(wipe(&user, "2028-02").await, 1);
+    assert_eq!(count(&user, "2028").await, 1);
+}

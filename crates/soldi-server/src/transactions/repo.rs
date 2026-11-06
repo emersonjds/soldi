@@ -349,6 +349,43 @@ pub async fn delete(conn: &mut PgConnection, user_id: Uuid, id: Uuid) -> Result<
     Ok(result.rows_affected() == 1)
 }
 
+/// SOL-30: the user's entries dated `from` to `to`; every date when `None`.
+pub async fn count_period(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    period: Option<(NaiveDate, NaiveDate)>,
+) -> Result<i64, sqlx::Error> {
+    let (from, to) = period.unzip();
+    sqlx::query_scalar!(
+        r#"SELECT count(*) AS "count!" FROM transactions
+         WHERE user_id = $1 AND ($2::date IS NULL OR date BETWEEN $2 AND $3)"#,
+        user_id,
+        from,
+        to
+    )
+    .fetch_one(&mut *conn)
+    .await
+}
+
+/// SOL-30: deletes the user's entries dated `from` to `to`, every date when `None`.
+pub async fn delete_period(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    period: Option<(NaiveDate, NaiveDate)>,
+) -> Result<u64, sqlx::Error> {
+    let (from, to) = period.unzip();
+    let result = sqlx::query!(
+        "DELETE FROM transactions
+         WHERE user_id = $1 AND ($2::date IS NULL OR date BETWEEN $2 AND $3)",
+        user_id,
+        from,
+        to
+    )
+    .execute(&mut *conn)
+    .await?;
+    Ok(result.rows_affected())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
