@@ -11,6 +11,7 @@ import {
   ReceiptText,
   Tags,
   Thermometer,
+  Trash2,
   Wallet,
 } from "lucide-react";
 
@@ -43,6 +44,7 @@ const GROUPS: { title: string; items: Item[] }[] = [
         hint: "Traga seu Termômetro.xlsx",
         icon: FileSpreadsheet,
       },
+      { href: "/ajustes/apagar", label: "Apagar lançamentos", hint: "Mês, ano ou tudo", icon: Trash2 },
     ],
   },
   {
