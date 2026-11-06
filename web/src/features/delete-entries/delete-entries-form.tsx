@@ -17,10 +17,10 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { Field, FieldError, FieldLabel } from "@/components/ui/field";
+import { Field, FieldError, FieldLabel, FieldTitle } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { useDeletePeriod, useTransactionCount } from "@/entities/transaction/transaction-queries";
+import { PERIOD, useDeletePeriod, useTransactionCount } from "@/entities/transaction/transaction-queries";
 import { todayISO } from "@/shared/lib/date";
 
 type Mode = "month" | "year" | "all";
@@ -35,6 +35,8 @@ const chip =
   "h-11 rounded-xl! font-semibold text-base text-muted-foreground data-[state=on]:bg-brand data-[state=on]:text-brand-foreground data-[state=on]:shadow-sm";
 
 const WORD = "APAGAR";
+
+const YEAR_RANGE = "Informe um ano entre 2000 e 2100.";
 
 const entries = (count: number) => (count === 1 ? "1 lançamento" : `${count} lançamentos`);
 
@@ -74,7 +76,7 @@ export const DeleteEntriesForm = () => {
   const period = { month, year, all: "all" }[mode];
   const count = useTransactionCount(period);
   const remove = useDeletePeriod();
-  const badYear = mode === "year" && !(Number(year) >= 2000 && Number(year) <= 2100);
+  const invalid = !PERIOD.test(period);
   const total = count.data;
 
   const toggle = (next: boolean) => {
@@ -96,12 +98,13 @@ export const DeleteEntriesForm = () => {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-4 rounded-2xl bg-card p-4 shadow-sm lg:p-6">
+        <FieldTitle id="delete-period">Período</FieldTitle>
         <ToggleGroup
           type="single"
           spacing={0}
           value={mode}
           onValueChange={(next: Mode | "") => next && setMode(next)}
-          aria-label="Período"
+          aria-labelledby="delete-period"
           className="grid w-full grid-cols-3 rounded-2xl bg-muted p-1"
         >
           {MODES.map(({ value, label }) => (
@@ -111,19 +114,24 @@ export const DeleteEntriesForm = () => {
           ))}
         </ToggleGroup>
         {mode === "month" && (
-          <Field className="gap-1.5">
+          <Field className="gap-1.5" data-invalid={invalid}>
             <FieldLabel htmlFor="delete-month">Mês</FieldLabel>
             <Input
               id="delete-month"
               type="month"
+              min="2000-01"
+              max="2100-12"
               value={month}
               onChange={(event) => event.target.value && setMonth(event.target.value)}
+              aria-invalid={invalid}
+              aria-describedby={invalid ? "delete-period-error" : undefined}
               className="h-12 text-base md:text-base"
             />
+            {invalid && <FieldError id="delete-period-error">{YEAR_RANGE}</FieldError>}
           </Field>
         )}
         {mode === "year" && (
-          <Field className="gap-1.5" data-invalid={badYear}>
+          <Field className="gap-1.5" data-invalid={invalid}>
             <FieldLabel htmlFor="delete-year">Ano</FieldLabel>
             <Input
               id="delete-year"
@@ -133,10 +141,11 @@ export const DeleteEntriesForm = () => {
               max={2100}
               value={year}
               onChange={(event) => setYear(event.target.value)}
-              aria-invalid={badYear}
+              aria-invalid={invalid}
+              aria-describedby={invalid ? "delete-period-error" : undefined}
               className="h-12 text-base tabular-nums md:text-base"
             />
-            {badYear && <FieldError>Informe um ano entre 2000 e 2100.</FieldError>}
+            {invalid && <FieldError id="delete-period-error">{YEAR_RANGE}</FieldError>}
           </Field>
         )}
       </div>

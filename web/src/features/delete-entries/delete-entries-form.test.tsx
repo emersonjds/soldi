@@ -86,18 +86,50 @@ describe("DeleteEntriesForm", () => {
     ]);
   });
 
+  it("labels the period choice as a radio group", () => {
+    serve({ "2026-11": count(37) });
+    open();
+
+    expect(screen.getByRole("radiogroup", { name: "Período" })).toBeInTheDocument();
+    expect(screen.getByText("Período")).toBeVisible();
+  });
+
   it("asks nothing for a year outside 2000 to 2100 and keeps the button off", async () => {
-    const requests = serve({ "2026-11": count(37) });
+    const requests = serve({ "2026-11": count(37), "2025": count(3) });
     open();
     await screen.findByText(/Serão apagados 37/);
 
     await userEvent.click(screen.getByRole("radio", { name: "Ano" }));
     fireEvent.change(screen.getByLabelText("Ano"), { target: { value: "1999" } });
 
-    expect(screen.getByText("Informe um ano entre 2000 e 2100.")).toBeInTheDocument();
+    expect(screen.getByLabelText("Ano")).toHaveAccessibleDescription("Informe um ano entre 2000 e 2100.");
+    expect(screen.getByLabelText("Ano")).toBeInvalid();
     expect(deleteButton()).toHaveAccessibleName("Apagar lançamentos");
     expect(deleteButton()).toBeDisabled();
-    expect(requests.map((request) => new URL(request.url).searchParams.get("period"))).toEqual(["2026-11", "2026"]);
+
+    fireEvent.change(screen.getByLabelText("Ano"), { target: { value: "2025" } });
+    await screen.findByText("Serão apagados 3 lançamentos de 2025.");
+    expect(requests.map((request) => new URL(request.url).searchParams.get("period"))).toEqual([
+      "2026-11",
+      "2026",
+      "2025",
+    ]);
+  });
+
+  it("refuses a month outside 2000 to 2100 with the year's message", async () => {
+    const requests = serve({ "2026-11": count(37) });
+    open();
+    await screen.findByText(/Serão apagados 37/);
+
+    const field = screen.getByLabelText("Mês");
+    expect(field).toHaveAttribute("min", "2000-01");
+    expect(field).toHaveAttribute("max", "2100-12");
+    fireEvent.change(field, { target: { value: "1999-05" } });
+
+    expect(field).toHaveAccessibleDescription("Informe um ano entre 2000 e 2100.");
+    expect(field).toBeInvalid();
+    expect(deleteButton()).toBeDisabled();
+    expect(requests).toHaveLength(1);
   });
 
   it("says 1 lançamento in the singular", async () => {
