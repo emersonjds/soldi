@@ -7,6 +7,28 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.12.0
+
+> Headline: repeat an entry over the next months
+
+### Added
+
+- `POST /api/transactions` takes `repeat_months` (2 to 60): the entry and its copies, one per following month on the same day (clamped to shorter months, always from the original day), are written in one transaction and share a `series_id`. `Transaction.series` carries `{ id, position, total }`. 422 `already-repeated` on a series member, `repeat-not-allowed-on-bill-payment` and `repeat-not-allowed-on-cofrinho-withdrawal` where repeating makes no sense.
+- `PATCH` and `DELETE /api/transactions/{id}` take `?scope=this|following` (default `this`); `following` reaches the members of the same series from this date on. Amount, category and note propagate; the date never does. `PATCH` with `repeat_months` turns a standalone entry into a series.
+- `POST /api/bills?transaction_id={id}` creates the recurring bill and links that standalone Saída as its payment this month, in one transaction; 422 `cannot-become-bill` otherwise.
+
+### Web
+
+- `Lançar` gains `Repetir`: chips `2x 3x 6x 12x Outro`, helper `12× R$ 150,00 · até out 2027`, caption `Em meses mais curtos, cai no último dia.` from day 29, toast `12 lançamentos criados`. Hidden for bill payments (`Já é uma conta fixa recorrente.`) and resgates.
+- Editing a series member shows `Parte de uma série de 12` and the scope `Só este` / `Este e os próximos` (`Toda a série` from the first member); the ledger's `Excluir` offers the same scope, with no `Desfazer` for a series.
+- Ledger rows of a series carry a repeat icon and `Saída · 3/12`, read as `3 de 12` by screen readers.
+- `Prefere uma conta fixa, sem data pra acabar? Transformar em conta fixa` under `Repetir` for a Saída opens the bill sheet prefilled; saving creates the bill and links the entry.
+- Biome now forbids imports between features (`src/features/**` cannot import `@/features/*`).
+
+### Upgrade notes
+
+- Migration `0015_transaction_series` adds the nullable `transactions.series_id` and a partial index; it runs on start-up, no manual step.
+
 ## 0.11.0
 
 > Headline: welcome tour
