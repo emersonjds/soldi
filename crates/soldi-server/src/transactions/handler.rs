@@ -3,7 +3,9 @@ use axum::extract::State;
 use axum::http::StatusCode;
 use serde::Deserialize;
 use soldi_types::Problem;
-use soldi_types::transactions::{CreateTransaction, Scope, Transaction, UpdateTransaction};
+use soldi_types::transactions::{
+    CreateTransaction, DeletedTransactions, Scope, Transaction, TransactionCount, UpdateTransaction,
+};
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
 use uuid::Uuid;
@@ -15,7 +17,12 @@ use crate::extract::{CurrentUser, JsonBody, PathParams, QueryParams};
 
 pub fn router() -> OpenApiRouter<AppState> {
     OpenApiRouter::new()
-        .routes(routes!(list_transactions, create_transaction))
+        .routes(routes!(
+            list_transactions,
+            create_transaction,
+            delete_transactions
+        ))
+        .routes(routes!(count_transactions))
         .routes(routes!(update_transaction, delete_transaction))
 }
 
@@ -23,6 +30,11 @@ pub fn router() -> OpenApiRouter<AppState> {
 pub struct ListQuery {
     month: String,
     category_id: Option<Uuid>,
+}
+
+#[derive(Deserialize)]
+pub struct PeriodQuery {
+    period: String,
 }
 
 #[derive(Deserialize)]
@@ -48,6 +60,38 @@ pub async fn list_transactions(
     Ok(Json(
         service::list(&state.pool, &user, &query.month, query.category_id).await?,
     ))
+}
+
+#[utoipa::path(get, path = "/api/transactions/count", tag = "transactions",
+    params(
+        ("period" = String, Query, description = "`YYYY-MM`, `YYYY` (2000 to 2100) or `all`", example = "2026-11")),
+    responses(
+        (status = 200, body = TransactionCount, description = "The caller's entries dated in the period, bill payments and resgates included"),
+        (status = 400, body = Problem, content_type = "application/problem+json", description = "No `period`, or not `YYYY-MM`, `YYYY` or `all`"),
+        (status = 401, body = Problem, content_type = "application/problem+json")))]
+pub async fn count_transactions(
+    State(state): State<AppState>,
+    user: CurrentUser,
+    QueryParams(query): QueryParams<PeriodQuery>,
+) -> Result<Json<TransactionCount>, AppError> {
+    let count = service::count(&state.pool, &user, &query.period).await?;
+    Ok(Json(TransactionCount { count }))
+}
+
+#[utoipa::path(delete, path = "/api/transactions", tag = "transactions",
+    params(
+        ("period" = String, Query, description = "`YYYY-MM`, `YYYY` (2000 to 2100) or `all`", example = "2026-11")),
+    responses(
+        (status = 200, body = DeletedTransactions, description = "Deleted the caller's entries dated in the period, bill payments and resgates included; nothing else changes"),
+        (status = 400, body = Problem, content_type = "application/problem+json", description = "No `period`, or not `YYYY-MM`, `YYYY` or `all`"),
+        (status = 401, body = Problem, content_type = "application/problem+json")))]
+pub async fn delete_transactions(
+    State(state): State<AppState>,
+    user: CurrentUser,
+    QueryParams(query): QueryParams<PeriodQuery>,
+) -> Result<Json<DeletedTransactions>, AppError> {
+    let deleted = service::delete_period(&state.pool, &user, &query.period).await?;
+    Ok(Json(DeletedTransactions { deleted }))
 }
 
 #[utoipa::path(post, path = "/api/transactions", tag = "transactions", request_body = CreateTransaction,

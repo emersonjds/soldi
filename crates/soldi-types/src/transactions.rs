@@ -88,6 +88,18 @@ pub struct UpdateTransaction {
     pub repeat_months: Option<i16>,
 }
 
+/// How many of the caller's entries a period holds.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+pub struct TransactionCount {
+    pub count: i64,
+}
+
+/// How many of the caller's entries a period deletion removed.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+pub struct DeletedTransactions {
+    pub deleted: i64,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -666,3 +666,99 @@ async fn members_on_the_same_date_keep_distinct_positions(pool: PgPool) {
     places.sort();
     assert_eq!(places, [(1, 3), (2, 3)]);
 }
+
+async fn count(user: &TestApp, period: &str) -> Value {
+    let (status, body) = user
+        .get(&format!("/api/transactions/count?period={period}"))
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    body["count"].clone()
+}
+
+async fn wipe(user: &TestApp, period: &str) -> Value {
+    let (status, body) = user
+        .delete(&format!("/api/transactions?period={period}"))
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    body["deleted"].clone()
+}
+
+#[sqlx::test]
+async fn sol30_a_month_counts_and_deletes_only_its_days_bill_payments_included(pool: PgPool) {
+    let ana = opened(pool, "ana@example.com").await;
+    let bia = ana.another_user("bia@example.com").await;
+    bia.open_at("0", "2026-10-01").await;
+    spend(&ana, "2026-10-31", "1", "Mercado").await;
+    spend(&ana, "2026-11-01", "2", "Mercado").await;
+    spend(&ana, "2026-11-30", "3", "Mercado").await;
+    spend(&ana, "2026-12-01", "4", "Mercado").await;
+    let rent = ana.category_id("Aluguel").await;
+    let (_, bill) = ana
+        .post(
+            "/api/bills",
+            json!({ "name": "Aluguel", "amount": "100", "due_day": 5, "category_id": rent }),
+        )
+        .await;
+    let pay = format!("/api/bills/{}/pay", bill["id"].as_str().unwrap());
+    let (status, paid) = ana.post(&pay, json!({ "date": "2026-11-05" })).await;
+    assert_eq!(status, StatusCode::CREATED, "{paid}");
+    spend(&bia, "2026-11-10", "9", "Mercado").await;
+
+    assert_eq!(count(&ana, "2026-11").await, 3);
+    assert_eq!(wipe(&ana, "2026-11").await, 3);
+
+    assert_eq!(count(&ana, "2026-11").await, 0);
+    assert_eq!(month(&ana, "2026-10").await.len(), 1);
+    assert_eq!(month(&ana, "2026-12").await.len(), 1);
+    assert_eq!(count(&bia, "2026-11").await, 1);
+    assert_eq!(ana.get("/api/bills").await.1.as_array().unwrap().len(), 1);
+    assert_eq!(wipe(&ana, "2026-11").await, 0);
+}
+
+#[sqlx::test]
+async fn sol30_a_year_spans_january_to_december_and_all_takes_every_date(pool: PgPool) {
+    let ana = TestApp::signed_in(pool, "ana@example.com").await;
+    ana.open_at("0", "2025-12-31").await;
+    let bia = ana.another_user("bia@example.com").await;
+    bia.open_at("0", "2026-10-01").await;
+    for date in ["2025-12-31", "2026-01-01", "2026-12-31", "2027-01-01"] {
+        spend(&ana, date, "1", "Mercado").await;
+    }
+    spend(&bia, "2026-11-10", "9", "Mercado").await;
+
+    assert_eq!(count(&ana, "2026").await, 2);
+    assert_eq!(count(&ana, "2025").await, 1);
+    assert_eq!(count(&ana, "all").await, 4);
+    assert_eq!(wipe(&ana, "2026").await, 2);
+    assert_eq!(count(&ana, "all").await, 2);
+    assert_eq!(wipe(&ana, "all").await, 2);
+
+    assert_eq!(count(&ana, "all").await, 0);
+    assert_eq!(wipe(&ana, "all").await, 0);
+    assert_eq!(count(&bia, "all").await, 1);
+}
+
+#[sqlx::test]
+async fn sol30_a_bad_or_missing_period_is_400(pool: PgPool) {
+    let user = opened(pool, "ana@example.com").await;
+    spend(&user, "2026-11-05", "1", "Mercado").await;
+
+    for query in [
+        "?period=2026-13",
+        "?period=99",
+        "?period=",
+        "?period=1999",
+        "?period=2101",
+        "?period=ALL",
+        "?period=2026-1",
+        "",
+    ] {
+        let (status, problem) = user.get(&format!("/api/transactions/count{query}")).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "count {query}");
+        assert_eq!(problem["type"], "urn:soldi:error:bad-request");
+        let (status, _) = user.delete(&format!("/api/transactions{query}")).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "delete {query}");
+    }
+    assert_eq!(count(&user, "2100").await, 0);
+    assert_eq!(count(&user, "all").await, 1);
+}

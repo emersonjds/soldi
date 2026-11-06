@@ -1566,6 +1566,106 @@
             }
           }
         }
+      },
+      "delete": {
+        "tags": [
+          "transactions"
+        ],
+        "operationId": "delete_transactions",
+        "parameters": [
+          {
+            "name": "period",
+            "in": "query",
+            "description": "`YYYY-MM`, `YYYY` (2000 to 2100) or `all`",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "2026-11"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deleted the caller's entries dated in the period, bill payments and resgates included; nothing else changes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeletedTransactions"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "No `period`, or not `YYYY-MM`, `YYYY` or `all`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/transactions/count": {
+      "get": {
+        "tags": [
+          "transactions"
+        ],
+        "operationId": "count_transactions",
+        "parameters": [
+          {
+            "name": "period",
+            "in": "query",
+            "description": "`YYYY-MM`, `YYYY` (2000 to 2100) or `all`",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "2026-11"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The caller's entries dated in the period, bill payments and resgates included",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransactionCount"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "No `period`, or not `YYYY-MM`, `YYYY` or `all`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/transactions/{id}": {
@@ -2323,6 +2423,19 @@
           }
         }
       },
+      "DeletedTransactions": {
+        "type": "object",
+        "description": "How many of the caller's entries a period deletion removed.",
+        "required": [
+          "deleted"
+        ],
+        "properties": {
+          "deleted": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
       "FieldError": {
         "type": "object",
         "required": [
@@ -2825,6 +2938,19 @@
                 "type": "null"
               }
             ]
+          }
+        }
+      },
+      "TransactionCount": {
+        "type": "object",
+        "description": "How many of the caller's entries a period holds.",
+        "required": [
+          "count"
+        ],
+        "properties": {
+          "count": {
+            "type": "integer",
+            "format": "int64"
           }
         }
       },

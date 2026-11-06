@@ -103,6 +103,28 @@ pub fn check_kind(kind: CategoryKind, category: &Category) -> Result<(), AppErro
     Ok(())
 }
 
+/// SOL-30: the inclusive dates of a `YYYY-MM`, a `YYYY` (2000 to 2100) or `all` (none).
+pub fn period(text: &str) -> Result<Option<(NaiveDate, NaiveDate)>, AppError> {
+    if text == "all" {
+        return Ok(None);
+    }
+    if let Ok(first) = crate::months::domain::parse_month(text) {
+        return Ok(Some((first, crate::months::domain::month_end(first))));
+    }
+    let year = (text.len() == 4 && text.bytes().all(|byte| byte.is_ascii_digit()))
+        .then(|| text.parse::<i32>().ok())
+        .flatten()
+        .filter(|year| (2000..=2100).contains(year));
+    year.and_then(|year| {
+        Some((
+            NaiveDate::from_ymd_opt(year, 1, 1)?,
+            NaiveDate::from_ymd_opt(year, 12, 31)?,
+        ))
+    })
+    .map(Some)
+    .ok_or_else(|| AppError::BadRequest("period must be YYYY-MM, YYYY or all".into()))
+}
+
 pub fn transaction(
     id: Uuid,
     input: CreateTransaction,
@@ -296,6 +318,25 @@ mod tests {
         assert!(check(entry("1", Some(&"é".repeat(500)))).is_ok());
         assert_eq!(field(check(entry("1", Some(&"x".repeat(501))))), "note");
         assert_eq!(field(check(entry("1", Some("a\0b")))), "note");
+    }
+
+    #[test]
+    fn sol30_a_period_is_a_month_a_year_or_all() {
+        assert_eq!(
+            period("2026-02").unwrap(),
+            Some((date("2026-02-01"), date("2026-02-28")))
+        );
+        assert_eq!(
+            period("2100").unwrap(),
+            Some((date("2100-01-01"), date("2100-12-31")))
+        );
+        assert_eq!(period("all").unwrap(), None);
+        for text in ["1999", "2101", "+202", "2026-13", "", "All"] {
+            assert!(
+                matches!(period(text), Err(AppError::BadRequest(_))),
+                "{text}"
+            );
+        }
     }
 
     #[test]

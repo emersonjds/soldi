@@ -22,6 +22,23 @@ pub async fn list(
     Ok(repo::list(&mut conn, user.id, first, to, category_id).await?)
 }
 
+pub async fn count(pool: &PgPool, user: &CurrentUser, period: &str) -> Result<i64, AppError> {
+    let period = domain::period(period)?;
+    let mut conn = pool.acquire().await?;
+    Ok(repo::count_period(&mut conn, user.id, period).await?)
+}
+
+pub async fn delete_period(
+    pool: &PgPool,
+    user: &CurrentUser,
+    period: &str,
+) -> Result<i64, AppError> {
+    let period = domain::period(period)?;
+    let mut conn = pool.acquire().await?;
+    let deleted = repo::delete_period(&mut conn, user.id, period).await?;
+    Ok(i64::try_from(deleted).unwrap_or(i64::MAX))
+}
+
 async fn active_category(
     conn: &mut PgConnection,
     user: &CurrentUser,
