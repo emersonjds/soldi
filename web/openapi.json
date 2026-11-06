@@ -7,7 +7,7 @@
       "name": "AGPL-3.0-only",
       "identifier": "AGPL-3.0-only"
     },
-    "version": "0.10.1"
+    "version": "0.12.0"
   },
   "paths": {
     "/api/auth/me": {
@@ -235,6 +235,18 @@
           "bills"
         ],
         "operationId": "create_bill",
+        "parameters": [
+          {
+            "name": "transaction_id",
+            "in": "query",
+            "description": "A `bill` entry outside any series that becomes this bill's payment, moved to its category",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -255,6 +267,16 @@
               }
             }
           },
+          "400": {
+            "description": "`transaction_id` is not a UUID",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
           "401": {
             "content": {
               "application/problem+json": {
@@ -264,8 +286,18 @@
               }
             }
           },
+          "404": {
+            "description": "The `transaction_id` entry is missing or another user's",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
           "422": {
-            "description": "Name not 1 to 100 characters, amount not above zero or with more than two places, due day not 1 to 31, or `category_id` not one of the caller's active bill categories",
+            "description": "Name not 1 to 100 characters, amount not above zero or with more than two places, due day not 1 to 31, `category_id` not one of the caller's active bill categories, or `cannot-become-bill` when the entry is not a `bill` entry, already a bill's payment, a resgate or a series member",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -1495,6 +1527,7 @@
         },
         "responses": {
           "201": {
+            "description": "The entry; with `repeat_months`, the first of its series, the copies written in the same database transaction",
             "content": {
               "application/json": {
                 "schema": {
@@ -1523,7 +1556,7 @@
             }
           },
           "422": {
-            "description": "Amount not above zero or with more than two places, note over 500 characters, a kind other than the category's (`category_id`), or a date before the opening date (`before-opening-date`)",
+            "description": "Amount not above zero or with more than two places, note over 500 characters, a kind other than the category's (`category_id`), `repeat_months` not 2 to 60, or a date before the opening date (`before-opening-date`)",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -1551,11 +1584,30 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "description": "`following` also deletes the series' members dated after this one",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/Scope"
+            }
           }
         ],
         "responses": {
           "204": {
             "description": "Deleted"
+          },
+          "400": {
+            "description": "`scope` is not `this` or `following`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
           },
           "401": {
             "content": {
@@ -1593,6 +1645,15 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "description": "`following` also writes the amount, kind, category and note onto the series' later members; the date never spreads",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/Scope"
+            }
           }
         ],
         "requestBody": {
@@ -1612,6 +1673,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Transaction"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`scope` is not `this` or `following`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
                 }
               }
             }
@@ -1636,7 +1707,7 @@
             }
           },
           "422": {
-            "description": "Same rules as create, on the entry after the change, `before-opening-date` included",
+            "description": "Same rules as create, on the entry after the change, `before-opening-date` included; with `repeat_months`, `already-repeated` on a series member, `repeat-not-allowed-on-bill-payment` or `repeat-not-allowed-on-cofrinho-withdrawal`",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -2183,6 +2254,16 @@
               "null"
             ],
             "description": "Up to 500 characters; blank means none."
+          },
+          "repeat_months": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "2 to 60 entries, this one included, on the same day of the following months (the\nmonth's last day when shorter); absent means just this one.",
+            "maximum": 60,
+            "minimum": 2
           }
         },
         "additionalProperties": false
@@ -2536,6 +2617,14 @@
           }
         }
       },
+      "Scope": {
+        "type": "string",
+        "description": "Which entries of a series a change or a deletion reaches; `this` when absent.",
+        "enum": [
+          "this",
+          "following"
+        ]
+      },
       "Settings": {
         "type": "object",
         "description": "Money is a decimal string with up to two places (`\"-500.00\"`). The tiers are the lower\nbounds of the thermometer colors and are strictly increasing:\n`tier_red < tier_zero < tier_yellow < tier_green`.",
@@ -2725,6 +2814,41 @@
             ],
             "format": "uuid",
             "description": "The recurring bill this entry pays, if any."
+          },
+          "series": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/TransactionSeries",
+                "description": "The repeated run this entry belongs to, if any."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "TransactionSeries": {
+        "type": "object",
+        "description": "Entries sharing `id` were launched together by `repeat_months`; counted at read time.",
+        "required": [
+          "id",
+          "position",
+          "total"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "position": {
+            "type": "integer",
+            "format": "int64",
+            "description": "1-based, by date."
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64"
           }
         }
       },
@@ -2907,6 +3031,16 @@
               "string",
               "null"
             ]
+          },
+          "repeat_months": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Turns an entry outside any series into the first of a run of 2 to 60.",
+            "maximum": 60,
+            "minimum": 2
           }
         },
         "additionalProperties": false

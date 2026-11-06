@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE transactions SET recurring_bill_id = $3, category_id = $4, updated_at = now()\n         WHERE user_id = $1 AND id = $2 AND recurring_bill_id IS NULL\n           AND series_id IS NULL AND cofrinho_id IS NULL AND kind = 'bill'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "907f507650c4135c5fdd3bfe9a573ad409cc383d9a6fba553ae47f059a61ba31"
+}

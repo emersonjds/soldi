@@ -25,21 +25,24 @@ type Fields = Schemas["CreateBill"] & { active: boolean };
 
 const BillForm = ({
   bill,
+  prefill,
   onSave,
   onArchive,
 }: {
   bill?: Bill;
+  prefill?: Schemas["CreateBill"];
   onSave: (fields: Fields) => void;
   onArchive: (bill: Bill) => void;
 }) => {
+  const from = bill ?? prefill;
   const [draft, setDraft] = useState<Draft>(
-    bill
+    from
       ? {
-          name: bill.name,
-          amount: bill.amount,
-          dueDay: String(bill.due_day),
-          categoryId: bill.category_id,
-          active: bill.active,
+          name: from.name,
+          amount: from.amount,
+          dueDay: String(from.due_day),
+          categoryId: from.category_id,
+          active: bill?.active ?? true,
         }
       : { name: "", amount: "", dueDay: "", active: true },
   );
@@ -151,11 +154,15 @@ type EditBillSheetProps = {
   onOpenChange: (open: boolean) => void;
   /** Given: the sheet edits it, pauses it or archives it. */
   bill?: Bill;
-  onArchive: (bill: Bill) => void;
+  onArchive?: (bill: Bill) => void;
+  /** Fills a new bill. */
+  prefill?: Schemas["CreateBill"];
+  /** Takes over saving a new bill. */
+  onCreate?: (fields: Schemas["CreateBill"]) => void;
 };
 
 /** Add or edit a recurring bill: nome, valor, dia 1–31, categoria and, when editing, Ativa. */
-export const EditBillSheet = ({ open, onOpenChange, bill, onArchive }: EditBillSheetProps) => {
+export const EditBillSheet = ({ open, onOpenChange, bill, onArchive, prefill, onCreate }: EditBillSheetProps) => {
   const create = useCreateBill();
   const update = useUpdateBill();
 
@@ -166,6 +173,7 @@ export const EditBillSheet = ({ open, onOpenChange, bill, onArchive }: EditBillS
       onError: () => toast.error("Não foi possível salvar a conta."),
     };
     if (bill) return update.mutate({ id: bill.id, ...fields, active }, feedback);
+    if (onCreate) return onCreate(fields);
     create.mutate(fields, feedback);
   };
 
@@ -179,10 +187,11 @@ export const EditBillSheet = ({ open, onOpenChange, bill, onArchive }: EditBillS
       <BillForm
         key={bill?.id ?? "new"}
         bill={bill}
+        prefill={prefill}
         onSave={save}
         onArchive={(archived) => {
           onOpenChange(false);
-          onArchive(archived);
+          onArchive?.(archived);
         }}
       />
     </ResponsiveSheet>

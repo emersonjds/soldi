@@ -566,6 +566,12 @@ export interface components {
             kind: components["schemas"]["CategoryKind"];
             /** @description Up to 500 characters; blank means none. */
             note?: string | null;
+            /**
+             * Format: int32
+             * @description 2 to 60 entries, this one included, on the same day of the following months (the
+             *     month's last day when shorter); absent means just this one.
+             */
+            repeat_months?: number | null;
         };
         /**
          * @description ISO 4217 code of the currency every amount is shown in.
@@ -675,6 +681,11 @@ export interface components {
             type: string;
         };
         /**
+         * @description Which entries of a series a change or a deletion reaches; `this` when absent.
+         * @enum {string}
+         */
+        Scope: "this" | "following";
+        /**
          * @description Money is a decimal string with up to two places (`"-500.00"`). The tiers are the lower
          *     bounds of the thermometer colors and are strictly increasing:
          *     `tier_red < tier_zero < tier_yellow < tier_green`.
@@ -744,6 +755,19 @@ export interface components {
              * @description The recurring bill this entry pays, if any.
              */
             recurring_bill_id?: string | null;
+            series?: components["schemas"]["TransactionSeries"] | null;
+        };
+        /** @description Entries sharing `id` were launched together by `repeat_months`; counted at read time. */
+        TransactionSeries: {
+            /** Format: uuid */
+            id: string;
+            /**
+             * Format: int64
+             * @description 1-based, by date.
+             */
+            position: number;
+            /** Format: int64 */
+            total: number;
         };
         /** @description Absent fields stay as they are. `active: false` keeps the bill out of the month. */
         UpdateBill: {
@@ -790,6 +814,11 @@ export interface components {
             date?: string | null;
             kind?: components["schemas"]["CategoryKind"] | null;
             note?: string | null;
+            /**
+             * Format: int32
+             * @description Turns an entry outside any series into the first of a run of 2 to 60.
+             */
+            repeat_months?: number | null;
         };
         User: {
             email: string;
@@ -1022,7 +1051,10 @@ export interface operations {
     };
     create_bill: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description A `bill` entry outside any series that becomes this bill's payment, moved to its category */
+                transaction_id?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -1041,6 +1073,15 @@ export interface operations {
                     "application/json": components["schemas"]["Bill"];
                 };
             };
+            /** @description `transaction_id` is not a UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
             401: {
                 headers: {
                     [name: string]: unknown;
@@ -1049,7 +1090,16 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Name not 1 to 100 characters, amount not above zero or with more than two places, due day not 1 to 31, or `category_id` not one of the caller's active bill categories */
+            /** @description The `transaction_id` entry is missing or another user's */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Name not 1 to 100 characters, amount not above zero or with more than two places, due day not 1 to 31, `category_id` not one of the caller's active bill categories, or `cannot-become-bill` when the entry is not a `bill` entry, already a bill's payment, a resgate or a series member */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -2063,6 +2113,7 @@ export interface operations {
             };
         };
         responses: {
+            /** @description The entry; with `repeat_months`, the first of its series, the copies written in the same database transaction */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -2088,7 +2139,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Amount not above zero or with more than two places, note over 500 characters, a kind other than the category's (`category_id`), or a date before the opening date (`before-opening-date`) */
+            /** @description Amount not above zero or with more than two places, note over 500 characters, a kind other than the category's (`category_id`), `repeat_months` not 2 to 60, or a date before the opening date (`before-opening-date`) */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -2101,7 +2152,10 @@ export interface operations {
     };
     delete_transaction: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description `following` also deletes the series' members dated after this one */
+                scope?: components["schemas"]["Scope"];
+            };
             header?: never;
             path: {
                 /** @description Transaction id */
@@ -2117,6 +2171,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description `scope` is not `this` or `following` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
             };
             401: {
                 headers: {
@@ -2139,7 +2202,10 @@ export interface operations {
     };
     update_transaction: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description `following` also writes the amount, kind, category and note onto the series' later members; the date never spreads */
+                scope?: components["schemas"]["Scope"];
+            };
             header?: never;
             path: {
                 /** @description Transaction id */
@@ -2162,6 +2228,15 @@ export interface operations {
                     "application/json": components["schemas"]["Transaction"];
                 };
             };
+            /** @description `scope` is not `this` or `following` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
             401: {
                 headers: {
                     [name: string]: unknown;
@@ -2179,7 +2254,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Same rules as create, on the entry after the change, `before-opening-date` included */
+            /** @description Same rules as create, on the entry after the change, `before-opening-date` included; with `repeat_months`, `already-repeated` on a series member, `repeat-not-allowed-on-bill-payment` or `repeat-not-allowed-on-cofrinho-withdrawal` */
             422: {
                 headers: {
                     [name: string]: unknown;

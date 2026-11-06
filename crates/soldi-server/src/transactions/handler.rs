@@ -3,7 +3,7 @@ use axum::extract::State;
 use axum::http::StatusCode;
 use serde::Deserialize;
 use soldi_types::Problem;
-use soldi_types::transactions::{CreateTransaction, Transaction, UpdateTransaction};
+use soldi_types::transactions::{CreateTransaction, Scope, Transaction, UpdateTransaction};
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
 use uuid::Uuid;
@@ -23,6 +23,12 @@ pub fn router() -> OpenApiRouter<AppState> {
 pub struct ListQuery {
     month: String,
     category_id: Option<Uuid>,
+}
+
+#[derive(Deserialize)]
+pub struct ScopeQuery {
+    #[serde(default)]
+    scope: Scope,
 }
 
 #[utoipa::path(get, path = "/api/transactions", tag = "transactions",
@@ -46,10 +52,10 @@ pub async fn list_transactions(
 
 #[utoipa::path(post, path = "/api/transactions", tag = "transactions", request_body = CreateTransaction,
     responses(
-        (status = 201, body = Transaction),
+        (status = 201, body = Transaction, description = "The entry; with `repeat_months`, the first of its series, the copies written in the same database transaction"),
         (status = 401, body = Problem, content_type = "application/problem+json"),
         (status = 404, body = Problem, content_type = "application/problem+json", description = "The category is missing, archived or another user's"),
-        (status = 422, body = Problem, content_type = "application/problem+json", description = "Amount not above zero or with more than two places, note over 500 characters, a kind other than the category's (`category_id`), or a date before the opening date (`before-opening-date`)")))]
+        (status = 422, body = Problem, content_type = "application/problem+json", description = "Amount not above zero or with more than two places, note over 500 characters, a kind other than the category's (`category_id`), `repeat_months` not 2 to 60, or a date before the opening date (`before-opening-date`)")))]
 pub async fn create_transaction(
     State(state): State<AppState>,
     user: CurrentUser,
@@ -60,32 +66,42 @@ pub async fn create_transaction(
 }
 
 #[utoipa::path(patch, path = "/api/transactions/{id}", tag = "transactions", request_body = UpdateTransaction,
-    params(("id" = Uuid, Path, description = "Transaction id")),
+    params(
+        ("id" = Uuid, Path, description = "Transaction id"),
+        ("scope" = Option<Scope>, Query, description = "`following` also writes the amount, kind, category and note onto the series' later members; the date never spreads")),
     responses(
         (status = 200, body = Transaction, description = "The entry after the change; absent fields stay as they are"),
+        (status = 400, body = Problem, content_type = "application/problem+json", description = "`scope` is not `this` or `following`"),
         (status = 401, body = Problem, content_type = "application/problem+json"),
         (status = 404, body = Problem, content_type = "application/problem+json", description = "The entry is missing or another user's, or the new category is missing, archived or another user's"),
-        (status = 422, body = Problem, content_type = "application/problem+json", description = "Same rules as create, on the entry after the change, `before-opening-date` included")))]
+        (status = 422, body = Problem, content_type = "application/problem+json", description = "Same rules as create, on the entry after the change, `before-opening-date` included; with `repeat_months`, `already-repeated` on a series member, `repeat-not-allowed-on-bill-payment` or `repeat-not-allowed-on-cofrinho-withdrawal`")))]
 pub async fn update_transaction(
     State(state): State<AppState>,
     user: CurrentUser,
     PathParams(id): PathParams<Uuid>,
+    QueryParams(query): QueryParams<ScopeQuery>,
     JsonBody(patch): JsonBody<UpdateTransaction>,
 ) -> Result<Json<Transaction>, AppError> {
-    Ok(Json(service::update(&state.pool, &user, id, patch).await?))
+    Ok(Json(
+        service::update(&state.pool, &user, id, query.scope, patch).await?,
+    ))
 }
 
 #[utoipa::path(delete, path = "/api/transactions/{id}", tag = "transactions",
-    params(("id" = Uuid, Path, description = "Transaction id")),
+    params(
+        ("id" = Uuid, Path, description = "Transaction id"),
+        ("scope" = Option<Scope>, Query, description = "`following` also deletes the series' members dated after this one")),
     responses(
         (status = 204, description = "Deleted"),
+        (status = 400, body = Problem, content_type = "application/problem+json", description = "`scope` is not `this` or `following`"),
         (status = 401, body = Problem, content_type = "application/problem+json"),
         (status = 404, body = Problem, content_type = "application/problem+json", description = "Missing or another user's")))]
 pub async fn delete_transaction(
     State(state): State<AppState>,
     user: CurrentUser,
     PathParams(id): PathParams<Uuid>,
+    QueryParams(query): QueryParams<ScopeQuery>,
 ) -> Result<StatusCode, AppError> {
-    service::delete(&state.pool, &user, id).await?;
+    service::delete(&state.pool, &user, id, query.scope).await?;
     Ok(StatusCode::NO_CONTENT)
 }

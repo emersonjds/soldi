@@ -22,6 +22,7 @@ import {
 import { SettingsCurrency } from "@/entities/settings/settings-currency";
 import { useMe } from "@/entities/user/session";
 import { TransactionSheet } from "@/features/add-transaction/transaction-sheet";
+import { EditBillSheet } from "@/features/edit-bill/edit-bill-sheet";
 import { SignOutButton } from "@/features/sign-out/sign-out-button";
 import { cn, getInitials } from "@/lib/utils";
 import { Wordmark } from "@/shared/ui/wordmark";
@@ -151,7 +152,11 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
           </div>
         </nav>
 
-        <TransactionSheet open={launching} onOpenChange={setLaunching} />
+        <TransactionSheet
+          open={launching}
+          onOpenChange={setLaunching}
+          billSheet={(props) => <EditBillSheet open {...props} />}
+        />
       </SidebarProvider>
     </SettingsCurrency>
   );

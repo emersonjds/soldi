@@ -59,12 +59,13 @@ pub async fn withdraw(
         kind: CategoryKind::Income,
         category_id: resgate.id,
         note: input.note,
+        repeat_months: None,
     })?;
     transactions::service::check_opening(&mut tx, user, entry.date).await?;
     let balance = repo::balance(&mut tx, user.id, cofrinho.id, opening).await?;
     domain::check_withdraw(balance, entry.amount)?;
     let transaction_id =
-        transactions::repo::insert(&mut tx, user.id, &entry, None, Some(cofrinho.id)).await?;
+        transactions::repo::insert(&mut tx, user.id, &entry, None, Some(cofrinho.id), None).await?;
     tx.commit().await?;
     Ok(Transaction {
         cofrinho_id: Some(cofrinho.id),

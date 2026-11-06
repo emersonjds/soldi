@@ -1,21 +1,27 @@
 "use client";
 
-import { type FormEvent, useState } from "react";
+import { type FormEvent, type ReactNode, useState } from "react";
 
+import { Repeat } from "lucide-react";
 import { toast } from "sonner";
 
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { type BillPrefill, useCreateBill } from "@/entities/bill/bill-queries";
 import { CategoryChips, useCategoryChips } from "@/entities/category/category-chips";
+import { ScopeRadio } from "@/entities/transaction/scope-radio";
 import {
   type NewTransaction,
+  type Scope,
   type Transaction,
   useCreateTransaction,
   useUpdateTransaction,
 } from "@/entities/transaction/transaction-queries";
 import type { Schemas } from "@/shared/api/client";
-import { todayISO } from "@/shared/lib/date";
-import { positiveAmount } from "@/shared/lib/money";
+import { useCurrency } from "@/shared/lib/currency";
+import { monthYear, todayISO } from "@/shared/lib/date";
+import { formatMoney, positiveAmount } from "@/shared/lib/money";
 import { BrandButton } from "@/shared/ui/brand-button";
 import { DateChips } from "@/shared/ui/date-chips";
 import { HeroAmount } from "@/shared/ui/hero-amount";
@@ -29,27 +35,100 @@ const KINDS: { value: Kind; label: string }[] = [
   { value: "daily", label: "Diário" },
 ];
 
-type Draft = { kind: Kind; amount: string; category?: Schemas["Category"]; date: string; note: string };
+const PRESETS = ["2", "3", "6", "12", "other"];
 
-const TransactionForm = ({ initial, onSave }: { initial: Draft; onSave: (draft: NewTransaction) => void }) => {
+const chip =
+  "h-11 rounded-xl! font-semibold text-base text-muted-foreground data-[state=on]:bg-brand data-[state=on]:text-brand-foreground data-[state=on]:shadow-sm";
+
+type Draft = {
+  kind: Kind;
+  amount: string;
+  category?: Schemas["Category"];
+  date: string;
+  note: string;
+  repeat: boolean;
+  preset: string;
+  custom: string;
+  scope: Scope;
+};
+
+/** `out 2027`: the month of the last of `months` entries from `date`; the day clamp never changes the month. */
+const lastMonth = (date: string, months: number) => {
+  const index = Number(date.slice(0, 4)) * 12 + Number(date.slice(5, 7)) - 1 + months - 1;
+  return monthYear(`${Math.floor(index / 12)}-${String((index % 12) + 1).padStart(2, "0")}`);
+};
+
+type Source = Transaction | NewTransaction;
+
+const prefillOf = ({ note, category, amount, date }: Source): BillPrefill => ({
+  name: (note ?? category.name).slice(0, 100),
+  amount,
+  due_day: Number(date.slice(8)),
+  category_id: category.id,
+});
+
+const TransactionForm = ({
+  initial,
+  transaction,
+  onSave,
+  onConvert,
+}: {
+  initial: Draft;
+  transaction?: Transaction;
+  onSave: (fields: NewTransaction, scope?: Scope) => void;
+  /** Absent: no Transformar em conta fixa. */
+  onConvert?: (source: Source) => void;
+}) => {
   const [draft, setDraft] = useState(initial);
   const [submitted, setSubmitted] = useState(false);
+  const currency = useCurrency();
   const categories = useCategoryChips(draft.kind);
   const category = draft.category ?? categories.data?.[0];
   const amount = positiveAmount(draft.amount);
+  const months = Number(draft.preset === "other" ? draft.custom : draft.preset);
+  const monthsValid = Number.isInteger(months) && months >= 2 && months <= 60;
+  const series = transaction?.series;
+  const canRepeat = !transaction?.recurring_bill_id && !transaction?.cofrinho_id && !series;
 
   const set = (patch: Partial<Draft>) => setDraft((current) => ({ ...current, ...patch }));
 
+  const fields = (): NewTransaction | undefined => {
+    setSubmitted(true);
+    if (!amount || !category || (draft.repeat && !monthsValid)) return;
+    const note = draft.note.trim();
+    return {
+      date: draft.date,
+      amount,
+      kind: draft.kind,
+      category_id: category.id,
+      note: note || null,
+      repeat_months: draft.repeat ? months : undefined,
+      category,
+    };
+  };
+
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    setSubmitted(true);
-    if (!amount || !category) return;
-    const note = draft.note.trim();
-    onSave({ date: draft.date, amount, kind: draft.kind, category_id: category.id, note: note || null, category });
+    const valid = fields();
+    if (valid) onSave(valid, series ? draft.scope : undefined);
+  };
+
+  const convertible = onConvert && (transaction?.kind ?? draft.kind) === "bill" && !draft.repeat;
+
+  // Editar converts the stored entry; its unsaved edits stay out.
+  const convert = () => {
+    const source = transaction ?? fields();
+    if (source) onConvert?.(source);
   };
 
   return (
     <form noValidate onSubmit={submit} className="flex flex-col gap-6">
+      {series && (
+        <p className="flex items-center gap-2 font-medium text-muted-foreground text-sm">
+          <Repeat className="size-4" aria-hidden />
+          Parte de uma série de {series.total}
+        </p>
+      )}
       <ToggleGroup
         type="single"
         spacing={0}
@@ -59,11 +138,7 @@ const TransactionForm = ({ initial, onSave }: { initial: Draft; onSave: (draft: 
         className="grid w-full grid-cols-3 rounded-2xl bg-muted p-1"
       >
         {KINDS.map((kind) => (
-          <ToggleGroupItem
-            key={kind.value}
-            value={kind.value}
-            className="h-11 rounded-xl! font-semibold text-base text-muted-foreground data-[state=on]:bg-brand data-[state=on]:text-brand-foreground data-[state=on]:shadow-sm"
-          >
+          <ToggleGroupItem key={kind.value} value={kind.value} className={chip}>
             {kind.label}
           </ToggleGroupItem>
         ))}
@@ -88,6 +163,85 @@ const TransactionForm = ({ initial, onSave }: { initial: Draft; onSave: (draft: 
 
       <DateChips legend="Quando foi?" value={draft.date} onChange={(date) => set({ date })} />
 
+      {transaction?.recurring_bill_id && (
+        <p className="text-muted-foreground text-sm">Já é uma conta fixa recorrente.</p>
+      )}
+      {canRepeat && (
+        <div className="flex flex-col gap-3">
+          <label
+            htmlFor="transaction-repeat-switch"
+            className="flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-xl bg-muted px-4"
+          >
+            <span id="transaction-repeat" className="font-medium text-base">
+              Repetir
+            </span>
+            <Switch
+              id="transaction-repeat-switch"
+              aria-labelledby="transaction-repeat"
+              checked={draft.repeat}
+              onCheckedChange={(repeat) => set({ repeat })}
+            />
+          </label>
+          {draft.repeat && (
+            <>
+              <ToggleGroup
+                type="single"
+                spacing={0}
+                value={draft.preset}
+                onValueChange={(preset: string) => preset && set({ preset })}
+                aria-label="Quantas vezes"
+                className="grid w-full grid-cols-5 rounded-2xl bg-muted p-1"
+              >
+                {PRESETS.map((preset) => (
+                  <ToggleGroupItem key={preset} value={preset} className={chip}>
+                    {preset === "other" ? "Outro" : `${preset}x`}
+                  </ToggleGroupItem>
+                ))}
+              </ToggleGroup>
+              {draft.preset === "other" && (
+                <div className="flex flex-col gap-1.5">
+                  <Input
+                    inputMode="numeric"
+                    aria-label="Meses"
+                    placeholder="De 2 a 60"
+                    value={draft.custom}
+                    onChange={(event) => set({ custom: event.target.value.replace(/\D/g, "").slice(0, 2) })}
+                    aria-invalid={submitted && !monthsValid}
+                    aria-describedby={submitted && !monthsValid ? "transaction-months-error" : undefined}
+                    className="h-12 rounded-xl bg-muted text-base tabular-nums md:text-base"
+                  />
+                  {submitted && !monthsValid && (
+                    <p id="transaction-months-error" role="alert" className="text-destructive text-sm">
+                      Escolha de 2 a 60 meses.
+                    </p>
+                  )}
+                </div>
+              )}
+              {monthsValid && (
+                <p className="text-muted-foreground text-sm">
+                  {amount && `${months}× ${formatMoney(amount, currency)} · `}até {lastMonth(draft.date, months)}
+                </p>
+              )}
+              {Number(draft.date.slice(8)) >= 29 && (
+                <p className="text-muted-foreground text-xs">Em meses mais curtos, cai no último dia.</p>
+              )}
+            </>
+          )}
+          {convertible && (
+            <p className="text-muted-foreground text-sm">
+              Prefere uma conta fixa, sem data pra acabar?{" "}
+              <button
+                type="button"
+                onClick={convert}
+                className="inline-flex min-h-11 items-center font-semibold text-primary underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring"
+              >
+                Transformar em conta fixa
+              </button>
+            </p>
+          )}
+        </div>
+      )}
+
       <div className="flex flex-col gap-2">
         <label htmlFor="transaction-note" className="font-semibold text-sm">
           Observação
@@ -101,6 +255,10 @@ const TransactionForm = ({ initial, onSave }: { initial: Draft; onSave: (draft: 
           className="h-12 rounded-xl bg-muted text-base md:text-base"
         />
       </div>
+
+      {series && (
+        <ScopeRadio legend="Aplicar em" series={series} value={draft.scope} onChange={(scope) => set({ scope })} />
+      )}
 
       <BrandButton type="submit">Salvar</BrandButton>
     </form>
@@ -118,6 +276,12 @@ type TransactionSheetProps = {
   initialCategory?: Schemas["Category"];
   /** A line above the form. */
   hint?: string;
+  /** The bill sheet that Transformar em conta fixa opens; absent, the link is not offered. */
+  billSheet?: (props: {
+    prefill: BillPrefill;
+    onOpenChange: (open: boolean) => void;
+    onCreate: (bill: BillPrefill) => void;
+  }) => ReactNode;
 };
 
 /** `Lançar`: bottom sheet below 1024px, dialog from there; closes at once and the row appears optimistically. */
@@ -128,21 +292,51 @@ export const TransactionSheet = ({
   initialKind = "daily",
   initialCategory,
   hint,
+  billSheet,
 }: TransactionSheetProps) => {
   const create = useCreateTransaction();
   const update = useUpdateTransaction();
+  const createBill = useCreateBill();
+  const [converting, setConverting] = useState<Source>();
   const failed = () => toast.error("Não foi possível salvar o lançamento.");
 
-  const save = (draft: NewTransaction) => {
+  const save = (fields: NewTransaction, scope?: Scope) => {
     onOpenChange(false);
-    if (!transaction) return create.mutate(draft, { onSuccess: () => toast.success("Lançado"), onError: failed });
-    const { category: _category, ...fields } = draft;
+    const done = (fallback: string) =>
+      toast.success(fields.repeat_months ? `${fields.repeat_months} lançamentos criados` : fallback);
+    if (!transaction) return create.mutate(fields, { onSuccess: () => done("Lançado"), onError: failed });
+    const { category: _category, ...patch } = fields;
     update.mutate(
-      { id: transaction.id, ...fields },
-      { onSuccess: () => toast.success("Lançamento atualizado"), onError: failed },
+      { id: transaction.id, scope, ...patch },
+      {
+        onSuccess: () => done(scope === "following" ? "Série atualizada" : "Lançamento atualizado"),
+        onError: failed,
+      },
     );
   };
 
+  // Lançar posts the entry first; Editar links the one that exists.
+  const convert = async (source: Source, bill: BillPrefill) => {
+    onOpenChange(false);
+    let transactionId: string;
+    try {
+      transactionId = "id" in source ? source.id : (await create.mutateAsync(source)).id;
+    } catch {
+      return failed();
+    }
+    createBill.mutate(
+      { ...bill, transactionId },
+      {
+        onSuccess: () => toast.success("Conta fixa criada"),
+        onError: () =>
+          toast.error(
+            transaction ? "Não foi possível criar a conta fixa." : "Lançado, mas a conta fixa não foi criada.",
+          ),
+      },
+    );
+  };
+
+  const repeat = { repeat: false, preset: "12", custom: "", scope: "this" } as const;
   const initial: Draft = transaction
     ? {
         kind: transaction.kind,
@@ -150,8 +344,9 @@ export const TransactionSheet = ({
         category: transaction.category,
         date: transaction.date,
         note: transaction.note ?? "",
+        ...repeat,
       }
-    : { kind: initialKind, amount: "", category: initialCategory, date: todayISO(), note: "" };
+    : { kind: initialKind, amount: "", category: initialCategory, date: todayISO(), note: "", ...repeat };
 
   return (
     <ResponsiveSheet
@@ -164,8 +359,16 @@ export const TransactionSheet = ({
       <TransactionForm
         key={transaction?.id ?? `${initialKind}-${initialCategory?.id}`}
         initial={initial}
+        transaction={transaction}
         onSave={save}
+        onConvert={billSheet && setConverting}
       />
+      {converting &&
+        billSheet?.({
+          prefill: prefillOf(converting),
+          onOpenChange: (open) => open || setConverting(undefined),
+          onCreate: (bill) => void convert(converting, bill),
+        })}
     </ResponsiveSheet>
   );
 };

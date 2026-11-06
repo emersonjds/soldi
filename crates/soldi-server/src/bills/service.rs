@@ -38,15 +38,31 @@ async fn check_category(
     Ok(())
 }
 
+/// R8 (SOL-21): with `transaction_id`, that entry becomes the new bill's payment, in the
+/// same database transaction.
 pub async fn create(
     pool: &PgPool,
     user: &CurrentUser,
     input: CreateBill,
+    transaction_id: Option<Uuid>,
 ) -> Result<Bill, AppError> {
     let input = domain::check(input, "")?;
-    let mut conn = pool.acquire().await?;
-    check_category(&mut conn, user, input.category_id, "category_id").await?;
-    Ok(repo::insert(&mut conn, user.id, &input).await?)
+    let mut tx = pool.begin().await?;
+    if let Some(id) = transaction_id {
+        let entry = transactions::repo::find(&mut tx, user.id, id)
+            .await?
+            .ok_or(AppError::NotFound)?;
+        transactions::domain::check_convertible(&entry)?;
+    }
+    check_category(&mut tx, user, input.category_id, "category_id").await?;
+    let bill = repo::insert(&mut tx, user.id, &input).await?;
+    if let Some(id) = transaction_id
+        && !transactions::repo::link_bill(&mut tx, user.id, id, bill.id, bill.category_id).await?
+    {
+        return Err(transactions::domain::cannot_become_bill());
+    }
+    tx.commit().await?;
+    Ok(bill)
 }
 
 pub async fn update(
@@ -105,13 +121,14 @@ pub async fn pay(
         kind: CategoryKind::Bill,
         category_id: bill.category_id,
         note: None,
+        repeat_months: None,
     })?;
     if month.is_some_and(|first| !(first..=month_end(first)).contains(&entry.date)) {
         return Err(AppError::invalid("date", "must be in the month"));
     }
     transactions::service::check_opening(&mut conn, user, entry.date).await?;
     let transaction_id =
-        transactions::repo::insert(&mut conn, user.id, &entry, Some(bill.id), None)
+        transactions::repo::insert(&mut conn, user.id, &entry, Some(bill.id), None, None)
             .await
             .map_err(transactions::service::paid_once)?;
     transactions::repo::find(&mut conn, user.id, transaction_id)

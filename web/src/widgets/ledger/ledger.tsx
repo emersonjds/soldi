@@ -3,18 +3,21 @@
 import { useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
-import { Pencil, ReceiptText, Trash2 } from "lucide-react";
+import { Pencil, ReceiptText, Repeat, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { categoriesQuery, categoryLabel } from "@/entities/category/categories-query";
+import { ScopeRadio } from "@/entities/transaction/scope-radio";
 import {
+  type Scope,
   type Transaction,
   useCreateTransaction,
   useDeleteTransaction,
 } from "@/entities/transaction/transaction-queries";
 import { TransactionSheet } from "@/features/add-transaction/transaction-sheet";
+import { EditBillSheet } from "@/features/edit-bill/edit-bill-sheet";
 import { cn } from "@/lib/utils";
 import type { Schemas } from "@/shared/api/client";
 import { shortDay, todayISO, yesterdayISO } from "@/shared/lib/date";
@@ -72,7 +75,16 @@ const Row = ({ transaction, entry, onOpen }: { transaction: Transaction; entry: 
       <CategoryIcon icon={transaction.category.icon} color={transaction.category.color} />
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="truncate font-medium text-base">{titleOf(transaction, entry)}</span>
-        <span className="text-muted-foreground text-xs">{entry.caption}</span>
+        <span className="flex items-center gap-1 text-muted-foreground text-xs">
+          {transaction.series && <Repeat className="size-4" aria-hidden />}
+          {entry.caption}
+          {transaction.series && (
+            <>
+              <span aria-hidden>{` · ${transaction.series.position}/${transaction.series.total}`}</span>
+              <span className="sr-only">{`${transaction.series.position} de ${transaction.series.total}`}</span>
+            </>
+          )}
+        </span>
       </span>
       <Money amount={transaction.amount} income={transaction.kind === "income"} className="font-bold text-base" />
     </button>
@@ -93,12 +105,16 @@ export const Ledger = ({ view, transactions, onLaunch, className }: LedgerProps)
   const [selected, setSelected] = useState<Transaction>();
   const [acting, setActing] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [scope, setScope] = useState<Scope>("this");
   const create = useCreateTransaction();
   const remove = useDeleteTransaction();
   const groups = groupByDay(view.days, transactions);
 
   const open = (transaction: Transaction) => {
     setSelected(transaction);
+    setConfirming(false);
+    setScope("this");
     setActing(true);
   };
 
@@ -107,27 +123,33 @@ export const Ledger = ({ view, transactions, onLaunch, className }: LedgerProps)
     setEditing(true);
   };
 
+  // Desfazer would re-create a member outside its series.
   const destroy = (transaction: Transaction) => {
     setActing(false);
-    remove.mutate(transaction.id, {
-      onSuccess: () =>
-        toast("Lançamento excluído", {
-          duration: 5000,
-          action: {
-            label: "Desfazer",
-            onClick: () =>
-              create.mutate({
-                date: transaction.date,
-                amount: transaction.amount,
-                kind: transaction.kind,
-                category_id: transaction.category.id,
-                note: transaction.note ?? null,
-                category: transaction.category,
-              }),
-          },
-        }),
-      onError: () => toast.error("Não foi possível excluir o lançamento."),
-    });
+    remove.mutate(
+      { id: transaction.id, scope: transaction.series ? scope : undefined },
+      {
+        onSuccess: () => {
+          if (transaction.series) return toast(scope === "following" ? "Série excluída" : "Lançamento excluído");
+          toast("Lançamento excluído", {
+            duration: 5000,
+            action: {
+              label: "Desfazer",
+              onClick: () =>
+                create.mutate({
+                  date: transaction.date,
+                  amount: transaction.amount,
+                  kind: transaction.kind,
+                  category_id: transaction.category.id,
+                  note: transaction.note ?? null,
+                  category: transaction.category,
+                }),
+            },
+          });
+        },
+        onError: () => toast.error("Não foi possível excluir o lançamento."),
+      },
+    );
   };
 
   return (
@@ -180,21 +202,40 @@ export const Ledger = ({ view, transactions, onLaunch, className }: LedgerProps)
           <SheetDescription>
             {selected && `${describe(selected).caption} · ${describe(selected).label}`}
           </SheetDescription>
-          <Button variant="ghost" className="mt-2 min-h-12 justify-start gap-3 text-base" onClick={edit}>
-            <Pencil className="size-5" />
-            Editar
-          </Button>
-          <Button
-            variant="ghost"
-            className="min-h-12 justify-start gap-3 text-base text-destructive hover:text-destructive"
-            onClick={() => selected && destroy(selected)}
-          >
-            <Trash2 className="size-5" />
-            Excluir
-          </Button>
+          {confirming && selected?.series ? (
+            <>
+              <ScopeRadio legend="Excluir quais?" series={selected.series} value={scope} onChange={setScope} />
+              <Button variant="destructive" className="mt-2 min-h-12 text-base" onClick={() => destroy(selected)}>
+                Excluir
+              </Button>
+              <Button variant="ghost" className="min-h-12 text-base" onClick={() => setActing(false)}>
+                Cancelar
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button variant="ghost" className="mt-2 min-h-12 justify-start gap-3 text-base" onClick={edit}>
+                <Pencil className="size-5" />
+                Editar
+              </Button>
+              <Button
+                variant="ghost"
+                className="min-h-12 justify-start gap-3 text-base text-destructive hover:text-destructive"
+                onClick={() => selected && (selected.series ? setConfirming(true) : destroy(selected))}
+              >
+                <Trash2 className="size-5" />
+                Excluir
+              </Button>
+            </>
+          )}
         </SheetContent>
       </Sheet>
-      <TransactionSheet open={editing} onOpenChange={setEditing} transaction={selected} />
+      <TransactionSheet
+        open={editing}
+        onOpenChange={setEditing}
+        transaction={selected}
+        billSheet={(props) => <EditBillSheet open {...props} />}
+      />
     </section>
   );
 };
