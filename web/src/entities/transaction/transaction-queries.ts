@@ -4,9 +4,9 @@ import { api, dataOrThrow, okOrThrow, type Schemas } from "@/shared/api/client";
 
 export type Transaction = Schemas["Transaction"];
 
-/** What the API takes, plus the chosen category so the optimistic row can draw its icon. */
 export type Scope = Schemas["Scope"];
 
+/** What the API takes, plus the chosen category so the optimistic row can draw its icon. */
 export type NewTransaction = Schemas["CreateTransaction"] & { category: Schemas["Category"] };
 
 /** `month` is `YYYY-MM`; `categoryId` narrows the list to one category. */
@@ -59,7 +59,6 @@ export const useDeleteTransaction = () => {
   return useMutation({
     mutationFn: async ({ id, scope }: { id: string; scope?: Scope }) =>
       okOrThrow(await api.DELETE("/api/transactions/{id}", { params: { path: { id }, query: { scope } } })),
-    // A series has one member per month, so only this row can be in a cached month list.
     onMutate: async ({ id }) => {
       await client.cancelQueries({ queryKey: ["transactions"] });
       client.setQueriesData<Transaction[]>({ queryKey: ["transactions"] }, (list) =>
