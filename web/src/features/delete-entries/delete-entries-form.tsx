@@ -150,7 +150,7 @@ export const DeleteEntriesForm = () => {
         </p>
       </div>
 
-      <AlertDialog open={open} onOpenChange={toggle}>
+      <AlertDialog open={open} onOpenChange={(next) => !remove.isPending && toggle(next)}>
         <AlertDialogTrigger asChild>
           <Button
             variant="destructive"
@@ -163,7 +163,9 @@ export const DeleteEntriesForm = () => {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Apagar {entries(total ?? 0)}?</AlertDialogTitle>
-            <AlertDialogDescription>{summary(total ?? 0, period)} Isso não pode ser desfeito.</AlertDialogDescription>
+            <AlertDialogDescription>
+              {summary(total ?? 0, period)} Isso não pode ser desfeito. O saldo dos meses seguintes muda.
+            </AlertDialogDescription>
           </AlertDialogHeader>
           <Field className="gap-1.5">
             <FieldLabel htmlFor="delete-confirm">Digite {WORD} para confirmar</FieldLabel>
@@ -172,6 +174,8 @@ export const DeleteEntriesForm = () => {
               autoFocus
               autoCapitalize="characters"
               autoComplete="off"
+              autoCorrect="off"
+              spellCheck={false}
               placeholder={WORD}
               value={typed}
               onChange={(event) => setTyped(event.target.value)}

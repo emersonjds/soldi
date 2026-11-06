@@ -7,7 +7,9 @@ import { renderWithQuery } from "@/test/render";
 
 import { DeleteEntriesForm } from "./delete-entries-form";
 
-type Answer = { status: number; body?: unknown } | Promise<never>;
+type Reply = { status: number; body?: unknown };
+
+type Answer = Reply | Promise<Reply>;
 
 /** Counts per `period`; `remove` answers the DELETE and, when it succeeds, empties every count. */
 const serve = (counts: Record<string, Answer>, remove: Answer = { status: 200, body: { deleted: 37 } }) => {
@@ -145,9 +147,14 @@ describe("DeleteEntriesForm", () => {
     open();
 
     const dialog = await confirmDialog();
-    expect(dialog).toHaveTextContent("Serão apagados 37 lançamentos de novembro de 2026. Isso não pode ser desfeito.");
+    expect(dialog).toHaveTextContent(
+      "Serão apagados 37 lançamentos de novembro de 2026. Isso não pode ser desfeito. O saldo dos meses seguintes muda.",
+    );
     const field = within(dialog).getByLabelText("Digite APAGAR para confirmar");
     expect(field).toHaveFocus();
+    expect(field).toHaveAttribute("autocorrect", "off");
+    expect(field).toHaveAttribute("spellcheck", "false");
+    expect(field).toHaveAttribute("autocapitalize", "characters");
     const confirm = within(dialog).getByRole("button", { name: "Apagar" });
     expect(confirm).toBeDisabled();
 
@@ -190,6 +197,22 @@ describe("DeleteEntriesForm", () => {
 
     expect(await within(dialog).findByRole("button", { name: "Apagando…" })).toBeDisabled();
     expect(within(dialog).getByRole("button", { name: "Cancelar" })).toBeDisabled();
+  });
+
+  it("keeps the dialog through Esc while deleting, then toasts", async () => {
+    let finish: (reply: Reply) => void = () => undefined;
+    serve({ "2026-11": count(37) }, new Promise<Reply>((resolve) => (finish = resolve)));
+    open();
+
+    const dialog = await confirmDialog();
+    await userEvent.type(within(dialog).getByLabelText("Digite APAGAR para confirmar"), "APAGAR");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Apagar" }));
+    await within(dialog).findByRole("button", { name: "Apagando…" });
+    await userEvent.keyboard("{Escape}");
+
+    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+    finish({ status: 200, body: { deleted: 37 } });
+    expect(await screen.findByText("37 lançamentos apagados")).toBeInTheDocument();
   });
 
   it("keeps the dialog and the typed word when deleting fails", async () => {
