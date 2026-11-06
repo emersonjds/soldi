@@ -7,6 +7,18 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.13.0
+
+> Headline: delete the entries of a month, a year or all
+
+### Added
+
+- `GET /api/transactions/count?period=YYYY-MM|YYYY|all` answers `{ count }` and `DELETE /api/transactions?period=…` answers `{ deleted }`, both for the caller's rows only. Years run from 2000 to 2100; anything else is 400. Bill payments, cofrinho deposits and resgates are entries and go with the period; categories, cofrinhos, contas fixas and settings stay.
+
+### Web
+
+- `Ajustes › Dados › Apagar lançamentos` (`Mês, ano ou tudo`): choose `Mês`, `Ano` or `Tudo`, see `Serão apagados 37 lançamentos de novembro de 2026` live, then confirm by typing `APAGAR`. The dialog warns `Isso não pode ser desfeito. O saldo dos meses seguintes muda.` and stays open while deleting; the toast reads `37 lançamentos apagados` and the preview falls to `Nada para apagar neste período`.
+
 ## 0.12.1
 
 > Headline: scheduled entries show up in Lançamentos

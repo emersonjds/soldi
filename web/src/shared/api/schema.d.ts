@@ -2180,7 +2180,7 @@ export interface operations {
         parameters: {
             query: {
                 /**
-                 * @description `YYYY-MM`, `YYYY` (2000 to 2100) or `all`
+                 * @description `YYYY-MM` or `YYYY` (years 2000 to 2100), or `all`
                  * @example 2026-11
                  */
                 period: string;
@@ -2223,7 +2223,7 @@ export interface operations {
         parameters: {
             query: {
                 /**
-                 * @description `YYYY-MM`, `YYYY` (2000 to 2100) or `all`
+                 * @description `YYYY-MM` or `YYYY` (years 2000 to 2100), or `all`
                  * @example 2026-11
                  */
                 period: string;
