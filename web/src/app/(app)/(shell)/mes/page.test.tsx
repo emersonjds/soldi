@@ -127,12 +127,31 @@ describe("Mês", () => {
     expect(await screen.findByRole("region", { name: "Termômetro do Mês" })).not.toHaveTextContent("Guardou");
   });
 
-  it("hides entries dated in the future", async () => {
+  it("lists a future day first as Agendado, without a balance, and its entry opens Editar / Excluir", async () => {
     const later = { ...TRANSACTIONS[0], id: "later", date: "2026-11-20", note: "Show" };
     open({ "GET /api/transactions": { status: 200, body: [later, ...TRANSACTIONS] } });
 
-    await within(await screen.findByRole("region", { name: "Lançamentos" })).findByText("Compras da semana");
-    expect(screen.queryByText("Show")).not.toBeInTheDocument();
+    const days = await within(await screen.findByRole("region", { name: "Lançamentos" })).findAllByRole("heading", {
+      level: 3,
+    });
+    expect(days.map((day) => day.textContent?.replace(/\s/g, " "))).toEqual([
+      "Agendado · 20 nov",
+      "Hoje, 5 novR$ 957,79Apertado",
+      "Ontem, 4 novR$ 1.142,10Confortável",
+      "3 novR$ 2.342,10Folga",
+    ]);
+    await userEvent.click(within(ledger()).getByRole("button", { name: /Show/ }));
+    const actions = await screen.findByRole("dialog", { name: "Show" });
+    expect(within(actions).getByRole("button", { name: "Editar" })).toBeInTheDocument();
+    expect(within(actions).getByRole("button", { name: "Excluir" })).toBeInTheDocument();
+  });
+
+  it("lists a month whose only entry is scheduled instead of the empty state", async () => {
+    const later = { ...TRANSACTIONS[0], id: "later", date: "2026-11-20", note: "Show" };
+    open({ "GET /api/transactions": { status: 200, body: [later] } });
+
+    expect(await within(await screen.findByRole("region", { name: "Lançamentos" })).findByText("Show")).toBeVisible();
+    expect(screen.queryByText("Nenhum lançamento ainda")).not.toBeInTheDocument();
   });
 
   it("invites the first entry when the month is empty and has no income yet", async () => {
