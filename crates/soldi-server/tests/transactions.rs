@@ -749,6 +749,8 @@ async fn sol30_a_bad_or_missing_period_is_400(pool: PgPool) {
         "?period=",
         "?period=1999",
         "?period=2101",
+        "?period=1999-01",
+        "?period=2101-01",
         "?period=ALL",
         "?period=2026-1",
         "",
@@ -760,5 +762,65 @@ async fn sol30_a_bad_or_missing_period_is_400(pool: PgPool) {
         assert_eq!(status, StatusCode::BAD_REQUEST, "delete {query}");
     }
     assert_eq!(count(&user, "2100").await, 0);
+    assert_eq!(count(&user, "2100-12").await, 0);
+    assert_eq!(wipe(&user, "2100-12").await, 0);
     assert_eq!(count(&user, "all").await, 1);
+}
+
+#[sqlx::test]
+async fn sol30_cofrinho_deposits_and_resgates_go_but_the_cofrinho_and_categories_stay(
+    pool: PgPool,
+) {
+    let user = opened(pool, "ana@example.com").await;
+    let economia = user.category_id("Economia").await;
+    let (status, reserva) = user
+        .post(
+            "/api/categories",
+            json!({ "name": "Reserva", "kind": "bill", "parent_id": economia, "target": "1000" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{reserva}");
+    let reserva = reserva["id"].as_str().unwrap();
+    for (date, amount) in [("2026-10-15", "100"), ("2026-11-03", "500")] {
+        let (status, deposit) = user
+            .post(
+                "/api/transactions",
+                json!({ "date": date, "amount": amount, "kind": "bill", "category_id": reserva }),
+            )
+            .await;
+        assert_eq!(status, StatusCode::CREATED, "{deposit}");
+    }
+    let (status, resgate) = user
+        .post(
+            &format!("/api/cofrinhos/{reserva}/withdraw"),
+            json!({ "date": "2026-11-04", "amount": "200" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{resgate}");
+    let (_, categories) = user.get("/api/categories").await;
+
+    assert_eq!(count(&user, "2026-11").await, 2);
+    assert_eq!(wipe(&user, "2026-11").await, 2);
+
+    let (_, cofrinhos) = user.get("/api/cofrinhos").await;
+    let items = cofrinhos["items"].as_array().unwrap();
+    let item = items.iter().find(|item| item["category_id"] == reserva);
+    assert_eq!(
+        item.map(|item| &item["balance"]),
+        Some(&json!("100.00")),
+        "{cofrinhos}"
+    );
+    assert_eq!(user.get("/api/categories").await.1, categories);
+}
+
+#[sqlx::test]
+async fn sol30_a_leap_day_counts_under_its_month_and_year(pool: PgPool) {
+    let user = opened(pool, "ana@example.com").await;
+    spend(&user, "2028-02-29", "1", "Mercado").await;
+    spend(&user, "2028-03-01", "2", "Mercado").await;
+
+    assert_eq!(count(&user, "2028-02").await, 1);
+    assert_eq!(count(&user, "2028").await, 2);
+    assert_eq!(wipe(&user, "2028-02").await, 1);
+    assert_eq!(count(&user, "2028").await, 1);
 }
