@@ -1576,7 +1576,7 @@
           {
             "name": "period",
             "in": "query",
-            "description": "`YYYY-MM`, `YYYY` (2000 to 2100) or `all`",
+            "description": "`YYYY-MM` or `YYYY` (years 2000 to 2100), or `all`",
             "required": true,
             "schema": {
               "type": "string"
@@ -1627,7 +1627,7 @@
           {
             "name": "period",
             "in": "query",
-            "description": "`YYYY-MM`, `YYYY` (2000 to 2100) or `all`",
+            "description": "`YYYY-MM` or `YYYY` (years 2000 to 2100), or `all`",
             "required": true,
             "schema": {
               "type": "string"
