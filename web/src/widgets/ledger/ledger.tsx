@@ -28,8 +28,9 @@ import { TierPill } from "@/shared/ui/tier-pill";
 
 const KIND_LABEL: Record<Schemas["CategoryKind"], string> = { income: "Entrada", bill: "Saída", daily: "Diário" };
 
-const dayLabel = (date: string) => {
+const dayLabel = ({ date, is_future }: Schemas["Day"]) => {
   const short = shortDay(date);
+  if (is_future) return `Agendado · ${short}`;
   if (date === todayISO()) return `Hoje, ${short}`;
   if (date === yesterdayISO()) return `Ontem, ${short}`;
   return short;
@@ -52,14 +53,14 @@ const entryOf = (transaction: Transaction, categories: Schemas["Category"][] = [
 
 const titleOf = (transaction: Transaction, entry: Entry) => transaction.note || entry.label;
 
-/** Days that have entries and are not in the future, newest first. */
+/** Days that have entries, newest first. */
 const groupByDay = (days: Schemas["Day"][], transactions: Transaction[]) => {
   const byDate = new Map(days.map((day) => [day.date, day]));
   const groups = new Map<string, Transaction[]>();
   const sorted = [...transactions].sort((a, b) => b.date.localeCompare(a.date));
   for (const transaction of sorted) {
     const day = byDate.get(transaction.date);
-    if (!day || day.is_future) continue;
+    if (!day) continue;
     groups.set(day.date, [...(groups.get(day.date) ?? []), transaction]);
   }
   return [...groups].map(([date, entries]) => ({ day: byDate.get(date) as Schemas["Day"], entries }));
@@ -174,8 +175,8 @@ export const Ledger = ({ view, transactions, onLaunch, className }: LedgerProps)
         groups.map(({ day, entries }) => (
           <div key={day.date}>
             <h3 className="sticky top-14 z-10 -mx-2 flex items-center justify-between gap-2 bg-card/95 px-2 py-2 font-semibold text-muted-foreground text-sm backdrop-blur lg:top-0">
-              {dayLabel(day.date)}
-              <TierPill tier={day.tier} amount={day.balance} size="sm" />
+              {dayLabel(day)}
+              {!day.is_future && <TierPill tier={day.tier} amount={day.balance} size="sm" />}
             </h3>
             <ul className="flex flex-col">
               {entries.map((transaction) => (

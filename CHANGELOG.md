@@ -7,6 +7,14 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.12.1
+
+> Headline: scheduled entries show up in Lançamentos
+
+### Fixed
+
+- `Lançamentos` on `Mês` lists the month's future days too, headed `Agendado · 20 nov` and without a balance pill, so an entry dated later in the month can be edited or deleted. Before, such an entry counted in `Entradas` and `Projetado` but was nowhere on screen, and the empty state still read `Nenhum lançamento ainda`.
+
 ## 0.12.0
 
 > Headline: repeat an entry over the next months

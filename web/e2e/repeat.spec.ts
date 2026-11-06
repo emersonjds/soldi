@@ -31,7 +31,6 @@ test("an entry repeated 3x shows in three months; edit and delete reach this one
   await page.getByRole("button", { name: "Pular" }).click();
   await page.getByRole("dialog", { name: "Lançar" }).getByRole("button", { name: "Fechar" }).click();
 
-  // The ledger hides future days, so the series starts two months back and ends this month.
   const [first, second, third] = [monthFrom(-2), monthFrom(-1), monthFrom(0)];
   expect((await page.request.patch("/api/settings", { data: { opening_date: `${first}-01` } })).ok()).toBe(true);
 
