@@ -50,6 +50,16 @@ const TabLink = ({ item, active }: { item: NavItem; active: boolean }) => (
   </Link>
 );
 
+const TodayLink = ({ className }: { className?: string }) => (
+  <Link
+    href="/mes"
+    aria-label="Soldi, ir para hoje"
+    className="inline-flex min-h-11 w-fit items-center rounded-lg px-2 focus-visible:outline-2 focus-visible:outline-ring"
+  >
+    <Wordmark className={className} />
+  </Link>
+);
+
 export const AppShell = ({ children }: { children: ReactNode }) => {
   const pathname = usePathname();
   const isAt = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
@@ -64,8 +74,8 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
       <SidebarProvider style={{ "--sidebar-width": "15rem" } as React.CSSProperties}>
         <aside aria-label="Barra lateral" className="sticky top-0 hidden h-svh shrink-0 lg:block">
           <Sidebar collapsible="none" className="h-full border-r">
-            <SidebarHeader className="gap-1 px-3 pt-7 pb-6 [&>p]:px-2 [&>span]:px-2">
-              <Wordmark />
+            <SidebarHeader className="gap-1 px-3 pt-7 pb-6 [&>p]:px-2">
+              <TodayLink />
               <p className="text-muted-foreground text-sm">Seu mês no verde.</p>
               <Button
                 className="mt-6 min-h-12 w-full bg-brand text-base text-brand-foreground shadow-lg hover:bg-brand-hover"
@@ -114,7 +124,7 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
 
         <div className="flex min-w-0 flex-1 flex-col">
           <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b bg-background/90 px-4 backdrop-blur lg:hidden">
-            <Wordmark className="text-xl" />
+            <TodayLink className="-ml-2 text-xl" />
             <Link
               href="/ajustes"
               aria-label="Sua conta"

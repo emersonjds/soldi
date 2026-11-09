@@ -7,6 +7,14 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.15.0
+
+> Headline: the logo takes you to today
+
+### Web
+
+- The `Soldi` logo, in the sidebar and in the top bar, opens `Mês` on the current month (`Saldo hoje`) from any screen or month.
+
 ## 0.14.0
 
 > Headline: categories with their own colors, visible actions and a guided create flow
