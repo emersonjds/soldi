@@ -46,7 +46,7 @@ async fn sign_up_seeds_the_default_categories(pool: PgPool) {
         (
             &json!("bill"),
             &json!("piggy-bank"),
-            &json!("cat-11"),
+            &json!("cat-13"),
             &json!(true),
             &Value::Null,
             &Value::Null
@@ -55,6 +55,19 @@ async fn sign_up_seeds_the_default_categories(pool: PgPool) {
     assert!(!names(&categories).contains(&"Resgate"));
     let (_, everything) = user.get("/api/categories?include_system=true").await;
     assert_eq!(everything.as_array().unwrap().len(), 32);
+    for kind in ["income", "bill", "daily"] {
+        let mut colors: Vec<&str> = everything
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|category| category["kind"] == kind)
+            .map(|category| category["color"].as_str().unwrap())
+            .collect();
+        let count = colors.len();
+        colors.sort_unstable();
+        colors.dedup();
+        assert_eq!(colors.len(), count, "{kind}");
+    }
     let resgate = find(&everything, "Resgate");
     assert_eq!(
         (&resgate["kind"], &resgate["icon"], &resgate["is_savings"]),
@@ -198,16 +211,16 @@ async fn create_defaults_icon_and_takes_the_next_color(pool: PgPool) {
     assert_eq!(status, StatusCode::CREATED, "{created}");
     assert_eq!(created["name"], "Freela");
     assert_eq!(created["icon"], "circle-dashed");
-    assert_eq!(created["color"], "cat-4");
+    assert_eq!(created["color"], "cat-3");
     let (_, custom) = user
         .post(
             "/api/categories",
-            json!({ "name": "Academia", "kind": "bill", "icon": "dumbbell", "color": "cat-7" }),
+            json!({ "name": "Academia", "kind": "bill", "icon": "dumbbell", "color": "cat-20" }),
         )
         .await;
     assert_eq!(
         (&custom["icon"], &custom["color"]),
-        (&json!("dumbbell"), &json!("cat-7"))
+        (&json!("dumbbell"), &json!("cat-20"))
     );
     assert_eq!(
         user.get("/api/categories")
@@ -269,14 +282,14 @@ async fn patch_renames_and_recolors(pool: PgPool) {
     let (status, updated) = user
         .patch(
             &format!("/api/categories/{id}"),
-            json!({ "name": "Diversão", "icon": "party-popper", "color": "cat-2" }),
+            json!({ "name": "Diversão", "icon": "party-popper", "color": "cat-16" }),
         )
         .await;
 
     assert_eq!(status, StatusCode::OK, "{updated}");
     assert_eq!(updated["name"], "Diversão");
     assert_eq!(updated["icon"], "party-popper");
-    assert_eq!(updated["color"], "cat-2");
+    assert_eq!(updated["color"], "cat-16");
     assert_eq!(updated["kind"], "daily");
     let (_, unchanged) = user
         .patch(&format!("/api/categories/{id}"), json!({}))
@@ -507,4 +520,163 @@ async fn archiving_a_parent_archives_its_subcategories(pool: PgPool) {
         create_child(&user, "Móveis", "daily", &casa).await.0,
         StatusCode::NOT_FOUND
     );
+}
+
+async fn create(user: &TestApp, body: Value) -> (StatusCode, Value) {
+    user.post("/api/categories", body).await
+}
+
+fn slug(problem: &Value) -> &str {
+    problem["type"]
+        .as_str()
+        .unwrap()
+        .trim_start_matches("urn:soldi:error:")
+}
+
+#[sqlx::test]
+async fn a_top_level_color_is_unique_in_its_kind(pool: PgPool) {
+    let user = TestApp::signed_in(pool, "ana@example.com").await;
+    let lazer = format!("/api/categories/{}", user.category_id("Lazer").await);
+
+    let (status, problem) = create(
+        &user,
+        json!({ "name": "Feira", "kind": "daily", "color": "cat-1" }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(slug(&problem), "color-taken");
+    for kind in ["daily", "income"] {
+        let (status, created) = create(
+            &user,
+            json!({ "name": "Feira", "kind": kind, "color": "cat-16" }),
+        )
+        .await;
+        assert_eq!(status, StatusCode::CREATED, "{created}");
+    }
+    let (_, next) = create(&user, json!({ "name": "Bar", "kind": "daily" })).await;
+    assert_eq!(next["color"], "cat-17");
+    let (status, same) = user
+        .patch(&lazer, json!({ "name": "Diversão", "color": "cat-5" }))
+        .await;
+    assert_eq!((status, &same["color"]), (StatusCode::OK, &json!("cat-5")));
+    let (status, problem) = user.patch(&lazer, json!({ "color": "cat-1" })).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(slug(&problem), "color-taken");
+    let pets = user.category_id("Pets").await;
+    user.delete(&format!("/api/categories/{pets}")).await;
+    let (status, reused) = create(
+        &user,
+        json!({ "name": "Bichos", "kind": "daily", "color": "cat-10" }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{reused}");
+}
+
+#[sqlx::test]
+async fn a_kind_with_all_24_colors_taken_has_no_free_one(pool: PgPool) {
+    let user = TestApp::signed_in(pool, "ana@example.com").await;
+    for n in 16..=24 {
+        let (status, created) = create(
+            &user,
+            json!({ "name": format!("Nova {n}"), "kind": "daily" }),
+        )
+        .await;
+        assert_eq!(created["color"], format!("cat-{n}"), "{status}");
+    }
+
+    let (status, problem) = create(&user, json!({ "name": "Mais", "kind": "daily" })).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(slug(&problem), "palette-full");
+    let (_, problem) = create(
+        &user,
+        json!({ "name": "Mais", "kind": "daily", "color": "cat-3" }),
+    )
+    .await;
+    assert_eq!(slug(&problem), "color-taken");
+    let casa = user.category_id("Casa").await;
+    assert_eq!(
+        create_child(&user, "Móveis", "daily", &casa).await.0,
+        StatusCode::CREATED
+    );
+    let (_, bill) = create(&user, json!({ "name": "Mais", "kind": "bill" })).await;
+    assert_eq!(bill["color"], "cat-14");
+}
+
+#[sqlx::test]
+async fn a_subcategory_wears_its_parents_color(pool: PgPool) {
+    let user = TestApp::signed_in(pool, "ana@example.com").await;
+    user.open_at("0", "2026-10-01").await;
+    let casa = user.category_id("Casa").await;
+    let economia = user.category_id("Economia").await;
+
+    let (_, moveis) = create(
+        &user,
+        json!({ "name": "Móveis", "kind": "daily", "parent_id": casa, "color": "cat-20" }),
+    )
+    .await;
+    let (_, reserva) = create(
+        &user,
+        json!({ "name": "Reserva", "kind": "bill", "parent_id": economia, "color": "cat-1" }),
+    )
+    .await;
+    let (_, sofa) = create_child(&user, "Sofá", "daily", &casa).await;
+
+    assert_eq!(moveis["color"], "cat-9");
+    assert_eq!(reserva["color"], "cat-13");
+    let moveis = format!("/api/categories/{}", moveis["id"].as_str().unwrap());
+    let (status, kept) = user.patch(&moveis, json!({ "color": "cat-20" })).await;
+    assert_eq!((status, &kept["color"]), (StatusCode::OK, &json!("cat-9")));
+    let (_, spent) = user
+        .post(
+            "/api/transactions",
+            json!({ "date": "2026-11-05", "amount": "10", "kind": "daily", "category_id": sofa["id"] }),
+        )
+        .await;
+    user.delete(&format!("/api/categories/{}", sofa["id"].as_str().unwrap()))
+        .await;
+    let (status, recolored) = user
+        .patch(
+            &format!("/api/categories/{casa}"),
+            json!({ "color": "cat-20" }),
+        )
+        .await;
+    assert_eq!(
+        (status, &recolored["color"]),
+        (StatusCode::OK, &json!("cat-20"))
+    );
+    let (_, categories) = user.get("/api/categories").await;
+    assert_eq!(find(&categories, "Móveis")["color"], "cat-20");
+    let (_, november) = user.get("/api/transactions?month=2026-11").await;
+    let entry = november
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|entry| entry["id"] == spent["id"])
+        .unwrap();
+    assert_eq!(entry["category"]["color"], "cat-20");
+}
+
+#[sqlx::test]
+async fn moving_takes_the_parents_color_in_and_a_free_one_out(pool: PgPool) {
+    let user = TestApp::signed_in(pool, "ana@example.com").await;
+    let casa = user.category_id("Casa").await;
+    let pets = format!("/api/categories/{}", user.category_id("Pets").await);
+
+    let (status, inside) = user.patch(&pets, json!({ "parent_id": casa })).await;
+    assert_eq!(
+        (status, &inside["color"]),
+        (StatusCode::OK, &json!("cat-9"))
+    );
+    let (status, problem) = user
+        .patch(&pets, json!({ "parent_id": null, "color": "cat-1" }))
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(slug(&problem), "color-taken");
+    let (status, out) = user.patch(&pets, json!({ "parent_id": null })).await;
+    assert_eq!((status, &out["color"]), (StatusCode::OK, &json!("cat-10")));
+    user.patch(&pets, json!({ "parent_id": casa })).await;
+    let (_, chosen) = user
+        .patch(&pets, json!({ "parent_id": null, "color": "cat-22" }))
+        .await;
+    assert_eq!(chosen["color"], "cat-22");
 }

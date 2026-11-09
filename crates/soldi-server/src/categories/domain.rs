@@ -116,11 +116,6 @@ pub fn defaults() -> Vec<Seed> {
         .collect()
 }
 
-/// The token for the category at `index` among those of its kind.
-pub fn color_for(index: usize) -> String {
-    format!("cat-{}", index % 12 + 1)
-}
-
 /// The color of a top-level category given the colors other active top-levels of its kind hold:
 /// `requested` when free, the lowest free token when none is requested.
 pub fn pick_color(requested: Option<&str>, taken: &[String]) -> Result<String, AppError> {

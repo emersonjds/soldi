@@ -53,11 +53,11 @@ pub async fn create(
         input.target,
         input.deadline,
     )?;
-    let color = match input.color {
-        Some(color) => color,
+    let color = match &parent {
+        Some(parent) => parent.color.clone(),
         None => {
-            let count = repo::count_of_kind(&mut conn, user.id, input.kind).await?;
-            domain::color_for(usize::try_from(count).unwrap_or_default())
+            let taken = repo::top_colors(&mut conn, user.id, input.kind, None).await?;
+            domain::pick_color(input.color.as_deref(), &taken)?
         }
     };
     let new = NewCategory {
@@ -85,19 +85,28 @@ pub async fn update(
         .as_deref()
         .map(domain::check_color)
         .transpose()?;
-    let mut conn = pool.acquire().await?;
-    let category = active(&mut conn, user, id).await?;
+    let mut tx = pool.begin().await?;
+    let conn = &mut *tx;
+    let category = active(conn, user, id).await?;
     // ponytail: checked then written without a lock; two concurrent moves could nest two levels.
     if let Some(Some(parent_id)) = input.parent_id {
         domain::check_not_savings(&category)?;
-        let parent = active(&mut conn, user, parent_id).await?;
-        let has_children = repo::has_children(&mut conn, user.id, id).await?;
+        let parent = active(conn, user, parent_id).await?;
+        let has_children = repo::has_children(conn, user.id, id).await?;
         domain::check_parent(Some(id), category.kind, has_children, &parent)?;
     }
     let parent_id = input.parent_id.unwrap_or(category.parent_id);
     let parent = match parent_id {
-        Some(parent_id) => repo::find_active(&mut conn, user.id, parent_id).await?,
+        Some(parent_id) => repo::find_active(conn, user.id, parent_id).await?,
         None => None,
+    };
+    let color = match (&parent, parent_id) {
+        (Some(parent), _) => Some(parent.color.clone()),
+        (None, None) if input.color.is_some() || category.parent_id.is_some() => {
+            let taken = repo::top_colors(conn, user.id, category.kind, Some(id)).await?;
+            Some(domain::pick_color(input.color.as_deref(), &taken)?)
+        }
+        (None, _) => None,
     };
     let cofrinho = domain::is_cofrinho_parent(parent.as_ref());
     domain::check_goal(cofrinho, input.target.flatten(), input.deadline.flatten())?;
@@ -108,14 +117,19 @@ pub async fn update(
     let change = CategoryChange {
         name: name.as_deref(),
         icon: input.icon.as_deref(),
-        color: input.color.as_deref(),
+        color: color.as_deref(),
         parent_id: input.parent_id,
         target,
         deadline,
     };
-    repo::update(&mut conn, user.id, id, change)
+    let updated = repo::update(conn, user.id, id, change)
         .await?
-        .ok_or(AppError::NotFound)
+        .ok_or(AppError::NotFound)?;
+    if updated.parent_id.is_none() && color.is_some() {
+        repo::recolor_children(conn, user.id, id, &updated.color).await?;
+    }
+    tx.commit().await?;
+    Ok(updated)
 }
 
 pub async fn archive(pool: &PgPool, user: &CurrentUser, id: Uuid) -> Result<(), AppError> {
