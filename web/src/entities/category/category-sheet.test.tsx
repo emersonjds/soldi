@@ -1,3 +1,4 @@
+import { QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Toaster } from "sonner";
@@ -221,6 +222,23 @@ describe("CategorySheet", () => {
     expect(within(sheet).getByRole("button", { name: "Criar" })).toBeDisabled();
     await userEvent.type(within(sheet).getByLabelText("Nome"), "Feira{Enter}");
     expect(requests.some((request) => request.method === "POST")).toBe(false);
+
+    await userEvent.click(within(sheet).getByRole("button", { name: "Criar subcategoria" }));
+    expect(await screen.findByRole("dialog", { name: "Subcategoria de qual categoria?" })).toBeInTheDocument();
+  });
+
+  it("goes straight to the cofrinho form when Economia arrives after the sheet opened", async () => {
+    stubApi({ "GET /api/categories": { status: 200, body: WITH_COFRINHOS } });
+    const { rerender, client } = renderWithQuery(<CategorySheet kind="bill" open onOpenChange={vi.fn()} />);
+    await screen.findByRole("dialog", { name: "Nova" });
+
+    rerender(
+      <QueryClientProvider client={client}>
+        <CategorySheet kind="bill" open onOpenChange={vi.fn()} parentId={ECONOMIA.id} />
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByRole("dialog", { name: "Novo cofrinho" })).toBeInTheDocument();
   });
 
   it("says when the color is taken or the palette is full", async () => {

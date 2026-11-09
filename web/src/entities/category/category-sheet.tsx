@@ -254,7 +254,16 @@ const CategoryForm = ({ kind, category, parentId: presetParent, onChangeParent, 
           Usa a cor de {parent.name}
         </p>
       )}
-      {full && <p className="text-muted-foreground text-sm">{allTaken(Boolean(category))}</p>}
+      {full && (
+        <div className="flex flex-col items-start gap-2">
+          <p className="text-muted-foreground text-sm">{allTaken(Boolean(category))}</p>
+          {onChangeParent && !category && (
+            <Button type="button" variant="link" className="min-h-11 px-0 text-base" onClick={onChangeParent}>
+              Criar subcategoria
+            </Button>
+          )}
+        </div>
+      )}
       {!parentId && !full && (
         <fieldset className="flex flex-col gap-2">
           <legend className="mb-2 font-semibold text-sm">Cor</legend>
@@ -328,9 +337,12 @@ export const CategorySheet = ({ open, onOpenChange, onSaved, onArchive, ...form 
   const [step, setStep] = useState<"kind" | "parent" | "form">(start);
   const [chosen, setChosen] = useState(form.parentId);
   const [opened, setOpened] = useState(open);
-  if (open !== opened) {
+  const [preset, setPreset] = useState(form.parentId);
+  if (open !== opened || form.parentId !== preset) {
+    const late = open === opened && step === "kind";
     setOpened(open);
-    if (open) {
+    setPreset(form.parentId);
+    if ((open && open !== opened) || (late && form.parentId)) {
       setStep(start);
       setChosen(form.parentId);
     }
