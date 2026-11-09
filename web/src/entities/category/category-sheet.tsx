@@ -15,10 +15,11 @@ import { hasProblem, hasStatus, type Schemas } from "@/shared/api/client";
 import { positiveAmount } from "@/shared/lib/money";
 import { AmountInput } from "@/shared/ui/amount-input";
 import { BrandButton } from "@/shared/ui/brand-button";
-import { categoryBg } from "@/shared/ui/category-icon";
+import { CategoryIcon, categoryBg } from "@/shared/ui/category-icon";
 import { ResponsiveSheet } from "@/shared/ui/responsive-sheet";
 
 import { systemCategoriesQuery, useCategories, useCreateCategory, useUpdateCategory } from "./categories-query";
+import { ChooseKind, ChooseParent } from "./category-chooser";
 import { IconPicker } from "./icon-picker";
 
 type Kind = Schemas["CategoryKind"];
@@ -91,14 +92,17 @@ type FormProps = {
   category?: Category;
   /** The parent preselected when creating. */
   parentId?: string;
+  /** Given: creating under a parent offers `Trocar`, which calls it. */
+  onChangeParent?: () => void;
   onSaved: (category: Category) => void;
   onArchive: (category: Category) => void;
 };
 
-const CategoryForm = ({ kind, category, parentId: presetParent, onSaved, onArchive }: FormProps) => {
+const CategoryForm = ({ kind, category, parentId: presetParent, onChangeParent, onSaved, onArchive }: FormProps) => {
   const [name, setName] = useState(category?.name ?? "");
   const [icon, setIcon] = useState(category?.icon);
-  const [parentId, setParentId] = useState(category?.parent_id ?? presetParent ?? "");
+  const [movedTo, setParentId] = useState(category?.parent_id ?? "");
+  const parentId = category ? movedTo : (presetParent ?? "");
   const [submitted, setSubmitted] = useState(false);
   const categories = useCategories(kind);
   const list = categories.data ?? [];
@@ -159,6 +163,17 @@ const CategoryForm = ({ kind, category, parentId: presetParent, onSaved, onArchi
 
   return (
     <form noValidate onSubmit={submit} className="flex flex-col gap-5">
+      {!category && parent && (
+        <div className="flex items-center gap-3">
+          <CategoryIcon icon={parent.icon} color={parent.color} className="size-8" />
+          <span className="flex-1 font-medium">Em {parent.name}</span>
+          {onChangeParent && (
+            <Button type="button" variant="ghost" className="min-h-11 text-base text-primary" onClick={onChangeParent}>
+              Trocar
+            </Button>
+          )}
+        </div>
+      )}
       <Field className="gap-1.5" data-invalid={Boolean(nameError)}>
         <FieldLabel htmlFor="category-name">Nome</FieldLabel>
         <Input
@@ -214,7 +229,7 @@ const CategoryForm = ({ kind, category, parentId: presetParent, onSaved, onArchi
           </Field>
         </div>
       )}
-      {!hasChildren && !fixedParent && (
+      {category && !hasChildren && !fixedParent && (
         <Field className="gap-1.5">
           <FieldLabel htmlFor="category-parent">Subcategoria de</FieldLabel>
           <NativeSelect
@@ -239,7 +254,16 @@ const CategoryForm = ({ kind, category, parentId: presetParent, onSaved, onArchi
           Usa a cor de {parent.name}
         </p>
       )}
-      {full && <p className="text-muted-foreground text-sm">{allTaken(Boolean(category))}</p>}
+      {full && (
+        <div className="flex flex-col items-start gap-2">
+          <p className="text-muted-foreground text-sm">{allTaken(Boolean(category))}</p>
+          {onChangeParent && !category && (
+            <Button type="button" variant="link" className="min-h-11 px-0 text-base" onClick={onChangeParent}>
+              Criar subcategoria
+            </Button>
+          )}
+        </div>
+      )}
       {!parentId && !full && (
         <fieldset className="flex flex-col gap-2">
           <legend className="mb-2 font-semibold text-sm">Cor</legend>
@@ -309,34 +333,66 @@ type CategorySheetProps = Omit<FormProps, "onSaved" | "onArchive"> & {
  */
 export const CategorySheet = ({ open, onOpenChange, onSaved, onArchive, ...form }: CategorySheetProps) => {
   const categories = useCategories(form.kind);
-  const parentId = form.category?.parent_id ?? form.parentId;
-  const cofrinho = Boolean(categories.data?.find((each) => each.id === parentId)?.is_savings);
+  const start = form.category || form.parentId ? "form" : "kind";
+  const [step, setStep] = useState<"kind" | "parent" | "form">(start);
+  const [chosen, setChosen] = useState(form.parentId);
+  const [opened, setOpened] = useState(open);
+  const [preset, setPreset] = useState(form.parentId);
+  if (open !== opened || form.parentId !== preset) {
+    const late = open === opened && step === "kind";
+    setOpened(open);
+    setPreset(form.parentId);
+    if ((open && open !== opened) || (late && form.parentId)) {
+      setStep(start);
+      setChosen(form.parentId);
+    }
+  }
+  const find = (id?: string) => categories.data?.find((each) => each.id === id);
+  const cofrinho = Boolean(find(form.category?.parent_id ?? chosen)?.is_savings);
+  // A cofrinho started from Cofrinhos stays under Economia.
+  const fixed = form.category || find(form.parentId)?.is_savings;
+  const pick = (parentId?: string) => {
+    setChosen(parentId);
+    setStep("form");
+  };
   const done = form.category ? "salv" : "criad";
   const saved = cofrinho ? `Cofrinho ${done}o` : `Categoria ${done}a`;
   const title = cofrinho
     ? `${form.category ? "Editar" : "Novo"} cofrinho`
     : `${form.category ? "Editar" : "Nova"} categoria`;
+  const heading = {
+    kind: ["Nova", "Categoria nova ou dentro de uma que já existe?"],
+    parent: ["Subcategoria de qual categoria?", "Busque e escolha a categoria que vai agrupar a nova."],
+    form: [title, "Nome, ícone e cor; subcategoria se quiser agrupar."],
+  }[step];
 
   return (
     <ResponsiveSheet
       open={open}
       onOpenChange={onOpenChange}
-      title={title}
-      description="Nome, ícone e cor; subcategoria se quiser agrupar."
+      title={heading[0]}
+      description={heading[1]}
+      onBack={step === "parent" ? () => setStep("kind") : undefined}
     >
-      <CategoryForm
-        key={form.category?.id ?? form.parentId ?? "new"}
-        {...form}
-        onSaved={(category) => {
-          onOpenChange(false);
-          toast.success(saved);
-          onSaved?.(category);
-        }}
-        onArchive={(category) => {
-          onOpenChange(false);
-          onArchive?.(category);
-        }}
-      />
+      {step === "kind" && <ChooseKind onCategory={() => pick()} onSubcategory={() => setStep("parent")} />}
+      {step === "parent" && <ChooseParent kind={form.kind} onPick={pick} />}
+      <div hidden={step !== "form"}>
+        <CategoryForm
+          key={form.category?.id ?? "new"}
+          {...form}
+          parentId={chosen}
+          onChangeParent={fixed ? undefined : () => setStep("parent")}
+          onSaved={(category) => {
+            onOpenChange(false);
+            toast.success(saved);
+            onSaved?.(category);
+          }}
+          onArchive={(category) => {
+            onOpenChange(false);
+            onArchive?.(category);
+          }}
+        />
+      </div>
     </ResponsiveSheet>
   );
 };

@@ -183,6 +183,9 @@ describe("TransactionSheet", () => {
     setup();
 
     await userEvent.click(await screen.findByRole("button", { name: "Nova categoria" }));
+    await userEvent.click(
+      within(await screen.findByRole("dialog", { name: "Nova" })).getByRole("button", { name: /^Categoria/ }),
+    );
     const create = await screen.findByRole("dialog", { name: "Nova categoria" });
     const requests = stubApi({
       "GET /api/categories": { status: 200, body: [...CATEGORIES, carro] },
