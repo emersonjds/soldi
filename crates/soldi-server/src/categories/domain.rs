@@ -43,7 +43,7 @@ const DEFAULTS: [(&str, CategoryKind, &str); 30] = {
     ]
 };
 
-/// The savings categories (SOL-20), seeded after the defaults with their own color.
+/// The savings categories (SOL-20), seeded after the defaults.
 const SAVINGS: [(&str, CategoryKind); 2] = [
     ("Economia", CategoryKind::Bill),
     ("Resgate", CategoryKind::Income),
@@ -59,7 +59,7 @@ pub struct Seed {
     pub is_savings: bool,
 }
 
-/// `cat-1..cat-12` in order (docs/design/tokens.md).
+/// The owners of `cat-1..cat-12`, in order (docs/design/tokens.md).
 const PALETTE: [&str; 12] = [
     "Mercado",
     "Comida fora",
@@ -75,39 +75,76 @@ const PALETTE: [&str; 12] = [
     "Extra",
 ];
 
-/// The defaults with their colors: the palette's twelve take their own token, the others
-/// share the palette round-robin in list order.
+const TOKENS: u8 = 24;
+
+/// The defaults then the savings ones: the palette's twelve take their own token, every other
+/// takes the lowest token not yet used in its kind, in list order.
 pub fn defaults() -> Vec<Seed> {
-    let mut others = 0;
+    let owned = |name: &str| {
+        PALETTE
+            .iter()
+            .position(|&owner| owner == name)
+            .map(|index| format!("cat-{}", index + 1))
+    };
+    let mut taken: Vec<(CategoryKind, String)> = DEFAULTS
+        .iter()
+        .filter_map(|&(name, kind, _)| Some((kind, owned(name)?)))
+        .collect();
     DEFAULTS
         .iter()
-        .map(|&(name, kind, icon)| {
-            let index = PALETTE.iter().position(|&owner| owner == name);
-            let color = color_for(index.unwrap_or_else(|| {
-                others += 1;
-                others - 1
-            }));
+        .map(|&(name, kind, icon)| (name, kind, icon, false))
+        .chain(SAVINGS.map(|(name, kind)| (name, kind, "piggy-bank", true)))
+        .map(|(name, kind, icon, is_savings)| {
+            let color = owned(name).unwrap_or_else(|| {
+                let colors: Vec<String> = taken
+                    .iter()
+                    .filter(|(each, _)| *each == kind)
+                    .map(|(_, color)| color.clone())
+                    .collect();
+                let color = pick_color(None, &colors).expect("24 tokens cover the seeds");
+                taken.push((kind, color.clone()));
+                color
+            });
             Seed {
                 name,
                 kind,
                 icon,
                 color,
-                is_savings: false,
+                is_savings,
             }
         })
-        .chain(SAVINGS.map(|(name, kind)| Seed {
-            name,
-            kind,
-            icon: "piggy-bank",
-            color: "cat-11".into(),
-            is_savings: true,
-        }))
         .collect()
 }
 
 /// The token for the category at `index` among those of its kind.
 pub fn color_for(index: usize) -> String {
     format!("cat-{}", index % 12 + 1)
+}
+
+/// The color of a top-level category given the colors other active top-levels of its kind hold:
+/// `requested` when free, the lowest free token when none is requested.
+pub fn pick_color(requested: Option<&str>, taken: &[String]) -> Result<String, AppError> {
+    let free = |color: &str| !taken.iter().any(|each| each == color);
+    match requested {
+        Some(color) if free(color) => Ok(color.to_string()),
+        Some(_) => Err(color_taken()),
+        None => (1..=TOKENS)
+            .map(|n| format!("cat-{n}"))
+            .find(|color| free(color))
+            .ok_or_else(|| {
+                AppError::rule(
+                    "palette-full",
+                    "All 24 colors are in use in this kind; archive one or make it a subcategory.",
+                )
+            }),
+    }
+}
+
+pub fn color_taken() -> AppError {
+    AppError::rule(
+        "color-taken",
+        "Another active category of this kind has this color.",
+    )
 }
 
 pub fn check_name(name: &str) -> Result<String, AppError> {
@@ -138,9 +175,10 @@ pub fn check_color(color: &str) -> Result<(), AppError> {
     let number = color
         .strip_prefix("cat-")
         .and_then(|n| n.parse::<u8>().ok());
-    let canonical = number.is_some_and(|n| (1..=12).contains(&n) && color == format!("cat-{n}"));
+    let canonical =
+        number.is_some_and(|n| (1..=TOKENS).contains(&n) && color == format!("cat-{n}"));
     if !canonical {
-        return Err(AppError::invalid("color", "must be one of cat-1 to cat-12"));
+        return Err(AppError::invalid("color", "must be one of cat-1 to cat-24"));
     }
     Ok(())
 }
@@ -252,8 +290,8 @@ mod tests {
         assert_eq!(
             savings,
             [
-                ("Economia", CategoryKind::Bill, "piggy-bank", "cat-11"),
-                ("Resgate", CategoryKind::Income, "piggy-bank", "cat-11")
+                ("Economia", CategoryKind::Bill, "piggy-bank", "cat-13"),
+                ("Resgate", CategoryKind::Income, "piggy-bank", "cat-2")
             ]
         );
     }
@@ -292,7 +330,7 @@ mod tests {
     }
 
     #[test]
-    fn the_twelve_named_defaults_own_the_palette_and_the_rest_share_it() {
+    fn the_twelve_named_defaults_own_the_palette_and_the_rest_take_the_lowest_free_token() {
         let seeds = defaults();
         let color = |name: &str| {
             seeds
@@ -316,15 +354,55 @@ mod tests {
             ("Assinaturas", "cat-10"),
             ("Salário", "cat-11"),
             ("Extra", "cat-12"),
+            ("Reembolso", "cat-1"),
+            ("Resgate", "cat-2"),
+            ("Condomínio", "cat-1"),
+            ("Celular", "cat-3"),
+            ("Impostos", "cat-12"),
+            ("Economia", "cat-13"),
+            ("Combustível", "cat-6"),
+            ("Casa", "cat-9"),
+            ("Outros", "cat-15"),
         ] {
             assert_eq!(color(name), token, "{name}");
         }
-        assert_eq!(color("Reembolso"), "cat-1");
-        assert_eq!(color("Condomínio"), "cat-2");
-        assert_eq!(color("Casa"), "cat-12");
-        assert_eq!(color("Pets"), "cat-1");
-        assert_eq!(color("Outros"), "cat-6");
-        assert_eq!(color_for(3), "cat-4");
+        for kind in [
+            CategoryKind::Income,
+            CategoryKind::Bill,
+            CategoryKind::Daily,
+        ] {
+            let mut colors: Vec<_> = seeds
+                .iter()
+                .filter(|seed| seed.kind == kind)
+                .map(|seed| seed.color.as_str())
+                .collect();
+            let count = colors.len();
+            colors.sort_unstable();
+            colors.dedup();
+            assert_eq!(colors.len(), count, "{kind:?}");
+        }
+    }
+
+    #[test]
+    fn a_top_level_color_is_free_in_its_kind() {
+        let taken =
+            |tokens: &[u8]| -> Vec<String> { tokens.iter().map(|n| format!("cat-{n}")).collect() };
+        let full = taken(&(1..=24).collect::<Vec<_>>());
+        let slug = |result: Result<String, AppError>| match result {
+            Err(AppError::Rule { slug, .. }) => slug,
+            other => panic!("{other:?}"),
+        };
+
+        assert_eq!(pick_color(None, &[]).unwrap(), "cat-1");
+        assert_eq!(pick_color(None, &taken(&[1, 3])).unwrap(), "cat-2");
+        assert_eq!(pick_color(None, &full[..23]).unwrap(), "cat-24");
+        assert_eq!(pick_color(Some("cat-4"), &taken(&[1, 3])).unwrap(), "cat-4");
+        assert_eq!(
+            slug(pick_color(Some("cat-3"), &taken(&[1, 3]))),
+            "color-taken"
+        );
+        assert_eq!(slug(pick_color(None, &full)), "palette-full");
+        assert_eq!(slug(pick_color(Some("cat-9"), &full)), "color-taken");
     }
 
     #[test]
@@ -410,11 +488,11 @@ mod tests {
     }
 
     #[test]
-    fn colors_are_the_twelve_tokens() {
-        for color in ["cat-1", "cat-9", "cat-10", "cat-12"] {
+    fn colors_are_the_twenty_four_tokens() {
+        for color in ["cat-1", "cat-9", "cat-10", "cat-13", "cat-24"] {
             assert!(check_color(color).is_ok(), "{color}");
         }
-        for color in ["cat-0", "cat-13", "cat-01", "#ff0000", "cat-", "cat-x"] {
+        for color in ["cat-0", "cat-25", "cat-01", "#ff0000", "cat-", "cat-x"] {
             assert_eq!(field(check_color(color)), "color", "{color}");
         }
     }
