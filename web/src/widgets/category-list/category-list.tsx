@@ -2,10 +2,16 @@
 
 import { useState } from "react";
 
-import { ChevronRight, PiggyBank, Plus, Tags } from "lucide-react";
+import { MoreVertical, Pencil, PiggyBank, Plus, Tags, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useArchiveCategory, useCategories } from "@/entities/category/categories-query";
 import { CategorySheet } from "@/entities/category/category-sheet";
@@ -33,6 +39,50 @@ const row =
 
 type Editing = { open: boolean; category?: Category; parentId?: string };
 
+const item = "min-h-11 text-base";
+
+const deletedTitle = (parent?: Category) => {
+  if (!parent) return "Categoria excluída";
+  return parent.is_savings ? "Cofrinho excluído" : "Subcategoria excluída";
+};
+
+type ActionsProps = { category: Category; onEdit: () => void; onAdd?: () => void; onDelete: () => void };
+
+/** The row's kebab: Editar, the parent's `Nova subcategoria`/`Novo cofrinho` and Excluir, which Economia never offers. */
+const RowActions = ({ category, onEdit, onAdd, onDelete }: ActionsProps) => (
+  <DropdownMenu>
+    <DropdownMenuTrigger asChild>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        aria-label={`Mais ações de ${category.name}`}
+        className="size-11 shrink-0 rounded-full text-muted-foreground"
+      >
+        <MoreVertical className="size-5" />
+      </Button>
+    </DropdownMenuTrigger>
+    <DropdownMenuContent align="end" className="w-auto max-w-72">
+      <DropdownMenuItem className={item} onSelect={onEdit}>
+        <Pencil />
+        Editar
+      </DropdownMenuItem>
+      {onAdd && (
+        <DropdownMenuItem className={item} onSelect={onAdd}>
+          <Plus />
+          {`${category.is_savings ? "Novo cofrinho" : "Nova subcategoria"} em ${category.name}`}
+        </DropdownMenuItem>
+      )}
+      {!category.is_savings && (
+        <DropdownMenuItem variant="destructive" className={item} onSelect={onDelete}>
+          <Trash2 />
+          Excluir
+        </DropdownMenuItem>
+      )}
+    </DropdownMenuContent>
+  </DropdownMenu>
+);
+
 /** Ajustes › Categorias: one kind at a time, each parent with its subcategories under it; a row opens the edit sheet. */
 export const CategoryList = ({ kind, onKindChange }: { kind: Kind; onKindChange: (kind: Kind) => void }) => {
   const categories = useCategories(kind);
@@ -45,7 +95,9 @@ export const CategoryList = ({ kind, onKindChange }: { kind: Kind; onKindChange:
 
   // ponytail: no unarchive endpoint, so the DELETE waits for the toast; closing the tab inside those 5 s keeps it.
   const archiveLater = (category: Category) => {
-    const children = (categories.data ?? []).filter((each) => each.parent_id === category.id);
+    const all = categories.data ?? [];
+    const children = all.filter((each) => each.parent_id === category.id);
+    const parent = all.find((each) => each.id === category.parent_id);
     const ids = [category.id, ...children.map((child) => child.id)];
     setArchiving((current) => [...current, ...ids]);
     let undone = false;
@@ -56,15 +108,18 @@ export const CategoryList = ({ kind, onKindChange }: { kind: Kind; onKindChange:
           restore(ids);
           toast.error(
             hasProblem(error, "cofrinho-not-empty")
-              ? "Resgate tudo antes de arquivar"
-              : "Não foi possível arquivar a categoria.",
+              ? "Resgate tudo antes de excluir."
+              : "Não foi possível excluir a categoria.",
           );
         },
       });
     };
-    toast("Categoria arquivada", {
+    const count = `${children.length} ${children.length === 1 ? "subcategoria" : "subcategorias"}`;
+    toast(deletedTitle(parent), {
       description:
-        children.length > 0 && `${children.length} ${children.length === 1 ? "subcategoria" : "subcategorias"} também`,
+        children.length > 0
+          ? `${count} também; lançamentos continuam com a categoria.`
+          : "Lançamentos continuam com a categoria.",
       duration: 5000,
       action: {
         label: "Desfazer",
@@ -116,26 +171,18 @@ export const CategoryList = ({ kind, onKindChange }: { kind: Kind; onKindChange:
                       <span className="hidden sm:inline">Cofrinhos</span>
                     </span>
                   )}
-                  <ChevronRight className="size-5 shrink-0 text-muted-foreground" aria-hidden />
                 </button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  aria-label={`${parent.is_savings ? "Novo cofrinho" : "Nova subcategoria"} em ${parent.name}`}
-                  onClick={() => setEditing({ open: true, parentId: parent.id })}
-                  className="size-11 shrink-0 rounded-full text-muted-foreground"
-                >
-                  <Plus className="size-5" />
-                </Button>
+                <RowActions
+                  category={parent}
+                  onEdit={() => setEditing({ open: true, category: parent })}
+                  onAdd={() => setEditing({ open: true, parentId: parent.id })}
+                  onDelete={() => archiveLater(parent)}
+                />
               </div>
               {children.length > 0 && (
-                <ul
-                  aria-label={`Subcategorias de ${parent.name}`}
-                  className="mr-12 mb-1 ml-7 flex flex-col border-l pl-2"
-                >
+                <ul aria-label={`Subcategorias de ${parent.name}`} className="mb-1 ml-7 flex flex-col border-l pl-2">
                   {children.map((child) => (
-                    <li key={child.id}>
+                    <li key={child.id} className="flex items-center gap-1">
                       <button
                         type="button"
                         aria-label={`Editar ${child.name}`}
@@ -144,8 +191,12 @@ export const CategoryList = ({ kind, onKindChange }: { kind: Kind; onKindChange:
                       >
                         <CategoryIcon icon={child.icon} color={child.color} className="size-8" />
                         <span className="min-w-0 flex-1 truncate text-base">{child.name}</span>
-                        <ChevronRight className="size-5 shrink-0 text-muted-foreground" aria-hidden />
                       </button>
+                      <RowActions
+                        category={child}
+                        onEdit={() => setEditing({ open: true, category: child })}
+                        onDelete={() => archiveLater(child)}
+                      />
                     </li>
                   ))}
                 </ul>
