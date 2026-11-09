@@ -38,6 +38,7 @@ export const DateChips = ({
             type="date"
             value={value}
             onChange={(event) => event.target.value && onChange(event.target.value)}
+            onClick={(event) => event.currentTarget.showPicker?.()}
             className="w-34 bg-transparent text-base outline-none"
           />
         </label>

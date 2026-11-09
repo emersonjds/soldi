@@ -410,7 +410,8 @@ export interface components {
             transaction_id?: string | null;
         };
         /**
-         * @description `icon` is a lucide icon name; `color` a palette token, `cat-1` to `cat-12`; `parent_id` the
+         * @description `icon` is a lucide icon name; `color` a palette token, `cat-1` to `cat-24`, unique among the
+         *     active top-level categories of a kind and the parent's on a subcategory; `parent_id` the
          *     category this one is a subcategory of, null for a top-level one. `is_savings` marks the
          *     user's `Economia` (bill) and `Resgate` (income); `target` and `deadline` belong only to
          *     cofrinhos, the subcategories of `Economia`.
@@ -550,8 +551,10 @@ export interface components {
             name: string;
         };
         /**
-         * @description `icon` defaults to `circle-dashed`; `color` to the next token for the kind. `parent_id` makes
-         *     it a subcategory of one of the caller's active top-level categories of the same kind.
+         * @description `icon` defaults to `circle-dashed`; `color`, `cat-1` to `cat-24`, to the lowest token free in
+         *     the kind. `parent_id` makes it a subcategory of one of the caller's active top-level categories
+         *     of the same kind; for a subcategory `color` is validated, then ignored: it wears its parent's
+         *     color.
          */
         CreateCategory: {
             color?: string | null;
@@ -806,9 +809,10 @@ export interface components {
             name?: string | null;
         };
         /**
-         * @description Absent fields stay as they are; the kind never changes; `"parent_id": null` makes it top-level;
-         *     `null` clears `target` or `deadline`, which only a subcategory of `Economia` may set. Leaving
-         *     `Economia` clears both.
+         * @description Absent fields stay as they are; the kind never changes; `"parent_id": null` makes it top-level,
+         *     with `color` or the lowest token free in the kind. For a subcategory `color` is validated, then
+         *     ignored: it wears its parent's; a parent's new color reaches its subcategories. `null` clears `target` or
+         *     `deadline`, which only a subcategory of `Economia` may set. Leaving `Economia` clears both.
          */
         UpdateCategory: {
             color?: string | null;
@@ -1444,7 +1448,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description A bad field, a parent of another kind, `nested-subcategory` when the parent is a subcategory, `savings-category` under `Resgate`, or `not-a-cofrinho` for a target or deadline outside `Economia` */
+            /** @description A bad field, a parent of another kind, `nested-subcategory` when the parent is a subcategory, `savings-category` under `Resgate`, `not-a-cofrinho` for a target or deadline outside `Economia`, `color-taken` when another active top-level category of the kind has the color, or `palette-full` when no color is given and all 24 are taken in the kind */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -1552,7 +1556,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description A bad field, a parent of another kind or itself, `nested-subcategory` when the parent is a subcategory or this category has subcategories, `savings-category` when moving `Economia` or `Resgate` or under `Resgate`, or `not-a-cofrinho` for a target or deadline outside `Economia` */
+            /** @description A bad field, a parent of another kind or itself, `nested-subcategory` when the parent is a subcategory or this category has subcategories, `savings-category` when moving `Economia` or `Resgate` or under `Resgate`, `not-a-cofrinho` for a target or deadline outside `Economia`, `color-taken` when another active top-level category of the kind has the color, or `palette-full` when moving to top-level without a color and all 24 are taken in the kind */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -1822,7 +1826,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description `import-has-errors` when the preview listed errors and `skip_errors` is not true; `opening_date` after the earliest imported date; `opening_balance` with more than two places */
+            /** @description `import-has-errors` when the preview listed errors and `skip_errors` is not true; `opening_date` after the earliest imported date; `opening_balance` with more than two places; `palette-full` when a new `Importado` category finds all 24 colors taken in its kind */
             422: {
                 headers: {
                     [name: string]: unknown;

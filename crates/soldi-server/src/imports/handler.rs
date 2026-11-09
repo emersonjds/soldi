@@ -61,7 +61,7 @@ pub async fn preview_xlsx(
         (status = 401, body = Problem, content_type = "application/problem+json"),
         (status = 404, body = Problem, content_type = "application/problem+json", description = "No preview of the caller with this token, or it was confirmed already"),
         (status = 410, body = Problem, content_type = "application/problem+json", description = "`import-expired`: the preview is older than 15 minutes"),
-        (status = 422, body = Problem, content_type = "application/problem+json", description = "`import-has-errors` when the preview listed errors and `skip_errors` is not true; `opening_date` after the earliest imported date; `opening_balance` with more than two places")))]
+        (status = 422, body = Problem, content_type = "application/problem+json", description = "`import-has-errors` when the preview listed errors and `skip_errors` is not true; `opening_date` after the earliest imported date; `opening_balance` with more than two places; `palette-full` when a new `Importado` category finds all 24 colors taken in its kind")))]
 pub async fn confirm_xlsx(
     State(state): State<AppState>,
     user: CurrentUser,

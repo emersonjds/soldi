@@ -12,5 +12,5 @@ fi
 
 web=$(grep -E '^web/' <<<"$staged" | grep -vE '^web/(openapi\.json|pnpm-lock\.yaml|out/)' | sed 's#^web/##' || true)
 if [[ -n "$web" ]]; then
-  (cd web && pnpm exec biome check $web)
+  (cd web && pnpm exec biome check --no-errors-on-unmatched $web)
 fi

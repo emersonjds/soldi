@@ -195,7 +195,7 @@ async fn confirming_writes_the_rows_and_a_second_import_of_the_year_replaces_the
     assert_eq!(march[0]["amount"], "2259.56");
     assert_eq!(march[0]["category"]["name"], "Importado (conta)");
     assert_eq!(march[0]["category"]["icon"], "file-spreadsheet");
-    assert_eq!(march[0]["category"]["color"], "cat-12");
+    assert_eq!(march[0]["category"]["color"], "cat-14");
     let (_, me) = ana.get("/api/auth/me").await;
     assert_eq!(me["onboarded"], true);
 
@@ -291,4 +291,27 @@ async fn a_preview_with_errors_is_confirmed_only_when_skipping_them(pool: PgPool
     );
     let (_, entries) = ana.get("/api/transactions?month=2026-01").await;
     assert_eq!(entries.as_array().unwrap().len(), 1, "{entries}");
+}
+
+#[sqlx::test]
+async fn an_import_with_no_free_color_for_its_category_writes_nothing(pool: PgPool) {
+    let ana = TestApp::signed_in(pool, "ana@example.com").await;
+    ana.open_at("0", "2025-01-01").await;
+    for n in 14..=24 {
+        let (status, created) = ana
+            .post(
+                "/api/categories",
+                json!({ "name": format!("Conta {n}"), "kind": "bill" }),
+            )
+            .await;
+        assert_eq!(status, StatusCode::CREATED, "{created}");
+    }
+    let token = token_of(&ana, SAMPLE).await;
+
+    let (status, problem) = confirm(&ana, &token, "2025-02-28").await;
+
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(problem["type"], "urn:soldi:error:palette-full");
+    let (_, march) = ana.get("/api/transactions?month=2026-03").await;
+    assert_eq!(march, json!([]));
 }

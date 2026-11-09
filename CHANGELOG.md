@@ -7,6 +7,22 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.14.0
+
+> Headline: categories with their own colors, visible actions and a guided create flow
+
+### Changed
+
+- Category colors: the palette grows from 12 to 24 tokens (`cat-13..cat-24`). Active top-level categories never share a color within a kind; a subcategory, cofrinhos included, always wears its parent's color, and changing the parent's color changes its children's. `POST`/`PATCH /api/categories` answer 422 `color-taken` for a color another top-level of the kind holds and `palette-full` when none is free; a `color` sent for a subcategory is validated, then ignored. The importer gives a new `Importado (...)` category a free color.
+- Migration `0016_unique_category_colors` recolors repeated top-level colors per kind (the palette's named owners keep theirs) and aligns every subcategory with its parent. It cannot be undone.
+- New accounts seed one color per category within a kind (`Economia` is now `cat-13`, `Resgate` `cat-2`).
+
+### Web
+
+- Clicking anywhere on a date field opens the calendar, including the `Outra data` chip in Lançar.
+- `Ajustes › Categorias`: every row, subcategories and `Importado (...)` included, has a `⋮` menu with `Editar`, `Nova subcategoria em …` / `Novo cofrinho em …` and `Excluir` (not on `Economia`). `Excluir` acts at once with `Desfazer` and says the entries keep the category. The sheet's `Arquivar` is now `Excluir`.
+- The `+` asks `Categoria` or `Subcategoria` first, then lets you search and pick the parent by icon and name; the create form shows `Em {Pai}` with `Trocar` instead of a dropdown. Taken colors show disabled with `usada por …`; a subcategory shows `Usa a cor de …`.
+
 ## 0.13.0
 
 > Headline: delete the entries of a month, a year or all

@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 const API = process.env.E2E_API_URL ?? process.env.E2E_BASE_URL ?? "http://localhost:8080";
 const SHOTS = process.env.E2E_SHOTS;
 
-test("a subcategory is created under Pets, renamed, and archived with its parent until Desfazer", async ({
+test("a subcategory is created under Pets from the header +, renamed, and deleted with its parent until Desfazer", async ({
   page,
   request,
 }) => {
@@ -28,8 +28,16 @@ test("a subcategory is created under Pets, renamed, and archived with its parent
   await expect(page.getByRole("heading", { level: 1, name: "Categorias" })).toBeVisible();
   await expect(page.getByRole("radio", { name: "Diário" })).toBeChecked();
 
-  await page.getByRole("button", { name: "Nova subcategoria em Pets" }).click();
+  await page.getByRole("button", { name: "Nova categoria" }).click();
+  await page
+    .getByRole("dialog", { name: "Nova" })
+    .getByRole("button", { name: /^Subcategoria/ })
+    .click();
+  const parents = page.getByRole("dialog", { name: "Subcategoria de qual categoria?" });
+  await parents.getByPlaceholder("Buscar categoria").fill("Pets");
+  await parents.getByRole("option", { name: "Pets" }).click();
   const create = page.getByRole("dialog", { name: "Nova categoria" });
+  await expect(create.getByText("Em Pets")).toBeVisible();
   await create.getByLabel("Nome").fill("Pet shop");
   await create.getByRole("button", { name: "Criar" }).click();
   const children = page.getByRole("list", { name: "Subcategorias de Pets" });
@@ -43,10 +51,10 @@ test("a subcategory is created under Pets, renamed, and archived with its parent
   await edit.getByRole("button", { name: "Salvar" }).click();
   await expect(children.getByRole("button", { name: "Editar Pet shop e banho" })).toBeVisible();
 
-  await page.getByRole("button", { name: "Editar Pets" }).click();
-  await page.getByRole("dialog", { name: "Editar categoria" }).getByRole("button", { name: "Arquivar" }).click();
-  await expect(page.getByText("Categoria arquivada")).toBeVisible();
-  await expect(page.getByText("1 subcategoria também")).toBeVisible();
+  await page.getByRole("button", { name: "Mais ações de Pets" }).click();
+  await page.getByRole("menuitem", { name: "Excluir" }).click();
+  await expect(page.getByText("Categoria excluída")).toBeVisible();
+  await expect(page.getByText("1 subcategoria também; lançamentos continuam com a categoria.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Editar Pets" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Editar Pet shop e banho" })).toHaveCount(0);
   await page.getByRole("button", { name: "Desfazer" }).click();

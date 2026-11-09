@@ -7,6 +7,12 @@ export const categoriesQuery = queryOptions({
   queryFn: async () => dataOrThrow(await api.GET("/api/categories")),
 });
 
+/** Also `Resgate`, which holds a color like any top-level category. */
+export const systemCategoriesQuery = queryOptions({
+  queryKey: ["categories", "system"],
+  queryFn: async () => dataOrThrow(await api.GET("/api/categories", { params: { query: { include_system: true } } })),
+});
+
 export const useCategories = (kind: Schemas["CategoryKind"]) =>
   useQuery({ ...categoriesQuery, select: (categories) => categories.filter((category) => category.kind === kind) });
 

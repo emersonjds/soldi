@@ -128,7 +128,7 @@ async fn subcategories_add_up_in_their_parents_group(pool: PgPool) {
     assert_eq!(
         report["groups"][0],
         json!({
-            "category_id": casa, "name": "Casa", "icon": "sofa", "color": "cat-12",
+            "category_id": casa, "name": "Casa", "icon": "sofa", "color": "cat-9",
             "kind": "daily", "amount": "200.00", "pct": "50.0", "previous_amount": "50.00",
             "delta_pct": "300.0", "children": [moveis, decoracao]
         })

@@ -14,7 +14,7 @@ use crate::settings::domain::check_money;
 
 pub const MAX_FILE_BYTES: usize = 5 * 1024 * 1024;
 
-/// Created on the first import; icon `file-spreadsheet`, color `cat-12`.
+/// Created on the first import; icon `file-spreadsheet`, the lowest free color of the kind.
 pub const CATEGORIES: [(&str, CategoryKind); 3] = [
     ("Importado (entrada)", CategoryKind::Income),
     ("Importado (conta)", CategoryKind::Bill),

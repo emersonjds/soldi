@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT color FROM categories\n         WHERE user_id = $1 AND kind = $2 AND parent_id IS NULL AND archived_at IS NULL\n           AND id IS DISTINCT FROM $3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "color",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "categories",
+            "name": "color"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "45f3ccb1f7243739a51dd46879af7644a8301088ad87e2fa3f1bac0b137a8c59"
+}

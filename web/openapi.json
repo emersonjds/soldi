@@ -7,7 +7,7 @@
       "name": "AGPL-3.0-only",
       "identifier": "AGPL-3.0-only"
     },
-    "version": "0.13.0"
+    "version": "0.14.0"
   },
   "paths": {
     "/api/auth/me": {
@@ -692,7 +692,7 @@
             }
           },
           "422": {
-            "description": "A bad field, a parent of another kind, `nested-subcategory` when the parent is a subcategory, `savings-category` under `Resgate`, or `not-a-cofrinho` for a target or deadline outside `Economia`",
+            "description": "A bad field, a parent of another kind, `nested-subcategory` when the parent is a subcategory, `savings-category` under `Resgate`, `not-a-cofrinho` for a target or deadline outside `Economia`, `color-taken` when another active top-level category of the kind has the color, or `palette-full` when no color is given and all 24 are taken in the kind",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -824,7 +824,7 @@
             }
           },
           "422": {
-            "description": "A bad field, a parent of another kind or itself, `nested-subcategory` when the parent is a subcategory or this category has subcategories, `savings-category` when moving `Economia` or `Resgate` or under `Resgate`, or `not-a-cofrinho` for a target or deadline outside `Economia`",
+            "description": "A bad field, a parent of another kind or itself, `nested-subcategory` when the parent is a subcategory or this category has subcategories, `savings-category` when moving `Economia` or `Resgate` or under `Resgate`, `not-a-cofrinho` for a target or deadline outside `Economia`, `color-taken` when another active top-level category of the kind has the color, or `palette-full` when moving to top-level without a color and all 24 are taken in the kind",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -1157,7 +1157,7 @@
             }
           },
           "422": {
-            "description": "`import-has-errors` when the preview listed errors and `skip_errors` is not true; `opening_date` after the earliest imported date; `opening_balance` with more than two places",
+            "description": "`import-has-errors` when the preview listed errors and `skip_errors` is not true; `opening_date` after the earliest imported date; `opening_balance` with more than two places; `palette-full` when a new `Importado` category finds all 24 colors taken in its kind",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -1910,7 +1910,7 @@
       },
       "Category": {
         "type": "object",
-        "description": "`icon` is a lucide icon name; `color` a palette token, `cat-1` to `cat-12`; `parent_id` the\ncategory this one is a subcategory of, null for a top-level one. `is_savings` marks the\nuser's `Economia` (bill) and `Resgate` (income); `target` and `deadline` belong only to\ncofrinhos, the subcategories of `Economia`.",
+        "description": "`icon` is a lucide icon name; `color` a palette token, `cat-1` to `cat-24`, unique among the\nactive top-level categories of a kind and the parent's on a subcategory; `parent_id` the\ncategory this one is a subcategory of, null for a top-level one. `is_savings` marks the\nuser's `Economia` (bill) and `Resgate` (income); `target` and `deadline` belong only to\ncofrinhos, the subcategories of `Economia`.",
         "required": [
           "id",
           "name",
@@ -2273,7 +2273,7 @@
       },
       "CreateCategory": {
         "type": "object",
-        "description": "`icon` defaults to `circle-dashed`; `color` to the next token for the kind. `parent_id` makes\nit a subcategory of one of the caller's active top-level categories of the same kind.",
+        "description": "`icon` defaults to `circle-dashed`; `color`, `cat-1` to `cat-24`, to the lowest token free in\nthe kind. `parent_id` makes it a subcategory of one of the caller's active top-level categories\nof the same kind; for a subcategory `color` is validated, then ignored: it wears its parent's\ncolor.",
         "required": [
           "name",
           "kind"
@@ -3021,7 +3021,7 @@
       },
       "UpdateCategory": {
         "type": "object",
-        "description": "Absent fields stay as they are; the kind never changes; `\"parent_id\": null` makes it top-level;\n`null` clears `target` or `deadline`, which only a subcategory of `Economia` may set. Leaving\n`Economia` clears both.",
+        "description": "Absent fields stay as they are; the kind never changes; `\"parent_id\": null` makes it top-level,\nwith `color` or the lowest token free in the kind. For a subcategory `color` is validated, then\nignored: it wears its parent's; a parent's new color reaches its subcategories. `null` clears `target` or\n`deadline`, which only a subcategory of `Economia` may set. Leaving `Economia` clears both.",
         "properties": {
           "color": {
             "type": [

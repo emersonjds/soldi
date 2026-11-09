@@ -72,6 +72,25 @@ pub async fn find_active(
     .await
 }
 
+/// `find_active` holding a share lock: a concurrent recolor of this parent waits or is seen.
+pub async fn find_active_shared(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    id: Uuid,
+) -> Result<Option<Category>, sqlx::Error> {
+    sqlx::query_as!(
+        Category,
+        r#"SELECT id, name, kind AS "kind: CategoryKind", icon, color, parent_id, is_savings,
+                  target, deadline
+           FROM categories WHERE user_id = $1 AND id = $2 AND archived_at IS NULL
+           FOR SHARE"#,
+        user_id,
+        id
+    )
+    .fetch_optional(&mut *conn)
+    .await
+}
+
 /// The user's `Economia` (bill) or `Resgate` (income).
 pub async fn savings(
     conn: &mut PgConnection,
@@ -105,21 +124,42 @@ pub async fn has_children(
     .await
 }
 
-/// Archived ones included, so a new category does not reuse a recent color; the savings ones
-/// keep their own.
-pub async fn count_of_kind(
+/// The colors of the user's active top-level categories of `kind`, but `except`.
+pub async fn top_colors(
     conn: &mut PgConnection,
     user_id: Uuid,
     kind: CategoryKind,
-) -> Result<i64, sqlx::Error> {
+    except: Option<Uuid>,
+) -> Result<Vec<String>, sqlx::Error> {
     sqlx::query_scalar!(
-        r#"SELECT count(*) AS "count!" FROM categories
-           WHERE user_id = $1 AND kind = $2 AND NOT is_savings"#,
+        "SELECT color FROM categories
+         WHERE user_id = $1 AND kind = $2 AND parent_id IS NULL AND archived_at IS NULL
+           AND id IS DISTINCT FROM $3",
         user_id,
-        kind.as_str()
+        kind.as_str(),
+        except
     )
-    .fetch_one(&mut *conn)
+    .fetch_all(&mut *conn)
     .await
+}
+
+/// Archived subcategories included.
+pub async fn recolor_children(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    parent_id: Uuid,
+    color: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        "UPDATE categories SET color = $3, updated_at = now()
+         WHERE user_id = $1 AND parent_id = $2 AND color <> $3",
+        user_id,
+        parent_id,
+        color
+    )
+    .execute(&mut *conn)
+    .await?;
+    Ok(())
 }
 
 pub struct NewCategory<'a> {
@@ -156,27 +196,21 @@ pub async fn insert(
     .await
 }
 
-/// The id of the user's active category with this name and kind, created when missing.
-pub async fn find_or_insert(
+/// The id of the user's active category with this name and kind.
+pub async fn find_id_by_name(
     conn: &mut PgConnection,
     user_id: Uuid,
     name: &str,
     kind: CategoryKind,
-    icon: &str,
-    color: &str,
-) -> Result<Uuid, sqlx::Error> {
+) -> Result<Option<Uuid>, sqlx::Error> {
     sqlx::query_scalar!(
-        "INSERT INTO categories (user_id, name, kind, icon, color) VALUES ($1, $2, $3, $4, $5)
-         ON CONFLICT (user_id, kind, lower(name)) WHERE archived_at IS NULL
-         DO UPDATE SET name = categories.name
-         RETURNING id",
+        "SELECT id FROM categories
+         WHERE user_id = $1 AND kind = $2 AND lower(name) = lower($3) AND archived_at IS NULL",
         user_id,
-        name,
         kind.as_str(),
-        icon,
-        color
+        name
     )
-    .fetch_one(&mut *conn)
+    .fetch_optional(&mut *conn)
     .await
 }
 
