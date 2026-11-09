@@ -703,3 +703,23 @@ async fn a_child_created_while_its_parent_is_recolored_wears_the_new_color(pool:
         (StatusCode::CREATED, &json!("cat-20"))
     );
 }
+
+#[sqlx::test]
+async fn moving_out_into_a_full_kind_has_no_free_color(pool: PgPool) {
+    let user = TestApp::signed_in(pool, "ana@example.com").await;
+    let casa = user.category_id("Casa").await;
+    let (_, moveis) = create_child(&user, "Móveis", "daily", &casa).await;
+    for n in 16..=24 {
+        create(
+            &user,
+            json!({ "name": format!("Nova {n}"), "kind": "daily" }),
+        )
+        .await;
+    }
+
+    let moveis = format!("/api/categories/{}", moveis["id"].as_str().unwrap());
+    let (status, problem) = user.patch(&moveis, json!({ "parent_id": null })).await;
+
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(slug(&problem), "palette-full");
+}
