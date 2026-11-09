@@ -3,7 +3,7 @@
 import { type FormEvent, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
-import { Archive } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -87,7 +87,7 @@ const problemOf = (error: Error | null, editing: boolean) => {
 
 type FormProps = {
   kind: Kind;
-  /** Given: the form edits it and offers `Arquivar`. */
+  /** Given: the form edits it and offers `Excluir`. */
   category?: Category;
   /** The parent preselected when creating. */
   parentId?: string;
@@ -288,8 +288,8 @@ const CategoryForm = ({ kind, category, parentId: presetParent, onSaved, onArchi
           className="min-h-11 text-base text-destructive hover:text-destructive"
           onClick={() => onArchive(category)}
         >
-          <Archive className="size-5" />
-          Arquivar
+          <Trash2 className="size-5" />
+          Excluir
         </Button>
       )}
     </form>

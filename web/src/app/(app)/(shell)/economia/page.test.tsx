@@ -254,12 +254,12 @@ describe("Cofrinhos", () => {
     expect(within(sheet).getByLabelText("Nome")).toHaveValue("Reserva");
   });
 
-  it("Arquivar inside Editar follows the same rule", async () => {
+  it("Excluir inside Editar follows the same rule", async () => {
     const requests = open();
 
     await userEvent.click(within(await detail("Reserva")).getByRole("button", { name: "Editar" }));
     await userEvent.click(
-      within(await screen.findByRole("dialog", { name: "Editar cofrinho" })).getByRole("button", { name: "Arquivar" }),
+      within(await screen.findByRole("dialog", { name: "Editar cofrinho" })).getByRole("button", { name: "Excluir" }),
     );
 
     expect(await screen.findByText("Resgate tudo antes de arquivar")).toBeInTheDocument();

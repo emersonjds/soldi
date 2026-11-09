@@ -39,7 +39,7 @@ const RACAO: Category = { ...PETS, id: "c1000000-0000-4000-8000-000000000011", n
 const VET: Category = { ...PETS, id: "c1000000-0000-4000-8000-000000000012", name: "Veterinário", parent_id: PETS.id };
 const IMPORTADO: Category = {
   id: "c1000000-0000-4000-8000-000000000020",
-  name: "Importado (gasto)",
+  name: "Importado (diário)",
   kind: "daily",
   icon: "circle-dashed",
   color: "cat-12",
@@ -61,6 +61,11 @@ const open = (replies: Record<string, Reply> = {}) => {
 
 const sent = (requests: Request[], method: string) => requests.filter((request) => request.method === method);
 const list = () => screen.findByRole("list", { name: /^Categorias de / });
+const menu = async (name: string, user = userEvent.setup()) => {
+  await user.click(within(await list()).getByRole("button", { name: `Mais ações de ${name}` }));
+  const items = within(await screen.findByRole("menu")).getAllByRole("menuitem");
+  return { user, items, labels: items.map((item) => item.textContent) };
+};
 const names = (element: HTMLElement) =>
   within(element)
     .queryAllByRole("button", { name: /^Editar / })
@@ -83,7 +88,7 @@ describe("Ajustes › Categorias", () => {
     expect(daily).toHaveAccessibleName("Categorias de Diário");
     expect(names(daily)).toEqual([
       "Editar Comida fora",
-      "Editar Importado (gasto)",
+      "Editar Importado (diário)",
       "Editar Mercado",
       "Editar Pets",
       "Editar Ração",
@@ -91,7 +96,54 @@ describe("Ajustes › Categorias", () => {
     ]);
     const children = within(daily).getByRole("list", { name: "Subcategorias de Pets" });
     expect(names(children)).toEqual(["Editar Ração", "Editar Veterinário"]);
-    expect(within(daily).getAllByRole("button", { name: /^Nova subcategoria em / })).toHaveLength(4);
+    expect(within(daily).getAllByRole("button", { name: /^Mais ações de / })).toHaveLength(6);
+    expect(within(daily).queryByRole("button", { name: /^Nova subcategoria em / })).not.toBeInTheDocument();
+  });
+
+  it("offers Editar, Nova subcategoria and Excluir on a top-level row's kebab", async () => {
+    open();
+
+    expect((await menu("Pets")).labels).toEqual(["Editar", "Nova subcategoria em Pets", "Excluir"]);
+  });
+
+  it("offers Editar and Excluir on a subcategory's kebab", async () => {
+    open();
+
+    expect((await menu("Ração")).labels).toEqual(["Editar", "Excluir"]);
+  });
+
+  it("treats Importado like any category", async () => {
+    open();
+
+    expect((await menu("Importado (diário)")).labels).toEqual([
+      "Editar",
+      "Nova subcategoria em Importado (diário)",
+      "Excluir",
+    ]);
+  });
+
+  it("opens the edit sheet from the kebab's Editar", async () => {
+    open();
+
+    const { user, items } = await menu("Veterinário");
+    await user.click(items[0]);
+
+    const sheet = await screen.findByRole("dialog", { name: "Editar categoria" });
+    expect(within(sheet).getByLabelText("Nome")).toHaveValue("Veterinário");
+  });
+
+  it("opens the kebab with Enter and gives focus back to it on Esc", async () => {
+    open();
+    const user = userEvent.setup();
+
+    const kebab = within(await list()).getByRole("button", { name: "Mais ações de Mercado" });
+    kebab.focus();
+    await user.keyboard("{Enter}");
+    expect(await screen.findByRole("menu")).toBeInTheDocument();
+    await user.keyboard("{Escape}");
+
+    await waitFor(() => expect(screen.queryByRole("menu")).not.toBeInTheDocument());
+    expect(kebab).toHaveFocus();
   });
 
   it("switches kind through ?k=", async () => {
@@ -137,10 +189,11 @@ describe("Ajustes › Categorias", () => {
     expect(await sent(requests, "POST")[0].json()).toMatchObject({ name: "Internet", kind: "bill" });
   });
 
-  it("creates a subcategory from the parent's +", async () => {
+  it("creates a subcategory from the parent's kebab", async () => {
     open();
 
-    await userEvent.click(await screen.findByRole("button", { name: "Nova subcategoria em Pets" }));
+    const { user, items } = await menu("Pets");
+    await user.click(items[1]);
     const sheet = await screen.findByRole("dialog", { name: "Nova categoria" });
     expect(within(sheet).getByLabelText("Subcategoria de")).toHaveValue(PETS.id);
   });
@@ -153,20 +206,22 @@ describe("Ajustes › Categorias", () => {
     expect(within(sheet).getByLabelText("Nome")).toHaveValue("Ração");
   });
 
-  it("marks Economia as the cofrinhos and creates one from its +", async () => {
+  it("marks Economia as the cofrinhos, never deletes it and creates one from its kebab", async () => {
     setSearch("k=bill");
     open();
 
     const economia = within(await list()).getByRole("button", { name: "Editar Economia" });
     expect(within(economia).getByText("Cofrinhos")).toBeInTheDocument();
     expect(screen.getByRole("list", { name: "Subcategorias de Economia" })).toHaveTextContent("ReservaViagem");
-    await userEvent.click(screen.getByRole("button", { name: "Novo cofrinho em Economia" }));
+    const { user, items, labels } = await menu("Economia");
+    expect(labels).toEqual(["Editar", "Novo cofrinho em Economia"]);
+    await user.click(items[1]);
 
     const sheet = await screen.findByRole("dialog", { name: "Novo cofrinho" });
     expect(within(sheet).getByLabelText("Meta")).toBeInTheDocument();
   });
 
-  describe("archiving", () => {
+  describe("deleting", () => {
     beforeEach(() => {
       vi.useFakeTimers({ shouldAdvanceTime: true });
     });
@@ -176,9 +231,8 @@ describe("Ajustes › Categorias", () => {
     });
 
     const archive = async (name: string) => {
-      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
-      await user.click(within(await list()).getByRole("button", { name: `Editar ${name}` }));
-      await user.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Arquivar" }));
+      const { user } = await menu(name, userEvent.setup({ advanceTimers: vi.advanceTimersByTime }));
+      await user.click(screen.getByRole("menuitem", { name: "Excluir" }));
       return user;
     };
 
@@ -187,20 +241,42 @@ describe("Ajustes › Categorias", () => {
 
       const user = await archive("Pets");
 
-      expect(await screen.findByText("Categoria arquivada")).toBeInTheDocument();
-      expect(screen.getByText("2 subcategorias também")).toBeInTheDocument();
-      expect(names(await list())).toEqual(["Editar Comida fora", "Editar Importado (gasto)", "Editar Mercado"]);
+      expect(await screen.findByText("Categoria excluída")).toBeInTheDocument();
+      expect(screen.getByText("2 subcategorias também; lançamentos continuam com a categoria.")).toBeInTheDocument();
+      expect(names(await list())).toEqual(["Editar Comida fora", "Editar Importado (diário)", "Editar Mercado"]);
       await user.click(screen.getByRole("button", { name: "Desfazer" }));
       expect(await screen.findByRole("button", { name: "Editar Veterinário" })).toBeInTheDocument();
       act(() => vi.advanceTimersByTime(6000));
       expect(sent(requests, "DELETE")).toHaveLength(0);
     });
 
-    it("archives once the toast is gone; one subcategory alone says nothing more", async () => {
+    it("counts a single subcategory in the singular", async () => {
+      open({ "GET /api/categories": { status: 200, body: LIST.filter((category) => category !== VET) } });
+
+      await archive("Pets");
+
+      expect(
+        await screen.findByText("1 subcategoria também; lançamentos continuam com a categoria."),
+      ).toBeInTheDocument();
+    });
+
+    it("deletes from the edit sheet the same way", async () => {
+      open();
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+
+      await user.click(within(await list()).getByRole("button", { name: "Editar Mercado" }));
+      await user.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Excluir" }));
+
+      expect(await screen.findByText("Categoria excluída")).toBeInTheDocument();
+      expect(screen.getByText("Lançamentos continuam com a categoria.")).toBeInTheDocument();
+    });
+
+    it("deletes once the toast is gone; a subcategory only says the entries stay", async () => {
       const requests = open({ [`DELETE /api/categories/${RACAO.id}`]: { status: 204 } });
 
       await archive("Ração");
-      await screen.findByText("Categoria arquivada");
+      await screen.findByText("Subcategoria excluída");
+      expect(screen.getByText("Lançamentos continuam com a categoria.")).toBeInTheDocument();
       expect(screen.queryByText(/também/)).not.toBeInTheDocument();
       expect(sent(requests, "DELETE")).toHaveLength(0);
       act(() => vi.advanceTimersByTime(6000));
@@ -218,20 +294,20 @@ describe("Ajustes › Categorias", () => {
       });
 
       await archive("Reserva");
-      await screen.findByText("Categoria arquivada");
+      await screen.findByText("Cofrinho excluído");
       act(() => vi.advanceTimersByTime(6000));
 
-      expect(await screen.findByText("Resgate tudo antes de arquivar")).toBeInTheDocument();
+      expect(await screen.findByText("Resgate tudo antes de excluir.")).toBeInTheDocument();
     });
 
-    it("brings the category back and says so when archiving fails", async () => {
+    it("brings the category back and says so when deleting fails", async () => {
       open({ [`DELETE /api/categories/${COMIDA.id}`]: { status: 500, body: problem(500, "Falhou.") } });
 
       await archive("Comida fora");
-      await screen.findByText("Categoria arquivada");
+      await screen.findByText("Categoria excluída");
       act(() => vi.advanceTimersByTime(6000));
 
-      expect(await screen.findByText("Não foi possível arquivar a categoria.")).toBeInTheDocument();
+      expect(await screen.findByText("Não foi possível excluir a categoria.")).toBeInTheDocument();
       expect(screen.getByRole("button", { name: "Editar Comida fora" })).toBeInTheDocument();
     });
   });
