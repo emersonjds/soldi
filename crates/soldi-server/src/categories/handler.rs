@@ -47,7 +47,7 @@ pub async fn list_categories(
         (status = 401, body = Problem, content_type = "application/problem+json"),
         (status = 404, body = Problem, content_type = "application/problem+json", description = "`parent_id` is missing, archived or another user's"),
         (status = 409, body = Problem, content_type = "application/problem+json", description = "An active category of the same kind has this name"),
-        (status = 422, body = Problem, content_type = "application/problem+json", description = "A bad field, a parent of another kind, `nested-subcategory` when the parent is a subcategory, `savings-category` under `Resgate`, or `not-a-cofrinho` for a target or deadline outside `Economia`")))]
+        (status = 422, body = Problem, content_type = "application/problem+json", description = "A bad field, a parent of another kind, `nested-subcategory` when the parent is a subcategory, `savings-category` under `Resgate`, `not-a-cofrinho` for a target or deadline outside `Economia`, `color-taken` when another active top-level category of the kind has the color, or `palette-full` when no color is given and all 24 are taken in the kind")))]
 pub async fn create_category(
     State(state): State<AppState>,
     user: CurrentUser,
@@ -64,7 +64,7 @@ pub async fn create_category(
         (status = 401, body = Problem, content_type = "application/problem+json"),
         (status = 404, body = Problem, content_type = "application/problem+json", description = "The category or `parent_id` is missing, archived or another user's"),
         (status = 409, body = Problem, content_type = "application/problem+json"),
-        (status = 422, body = Problem, content_type = "application/problem+json", description = "A bad field, a parent of another kind or itself, `nested-subcategory` when the parent is a subcategory or this category has subcategories, `savings-category` when moving `Economia` or `Resgate` or under `Resgate`, or `not-a-cofrinho` for a target or deadline outside `Economia`")))]
+        (status = 422, body = Problem, content_type = "application/problem+json", description = "A bad field, a parent of another kind or itself, `nested-subcategory` when the parent is a subcategory or this category has subcategories, `savings-category` when moving `Economia` or `Resgate` or under `Resgate`, `not-a-cofrinho` for a target or deadline outside `Economia`, `color-taken` when another active top-level category of the kind has the color, or `palette-full` when moving to top-level without a color and all 24 are taken in the kind")))]
 pub async fn update_category(
     State(state): State<AppState>,
     user: CurrentUser,
