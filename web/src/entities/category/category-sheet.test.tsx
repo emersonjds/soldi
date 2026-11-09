@@ -9,9 +9,12 @@ import {
   CATEGORIES,
   COMIDA,
   ECONOMIA,
+  EXTRA,
   MERCADO,
   problem,
   RESERVA,
+  RESGATE,
+  SALARIO,
   stubApi,
   VIAGEM,
   WITH_COFRINHOS,
@@ -37,6 +40,7 @@ type Reply = { status: number; body?: unknown };
 
 const rule = (slug: string) => ({ ...problem(422, slug), type: `urn:soldi:error:${slug}` });
 const ALL_TAKEN = "Todas as 24 cores estão em uso. Crie como subcategoria ou arquive uma categoria.";
+const ALL_TAKEN_EDITING = "Todas as 24 cores estão em uso. Mantenha como subcategoria ou arquive uma categoria.";
 
 const open = (
   props: { category?: Category; parentId?: string; kind?: Category["kind"] },
@@ -216,7 +220,41 @@ describe("CategorySheet", () => {
       [`PATCH /api/categories/${MERCADO.id}`]: { status: 422, body: rule("palette-full") },
     });
     await userEvent.click(within(sheet).getByRole("button", { name: "Salvar" }));
-    expect(await within(sheet).findByText(ALL_TAKEN)).toBeInTheDocument();
+    expect(await within(sheet).findByText(ALL_TAKEN_EDITING)).toBeInTheDocument();
+  });
+
+  it("counts Resgate, listed only with include_system, among the colors taken", async () => {
+    const resgate: Category = { ...RESGATE, color: "cat-1" };
+    stubApi({
+      "GET /api/categories": { status: 200, body: [EXTRA, SALARIO] },
+      "GET /api/categories?include_system=true": { status: 200, body: [EXTRA, SALARIO, resgate] },
+    });
+    renderWithQuery(<CategorySheet kind="income" open onOpenChange={vi.fn()} />);
+
+    const sheet = await screen.findByRole("dialog", { name: "Nova categoria" });
+    expect(await within(sheet).findByRole("radio", { name: "Cor Âmbar, usada por Resgate" })).toBeDisabled();
+    expect(within(sheet).getByRole("radio", { name: "Cor Laranja" })).toBeChecked();
+  });
+
+  it("asks to keep a subcategory under its parent when every color is taken", async () => {
+    const full = Array.from({ length: 24 }, (_, index) => ({
+      ...MERCADO,
+      id: `c2000000-0000-4000-8000-0000000000${String(index).padStart(2, "0")}`,
+      name: `Gasto ${index + 1}`,
+      color: `cat-${index + 1}`,
+    }));
+    const child: Category = {
+      ...MERCADO,
+      id: "c3000000-0000-4000-8000-000000000001",
+      name: "Feira",
+      parent_id: full[0].id,
+    };
+    open({ category: child }, { "GET /api/categories": { status: 200, body: [...full, child] } });
+
+    const sheet = await screen.findByRole("dialog", { name: "Editar categoria" });
+    await userEvent.selectOptions(await within(sheet).findByLabelText("Subcategoria de"), "");
+    expect(within(sheet).getByText(ALL_TAKEN_EDITING)).toBeInTheDocument();
+    expect(within(sheet).getByRole("button", { name: "Salvar" })).toBeDisabled();
   });
 
   it("says when the new name is taken, or saving fails otherwise", async () => {

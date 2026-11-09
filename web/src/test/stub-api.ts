@@ -6,13 +6,14 @@ type Reply = { status: number; body?: unknown };
 
 export const problem = (status: number, detail: string) => ({ type: "about:blank", title: detail, status, detail });
 
-/** Answers `fetch` by `"METHOD /path"`; unknown calls get a 404 problem. Returns the requests seen. */
+/** Answers `fetch` by `"METHOD /path?query"`, else `"METHOD /path"`; unknown calls get a 404 problem. Returns the requests seen. */
 export const stubApi = (replies: Record<string, Reply>) => {
   const requests: Request[] = [];
   vi.stubGlobal("fetch", async (request: Request) => {
     requests.push(request);
-    const route = `${request.method} ${new URL(request.url).pathname}`;
-    const reply = replies[route] ?? { status: 404, body: problem(404, route) };
+    const url = new URL(request.url);
+    const route = `${request.method} ${url.pathname}`;
+    const reply = replies[`${route}${url.search}`] ?? replies[route] ?? { status: 404, body: problem(404, route) };
     const body = reply.body === undefined ? null : JSON.stringify(reply.body);
     const type = reply.status >= 400 ? "application/problem+json" : "application/json";
     return new Response(body, { status: reply.status, headers: { "content-type": type } });

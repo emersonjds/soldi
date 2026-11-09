@@ -2,6 +2,7 @@
 
 import { type FormEvent, useState } from "react";
 
+import { useQuery } from "@tanstack/react-query";
 import { Archive } from "lucide-react";
 import { toast } from "sonner";
 
@@ -17,7 +18,7 @@ import { BrandButton } from "@/shared/ui/brand-button";
 import { categoryBg } from "@/shared/ui/category-icon";
 import { ResponsiveSheet } from "@/shared/ui/responsive-sheet";
 
-import { useCategories, useCreateCategory, useUpdateCategory } from "./categories-query";
+import { systemCategoriesQuery, useCategories, useCreateCategory, useUpdateCategory } from "./categories-query";
 import { IconPicker } from "./icon-picker";
 
 type Kind = Schemas["CategoryKind"];
@@ -59,7 +60,8 @@ const holderOf = (list: Category[], token: string, except?: string) =>
 const freeColor = (list: Category[], except?: string) =>
   COLOR_NAMES.find(([token]) => !holderOf(list, token, except))?.[0];
 
-const ALL_TAKEN = "Todas as 24 cores estão em uso. Crie como subcategoria ou arquive uma categoria.";
+const allTaken = (editing: boolean) =>
+  `Todas as 24 cores estão em uso. ${editing ? "Mantenha" : "Crie"} como subcategoria ou arquive uma categoria.`;
 
 /** Names a new cofrinho can start from, with their icons. */
 const SUGGESTIONS: [name: string, icon: string][] = [
@@ -79,7 +81,7 @@ const problemOf = (error: Error | null, editing: boolean) => {
   if (!error) return undefined;
   if (hasStatus(error, 409)) return "Já existe uma categoria com esse nome";
   if (hasProblem(error, "color-taken")) return "Essa cor já é de outra categoria";
-  if (hasProblem(error, "palette-full")) return ALL_TAKEN;
+  if (hasProblem(error, "palette-full")) return allTaken(editing);
   return editing ? "Não foi possível salvar a categoria." : "Não foi possível criar a categoria.";
 };
 
@@ -100,14 +102,16 @@ const CategoryForm = ({ kind, category, parentId: presetParent, onSaved, onArchi
   const [submitted, setSubmitted] = useState(false);
   const categories = useCategories(kind);
   const list = categories.data ?? [];
+  const holders =
+    useQuery({ ...systemCategoriesQuery, select: (all) => all.filter((each) => each.kind === kind) }).data ?? list;
   const [color, setColor] = useState(category?.color);
   const [target, setTarget] = useState(category?.target ?? "");
   const [deadline, setDeadline] = useState(category?.deadline ?? "");
   const parent = list.find((each) => each.id === parentId);
   const cofrinho = Boolean(parent?.is_savings);
   const chosenIcon = icon ?? parent?.icon ?? "circle-dashed";
-  const free = freeColor(list, category?.id);
-  const ownColor = color && !holderOf(list, color, category?.id) ? color : free;
+  const free = freeColor(holders, category?.id);
+  const ownColor = color && !holderOf(holders, color, category?.id) ? color : free;
   const chosenColor = parentId ? parent?.color : ownColor;
   const full = !parentId && !free;
   const parents = list.filter((each) => !each.parent_id && each.id !== category?.id);
@@ -235,13 +239,13 @@ const CategoryForm = ({ kind, category, parentId: presetParent, onSaved, onArchi
           Usa a cor de {parent.name}
         </p>
       )}
-      {full && <p className="text-muted-foreground text-sm">{ALL_TAKEN}</p>}
+      {full && <p className="text-muted-foreground text-sm">{allTaken(Boolean(category))}</p>}
       {!parentId && !full && (
         <fieldset className="flex flex-col gap-2">
           <legend className="mb-2 font-semibold text-sm">Cor</legend>
           <div className="flex flex-wrap gap-2">
             {COLOR_NAMES.map(([token, label]) => {
-              const holder = holderOf(list, token, category?.id);
+              const holder = holderOf(holders, token, category?.id);
               return (
                 <label
                   key={token}
