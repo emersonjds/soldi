@@ -58,7 +58,7 @@ pub async fn confirm(
     settings::repo::update(&mut tx, user.id, &next).await?;
     let mut category_ids = Vec::new();
     for (name, kind) in domain::CATEGORIES {
-        // ponytail: looked up then inserted; a concurrent import of the same user gets a 409.
+        // ponytail: looked up then inserted; a concurrent import of the same user gets a 409, or a 422 `color-taken`.
         let id = match categories::repo::find_id_by_name(&mut tx, user.id, name, kind).await? {
             Some(id) => id,
             None => {
