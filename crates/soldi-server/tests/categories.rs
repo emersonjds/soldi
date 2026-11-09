@@ -680,3 +680,26 @@ async fn moving_takes_the_parents_color_in_and_a_free_one_out(pool: PgPool) {
         .await;
     assert_eq!(chosen["color"], "cat-22");
 }
+
+#[sqlx::test]
+async fn a_child_created_while_its_parent_is_recolored_wears_the_new_color(pool: PgPool) {
+    let user = TestApp::signed_in(pool.clone(), "ana@example.com").await;
+    let casa = user.category_id("Casa").await;
+    let mut recolor = pool.begin().await.unwrap();
+    sqlx::query("UPDATE categories SET color = 'cat-20' WHERE id::text = $1")
+        .bind(&casa)
+        .execute(&mut *recolor)
+        .await
+        .unwrap();
+
+    let ((status, child), ()) =
+        tokio::join!(create_child(&user, "Móveis", "daily", &casa), async {
+            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+            recolor.commit().await.unwrap();
+        });
+
+    assert_eq!(
+        (status, &child["color"]),
+        (StatusCode::CREATED, &json!("cat-20"))
+    );
+}

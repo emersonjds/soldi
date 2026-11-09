@@ -72,6 +72,25 @@ pub async fn find_active(
     .await
 }
 
+/// `find_active` holding a share lock: a concurrent recolor of this parent waits or is seen.
+pub async fn find_active_shared(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    id: Uuid,
+) -> Result<Option<Category>, sqlx::Error> {
+    sqlx::query_as!(
+        Category,
+        r#"SELECT id, name, kind AS "kind: CategoryKind", icon, color, parent_id, is_savings,
+                  target, deadline
+           FROM categories WHERE user_id = $1 AND id = $2 AND archived_at IS NULL
+           FOR SHARE"#,
+        user_id,
+        id
+    )
+    .fetch_optional(&mut *conn)
+    .await
+}
+
 /// The user's `Economia` (bill) or `Resgate` (income).
 pub async fn savings(
     conn: &mut PgConnection,

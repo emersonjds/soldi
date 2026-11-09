@@ -40,9 +40,14 @@ pub async fn create(
         .as_deref()
         .map(domain::check_color)
         .transpose()?;
-    let mut conn = pool.acquire().await?;
+    let mut tx = pool.begin().await?;
+    let conn = &mut *tx;
     let parent = match input.parent_id {
-        Some(parent_id) => Some(active(&mut conn, user, parent_id).await?),
+        Some(parent_id) => Some(
+            repo::find_active_shared(conn, user.id, parent_id)
+                .await?
+                .ok_or(AppError::NotFound)?,
+        ),
         None => None,
     };
     if let Some(parent) = &parent {
@@ -56,7 +61,7 @@ pub async fn create(
     let color = match &parent {
         Some(parent) => parent.color.clone(),
         None => {
-            let taken = repo::top_colors(&mut conn, user.id, input.kind, None).await?;
+            let taken = repo::top_colors(conn, user.id, input.kind, None).await?;
             domain::pick_color(input.color.as_deref(), &taken)?
         }
     };
@@ -69,7 +74,9 @@ pub async fn create(
         target: input.target,
         deadline: input.deadline,
     };
-    Ok(repo::insert(&mut conn, user.id, new).await?)
+    let created = repo::insert(conn, user.id, new).await?;
+    tx.commit().await?;
+    Ok(created)
 }
 
 pub async fn update(
@@ -97,7 +104,7 @@ pub async fn update(
     }
     let parent_id = input.parent_id.unwrap_or(category.parent_id);
     let parent = match parent_id {
-        Some(parent_id) => repo::find_active(conn, user.id, parent_id).await?,
+        Some(parent_id) => repo::find_active_shared(conn, user.id, parent_id).await?,
         None => None,
     };
     let color = match (&parent, parent_id) {
