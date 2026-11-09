@@ -145,8 +145,8 @@ describe("CategoryChips", () => {
     expect(await screen.findByRole("combobox", { name: "Categoria" })).toHaveTextContent("Carro");
   });
 
-  it("asks for a name and sends the default icon with the last color when all twelve are taken", async () => {
-    const full = Array.from({ length: 12 }, (_, index) => ({
+  it("asks for a name and sends the default icon with the last color when all 24 are taken", async () => {
+    const full = Array.from({ length: 24 }, (_, index) => ({
       ...MERCADO,
       id: `c2000000-0000-4000-8000-0000000000${String(index).padStart(2, "0")}`,
       name: `Gasto ${index + 1}`,
@@ -160,7 +160,7 @@ describe("CategoryChips", () => {
     expect(requests.some((request) => request.method === "POST")).toBe(false);
 
     await userEvent.type(within(sheet).getByLabelText("Nome"), "Feira{Enter}");
-    expect(await posted()).toEqual({ name: "Feira", kind: "daily", icon: "circle-dashed", color: "cat-12" });
+    expect(await posted()).toEqual({ name: "Feira", kind: "daily", icon: "circle-dashed", color: "cat-24" });
   });
 
   it("creates a subcategory with a searched icon and a chosen color", async () => {

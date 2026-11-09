@@ -23,7 +23,7 @@ import { IconPicker } from "./icon-picker";
 type Kind = Schemas["CategoryKind"];
 type Category = Schemas["Category"];
 
-/** The twelve palette tokens with the names the swatches announce (docs/design/tokens.md). */
+/** The 24 palette tokens with the names the swatches announce (docs/design/tokens.md). */
 export const COLOR_NAMES: [token: string, name: string][] = [
   ["cat-1", "Âmbar"],
   ["cat-2", "Laranja"],
@@ -37,11 +37,23 @@ export const COLOR_NAMES: [token: string, name: string][] = [
   ["cat-10", "Violeta"],
   ["cat-11", "Verde"],
   ["cat-12", "Verde-claro"],
+  ["cat-13", "Verde-azulado"],
+  ["cat-14", "Framboesa"],
+  ["cat-15", "Oliva"],
+  ["cat-16", "Azul-petróleo"],
+  ["cat-17", "Ameixa"],
+  ["cat-18", "Marrom"],
+  ["cat-19", "Ardósia"],
+  ["cat-20", "Verde-escuro"],
+  ["cat-21", "Vinho"],
+  ["cat-22", "Telha"],
+  ["cat-23", "Anil"],
+  ["cat-24", "Malva"],
 ];
 
-/** The first palette token the kind does not wear yet; the last one once all twelve are taken. */
+/** The first palette token the kind does not wear yet; the last one once all 24 are taken. */
 const nextColor = (taken: Category[]) =>
-  COLOR_NAMES.find(([token]) => !taken.some((category) => category.color === token))?.[0] ?? "cat-12";
+  COLOR_NAMES.find(([token]) => !taken.some((category) => category.color === token))?.[0] ?? "cat-24";
 
 /** Names a new cofrinho can start from, with their icons. */
 const SUGGESTIONS: [name: string, icon: string][] = [
