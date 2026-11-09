@@ -134,10 +134,10 @@ describe("CategorySheet", () => {
     await waitFor(() => expect(options(sheet)).toEqual(["Nenhuma", "Comida fora", "Pets"]));
   });
 
-  it("archives from the sheet", async () => {
+  it("deletes from the sheet", async () => {
     const { onArchive, onOpenChange } = open({ category: COMIDA });
 
-    await userEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Arquivar" }));
+    await userEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Excluir" }));
 
     expect(onOpenChange).toHaveBeenCalledWith(false);
     expect(onArchive).toHaveBeenCalledWith(COMIDA);
@@ -152,7 +152,7 @@ describe("CategorySheet", () => {
     expect(within(sheet).getByRole("radio", { name: "Ícone paw-print" })).toBeChecked();
     expect(within(sheet).getByText("Usa a cor de Pets")).toBeInTheDocument();
     expect(within(sheet).queryByRole("radio", { name: /^Cor / })).not.toBeInTheDocument();
-    expect(within(sheet).queryByRole("button", { name: "Arquivar" })).not.toBeInTheDocument();
+    expect(within(sheet).queryByRole("button", { name: "Excluir" })).not.toBeInTheDocument();
     await userEvent.type(within(sheet).getByLabelText("Nome"), "Pet shop{Enter}");
 
     await waitFor(() => expect(requests.some((request) => request.method === "POST")).toBe(true));
@@ -356,7 +356,7 @@ describe("CategorySheet", () => {
       await waitFor(() => expect(within(sheet).getByLabelText("Nome")).toHaveValue("Economia"));
       expect(within(sheet).queryByLabelText("Subcategoria de")).not.toBeInTheDocument();
       expect(within(sheet).queryByLabelText("Meta")).not.toBeInTheDocument();
-      expect(within(sheet).queryByRole("button", { name: "Arquivar" })).not.toBeInTheDocument();
+      expect(within(sheet).queryByRole("button", { name: "Excluir" })).not.toBeInTheDocument();
     });
   });
 });
