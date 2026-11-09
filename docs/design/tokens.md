@@ -37,7 +37,11 @@ The strip under "Termômetro do Mês" shows the five segments and highlights the
 
 ## Category icon circles (40px, white icon)
 
-Mercado `#F59E0B`, Comida fora `#F97316`, Transporte `#3B82F6`, Saúde `#EF4444`, Lazer `#A855F7`, Aluguel `#6366F1`, Luz `#EAB308`, Internet `#06B6D4`, Cartão `#EC4899`, Assinaturas `#8B5CF6`, Salário `#16A34A`, Extra `#22C55E`. Stored as token names `cat-1..cat-12`; the remaining default categories reuse the palette round-robin.
+Mercado `#F59E0B`, Comida fora `#F97316`, Transporte `#3B82F6`, Saúde `#EF4444`, Lazer `#A855F7`, Aluguel `#6366F1`, Luz `#EAB308`, Internet `#06B6D4`, Cartão `#EC4899`, Assinaturas `#8B5CF6`, Salário `#16A34A`, Extra `#22C55E`. Stored as token names `cat-1..cat-12`.
+
+`cat-13..cat-24` (SOL-32), white glyph contrast in parentheses: Verde-azulado `#0D9488` (3.74:1), Framboesa `#BE185D` (6.04:1), Oliva `#6B7A1F` (4.74:1), Azul-petróleo `#075985` (7.56:1), Ameixa `#86198F` (8.24:1), Marrom `#854D0E` (6.85:1), Ardósia `#64748B` (4.76:1), Verde-escuro `#166534` (7.13:1), Vinho `#881337` (9.57:1), Telha `#C2410C` (5.18:1), Anil `#3730A3` (9.93:1), Malva `#9D4E8C` (5.38:1). Each sits at least 0.10 from its nearest palette neighbor in OKLab, twice the closest pair of the first twelve (0.05).
+
+Top-level colors are unique per kind and subcategories wear the parent's (D15).
 
 Icons: Stitch used Material Symbols; the web uses lucide (already in the template) with the names listed in `docs/specs/market-analysis.md`.
 

@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE categories SET color = $3, updated_at = now()\n         WHERE user_id = $1 AND parent_id = $2 AND color <> $3",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5a770354457a9f0e021404a3124913e2b187263a37a38351e76a19074d1bbfa1"
+}

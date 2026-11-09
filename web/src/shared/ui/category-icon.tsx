@@ -99,6 +99,18 @@ const COLORS: Record<string, string> = {
   "cat-10": "bg-cat-10",
   "cat-11": "bg-cat-11",
   "cat-12": "bg-cat-12",
+  "cat-13": "bg-cat-13",
+  "cat-14": "bg-cat-14",
+  "cat-15": "bg-cat-15",
+  "cat-16": "bg-cat-16",
+  "cat-17": "bg-cat-17",
+  "cat-18": "bg-cat-18",
+  "cat-19": "bg-cat-19",
+  "cat-20": "bg-cat-20",
+  "cat-21": "bg-cat-21",
+  "cat-22": "bg-cat-22",
+  "cat-23": "bg-cat-23",
+  "cat-24": "bg-cat-24",
 };
 
 /** The category's color as a background class; an unknown token falls back to muted. */

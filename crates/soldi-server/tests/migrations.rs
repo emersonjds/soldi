@@ -85,3 +85,100 @@ async fn cofrinhos_backfill_economia_and_resgate_once_per_user(pool: PgPool) {
     .await;
     assert!(duplicate.is_err());
 }
+
+async fn category(
+    pool: &PgPool,
+    user_id: Uuid,
+    name: &str,
+    kind: &str,
+    color: &str,
+    parent: Option<Uuid>,
+    archived: bool,
+) -> Uuid {
+    sqlx::query_scalar(
+        "INSERT INTO categories (user_id, name, kind, icon, color, parent_id, archived_at)
+         VALUES ($1, $2, $3, 'x', $4, $5, CASE WHEN $6 THEN now() END) RETURNING id",
+    )
+    .bind(user_id)
+    .bind(name)
+    .bind(kind)
+    .bind(color)
+    .bind(parent)
+    .bind(archived)
+    .fetch_one(pool)
+    .await
+    .unwrap()
+}
+
+async fn color_of(pool: &PgPool, id: Uuid) -> String {
+    sqlx::query_scalar("SELECT color FROM categories WHERE id = $1")
+        .bind(id)
+        .fetch_one(pool)
+        .await
+        .unwrap()
+}
+
+#[sqlx::test(migrations = false)]
+async fn unique_colors_recolor_later_duplicates_and_children_wear_the_parents(pool: PgPool) {
+    migrate_before(&pool, 16).await;
+    let ana = user(&pool, "ana@example.com").await;
+    let bia = user(&pool, "bia@example.com").await;
+    let mercado = category(&pool, ana, "Mercado", "daily", "cat-1", None, false).await;
+    let pets = category(&pool, ana, "Pets", "daily", "cat-1", None, false).await;
+    category(&pool, ana, "Lazer", "daily", "cat-2", None, false).await;
+    let casa = category(&pool, ana, "Casa", "daily", "cat-2", None, false).await;
+    category(&pool, ana, "Velha", "daily", "cat-3", None, true).await;
+    let moveis = category(&pool, ana, "Móveis", "daily", "cat-7", Some(casa), false).await;
+    let sofa = category(&pool, ana, "Sofá", "daily", "cat-8", Some(casa), true).await;
+    category(&pool, ana, "Salário", "income", "cat-1", None, false).await;
+    let bia_pets = category(&pool, bia, "Pets", "daily", "cat-1", None, false).await;
+    let bia_mercado = category(&pool, bia, "Mercado", "daily", "cat-1", None, false).await;
+    sqlx::query("UPDATE categories SET created_at = '2026-01-01' WHERE user_id = $1")
+        .bind(bia)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    migrate_from(&pool, 16).await;
+
+    let colors: Vec<(Uuid, String, String)> = sqlx::query_as(
+        "SELECT user_id, name, color FROM categories ORDER BY user_id = $1 DESC, created_at, id",
+    )
+    .bind(ana)
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(color_of(&pool, mercado).await, "cat-1");
+    assert_eq!(color_of(&pool, pets).await, "cat-3");
+    assert_eq!(color_of(&pool, casa).await, "cat-4");
+    assert_eq!(color_of(&pool, moveis).await, "cat-4");
+    assert_eq!(color_of(&pool, sofa).await, "cat-4");
+    assert_eq!(
+        colors
+            .iter()
+            .map(|row| (row.1.as_str(), row.2.as_str()))
+            .filter(|row| row.0 == "Salário" || row.0 == "Velha")
+            .collect::<Vec<_>>(),
+        [("Velha", "cat-3"), ("Salário", "cat-1")]
+    );
+    assert_eq!(color_of(&pool, bia_mercado).await, "cat-1");
+    assert_eq!(color_of(&pool, bia_pets).await, "cat-2");
+    let free = sqlx::query(
+        "INSERT INTO categories (user_id, name, kind, icon, color) VALUES ($1, 'Nova', 'daily', 'x', 'cat-24')",
+    )
+    .bind(ana)
+    .execute(&pool)
+    .await;
+    assert!(free.is_ok());
+    let taken = sqlx::query(
+        "INSERT INTO categories (user_id, name, kind, icon, color) VALUES ($1, 'Outra', 'daily', 'x', 'cat-24')",
+    )
+    .bind(ana)
+    .execute(&pool)
+    .await
+    .unwrap_err();
+    assert_eq!(
+        taken.as_database_error().unwrap().constraint(),
+        Some("categories_top_color_idx")
+    );
+}

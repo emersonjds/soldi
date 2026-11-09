@@ -58,15 +58,24 @@ pub async fn confirm(
     settings::repo::update(&mut tx, user.id, &next).await?;
     let mut category_ids = Vec::new();
     for (name, kind) in domain::CATEGORIES {
-        let id = categories::repo::find_or_insert(
-            &mut tx,
-            user.id,
-            name,
-            kind,
-            "file-spreadsheet",
-            "cat-12",
-        )
-        .await?;
+        // ponytail: looked up then inserted; a concurrent import of the same user gets a 409, or a 422 `color-taken`.
+        let id = match categories::repo::find_id_by_name(&mut tx, user.id, name, kind).await? {
+            Some(id) => id,
+            None => {
+                let taken = categories::repo::top_colors(&mut tx, user.id, kind, None).await?;
+                let color = categories::domain::pick_color(None, &taken)?;
+                let new = categories::repo::NewCategory {
+                    name,
+                    kind,
+                    icon: "file-spreadsheet",
+                    color: &color,
+                    parent_id: None,
+                    target: None,
+                    deadline: None,
+                };
+                categories::repo::insert(&mut tx, user.id, new).await?.id
+            }
+        };
         category_ids.push((kind, id));
     }
     let category_id = |kind| {

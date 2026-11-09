@@ -190,6 +190,9 @@ impl From<sqlx::Error> for AppError {
         let Some(database_error) = error.as_database_error() else {
             return AppError::Internal(error.to_string());
         };
+        if database_error.constraint() == Some("categories_top_color_idx") {
+            return crate::categories::domain::color_taken();
+        }
         if database_error.is_unique_violation() {
             return AppError::conflict(
                 "already-exists",
@@ -434,6 +437,14 @@ mod tests {
             .execute(&pool)
             .await
             .unwrap_err();
+        sqlx::query("CREATE UNIQUE INDEX categories_top_color_idx ON sample (amount)")
+            .execute(&pool)
+            .await
+            .unwrap();
+        let color = sqlx::query("INSERT INTO sample (id, amount) VALUES (4, 5)")
+            .execute(&pool)
+            .await
+            .unwrap_err();
         let syntax = sqlx::query("SELEC 1").execute(&pool).await.unwrap_err();
         let nul = sqlx::query("SELECT $1::text")
             .bind("a\0b")
@@ -446,6 +457,11 @@ mod tests {
             "urn:soldi:error:already-exists"
         );
         assert_eq!(AppError::from(negative).to_problem().status, 422);
+        let color = AppError::from(color).to_problem();
+        assert_eq!(
+            (color.status, color.problem_type.as_str()),
+            (422, "urn:soldi:error:color-taken")
+        );
         assert_eq!(
             AppError::from(orphan).to_problem().problem_type,
             "urn:soldi:error:in-use"
