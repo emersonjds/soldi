@@ -64,8 +64,18 @@ const setup = (replies = {}, categories = CATEGORIES) => {
   return { requests, posted };
 };
 
-const openCreate = async () => {
+/** Through the chooser: a top-level category, or a subcategory of `parent`. */
+const openCreate = async (parent?: string) => {
   await userEvent.click(await screen.findByRole("button", { name: "Nova categoria" }));
+  const chooser = await screen.findByRole("dialog", { name: "Nova" });
+  await userEvent.click(within(chooser).getByRole("button", { name: parent ? /^Subcategoria/ : /^Categoria/ }));
+  if (parent)
+    await userEvent.click(
+      await within(await screen.findByRole("dialog", { name: "Subcategoria de qual categoria?" })).findByRole(
+        "option",
+        { name: parent },
+      ),
+    );
   return screen.findByRole("dialog", { name: "Nova categoria" });
 };
 
@@ -145,7 +155,7 @@ describe("CategoryChips", () => {
     expect(await screen.findByRole("combobox", { name: "Categoria" })).toHaveTextContent("Carro");
   });
 
-  it("asks for a name and, with all 24 colors taken, creates only a subcategory in the parent's icon and color", async () => {
+  it("asks for a name and, with all 24 colors taken, still creates a subcategory in the parent's icon and color", async () => {
     const full = Array.from({ length: 24 }, (_, index) => ({
       ...MERCADO,
       id: `c2000000-0000-4000-8000-0000000000${String(index).padStart(2, "0")}`,
@@ -154,12 +164,10 @@ describe("CategoryChips", () => {
     }));
     const { requests, posted } = setup({}, full);
 
-    const sheet = await openCreate();
+    const sheet = await openCreate("Gasto 1");
     expect(
-      within(sheet).getByText("Todas as 24 cores estão em uso. Crie como subcategoria ou arquive uma categoria."),
-    ).toBeInTheDocument();
-    expect(within(sheet).getByRole("button", { name: "Criar" })).toBeDisabled();
-    await userEvent.selectOptions(within(sheet).getByLabelText("Subcategoria de"), full[0].id);
+      within(sheet).queryByText("Todas as 24 cores estão em uso. Crie como subcategoria ou arquive uma categoria."),
+    ).not.toBeInTheDocument();
     await userEvent.click(within(sheet).getByRole("button", { name: "Criar" }));
     expect(within(sheet).getByText("Informe o nome.")).toBeInTheDocument();
     expect(requests.some((request) => request.method === "POST")).toBe(false);
@@ -170,10 +178,9 @@ describe("CategoryChips", () => {
 
   it("creates a subcategory with a searched icon in the parent's color", async () => {
     setup({}, WITH_CHILDREN);
-    const sheet = await openCreate();
+    const sheet = await openCreate("Pets");
 
     await userEvent.type(within(sheet).getByLabelText("Nome"), "Pet shop");
-    await userEvent.selectOptions(within(sheet).getByLabelText("Subcategoria de"), PETS.id);
     await userEvent.type(within(sheet).getByLabelText("Buscar ícone"), "dog");
     await userEvent.click(await within(sheet).findByRole("radio", { name: "Ícone dog" }));
     expect(within(sheet).getByText("Usa a cor de Pets")).toBeInTheDocument();

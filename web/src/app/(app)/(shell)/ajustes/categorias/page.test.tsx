@@ -181,21 +181,34 @@ describe("Ajustes › Categorias", () => {
 
     await list();
     await userEvent.click(screen.getByRole("button", { name: "Nova categoria" }));
+    await userEvent.click(
+      within(await screen.findByRole("dialog", { name: "Nova" })).getByRole("button", { name: /^Categoria/ }),
+    );
     const sheet = await screen.findByRole("dialog", { name: "Nova categoria" });
-    expect(within(sheet).getByLabelText("Subcategoria de")).toHaveValue("");
+    expect(sheet.querySelector("select")).toBeNull();
     await userEvent.type(within(sheet).getByLabelText("Nome"), "Internet{Enter}");
 
     await waitFor(() => expect(sent(requests, "POST")).toHaveLength(1));
     expect(await sent(requests, "POST")[0].json()).toMatchObject({ name: "Internet", kind: "bill" });
   });
 
-  it("creates a subcategory from the parent's kebab", async () => {
+  it("creates a subcategory from the parent's kebab, skipping the chooser the header opened before", async () => {
     open();
+
+    await userEvent.click(within(await list()).getByRole("button", { name: "Editar Pets" }));
+    await userEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Fechar" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await userEvent.click(screen.getByRole("button", { name: "Nova categoria" }));
+    await userEvent.click(
+      within(await screen.findByRole("dialog", { name: "Nova" })).getByRole("button", { name: "Fechar" }),
+    );
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
 
     const { user, items } = await menu("Pets");
     await user.click(items[1]);
     const sheet = await screen.findByRole("dialog", { name: "Nova categoria" });
-    expect(within(sheet).getByLabelText("Subcategoria de")).toHaveValue(PETS.id);
+    expect(within(sheet).getByText("Em Pets")).toBeInTheDocument();
+    expect(sheet.querySelector("select")).toBeNull();
   });
 
   it("opens the edit sheet from a row", async () => {
