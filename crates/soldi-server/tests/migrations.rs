@@ -131,7 +131,13 @@ async fn unique_colors_recolor_later_duplicates_and_children_wear_the_parents(po
     let moveis = category(&pool, ana, "Móveis", "daily", "cat-7", Some(casa), false).await;
     let sofa = category(&pool, ana, "Sofá", "daily", "cat-8", Some(casa), true).await;
     category(&pool, ana, "Salário", "income", "cat-1", None, false).await;
-    category(&pool, bia, "Mercado", "daily", "cat-1", None, false).await;
+    let bia_pets = category(&pool, bia, "Pets", "daily", "cat-1", None, false).await;
+    let bia_mercado = category(&pool, bia, "Mercado", "daily", "cat-1", None, false).await;
+    sqlx::query("UPDATE categories SET created_at = '2026-01-01' WHERE user_id = $1")
+        .bind(bia)
+        .execute(&pool)
+        .await
+        .unwrap();
 
     migrate_from(&pool, 16).await;
 
@@ -155,7 +161,8 @@ async fn unique_colors_recolor_later_duplicates_and_children_wear_the_parents(po
             .collect::<Vec<_>>(),
         [("Velha", "cat-3"), ("Salário", "cat-1")]
     );
-    assert_eq!(colors.last().unwrap().2, "cat-1");
+    assert_eq!(color_of(&pool, bia_mercado).await, "cat-1");
+    assert_eq!(color_of(&pool, bia_pets).await, "cat-2");
     let free = sqlx::query(
         "INSERT INTO categories (user_id, name, kind, icon, color) VALUES ($1, 'Nova', 'daily', 'x', 'cat-24')",
     )

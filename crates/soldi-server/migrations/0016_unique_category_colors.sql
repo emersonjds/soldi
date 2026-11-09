@@ -3,7 +3,8 @@ ALTER TABLE categories
     DROP CONSTRAINT categories_color_check,
     ADD CONSTRAINT categories_color_check CHECK (color ~ '^cat-([1-9]|1[0-9]|2[0-4])$');
 
--- The first active top-level holding a color keeps it; each later one takes the lowest free token.
+-- The first active top-level holding a color keeps it (seeds share created_at, so the palette's
+-- twelve named owners go first); each later one takes the lowest free token.
 -- More than 24 in a kind leaves no token: the NOT NULL check fails the migration.
 DO $$
 DECLARE
@@ -12,7 +13,10 @@ BEGIN
     FOR duplicate IN
         SELECT id, user_id, kind FROM (
             SELECT id, user_id, kind, created_at, row_number() OVER (
-                PARTITION BY user_id, kind, color ORDER BY created_at, id) AS rank
+                PARTITION BY user_id, kind, color ORDER BY created_at,
+                    name NOT IN ('Mercado', 'Comida fora', 'Transporte', 'Saúde', 'Lazer', 'Aluguel',
+                                 'Luz', 'Internet', 'Cartão', 'Assinaturas', 'Salário', 'Extra'),
+                    id) AS rank
             FROM categories WHERE parent_id IS NULL AND archived_at IS NULL) ranked
         WHERE rank > 1
         ORDER BY user_id, kind, created_at, id
