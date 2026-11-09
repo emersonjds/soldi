@@ -32,6 +32,15 @@ describe("AppShell", () => {
     expect(screen.getByText("conteúdo")).toBeInTheDocument();
   });
 
+  it("takes the logo to today's month from the sidebar and the top bar", () => {
+    setPathname("/ajustes/categorias");
+    renderWithQuery(<AppShell>conteúdo</AppShell>);
+
+    const logos = screen.getAllByRole("link", { name: "Soldi, ir para hoje" });
+    expect(logos).toHaveLength(2);
+    for (const logo of logos) expect(logo).toHaveAttribute("href", "/mes");
+  });
+
   it("keeps Ajustes marked on its sub-screens", () => {
     setPathname("/ajustes/contas");
     renderWithQuery(<AppShell>conteúdo</AppShell>);
