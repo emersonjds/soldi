@@ -553,7 +553,8 @@ export interface components {
         /**
          * @description `icon` defaults to `circle-dashed`; `color`, `cat-1` to `cat-24`, to the lowest token free in
          *     the kind. `parent_id` makes it a subcategory of one of the caller's active top-level categories
-         *     of the same kind; a subcategory takes the parent's color and ignores `color`.
+         *     of the same kind; for a subcategory `color` is validated, then ignored: it wears its parent's
+         *     color.
          */
         CreateCategory: {
             color?: string | null;
@@ -809,8 +810,8 @@ export interface components {
         };
         /**
          * @description Absent fields stay as they are; the kind never changes; `"parent_id": null` makes it top-level,
-         *     with `color` or the lowest token free in the kind. A subcategory ignores `color` and wears the
-         *     parent's; a parent's new color reaches its subcategories. `null` clears `target` or
+         *     with `color` or the lowest token free in the kind. For a subcategory `color` is validated, then
+         *     ignored: it wears its parent's; a parent's new color reaches its subcategories. `null` clears `target` or
          *     `deadline`, which only a subcategory of `Economia` may set. Leaving `Economia` clears both.
          */
         UpdateCategory: {
