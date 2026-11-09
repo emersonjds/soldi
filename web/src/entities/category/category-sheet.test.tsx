@@ -35,6 +35,9 @@ const LIST = [...CATEGORIES, PETS, RACAO, VET];
 
 type Reply = { status: number; body?: unknown };
 
+const rule = (slug: string) => ({ ...problem(422, slug), type: `urn:soldi:error:${slug}` });
+const ALL_TAKEN = "Todas as 24 cores estão em uso. Crie como subcategoria ou arquive uma categoria.";
+
 const open = (
   props: { category?: Category; parentId?: string; kind?: Category["kind"] },
   replies: Record<string, Reply> = {},
@@ -76,8 +79,9 @@ describe("CategorySheet", () => {
 
     const sheet = await screen.findByRole("dialog", { name: "Editar categoria" });
     expect(within(sheet).getByLabelText("Nome")).toHaveValue("Ração");
-    expect(within(sheet).getByRole("radio", { name: "Cor Roxo" })).toBeChecked();
     await waitFor(() => expect(options(sheet)).toEqual(["Nenhuma", "Comida fora", "Mercado", "Pets"]));
+    expect(within(sheet).getByText("Usa a cor de Pets")).toBeInTheDocument();
+    expect(within(sheet).queryByRole("radio", { name: /^Cor / })).not.toBeInTheDocument();
     expect(within(sheet).getByLabelText("Subcategoria de")).toHaveValue(PETS.id);
     // A select nested in another renders empty in browsers.
     expect(within(sheet).getByLabelText("Subcategoria de").parentElement?.closest("select")).toBeNull();
@@ -86,12 +90,15 @@ describe("CategorySheet", () => {
     await userEvent.clear(within(sheet).getByLabelText("Nome"));
     await userEvent.type(within(sheet).getByLabelText("Nome"), "Ração e areia");
     await userEvent.selectOptions(within(sheet).getByLabelText("Subcategoria de"), "");
+    expect(within(sheet).queryByText("Usa a cor de Pets")).not.toBeInTheDocument();
+    expect(within(sheet).getByRole("radio", { name: "Cor Azul" })).toBeChecked();
+    expect(within(sheet).getByRole("radio", { name: "Cor Roxo, usada por Pets" })).toBeDisabled();
     await userEvent.click(within(sheet).getByRole("button", { name: "Salvar" }));
 
     expect(await patched(requests)).toEqual({
       name: "Ração e areia",
       icon: "paw-print",
-      color: "cat-5",
+      color: "cat-3",
       parent_id: null,
     });
     expect(await screen.findByText("Categoria salva")).toBeInTheDocument();
@@ -108,6 +115,9 @@ describe("CategorySheet", () => {
     const sheet = await screen.findByRole("dialog", { name: "Editar categoria" });
     await waitFor(() => expect(within(sheet).getByLabelText("Nome")).toHaveValue("Pets"));
     expect(within(sheet).queryByLabelText("Subcategoria de")).not.toBeInTheDocument();
+    expect(within(sheet).getByRole("radio", { name: "Cor Roxo" })).toBeChecked();
+    expect(within(sheet).getByRole("radio", { name: "Cor Roxo" })).toBeEnabled();
+    expect(within(sheet).getByRole("radio", { name: "Cor Âmbar, usada por Mercado" })).toBeDisabled();
     await userEvent.click(within(sheet).getByRole("button", { name: "Salvar" }));
 
     expect(await patched(requests)).toEqual({ name: "Pets", icon: "paw-print", color: "cat-5", parent_id: null });
@@ -136,16 +146,77 @@ describe("CategorySheet", () => {
     const sheet = await screen.findByRole("dialog", { name: "Nova categoria" });
     await waitFor(() => expect(within(sheet).getByLabelText("Subcategoria de")).toHaveValue(PETS.id));
     expect(within(sheet).getByRole("radio", { name: "Ícone paw-print" })).toBeChecked();
-    expect(within(sheet).getByRole("radio", { name: "Cor Roxo" })).toBeChecked();
+    expect(within(sheet).getByText("Usa a cor de Pets")).toBeInTheDocument();
+    expect(within(sheet).queryByRole("radio", { name: /^Cor / })).not.toBeInTheDocument();
     expect(within(sheet).queryByRole("button", { name: "Arquivar" })).not.toBeInTheDocument();
     await userEvent.type(within(sheet).getByLabelText("Nome"), "Pet shop{Enter}");
 
     await waitFor(() => expect(requests.some((request) => request.method === "POST")).toBe(true));
-    expect(await requests.find((request) => request.method === "POST")?.json()).toMatchObject({
+    expect(await requests.find((request) => request.method === "POST")?.json()).toEqual({
       name: "Pet shop",
+      kind: "daily",
+      icon: "paw-print",
       parent_id: PETS.id,
     });
     expect(await screen.findByText("Categoria criada")).toBeInTheDocument();
+  });
+
+  it("starts a new one on the first free color, the others' colors disabled, and hides them under a parent", async () => {
+    open({});
+
+    const sheet = await screen.findByRole("dialog", { name: "Nova categoria" });
+    await waitFor(() => expect(within(sheet).getByRole("radio", { name: "Cor Azul" })).toBeChecked());
+    expect(within(sheet).getAllByRole("radio", { name: /^Cor / })).toHaveLength(24);
+    expect(within(sheet).getByRole("radio", { name: "Cor Âmbar, usada por Mercado" })).toBeDisabled();
+    expect(within(sheet).getByRole("radio", { name: "Cor Laranja, usada por Comida fora" })).toBeDisabled();
+    expect(within(sheet).getByRole("radio", { name: "Cor Roxo, usada por Pets" })).toBeDisabled();
+    await userEvent.click(within(sheet).getByRole("radio", { name: "Cor Rosa" }));
+    expect(within(sheet).getByRole("radio", { name: "Cor Rosa" })).toBeChecked();
+
+    await userEvent.selectOptions(within(sheet).getByLabelText("Subcategoria de"), PETS.id);
+    expect(within(sheet).getByText("Usa a cor de Pets")).toBeInTheDocument();
+    expect(within(sheet).queryByRole("radio", { name: /^Cor / })).not.toBeInTheDocument();
+    await userEvent.selectOptions(within(sheet).getByLabelText("Subcategoria de"), "");
+    expect(within(sheet).getByRole("radio", { name: "Cor Rosa" })).toBeChecked();
+  });
+
+  it("with all 24 colors taken offers only a subcategory", async () => {
+    const full = Array.from({ length: 24 }, (_, index) => ({
+      ...MERCADO,
+      id: `c2000000-0000-4000-8000-0000000000${String(index).padStart(2, "0")}`,
+      name: `Gasto ${index + 1}`,
+      color: `cat-${index + 1}`,
+    }));
+    const { requests } = open({}, { "GET /api/categories": { status: 200, body: full } });
+
+    const sheet = await screen.findByRole("dialog", { name: "Nova categoria" });
+    expect(await within(sheet).findByText(ALL_TAKEN)).toBeInTheDocument();
+    expect(within(sheet).queryByRole("radio", { name: /^Cor / })).not.toBeInTheDocument();
+    expect(within(sheet).getByRole("button", { name: "Criar" })).toBeDisabled();
+    await userEvent.type(within(sheet).getByLabelText("Nome"), "Feira{Enter}");
+    expect(requests.some((request) => request.method === "POST")).toBe(false);
+
+    await userEvent.selectOptions(within(sheet).getByLabelText("Subcategoria de"), full[0].id);
+    expect(within(sheet).queryByText(ALL_TAKEN)).not.toBeInTheDocument();
+    expect(within(sheet).getByText("Usa a cor de Gasto 1")).toBeInTheDocument();
+    expect(within(sheet).getByRole("button", { name: "Criar" })).toBeEnabled();
+  });
+
+  it("says when the color is taken or the palette is full", async () => {
+    open(
+      { category: MERCADO },
+      { [`PATCH /api/categories/${MERCADO.id}`]: { status: 422, body: rule("color-taken") } },
+    );
+    const sheet = await screen.findByRole("dialog", { name: "Editar categoria" });
+    await userEvent.click(within(sheet).getByRole("button", { name: "Salvar" }));
+    expect(await within(sheet).findByText("Essa cor já é de outra categoria")).toBeInTheDocument();
+
+    stubApi({
+      "GET /api/categories": { status: 200, body: LIST },
+      [`PATCH /api/categories/${MERCADO.id}`]: { status: 422, body: rule("palette-full") },
+    });
+    await userEvent.click(within(sheet).getByRole("button", { name: "Salvar" }));
+    expect(await within(sheet).findByText(ALL_TAKEN)).toBeInTheDocument();
   });
 
   it("says when the new name is taken, or saving fails otherwise", async () => {
@@ -180,6 +251,8 @@ describe("CategorySheet", () => {
       expect(within(sheet).queryByLabelText("Subcategoria de")).not.toBeInTheDocument();
       for (const name of ["Reserva de emergência", "Viagem", "Carro", "Casa", "Estudos"])
         expect(within(sheet).getByRole("button", { name })).toBeInTheDocument();
+      expect(within(sheet).getByText("Usa a cor de Economia")).toBeInTheDocument();
+      expect(within(sheet).queryByRole("radio", { name: /^Cor / })).not.toBeInTheDocument();
       await userEvent.click(within(sheet).getByRole("button", { name: "Viagem" }));
       expect(within(sheet).getByLabelText("Nome")).toHaveValue("Viagem");
       expect(within(sheet).getByRole("radio", { name: "Ícone plane" })).toBeChecked();
@@ -192,7 +265,6 @@ describe("CategorySheet", () => {
         name: "Viagem",
         kind: "bill",
         icon: "plane",
-        color: "cat-1",
         parent_id: ECONOMIA.id,
         target: "5000.00",
         deadline: "2027-06-30",
@@ -232,7 +304,6 @@ describe("CategorySheet", () => {
       expect(await patched(requests)).toEqual({
         name: "Reserva",
         icon: "shield",
-        color: "cat-3",
         parent_id: ECONOMIA.id,
         target: "10000.00",
         deadline: null,

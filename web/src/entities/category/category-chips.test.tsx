@@ -145,7 +145,7 @@ describe("CategoryChips", () => {
     expect(await screen.findByRole("combobox", { name: "Categoria" })).toHaveTextContent("Carro");
   });
 
-  it("asks for a name and sends the default icon with the last color when all 24 are taken", async () => {
+  it("asks for a name and, with all 24 colors taken, creates only a subcategory in the parent's icon and color", async () => {
     const full = Array.from({ length: 24 }, (_, index) => ({
       ...MERCADO,
       id: `c2000000-0000-4000-8000-0000000000${String(index).padStart(2, "0")}`,
@@ -155,15 +155,20 @@ describe("CategoryChips", () => {
     const { requests, posted } = setup({}, full);
 
     const sheet = await openCreate();
+    expect(
+      within(sheet).getByText("Todas as 24 cores estão em uso. Crie como subcategoria ou arquive uma categoria."),
+    ).toBeInTheDocument();
+    expect(within(sheet).getByRole("button", { name: "Criar" })).toBeDisabled();
+    await userEvent.selectOptions(within(sheet).getByLabelText("Subcategoria de"), full[0].id);
     await userEvent.click(within(sheet).getByRole("button", { name: "Criar" }));
     expect(within(sheet).getByText("Informe o nome.")).toBeInTheDocument();
     expect(requests.some((request) => request.method === "POST")).toBe(false);
 
     await userEvent.type(within(sheet).getByLabelText("Nome"), "Feira{Enter}");
-    expect(await posted()).toEqual({ name: "Feira", kind: "daily", icon: "circle-dashed", color: "cat-24" });
+    expect(await posted()).toEqual({ name: "Feira", kind: "daily", icon: MERCADO.icon, parent_id: full[0].id });
   });
 
-  it("creates a subcategory with a searched icon and a chosen color", async () => {
+  it("creates a subcategory with a searched icon in the parent's color", async () => {
     setup({}, WITH_CHILDREN);
     const sheet = await openCreate();
 
@@ -171,13 +176,14 @@ describe("CategoryChips", () => {
     await userEvent.selectOptions(within(sheet).getByLabelText("Subcategoria de"), PETS.id);
     await userEvent.type(within(sheet).getByLabelText("Buscar ícone"), "dog");
     await userEvent.click(await within(sheet).findByRole("radio", { name: "Ícone dog" }));
-    await userEvent.click(within(sheet).getByRole("radio", { name: "Cor Rosa" }));
+    expect(within(sheet).getByText("Usa a cor de Pets")).toBeInTheDocument();
+    expect(within(sheet).queryByRole("radio", { name: /^Cor / })).not.toBeInTheDocument();
     const created = {
       ...RACAO,
       id: "c1000000-0000-4000-8000-000000000012",
       name: "Pet shop",
       icon: "dog",
-      color: "cat-9",
+      color: "cat-5",
     };
     const requests = stubApi({
       "GET /api/categories": { status: 200, body: [...WITH_CHILDREN, created] },
@@ -190,7 +196,6 @@ describe("CategoryChips", () => {
       name: "Pet shop",
       kind: "daily",
       icon: "dog",
-      color: "cat-9",
       parent_id: PETS.id,
     });
     expect(await screen.findByRole("combobox", { name: "Categoria" })).toHaveTextContent("Pets › Pet shop");
