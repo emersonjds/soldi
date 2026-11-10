@@ -92,3 +92,62 @@ test("an entry repeated 3x shows in three months; edit and delete reach this one
   await visit(first);
   await expect(internet).toContainText("Saída · 1/11 de 1R$ 100,00");
 });
+
+test("a 12x series shrinks to 6 from its first entry and grows back to 12 from its last", async ({ page, request }) => {
+  const health = await request.get(`${API}/api/health`).catch(() => null);
+  test.skip(!health?.ok(), `Soldi server unreachable at ${API}/api/health; start it to run this flow.`);
+  test.setTimeout(90_000);
+
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto("/criar-conta");
+  await page.getByLabel("E-mail").fill(`e2e-resize-${Date.now()}@example.com`);
+  await page.getByLabel("Senha").fill("uma-senha-bem-longa");
+  await page.getByRole("button", { name: "Criar conta" }).click();
+  await page.getByRole("button", { name: "Continuar" }).click();
+  await page.getByLabel("Saldo de hoje").fill("1.000,00");
+  await page.getByRole("button", { name: "Continuar" }).click();
+  await page.getByRole("button", { name: "Pular por agora" }).click();
+  await page.getByRole("button", { name: "Ver meu mês" }).click();
+  await page.getByRole("button", { name: "Pular" }).click();
+  await page.getByRole("dialog", { name: "Lançar" }).getByRole("button", { name: "Fechar" }).click();
+
+  const [first, sixth, seventh, twelfth] = [monthFrom(0), monthFrom(5), monthFrom(6), monthFrom(11)];
+  expect((await page.request.patch("/api/settings", { data: { opening_date: `${first}-01` } })).ok()).toBe(true);
+
+  const ledger = page.getByRole("region", { name: "Lançamentos" });
+  const internet = ledger.getByRole("button", { name: /^Internet/ });
+  const visit = async (month: string) => {
+    await page.goto(`/mes?m=${month}`);
+    await expect(ledger).toBeVisible();
+  };
+  const resize = async (month: string, count: string) => {
+    await visit(month);
+    await internet.click();
+    await page.getByRole("dialog", { name: "Internet" }).getByRole("button", { name: "Editar" }).click();
+    const edit = page.getByRole("dialog", { name: "Editar lançamento" });
+    await edit.getByRole("radiogroup", { name: "Meses na série" }).getByRole("radio", { name: count }).click();
+    await edit.getByRole("button", { name: "Salvar" }).click();
+  };
+
+  await page.getByRole("navigation", { name: "Navegação principal" }).getByRole("button", { name: "Lançar" }).click();
+  const launch = page.getByRole("dialog", { name: "Lançar" });
+  await launch.getByRole("radio", { name: "Saída" }).click();
+  await launch.getByLabel("Valor").fill("100,00");
+  await launch.getByLabel("Outra data").fill(`${first}-01`);
+  await launch.getByLabel("Observação").fill("Internet");
+  await launch.getByRole("switch", { name: "Repetir" }).click();
+  await launch.getByRole("button", { name: "Salvar" }).click();
+  await expect(page.getByText("12 lançamentos criados")).toBeVisible();
+
+  await resize(first, "6x");
+  await expect(page.getByText("Série ajustada para 6 meses")).toBeVisible();
+  await visit(sixth);
+  await expect(internet).toContainText("Saída · 6/66 de 6");
+  await visit(seventh);
+  await expect(ledger).toContainText("Nenhum lançamento ainda");
+
+  await resize(sixth, "12x");
+  await expect(page.getByText("Série ajustada para 12 meses")).toBeVisible();
+  await visit(twelfth);
+  await expect(internet).toContainText("Saída · 12/1212 de 12");
+});
