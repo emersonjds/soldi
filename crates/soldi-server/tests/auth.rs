@@ -531,13 +531,15 @@ async fn the_eleventh_sign_in_for_one_email_is_limited_without_touching_the_data
 }
 
 #[sqlx::test]
-async fn the_twenty_first_sign_in_from_one_ip_is_limited_and_other_ips_are_not(pool: PgPool) {
+async fn the_twenty_first_sign_in_from_one_ip_is_limited_even_with_forged_forwarded_entries(
+    pool: PgPool,
+) {
     let app = TestApp::anonymous(pool);
     for attempt in 0..20 {
         let response = app
             .send(forwarded(
                 sign_in_request(&format!("user{attempt}@example.com"), "wrong horse"),
-                "203.0.113.7, 10.0.0.1",
+                &format!("198.51.100.{attempt}, 203.0.113.7"),
             ))
             .await;
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED, "{attempt}");
@@ -553,7 +555,7 @@ async fn the_twenty_first_sign_in_from_one_ip_is_limited_and_other_ips_are_not(p
     let elsewhere = app
         .send(forwarded(
             sign_in_request("late@example.com", "wrong horse"),
-            "203.0.113.8, 203.0.113.7",
+            "203.0.113.7, 203.0.113.8",
         ))
         .await;
     assert_eq!(elsewhere.status(), StatusCode::UNAUTHORIZED);

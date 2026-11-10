@@ -115,13 +115,14 @@ impl Limiter {
     }
 }
 
-/// The first `X-Forwarded-For` address (set by Railway's edge), else the socket peer.
+/// The last `X-Forwarded-For` address, else the socket peer. Railway's edge appends the address it
+/// saw, so earlier entries come from the client and can be forged.
 pub fn client_ip(headers: &HeaderMap, peer: Option<SocketAddr>) -> Option<IpAddr> {
     headers
         .get("x-forwarded-for")
         .and_then(|value| value.to_str().ok())
-        .and_then(|value| value.split(',').next())
-        .and_then(|first| first.trim().parse().ok())
+        .and_then(|value| value.rsplit(',').next())
+        .and_then(|last| last.trim().parse().ok())
         .or(peer.map(|peer| peer.ip()))
 }
 
@@ -171,7 +172,7 @@ mod tests {
     }
 
     #[test]
-    fn the_client_is_the_first_forwarded_address_else_the_peer() {
+    fn the_client_is_the_last_forwarded_address_else_the_peer() {
         let peer: SocketAddr = "10.0.0.9:4000".parse().unwrap();
         let headers = |value: &str| {
             let mut headers = HeaderMap::new();
@@ -179,8 +180,8 @@ mod tests {
             headers
         };
 
-        let first = client_ip(&headers(" 203.0.113.7 , 10.0.0.1"), Some(peer));
-        assert_eq!(first, Some("203.0.113.7".parse().unwrap()));
+        let spoofed = client_ip(&headers("1.2.3.4, 203.0.113.7 "), Some(peer));
+        assert_eq!(spoofed, Some("203.0.113.7".parse().unwrap()));
         let v6 = client_ip(&headers("2001:db8::1"), None);
         assert_eq!(v6, Some("2001:db8::1".parse().unwrap()));
         let malformed = client_ip(&headers("not-an-ip"), Some(peer));
