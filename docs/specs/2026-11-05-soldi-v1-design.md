@@ -152,7 +152,7 @@ Every screen defines loading, empty, error and disabled states before implementa
 | SOL-4 | Recurring bills, pay/unpay, projection in the thermometer | SOL-3 |
 | SOL-5 | `Para onde vai` and `Economia` | SOL-3 |
 | SOL-6 | Google sign-in | SOL-2 |
-| SOL-7 | Import `Termômetro.xlsx` (year tabs A..BS blocks, `Economia` tab) with preview | SOL-5 |
+| SOL-7 | Import `Termômetro.xlsx` (year tabs A..BS blocks, `Economia` tab) with preview — removed in SOL-59 (D18) | SOL-5 |
 
 One card per session: spec brief → plan → subagent-driven build → review → merge to `developer` → version bump → PR to `main`.
 

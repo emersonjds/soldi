@@ -4,7 +4,6 @@ pub mod categories;
 pub mod cofrinhos;
 pub mod error;
 pub mod extract;
-pub mod imports;
 pub mod limits;
 pub mod mail;
 pub mod months;
@@ -77,7 +76,6 @@ fn api() -> OpenApiRouter<AppState> {
         .merge(months::handler::router())
         .merge(onboarding::handler::router())
         .merge(reports::handler::router())
-        .merge(imports::handler::router())
 }
 
 /// The API contract, built without a database; `web/openapi.json` is its committed snapshot.

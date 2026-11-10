@@ -365,28 +365,6 @@ export const MOVEMENTS: Schemas["Transaction"][] = [
   },
 ];
 
-/** A Termômetro workbook of 2025 and 2026 with one unreadable cell. */
-export const PREVIEW: Schemas["ImportPreview"] = {
-  token: "a1000000-0000-4000-8000-000000000001",
-  years: [
-    {
-      year: 2025,
-      transactions: 42,
-      income_total: "60000.00",
-      bills_total: "27114.72",
-      daily_total: "18240.55",
-    },
-    {
-      year: 2026,
-      transactions: 9,
-      income_total: "15000.00",
-      bills_total: "6778.68",
-      daily_total: "3120.40",
-    },
-  ],
-  errors: [{ sheet: "2026", cell: "D14", message: "fórmula que não é soma" }],
-};
-
 export const fieldProblem = (status: number, field: string) => ({
   ...problem(status, "invalid"),
   errors: [{ field, message: "invalid" }],

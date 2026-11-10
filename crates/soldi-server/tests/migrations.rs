@@ -206,3 +206,39 @@ async fn active_since_backfills_the_sao_paulo_day_each_bill_was_registered(pool:
         .unwrap();
     assert_eq!(since, "2026-02-28".parse().unwrap());
 }
+
+#[sqlx::test(migrations = false)]
+async fn dropping_the_importer_keeps_imported_entries(pool: PgPool) {
+    migrate_before(&pool, 19).await;
+    let ana = user(&pool, "ana@example.com").await;
+    let mercado = category(&pool, ana, "Mercado", "daily", "cat-1", None, false).await;
+    sqlx::query(
+        "INSERT INTO transactions (user_id, date, amount, kind, category_id, import_batch_id, import_year)
+         VALUES ($1, '2025-03-10', 42.50, 'daily', $2, gen_random_uuid(), 2025)",
+    )
+    .bind(ana)
+    .bind(mercado)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    migrate_from(&pool, 19).await;
+
+    let leftovers: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM information_schema.columns
+         WHERE table_name = 'transactions' AND column_name LIKE 'import_%'",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let previews: Option<String> =
+        sqlx::query_scalar("SELECT to_regclass('import_previews')::text")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    let kept: i64 = sqlx::query_scalar("SELECT count(*) FROM transactions")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!((leftovers, previews, kept), (0, None, 1));
+}

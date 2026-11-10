@@ -1,5 +1,4 @@
 use axum::Json;
-use axum::extract::multipart::MultipartRejection;
 use axum::extract::rejection::{JsonRejection, PathRejection, QueryRejection};
 use axum::http::StatusCode;
 use axum::http::header::{CONTENT_TYPE, RETRY_AFTER};
@@ -21,13 +20,6 @@ pub enum AppError {
         slug: &'static str,
         detail: String,
     },
-    /// Past its lifetime, like an import preview after 15 minutes; 410 with its slug.
-    Gone {
-        slug: &'static str,
-        detail: String,
-    },
-    /// The body is over the endpoint's size limit.
-    TooLarge,
     /// A domain rule refused a well-formed request; 422 with the rule's slug.
     Rule {
         slug: &'static str,
@@ -103,13 +95,6 @@ impl AppError {
                 "Nothing exists here, or you cannot see it.".into(),
             ),
             AppError::Conflict { slug, detail } => (409, *slug, "Conflict", detail.clone()),
-            AppError::Gone { slug, detail } => (410, *slug, "Gone", detail.clone()),
-            AppError::TooLarge => (
-                413,
-                "too-large",
-                "Too large",
-                "The upload is over the size limit.".into(),
-            ),
             AppError::Rule { slug, detail } => (422, *slug, "Rule broken", detail.clone()),
             AppError::TooManyRequests { retry_after } => (
                 429,
@@ -253,13 +238,6 @@ pub(crate) fn wrong_shape(text: &str) -> AppError {
     })
 }
 
-/// Not a `multipart/form-data` body.
-impl From<MultipartRejection> for AppError {
-    fn from(_: MultipartRejection) -> Self {
-        AppError::invalid("file", "send the file as multipart/form-data")
-    }
-}
-
 impl From<PathRejection> for AppError {
     fn from(rejection: PathRejection) -> Self {
         AppError::BadRequest(rejection.body_text())
@@ -321,12 +299,6 @@ mod tests {
         assert_eq!(AppError::InvalidCredentials.to_problem().status, 401);
         assert_eq!(AppError::Forbidden.to_problem().status, 403);
         assert_eq!(AppError::NotFound.to_problem().status, 404);
-        assert_eq!(AppError::TooLarge.to_problem().status, 413);
-        let gone = AppError::Gone {
-            slug: "import-expired",
-            detail: "Upload again.".into(),
-        };
-        assert_eq!(gone.to_problem().status, 410);
     }
 
     #[test]
