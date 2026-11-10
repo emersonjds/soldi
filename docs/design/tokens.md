@@ -35,6 +35,8 @@ Dark: background `#0F1222`, card `#1A1E36`, header `#141734`, foreground `#F0EFF
 
 Tokens: `--tier-<tier>` (dot, strip), `--tier-<tier>-soft` (pill background), `--tier-<tier>-foreground` (pill text, AA ≥ 4.5:1 on soft). `TIER_STYLE` in `web/src/shared/lib/tier.ts` is the only map; `TierPill` (ledger day headers, Mês header and overview, Simular preview, welcome tour) and the Próximos meses chips all read it. The strong color never carries text: it fills the dot beside the label and the `ThermometerStrip` segments, whose labels sit on the page in `foreground` / `muted-foreground`. The red-days badge on a chip is white on `#DC2626` (4.83:1).
 
+Text on `income-soft` / `expense-soft` (Pago pill, Para onde vai change %, form alerts) uses the tier text tokens: `#14532D` on `#DCFCE7` 8.30:1, `#991B1B` on `#FEE2E2` 6.80:1. `income` and `expense` themselves on their soft backgrounds are 3.00:1 and 3.95:1, enough only for icons (3:1), not for text.
+
 The strip under "Termômetro do Mês" shows the five segments and highlights the current one. Color is never alone: the label travels with the pill.
 
 ## Category icon circles (40px, white icon)
