@@ -329,3 +329,22 @@ async fn the_twenty_first_confirm_from_one_ip_is_limited(pool: PgPool) {
     let request = forwarded(confirm_request("guess", NEW_PASSWORD), "203.0.113.1");
     assert_rate_limited(app.send(request).await).await;
 }
+
+#[sqlx::test]
+async fn changing_the_password_in_the_account_voids_pending_links(pool: PgPool) {
+    let (app, mail) = app(pool);
+    let ana = app.another_user("ana@example.com").await;
+    request_reset(&app, "ana@example.com").await;
+    let token = token_in(&mail.sent().await[0]);
+
+    let (status, _) = ana
+        .post(
+            "/api/me/password",
+            json!({ "current_password": PASSWORD, "new_password": NEW_PASSWORD }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+
+    let (status, problem) = confirm(&app, &token, "another long one").await;
+    assert_invalid_link(status, &problem);
+}

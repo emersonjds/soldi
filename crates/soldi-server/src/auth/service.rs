@@ -95,6 +95,7 @@ pub async fn change_password(
         return Err(domain::wrong_password());
     }
     repo::delete_other_sessions(&mut tx, user).await?;
+    repo::delete_password_resets(&mut tx, user.id).await?;
     tx.commit().await?;
     Ok(())
 }
