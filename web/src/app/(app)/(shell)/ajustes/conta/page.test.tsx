@@ -183,6 +183,16 @@ describe("Ajustes › Minha conta", () => {
     expect(await screen.findByText("Não foi possível trocar a senha.")).toBeInTheDocument();
   });
 
+  it("asks to wait when there were too many password attempts", async () => {
+    open({ "POST /api/me/password": { status: 429, body: problem(429, "Too many.") } });
+
+    await userEvent.type(await screen.findByLabelText("Senha atual"), "senha-antiga");
+    await userEvent.type(screen.getByLabelText("Nova senha"), "nova-senha-longa");
+    await userEvent.click(screen.getByRole("button", { name: "Trocar senha" }));
+
+    expect(await screen.findByText("Muitas tentativas. Espere um pouco e tente de novo.")).toBeInTheDocument();
+  });
+
   it("signs out everywhere only after confirming, then goes to sign-in", async () => {
     const { requests, client } = open({ "POST /api/auth/sign-out-everywhere": { status: 204 } });
 
