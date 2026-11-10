@@ -332,7 +332,7 @@ async fn forecast_an_unpaid_bill_dips_its_clamped_due_day_two_months_ahead(pool:
     let (before, last) = (&days[days.len() - 2], days.last().unwrap());
     assert_eq!(
         (&before["projected_balance"], &before["projected_tier"]),
-        (&json!("1000.00"), &json!("light_green"))
+        (&json!("-2200.00"), &json!("red"))
     );
     assert_eq!(
         (
@@ -340,8 +340,69 @@ async fn forecast_an_unpaid_bill_dips_its_clamped_due_day_two_months_ahead(pool:
             &last["projected_tier"],
             &last["balance"]
         ),
-        (&json!("-600.00"), &json!("red"), &json!("1000.00"))
+        (&json!("-3800.00"), &json!("red"), &json!("1000.00"))
     );
     assert_eq!(view["bills_of_month"][0]["lands_on"], last["date"]);
-    assert_eq!(view["projected_balance"], "-600.00");
+    assert_eq!(view["projected_balance"], "-3800.00");
+}
+
+#[sqlx::test]
+async fn sol55_last_months_unpaid_bill_lands_today_until_paid_in_its_own_month(pool: PgPool) {
+    use chrono::{Datelike, Months};
+    let user = TestApp::signed_in(pool.clone(), "ana@example.com").await;
+    let bia = user.another_user("bia@example.com").await;
+    let today = soldi_server::today_sao_paulo();
+    let this_month = today.with_day(1).unwrap();
+    let last_month = this_month.checked_sub_months(Months::new(1)).unwrap();
+    open_at(&user, "1000", &last_month.to_string()).await;
+    open_at(&bia, "1000", &last_month.to_string()).await;
+    let aluguel = add_bill(&user, "Aluguel", "1800", 1, "Aluguel").await;
+    add_bill(&bia, "Aluguel", "999", 1, "Aluguel").await;
+    sqlx::query("UPDATE recurring_bills SET created_at = $1::timestamptz")
+        .bind(format!("{last_month}T12:00:00-03:00"))
+        .execute(&pool)
+        .await
+        .unwrap();
+    let path = format!("/api/months/{}", this_month.format("%Y-%m"));
+
+    let (status, view) = user.get(&path).await;
+
+    assert_eq!(status, StatusCode::OK, "{view}");
+    let rows: Vec<(String, bool)> = view["bills_of_month"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|bill| {
+            (
+                bill["due_date"].as_str().unwrap().into(),
+                bill["overdue"] == true,
+            )
+        })
+        .collect();
+    assert_eq!(
+        rows,
+        [
+            (last_month.to_string(), true),
+            (this_month.to_string(), today > this_month)
+        ]
+    );
+    assert_eq!(view["bills_of_month"][0]["bill_id"], aluguel["id"]);
+    assert_eq!(view["bills_of_month"][0]["lands_on"], today.to_string());
+    let index = usize::try_from(today.day() - 1).unwrap();
+    assert_eq!(view["days"][index]["projected_balance"], "-2600.00");
+    assert_eq!(view["projected_balance"], "-2600.00");
+
+    let pay = format!(
+        "/api/bills/{}/pay?month={}",
+        aluguel["id"].as_str().unwrap(),
+        last_month.format("%Y-%m")
+    );
+    let (status, entry) = user
+        .post(&pay, json!({ "date": last_month.to_string() }))
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{entry}");
+    let (_, paid) = user.get(&path).await;
+    assert_eq!(paid["bills_of_month"].as_array().unwrap().len(), 1);
+    assert_eq!(paid["balance_today"], "-800.00");
+    assert_eq!(paid["projected_balance"], "-2600.00");
 }
