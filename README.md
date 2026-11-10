@@ -4,6 +4,8 @@ Your month at a glance: income, bills and day-to-day spending with a running bal
 
 Soldi replaces a spreadsheet "thermometer" kept for years. The rules are the same; the friction is not.
 
+**Use it:** [getsoldi.app](https://getsoldi.app) — free, in Portuguese (pt-BR), works on the phone and on the desktop.
+
 ## Run locally
 
 ```sh
