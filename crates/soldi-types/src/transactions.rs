@@ -87,7 +87,8 @@ pub struct UpdateTransaction {
     #[serde(default, deserialize_with = "crate::nullable_field")]
     #[schema(value_type = Option<String>, nullable)]
     pub note: Option<Option<String>>,
-    /// Turns an entry outside any series into the first of a run of 2 to 60.
+    /// How many entries the series counts, 2 to 60: starts a series from an entry outside one,
+    /// or adds or removes members at the end of this entry's series (never one dated before it).
     #[serde(default)]
     #[schema(minimum = 2, maximum = 60)]
     pub repeat_months: Option<i16>,
