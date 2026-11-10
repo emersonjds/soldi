@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -12,6 +12,18 @@ describe("MonthHeader", () => {
     expect(screen.getByText("Saldo hoje")).toBeInTheDocument();
     expect(screen.getByText("R$ 1.842,10")).toBeInTheDocument();
     expect(screen.getByText("Confortável")).toBeInTheDocument();
+  });
+
+  it("shows what the page puts under the balance", () => {
+    render(
+      <MonthHeader month="2026-11" balance="0" tier="yellow" onMonthChange={vi.fn()}>
+        <p>Dia 23 fica no vermelho</p>
+      </MonthHeader>,
+    );
+
+    expect(
+      within(screen.getByRole("region", { name: "Saldo hoje" })).getByText("Dia 23 fica no vermelho"),
+    ).toBeVisible();
   });
 
   it("switches to the previous and the next month across years", async () => {

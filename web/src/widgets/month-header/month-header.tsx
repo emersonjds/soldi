@@ -28,6 +28,8 @@ type MonthHeaderProps = {
   /** `YYYY-MM` of the opening balance; nothing exists before it. */
   minMonth?: string;
   onMonthChange: (month: string) => void;
+  /** Under the balance; the compact variant ignores it. */
+  children?: ReactNode;
 } & (
   | { balance: string; tier: Tier; title?: never }
   /** Compact: the screen's title over the switcher, no balance. */
@@ -87,7 +89,7 @@ const CompactHeader = ({ title, children }: { title: string; children: ReactNode
   </section>
 );
 
-export const MonthHeader = ({ month, minMonth, balance, tier, title, onMonthChange }: MonthHeaderProps) => {
+export const MonthHeader = ({ month, minMonth, balance, tier, title, onMonthChange, children }: MonthHeaderProps) => {
   const currency = useCurrency();
   const switcher = (
     <Switcher
@@ -114,6 +116,7 @@ export const MonthHeader = ({ month, minMonth, balance, tier, title, onMonthChan
         </div>
         <TierPill tier={tier} className="lg:mb-1.5" />
       </div>
+      {children}
     </section>
   );
 };

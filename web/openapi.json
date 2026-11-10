@@ -7,7 +7,7 @@
       "name": "AGPL-3.0-only",
       "identifier": "AGPL-3.0-only"
     },
-    "version": "0.16.0"
+    "version": "0.17.0"
   },
   "paths": {
     "/api/auth/me": {
@@ -2149,6 +2149,14 @@
             "type": "string",
             "description": "The category's lucide icon."
           },
+          "lands_on": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date",
+            "description": "The day an unpaid bill enters the projection: its due date, or today once due; null when\npaid or when that day falls after the month."
+          },
           "name": {
             "type": "string"
           },
@@ -2683,6 +2691,8 @@
           "daily",
           "balance",
           "tier",
+          "projected_balance",
+          "projected_tier",
           "is_today",
           "is_future"
         ],
@@ -2708,6 +2718,13 @@
           },
           "is_today": {
             "type": "boolean"
+          },
+          "projected_balance": {
+            "type": "string",
+            "description": "`balance` minus the unpaid bills landed on or before this day (`BillOfMonth::lands_on`);\nequal to `balance` before today and in a past month."
+          },
+          "projected_tier": {
+            "$ref": "#/components/schemas/Tier"
           },
           "tier": {
             "$ref": "#/components/schemas/Tier"

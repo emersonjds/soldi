@@ -13,7 +13,7 @@ import { PayBillSheet } from "@/features/pay-bill/pay-bill-sheet";
 import { cn } from "@/lib/utils";
 import type { Schemas } from "@/shared/api/client";
 import { useCurrency } from "@/shared/lib/currency";
-import { todayISO } from "@/shared/lib/date";
+import { dayMonth, todayISO } from "@/shared/lib/date";
 import { formatMoney } from "@/shared/lib/money";
 import { CategoryIcon } from "@/shared/ui/category-icon";
 import { Money } from "@/shared/ui/money";
@@ -25,8 +25,6 @@ const FILTERS: { value: Filter; label: string }[] = [
   { value: "open", label: "Pendentes" },
   { value: "paid", label: "Pagas" },
 ];
-
-const dayMonth = (date: string) => `${date.slice(8, 10)}/${date.slice(5, 7)}`;
 
 const daysFromToday = (date: string) => (Date.parse(date) - Date.parse(todayISO())) / 86_400_000;
 

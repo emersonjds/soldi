@@ -120,6 +120,8 @@ const day = (date: string, balance: string, tier: Schemas["Tier"], rest: Partial
   daily: "0.00",
   balance,
   tier,
+  projected_balance: balance,
+  projected_tier: tier,
   is_today: false,
   is_future: false,
   ...rest,
@@ -206,6 +208,78 @@ export const BILLS_OF_MONTH: Schemas["BillOfMonth"][] = [
     paid: false,
     transaction_id: null,
     overdue: false,
+  },
+];
+
+/** The owner's November (SOL-49/50), today the 5th: R$ 6.150,00 until the 22nd, red on the 23rd, worst on the 28th, back on the 30th. */
+const forecastProjection = (index: number): [string, Schemas["Tier"]] => {
+  if (index < 22) return ["6150.00", "green"];
+  if (index < 24) return ["-675.00", "red"];
+  if (index < 27) return ["-916.00", "red"];
+  if (index < 29) return ["-2916.00", "red"];
+  return ["491.00", "yellow"];
+};
+
+const forecastDay = (index: number): Schemas["Day"] => {
+  const date = `2026-11-${String(index + 1).padStart(2, "0")}`;
+  const [projected, tier] = forecastProjection(index);
+  return day(date, "6150.00", "green", {
+    projected_balance: projected,
+    projected_tier: tier,
+    is_today: index === 4,
+    is_future: index > 4,
+  });
+};
+
+const forecastBill = (id: number, name: string, amount: string, due: string): Schemas["BillOfMonth"] => ({
+  bill_id: `b2000000-0000-4000-8000-00000000000${id}`,
+  name,
+  icon: ALUGUEL.icon,
+  color: ALUGUEL.color,
+  amount,
+  due_date: due,
+  paid: false,
+  transaction_id: null,
+  overdue: false,
+  lands_on: due,
+});
+
+export const FORECAST_MONTH: Schemas["MonthView"] = {
+  ...MONTH,
+  days: Array.from({ length: 30 }, (_, index) => forecastDay(index)),
+  projected_balance: "491.00",
+  projected_tier: "yellow",
+  bills_of_month: [
+    forecastBill(1, "Cartão", "4900.00", "2026-11-23"),
+    forecastBill(2, "Financiamento", "2000.00", "2026-11-28"),
+    forecastBill(3, "Condomínio", "1168.00", "2026-11-30"),
+  ],
+};
+
+export const FORECAST_TRANSACTIONS: Schemas["Transaction"][] = [
+  {
+    id: "t2000000-0000-4000-8000-000000000003",
+    date: "2026-11-30",
+    amount: "4575.00",
+    kind: "income",
+    note: "Salário",
+    category: SALARIO,
+  },
+  {
+    id: "t2000000-0000-4000-8000-000000000002",
+    date: "2026-11-25",
+    amount: "241.00",
+    kind: "daily",
+    note: "Feira",
+    category: MERCADO,
+  },
+  {
+    id: "t2000000-0000-4000-8000-000000000001",
+    date: "2026-11-23",
+    amount: "1925.00",
+    kind: "bill",
+    note: "Seguro",
+    category: ALUGUEL,
   },
 ];
 
