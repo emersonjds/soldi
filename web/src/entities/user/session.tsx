@@ -57,3 +57,17 @@ export const SessionGate = ({ children }: { children: ReactNode }) => {
   if (!me.isSuccess || target) return <PageLoading />;
   return children;
 };
+
+/** Runs `leave`, then forgets every cached answer and goes to sign-in. */
+export const useLeave = (leave: () => Promise<void>) => {
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: leave,
+    onSuccess: () => {
+      queryClient.clear();
+      queryClient.setQueryData(meQuery.queryKey, null);
+      router.replace("/entrar");
+    },
+  });
+};

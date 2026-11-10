@@ -8,7 +8,8 @@ use axum::http::{HeaderMap, StatusCode};
 use axum::response::IntoResponse;
 use soldi_types::Problem;
 use soldi_types::auth::{
-    ChangePassword, ConfirmPasswordReset, RequestPasswordReset, SignIn, SignUp, UpdateMe, User,
+    ChangePassword, ConfirmPasswordReset, DeleteAccount, RequestPasswordReset, SignIn, SignUp,
+    UpdateMe, User,
 };
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
@@ -34,7 +35,7 @@ pub fn router() -> OpenApiRouter<AppState> {
         .routes(routes!(sign_out_everywhere))
         .routes(routes!(me))
         .routes(routes!(tour_seen))
-        .routes(routes!(update_me))
+        .routes(routes!(update_me, delete_me))
         .routes(routes!(change_password))
         .routes(routes!(request_password_reset))
         .routes(routes!(confirm_password_reset))
@@ -147,6 +148,27 @@ pub async fn update_me(
     JsonBody(input): JsonBody<UpdateMe>,
 ) -> Result<Json<User>, AppError> {
     Ok(Json(service::update_me(&state.pool, &user, input).await?))
+}
+
+#[utoipa::path(delete, path = "/api/me", tag = "auth", request_body = DeleteAccount,
+    responses(
+        (status = 204, description = "Account and every row of it deleted; cookie cleared. The e-mail can sign up again"),
+        (status = 401, body = Problem, content_type = "application/problem+json"),
+        (status = 422, body = Problem, content_type = "application/problem+json", description = "`wrong-password`; nothing deleted"),
+        (status = 429, body = Problem, content_type = "application/problem+json", description = "Rate limited with the password-change budget; wait `Retry-After` seconds")))]
+pub async fn delete_me(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    user: CurrentUser,
+    JsonBody(input): JsonBody<DeleteAccount>,
+) -> Result<impl IntoResponse, AppError> {
+    let user_id = Some(user.id.to_string());
+    state
+        .limiter
+        .check(&[(limits::PASSWORD_CHANGE_USER, user_id)])?;
+    service::delete_account(&state.pool, &user, input).await?;
+    let cookie = domain::expired_session_cookie(domain::is_https(&headers));
+    Ok((StatusCode::NO_CONTENT, [(SET_COOKIE, cookie)]))
 }
 
 #[utoipa::path(post, path = "/api/me/password", tag = "auth", request_body = ChangePassword,

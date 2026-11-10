@@ -1,27 +1,10 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { LogOut } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { meQuery } from "@/entities/user/session";
+import { useLeave } from "@/entities/user/session";
 import { api, okOrThrow } from "@/shared/api/client";
-
-/** Runs `leave`, then forgets every cached answer and goes to sign-in. */
-export const useLeave = (leave: () => Promise<void>) => {
-  const router = useRouter();
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: leave,
-    onSuccess: () => {
-      queryClient.clear();
-      queryClient.setQueryData(meQuery.queryKey, null);
-      router.replace("/entrar");
-    },
-  });
-};
 
 /** `compact`: an icon-only button for the sidebar user card. */
 export const SignOutButton = ({ compact = false }: { compact?: boolean }) => {

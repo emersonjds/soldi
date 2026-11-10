@@ -25,8 +25,23 @@ const open = (replies: Record<string, Reply> = {}) => {
   return { requests, client };
 };
 
-const posts = (requests: Request[], path: string) =>
-  requests.filter((request) => request.method === "POST" && new URL(request.url).pathname === path);
+const sent = (requests: Request[], method: string, path: string) =>
+  requests.filter((request) => request.method === method && new URL(request.url).pathname === path);
+const posts = (requests: Request[], path: string) => sent(requests, "POST", path);
+
+const openDeletion = async () => {
+  await userEvent.click(await screen.findByRole("button", { name: "Excluir minha conta" }));
+  return screen.findByRole("alertdialog", { name: "Excluir sua conta?" });
+};
+
+const fillDeletion = async (dialog: HTMLElement, password = "minha-senha-longa") => {
+  await userEvent.type(within(dialog).getByLabelText("Senha"), password);
+  await userEvent.type(within(dialog).getByLabelText("Digite EXCLUIR para confirmar"), "EXCLUIR");
+  await userEvent.click(within(dialog).getByRole("button", { name: "Excluir para sempre" }));
+};
+
+const WARNING =
+  "Apaga sua conta e todos os seus lançamentos, categorias, contas fixas e cofrinhos. Não dá para desfazer.";
 
 describe("Ajustes › Minha conta", () => {
   beforeEach(() => router.replace.mockClear());
@@ -230,5 +245,119 @@ describe("Ajustes › Minha conta", () => {
 
     expect(await screen.findByText("Não foi possível sair. Tente de novo.")).toBeInTheDocument();
     expect(router.replace).not.toHaveBeenCalled();
+  });
+
+  it("deletes the account only once the password and EXCLUIR are typed, then goes to sign-in", async () => {
+    const { requests, client } = open({ "DELETE /api/me": { status: 204 } });
+
+    const section = await screen.findByRole("region", { name: "Excluir conta" });
+    expect(within(section).getByText(WARNING)).toBeInTheDocument();
+    client.setQueryData(["months", "2026-11"], { balance: "10.00" });
+    const dialog = await openDeletion();
+    expect(within(dialog).getByText(WARNING)).toBeInTheDocument();
+    const password = within(dialog).getByLabelText("Senha");
+    const confirmation = within(dialog).getByLabelText("Digite EXCLUIR para confirmar");
+    const submit = within(dialog).getByRole("button", { name: "Excluir para sempre" });
+    expect(password).toHaveAttribute("type", "password");
+    expect(password).toHaveAttribute("autocomplete", "current-password");
+    expect(submit).toBeDisabled();
+
+    await userEvent.type(confirmation, "EXCLUIR");
+    expect(submit).toBeDisabled();
+    await userEvent.type(password, "minha-senha-longa");
+    expect(submit).toBeEnabled();
+    await userEvent.clear(confirmation);
+    await userEvent.type(confirmation, "excluir");
+    expect(submit).toBeDisabled();
+    await userEvent.clear(confirmation);
+    await userEvent.type(confirmation, "EXCLUIR");
+    await userEvent.click(submit);
+
+    await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/entrar"));
+    expect(await screen.findByText("Sua conta foi excluída.")).toBeInTheDocument();
+    const deletions = sent(requests, "DELETE", "/api/me");
+    expect(deletions).toHaveLength(1);
+    expect(await deletions[0].json()).toEqual({ password: "minha-senha-longa" });
+    expect(client.getQueryData(meQuery.queryKey)).toBeNull();
+    expect(
+      client
+        .getQueryCache()
+        .getAll()
+        .map((query) => query.queryKey),
+    ).toEqual([meQuery.queryKey]);
+  });
+
+  it("marks a wrong password under the field and keeps the dialog open", async () => {
+    open({
+      "DELETE /api/me": { status: 422, body: { ...problem(422, "No."), type: "urn:soldi:error:wrong-password" } },
+    });
+
+    const dialog = await openDeletion();
+    await fillDeletion(dialog, "senha-errada");
+
+    expect(await within(dialog).findByText("Senha incorreta")).toBeInTheDocument();
+    const password = within(dialog).getByLabelText("Senha");
+    expect(password).toHaveAttribute("aria-invalid", "true");
+    expect(password).toHaveFocus();
+    expect(password).toHaveAccessibleDescription("Senha incorreta");
+    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+    expect(router.replace).not.toHaveBeenCalled();
+
+    await userEvent.type(password, "!");
+    expect(within(dialog).queryByText("Senha incorreta")).not.toBeInTheDocument();
+  });
+
+  it("keeps the dialog open and Cancelar off while the deletion is on its way", async () => {
+    open();
+    const dialog = await openDeletion();
+    let release = (): void => undefined;
+    vi.stubGlobal(
+      "fetch",
+      () =>
+        new Promise<Response>((resolve) => {
+          release = () => resolve(new Response(null, { status: 204 }));
+        }),
+    );
+
+    await fillDeletion(dialog);
+
+    expect(within(dialog).getByRole("button", { name: "Cancelar" })).toBeDisabled();
+    await userEvent.keyboard("{Escape}");
+    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+    release();
+    await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/entrar"));
+  });
+
+  it("asks to wait when there were too many deletion attempts", async () => {
+    open({ "DELETE /api/me": { status: 429, body: problem(429, "Too many.") } });
+
+    const dialog = await openDeletion();
+    await fillDeletion(dialog);
+
+    expect(await within(dialog).findByText("Muitas tentativas. Espere um pouco e tente de novo.")).toBeInTheDocument();
+    expect(router.replace).not.toHaveBeenCalled();
+  });
+
+  it("says so when the account is not deleted for another reason", async () => {
+    open({ "DELETE /api/me": { status: 500, body: problem(500, "Falhou.") } });
+
+    const dialog = await openDeletion();
+    await fillDeletion(dialog);
+
+    expect(await within(dialog).findByText("Não foi possível excluir a conta.")).toBeInTheDocument();
+    expect(router.replace).not.toHaveBeenCalled();
+  });
+
+  it("cancels the deletion without a request and forgets what was typed", async () => {
+    const { requests } = open();
+
+    let dialog = await openDeletion();
+    await userEvent.type(within(dialog).getByLabelText("Senha"), "minha-senha-longa");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Cancelar" }));
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+    expect(sent(requests, "DELETE", "/api/me")).toHaveLength(0);
+
+    dialog = await openDeletion();
+    expect(within(dialog).getByLabelText("Senha")).toHaveValue("");
   });
 });

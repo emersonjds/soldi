@@ -1,5 +1,7 @@
 use chrono::{Duration, Utc};
-use soldi_types::auth::{ChangePassword, ConfirmPasswordReset, SignIn, SignUp, UpdateMe, User};
+use soldi_types::auth::{
+    ChangePassword, ConfirmPasswordReset, DeleteAccount, SignIn, SignUp, UpdateMe, User,
+};
 use sqlx::{PgConnection, PgPool};
 use uuid::Uuid;
 
@@ -97,6 +99,29 @@ pub async fn change_password(
     repo::delete_other_sessions(&mut tx, user).await?;
     repo::delete_password_resets(&mut tx, user.id).await?;
     tx.commit().await?;
+    Ok(())
+}
+
+/// Deletes the user and, by cascade, every row they own.
+pub async fn delete_account(
+    pool: &PgPool,
+    user: &CurrentUser,
+    input: DeleteAccount,
+) -> Result<(), AppError> {
+    let stored_hash = {
+        let mut conn = pool.acquire().await?;
+        repo::find_password_hash(&mut conn, user.id).await?
+    };
+    let checked = stored_hash
+        .clone()
+        .unwrap_or_else(domain::dummy_password_hash);
+    if !verify_in_background(input.password, checked).await? {
+        return Err(domain::wrong_password());
+    }
+    let mut conn = pool.acquire().await?;
+    if !repo::delete_user(&mut conn, user.id, stored_hash.as_deref()).await? {
+        return Err(domain::wrong_password());
+    }
     Ok(())
 }
 
