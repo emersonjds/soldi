@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { Toaster } from "sonner";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { Schemas } from "@/shared/api/client";
 import { router, setSearch } from "@/test/next-navigation";
 import { renderWithQuery } from "@/test/render";
 import {
@@ -127,7 +128,7 @@ describe("Mês", () => {
     expect(await screen.findByRole("region", { name: "Termômetro do Mês" })).not.toHaveTextContent("Guardou");
   });
 
-  it("lists a future day first as Agendado, without a balance, and its entry opens Editar / Excluir", async () => {
+  it("lists a future day first as Agendado with its Previsto balance, and its entry opens Editar / Excluir", async () => {
     const later = { ...TRANSACTIONS[0], id: "later", date: "2026-11-20", note: "Show" };
     open({ "GET /api/transactions": { status: 200, body: [later, ...TRANSACTIONS] } });
 
@@ -135,7 +136,7 @@ describe("Mês", () => {
       level: 3,
     });
     expect(days.map((day) => day.textContent?.replace(/\s/g, " "))).toEqual([
-      "Agendado · 20 nov",
+      "Agendado · 20 novR$ 957,79Previsto · Apertado",
       "Hoje, 5 novR$ 957,79Apertado",
       "Ontem, 4 novR$ 1.142,10Confortável",
       "3 novR$ 2.342,10Folga",
@@ -144,6 +145,40 @@ describe("Mês", () => {
     const actions = await screen.findByRole("dialog", { name: "Show" });
     expect(within(actions).getByRole("button", { name: "Editar" })).toBeInTheDocument();
     expect(within(actions).getByRole("button", { name: "Excluir" })).toBeInTheDocument();
+  });
+
+  it("lists an unpaid conta fixa on the day it lands, with the Previsto balance", async () => {
+    const landed = (day: Schemas["Day"]): Schemas["Day"] => {
+      if (day.date < "2026-11-05") return day;
+      if (day.date < "2026-11-10") return { ...day, projected_balance: "673.69", projected_tier: "yellow" };
+      return { ...day, projected_balance: "-1585.87", projected_tier: "red" };
+    };
+    const bills = [
+      { ...BILLS_OF_MONTH[0], lands_on: "2026-11-05" },
+      { ...BILLS_OF_MONTH[1], lands_on: "2026-11-10" },
+    ];
+    open({
+      "GET /api/months/2026-11": {
+        status: 200,
+        body: { ...MONTH, days: MONTH.days.map(landed), bills_of_month: bills },
+      },
+    });
+
+    const days = await within(await screen.findByRole("region", { name: "Lançamentos" })).findAllByRole("heading", {
+      level: 3,
+    });
+    expect(days.map((day) => day.textContent?.replace(/\s/g, " "))).toEqual([
+      "Agendado · 10 nov-R$ 1.585,87Previsto · Crítico",
+      "Hoje, 5 novR$ 673,69Previsto · Apertado",
+      "Ontem, 4 novR$ 1.142,10Confortável",
+      "3 novR$ 2.342,10Folga",
+    ]);
+    expect(within(ledger()).getByRole("listitem", { name: "Aluguel Residencial" })).toHaveTextContent(
+      "Aluguel ResidencialConta fixa · a pagarR$ 2.259,56",
+    );
+    expect(within(ledger()).getByRole("listitem", { name: "Luz (Enel)" })).toHaveTextContent(
+      "Luz (Enel)Conta fixa · venceu dia 02/11R$ 284,10",
+    );
   });
 
   it("lists a month whose only entry is scheduled instead of the empty state", async () => {

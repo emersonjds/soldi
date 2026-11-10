@@ -120,6 +120,8 @@ const day = (date: string, balance: string, tier: Schemas["Tier"], rest: Partial
   daily: "0.00",
   balance,
   tier,
+  projected_balance: balance,
+  projected_tier: tier,
   is_today: false,
   is_future: false,
   ...rest,

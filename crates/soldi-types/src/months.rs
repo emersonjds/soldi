@@ -31,6 +31,11 @@ pub struct Day {
     #[serde(serialize_with = "crate::money")]
     pub balance: Decimal,
     pub tier: Tier,
+    /// `balance` minus the unpaid bills landed on or before this day (`BillOfMonth::lands_on`);
+    /// equal to `balance` before today and in a past month.
+    #[serde(serialize_with = "crate::money")]
+    pub projected_balance: Decimal,
+    pub projected_tier: Tier,
     pub is_today: bool,
     pub is_future: bool,
 }
@@ -73,6 +78,9 @@ pub struct BillOfMonth {
     pub paid: bool,
     pub transaction_id: Option<Uuid>,
     pub overdue: bool,
+    /// The day an unpaid bill enters the projection: its due date, or today once due; null when
+    /// paid or when that day falls after the month.
+    pub lands_on: Option<NaiveDate>,
 }
 
 /// The month's savings (SOL-20): `saved` is `totals.saved`; `rate_pct` is `saved / income` as a
@@ -119,6 +127,8 @@ mod tests {
             daily: "50.5".parse().unwrap(),
             balance: "-1150".parse().unwrap(),
             tier: Tier::LightRed,
+            projected_balance: "-1650".parse().unwrap(),
+            projected_tier: Tier::Red,
             is_today: true,
             is_future: false,
         };
@@ -127,7 +137,7 @@ mod tests {
             serde_json::to_value(&day).unwrap(),
             json!({
                 "date": "2026-11-03", "income": "0.00", "withdrawn": "0.00", "bills": "300.00", "daily": "50.50",
-                "balance": "-1150.00", "tier": "light_red", "is_today": true, "is_future": false
+                "balance": "-1150.00", "tier": "light_red", "projected_balance": "-1650.00", "projected_tier": "red", "is_today": true, "is_future": false
             })
         );
         assert_eq!(

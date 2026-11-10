@@ -20,7 +20,7 @@ import { TransactionSheet } from "@/features/add-transaction/transaction-sheet";
 import { EditBillSheet } from "@/features/edit-bill/edit-bill-sheet";
 import { cn } from "@/lib/utils";
 import type { Schemas } from "@/shared/api/client";
-import { shortDay, todayISO, yesterdayISO } from "@/shared/lib/date";
+import { dayMonth, shortDay, todayISO, yesterdayISO } from "@/shared/lib/date";
 import { BrandButton } from "@/shared/ui/brand-button";
 import { CategoryIcon } from "@/shared/ui/category-icon";
 import { Money } from "@/shared/ui/money";
@@ -53,18 +53,38 @@ const entryOf = (transaction: Transaction, categories: Schemas["Category"][] = [
 
 const titleOf = (transaction: Transaction, entry: Entry) => transaction.note || entry.label;
 
-/** Days that have entries, newest first. */
-const groupByDay = (days: Schemas["Day"][], transactions: Transaction[]) => {
-  const byDate = new Map(days.map((day) => [day.date, day]));
-  const groups = new Map<string, Transaction[]>();
-  const sorted = [...transactions].sort((a, b) => b.date.localeCompare(a.date));
-  for (const transaction of sorted) {
-    const day = byDate.get(transaction.date);
-    if (!day) continue;
-    groups.set(day.date, [...(groups.get(day.date) ?? []), transaction]);
-  }
-  return [...groups].map(([date, entries]) => ({ day: byDate.get(date) as Schemas["Day"], entries }));
-};
+type Day = Schemas["Day"];
+type Due = Schemas["BillOfMonth"];
+
+/** Days with entries or an unpaid bill landed on them, newest first. */
+// ponytail: days × entries scan, 31 days a month.
+const groupByDay = (days: Day[], transactions: Transaction[], bills: Due[]) =>
+  days
+    .map((day) => ({
+      day,
+      entries: transactions.filter((transaction) => transaction.date === day.date),
+      due: bills.filter((bill) => bill.lands_on === day.date),
+    }))
+    .filter(({ entries, due }) => entries.length > 0 || due.length > 0)
+    .reverse();
+
+/** A day ahead, or today once an unpaid bill landed on it. */
+const isForecast = (day: Day) => day.is_future || day.projected_balance !== day.balance;
+
+const DueRow = ({ bill }: { bill: Due }) => (
+  <li aria-labelledby={`due-${bill.bill_id}`} className="flex min-h-16 items-center gap-3 px-2 py-2">
+    <CategoryIcon icon={bill.icon} color={bill.color} />
+    <span className="flex min-w-0 flex-1 flex-col">
+      <span id={`due-${bill.bill_id}`} className="truncate font-medium text-base">
+        {bill.name}
+      </span>
+      <span className={cn("text-xs", bill.overdue ? "text-expense" : "text-muted-foreground")}>
+        {bill.overdue ? `Conta fixa · venceu dia ${dayMonth(bill.due_date)}` : "Conta fixa · a pagar"}
+      </span>
+    </span>
+    <Money amount={bill.amount} className="font-bold text-base" />
+  </li>
+);
 
 const Row = ({ transaction, entry, onOpen }: { transaction: Transaction; entry: Entry; onOpen: () => void }) => (
   <li>
@@ -110,7 +130,7 @@ export const Ledger = ({ view, transactions, onLaunch, className }: LedgerProps)
   const [scope, setScope] = useState<Scope>("this");
   const create = useCreateTransaction();
   const remove = useDeleteTransaction();
-  const groups = groupByDay(view.days, transactions);
+  const groups = groupByDay(view.days, transactions, view.bills_of_month);
 
   const open = (transaction: Transaction) => {
     setSelected(transaction);
@@ -172,11 +192,11 @@ export const Ledger = ({ view, transactions, onLaunch, className }: LedgerProps)
           </BrandButton>
         </div>
       ) : (
-        groups.map(({ day, entries }) => (
+        groups.map(({ day, entries, due }) => (
           <div key={day.date}>
             <h3 className="sticky top-14 z-10 -mx-2 flex items-center justify-between gap-2 bg-card/95 px-2 py-2 font-semibold text-muted-foreground text-sm backdrop-blur lg:top-0">
               {dayLabel(day)}
-              {!day.is_future && <TierPill tier={day.tier} amount={day.balance} size="sm" />}
+              <TierPill tier={day.projected_tier} amount={day.projected_balance} forecast={isForecast(day)} size="sm" />
             </h3>
             <ul className="flex flex-col">
               {entries.map((transaction) => (
@@ -186,6 +206,9 @@ export const Ledger = ({ view, transactions, onLaunch, className }: LedgerProps)
                   transaction={transaction}
                   onOpen={() => open(transaction)}
                 />
+              ))}
+              {due.map((bill) => (
+                <DueRow key={bill.bill_id} bill={bill} />
               ))}
             </ul>
           </div>
