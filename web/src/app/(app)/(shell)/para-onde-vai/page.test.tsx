@@ -42,9 +42,9 @@ describe("Para onde vai", () => {
     expect(screen.getByRole("radio", { name: "Saídas" })).toBeChecked();
 
     expect(row("Aluguel")).toHaveTextContent("Aluguel87%−6% em relação ao mês anteriorR$ 1.200,00");
-    expect(within(row("Aluguel")).getByText("−6%")).toHaveClass("text-income");
+    expect(within(row("Aluguel")).getByText("−6%")).toHaveClass("text-tier-green-foreground");
     expect(row("Mercado")).toHaveTextContent("Mercado13%+18% em relação ao mês anteriorR$ 184,31");
-    expect(within(row("Mercado")).getByText("+18%")).toHaveClass("text-expense");
+    expect(within(row("Mercado")).getByText("+18%")).toHaveClass("text-tier-red-foreground");
 
     const top = screen.getByRole("region", { name: "Top 5" });
     expect(

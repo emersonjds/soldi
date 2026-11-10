@@ -85,7 +85,7 @@ const Pill = ({
         aria-label={`Pago: desfazer ${label}`}
         onClick={onUnpay}
         disabled={busy}
-        className={cn(pill, "bg-income-soft text-income")}
+        className={cn(pill, "bg-income-soft text-tier-green-foreground")}
       >
         <Check className="size-4" aria-hidden />
         Pago

@@ -103,6 +103,9 @@ describe("Contas do Mês", () => {
     expect(
       await within(rowOf("Aluguel Residencial")).findByRole("button", { name: "Pago: desfazer Aluguel Residencial" }),
     ).toHaveTextContent("Pago");
+    expect(within(rowOf("Aluguel Residencial")).getByRole("button", { name: /^Pago/ })).toHaveClass(
+      "text-tier-green-foreground",
+    );
     const post = requests.find((request) => request.method === "POST");
     expect(new URL(post?.url ?? "").searchParams.get("month")).toBe("2026-11");
     expect(await post?.json()).toEqual({ date: "2026-11-05" });

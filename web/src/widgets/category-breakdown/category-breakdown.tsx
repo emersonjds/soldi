@@ -41,7 +41,8 @@ const DeltaBadge = ({ share }: { share: CategoryShare }) => {
         className={cn(
           "rounded-md px-1.5 font-semibold text-xs tabular-nums leading-5",
           label === "0%" && "bg-muted text-muted-foreground",
-          label !== "0%" && (good ? "bg-income-soft text-income" : "bg-expense-soft text-expense"),
+          label !== "0%" &&
+            (good ? "bg-income-soft text-tier-green-foreground" : "bg-expense-soft text-tier-red-foreground"),
         )}
       >
         {label}
