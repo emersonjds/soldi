@@ -11,6 +11,7 @@ import {
   CARRIED_ALUGUEL,
   CATEGORIES,
   ECONOMIA,
+  FORECAST,
   FORECAST_MONTH,
   FORECAST_TRANSACTIONS,
   MERCADO,
@@ -487,5 +488,25 @@ describe("Mês", () => {
 
     const hero = await screen.findByRole("region", { name: "Saldo hoje" });
     expect(within(hero).queryByText(/no vermelho/)).not.toBeInTheDocument();
+  });
+
+  it("opens a month from Próximos meses at the top of the screen", async () => {
+    const scrollTo = vi.spyOn(window, "scrollTo").mockImplementation(() => undefined);
+    open({ "GET /api/forecast": { status: 200, body: FORECAST } });
+
+    const strip = await screen.findByRole("region", { name: "Próximos meses" });
+    await userEvent.click(await within(strip).findByRole("button", { name: /^dez 2026/ }));
+
+    expect(router.replace).toHaveBeenCalledWith("/mes?m=2026-12", { scroll: false });
+    expect(scrollTo).toHaveBeenCalledWith({ top: 0 });
+  });
+
+  it("keeps the month on screen when Próximos meses fails", async () => {
+    open({ "GET /api/forecast": { status: 500, body: problem(500, "Erro") } });
+
+    const strip = await screen.findByRole("region", { name: "Próximos meses" });
+    expect(await within(strip).findByText("Não foi possível carregar.")).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Saldo hoje" })).toBeInTheDocument();
+    expect(ledger()).toBeInTheDocument();
   });
 });
