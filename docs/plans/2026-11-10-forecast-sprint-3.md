@@ -1715,10 +1715,13 @@ git commit -m "test(web): SOL-51 chips paint the coming months and open one"
     }
 
     #[test]
-    fn r9_installments_split_half_even_with_the_remainder_on_the_last() {
+    fn r9_installments_truncate_each_to_cents_with_the_remainder_on_the_last() {
         let ten = amounts("1000.01", 10);
-        assert_eq!(ten[..9], vec!["100.00"; 9]);
+        assert_eq!(ten[..9], ["100.00"; 9]);
         assert_eq!(ten[9], "100.01");
+        let sixty = amounts("10.00", 60);
+        assert_eq!(sixty[..59], ["0.16"; 59]);
+        assert_eq!(sixty[59], "0.56");
         assert_eq!(amounts("100.00", 3), ["33.33", "33.33", "33.34"]);
         assert_eq!(amounts("1000.00", 12)[11], "83.37");
         assert_eq!(amounts("0.05", 2), ["0.02", "0.03"]);
@@ -1734,12 +1737,14 @@ git commit -m "test(web): SOL-51 chips paint the coming months and open one"
             ..entry(amount, None)
         };
         assert!(check(split("1000.01", 10, None)).is_ok());
-        assert!(check(split("60", 60, None)).is_ok());
+        assert!(check(split("10.00", 60, None)).is_ok());
+        assert!(check(split("0.06", 4, None)).is_ok());
+        assert!(check(split("0.02", 2, None)).is_ok());
         for input in [
             split("10", 1, None),
             split("10", 61, None),
             split("10", 3, Some(3)),
-            split("0.06", 4, None),
+            split("0.05", 6, None),
             split("0.01", 2, None),
         ] {
             assert_eq!(field(check(input)), "installments");
@@ -1769,7 +1774,7 @@ Expected: `no field installments`, `cannot find function installment_amounts`.
 `soldi-types/src/transactions.rs`, after `repeat_months` in `CreateTransaction`:
 
 ```rust
-    /// 2 to 60 monthly parcelas splitting `amount`, the total: each `amount / n` half-even to
+    /// 2 to 60 monthly parcelas splitting `amount`, the total: each `amount / n` truncated to
     /// cents, the last takes the remainder (D16); dated like `repeat_months`; not with it.
     #[serde(default)]
     #[schema(minimum = 2, maximum = 60)]
@@ -1779,11 +1784,10 @@ Expected: `no field installments`, `cannot find function installment_amounts`.
 `transactions/domain.rs` (import `rust_decimal::RoundingStrategy`):
 
 ```rust
-/// R9 (D16 rule 3): `total` in `count` parcelas, half-even to cents; the last takes the remainder.
+/// R9 (D16 rule 3): `total` in `count` parcelas, each truncated to cents; the last takes the rest.
 pub fn installment_amounts(total: Decimal, count: i16) -> Vec<Decimal> {
     let rest = count.saturating_sub(1);
-    let each = (total / Decimal::from(count))
-        .round_dp_with_strategy(2, RoundingStrategy::MidpointNearestEven);
+    let each = (total / Decimal::from(count)).round_dp_with_strategy(2, RoundingStrategy::ToZero);
     let mut amounts = vec![each; usize::try_from(rest).unwrap_or(0)];
     amounts.push(total - each * Decimal::from(rest));
     amounts
@@ -1802,10 +1806,7 @@ fn check_installments(input: &CreateTransaction, amount: Decimal) -> Result<(), 
     if !(2..=60).contains(&count) {
         return Err(AppError::invalid("installments", "must be 2 to 60"));
     }
-    if installment_amounts(amount, count)
-        .iter()
-        .any(|part| *part <= Decimal::ZERO)
-    {
+    if installment_amounts(amount, count)[0] <= Decimal::ZERO {
         return Err(AppError::invalid(
             "installments",
             "must leave every installment above zero",
@@ -1825,7 +1826,7 @@ Every other `CreateTransaction { … }` literal: `installments: None,`.
 
 ```bash
 git add crates
-git commit -m "feat(server): SOL-52 split a total into parcelas, half-even, remainder last"
+git commit -m "feat(server): SOL-52 split a total into parcelas, truncated, remainder last"
 ```
 
 ### Task 11: Write parcelas as a series (repo, service, integration, OpenAPI)
@@ -1877,7 +1878,7 @@ async fn installments_out_of_range_with_repeat_or_too_small_are_refused(pool: Pg
         ("10", json!({ "installments": 1 })),
         ("10", json!({ "installments": 61 })),
         ("10", json!({ "installments": 3, "repeat_months": 3 })),
-        ("0.06", json!({ "installments": 4 })),
+        ("0.05", json!({ "installments": 6 })),
     ] {
         let mut body = json!({ "date": "2026-11-05", "amount": amount, "kind": "daily", "category_id": market });
         body.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
@@ -1992,13 +1993,16 @@ import { describe, expect, it } from "vitest";
 import { installmentCents } from "./installments";
 
 describe("installmentCents", () => {
-  it("splits half-even with the remainder on the last, like the server", () => {
+  it("truncates each parcela to cents and puts the remainder on the last, like the server", () => {
     expect(installmentCents(100_001, 10)).toEqual([...Array(9).fill(10_000), 10_001]);
-    expect(installmentCents(10_000, 3)).toEqual([3333, 3333, 3334]);
-    expect(installmentCents(100_000, 12).at(-1)).toBe(8337);
+    expect(installmentCents(1000, 60)).toEqual([...Array(59).fill(16), 56]);
     expect(installmentCents(5, 2)).toEqual([2, 3]);
-    expect(installmentCents(6, 4)).toEqual([2, 2, 2, 0]);
-    expect(installmentCents(1, 2)).toEqual([0, 1]);
+    expect(installmentCents(10_000, 3)).toEqual([3333, 3333, 3334]);
+    expect(installmentCents(6, 4)).toEqual([1, 1, 1, 3]);
+  });
+
+  it("leaves parcelas at zero when the total is under one cent each, for the caller to refuse", () => {
+    expect(installmentCents(5, 6)).toEqual([0, 0, 0, 0, 0, 5]);
   });
 });
 ```
@@ -2046,12 +2050,9 @@ Run: `pnpm vitest run src/shared/lib src/entities/transaction/transaction-querie
 `shared/lib/installments.ts`:
 
 ```ts
-/** D16 rule 3 in whole cents, the server's `installment_amounts`: `total / count` half-even, the last takes the remainder. */
+/** D16 rule 3 in whole cents, the server's `installment_amounts`: `total / count` truncated, the last takes the remainder. */
 export const installmentCents = (total: number, count: number) => {
-  const quotient = Math.floor(total / count);
-  const remainder = total - quotient * count;
-  const roundsUp = remainder * 2 > count || (remainder * 2 === count && quotient % 2 === 1);
-  const each = quotient + (roundsUp ? 1 : 0);
+  const each = Math.trunc(total / count);
   return [...Array.from({ length: count - 1 }, () => each), total - each * (count - 1)];
 };
 ```
@@ -2282,12 +2283,12 @@ describe("draftRows", () => {
   it("refuses a parcela at zero and offers Parcelar only on Saída and Diário, never when editing", async () => {
     setup();
     await userEvent.click(screen.getByLabelText("Valor"));
-    await userEvent.keyboard("0,06");
+    await userEvent.keyboard("0,05");
     await userEvent.click(await screen.findByRole("switch", { name: "Parcelar" }));
     await userEvent.click(within(screen.getByRole("group", { name: "Quantas parcelas" })).getByRole("radio", { name: "Outro" }));
-    await userEvent.type(screen.getByLabelText("Parcelas"), "4");
+    await userEvent.type(screen.getByLabelText("Parcelas"), "6");
     await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
-    expect(screen.getByRole("alert")).toHaveTextContent("Valor pequeno demais para 4 parcelas.");
+    expect(screen.getByRole("alert")).toHaveTextContent("Valor pequeno demais para 6 parcelas.");
 
     await userEvent.click(screen.getByRole("radio", { name: "Entrada" }));
     expect(screen.queryByRole("switch", { name: "Parcelar" })).not.toBeInTheDocument();

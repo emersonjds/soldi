@@ -5,6 +5,7 @@ import { type FormEvent, type ReactNode, useState } from "react";
 import { Repeat } from "lucide-react";
 import { toast } from "sonner";
 
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -21,11 +22,16 @@ import {
 import type { Schemas } from "@/shared/api/client";
 import { useCurrency } from "@/shared/lib/currency";
 import { addMonths, monthYear, todayISO } from "@/shared/lib/date";
+import { installmentCents } from "@/shared/lib/installments";
 import { formatMoney, positiveAmount } from "@/shared/lib/money";
+import { cents, fromCents } from "@/shared/lib/tier";
 import { BrandButton } from "@/shared/ui/brand-button";
 import { DateChips } from "@/shared/ui/date-chips";
 import { HeroAmount } from "@/shared/ui/hero-amount";
 import { ResponsiveSheet } from "@/shared/ui/responsive-sheet";
+
+import { draftRows, type Plan } from "./draft-rows";
+import { Simulation } from "./simulation";
 
 type Kind = Schemas["CategoryKind"];
 
@@ -47,6 +53,8 @@ type Draft = {
   date: string;
   note: string;
   repeat: boolean;
+  installments: boolean;
+  simulate: boolean;
   preset: string;
   custom: string;
   scope: Scope;
@@ -69,10 +77,12 @@ const TransactionForm = ({
   transaction,
   onSave,
   onConvert,
+  onDiscard,
 }: {
   initial: Draft;
   transaction?: Transaction;
   onSave: (fields: NewTransaction, scope?: Scope) => void;
+  onDiscard: () => void;
   /** Absent: no Transformar em conta fixa. */
   onConvert?: (source: Source) => void;
 }) => {
@@ -86,12 +96,24 @@ const TransactionForm = ({
   const monthsValid = Number.isInteger(months) && months >= 2 && months <= 60;
   const series = transaction?.series;
   const canRepeat = !transaction?.recurring_bill_id && !transaction?.cofrinho_id && !series;
+  const installments = draft.installments && !transaction && draft.kind !== "income";
+  const counted = draft.repeat || installments;
+  const split = installments && amount && monthsValid ? installmentCents(cents(amount), months) : null;
+  const splitValid = !split || split[0] > 0;
+  const money = (value: number) => formatMoney(fromCents(value), currency);
+  let plan: Plan = "once";
+  if (draft.repeat) plan = "repeat";
+  if (installments) plan = "installments";
+  const rows =
+    amount && (plan === "once" || monthsValid)
+      ? draftRows({ kind: draft.kind, amount, date: draft.date, plan, count: months })
+      : null;
 
   const set = (patch: Partial<Draft>) => setDraft((current) => ({ ...current, ...patch }));
 
   const fields = (): NewTransaction | undefined => {
     setSubmitted(true);
-    if (!amount || !category || (draft.repeat && !monthsValid)) return;
+    if (!amount || !category || (counted && !monthsValid) || !splitValid) return;
     const note = draft.note.trim();
     return {
       date: draft.date,
@@ -100,6 +122,7 @@ const TransactionForm = ({
       category_id: category.id,
       note: note || null,
       repeat_months: draft.repeat ? months : undefined,
+      installments: installments ? months : undefined,
       category,
     };
   };
@@ -110,7 +133,7 @@ const TransactionForm = ({
     if (valid) onSave(valid, series ? draft.scope : undefined);
   };
 
-  const convertible = onConvert && (transaction?.kind ?? draft.kind) === "bill" && !draft.repeat;
+  const convertible = onConvert && (transaction?.kind ?? draft.kind) === "bill" && !draft.repeat && !installments;
 
   // Editar converts the stored entry; its unsaved edits stay out.
   const convert = () => {
@@ -126,11 +149,35 @@ const TransactionForm = ({
           Parte de uma série de {series.total}
         </p>
       )}
+      {!transaction && (
+        <label
+          htmlFor="transaction-simulate-switch"
+          className="flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-xl bg-muted px-4 py-2"
+        >
+          <span className="flex flex-col">
+            <span id="transaction-simulate" className="font-medium text-base">
+              Simular
+            </span>
+            <span id="transaction-simulate-help" className="text-muted-foreground text-xs">
+              Veja o efeito antes de lançar.
+            </span>
+          </span>
+          <Switch
+            id="transaction-simulate-switch"
+            aria-labelledby="transaction-simulate"
+            aria-describedby="transaction-simulate-help"
+            checked={draft.simulate}
+            onCheckedChange={(simulate) => set({ simulate })}
+          />
+        </label>
+      )}
       <ToggleGroup
         type="single"
         spacing={0}
         value={draft.kind}
-        onValueChange={(kind: Kind | "") => kind && set({ kind, category: undefined })}
+        onValueChange={(kind: Kind | "") =>
+          kind && set({ kind, category: undefined, installments: draft.installments && kind !== "income" })
+        }
         aria-label="Tipo"
         className="grid w-full grid-cols-3 rounded-2xl bg-muted p-1"
       >
@@ -176,17 +223,33 @@ const TransactionForm = ({
               id="transaction-repeat-switch"
               aria-labelledby="transaction-repeat"
               checked={draft.repeat}
-              onCheckedChange={(repeat) => set({ repeat })}
+              onCheckedChange={(repeat) => set({ repeat, installments: false })}
             />
           </label>
-          {draft.repeat && (
+          {!transaction && draft.kind !== "income" && (
+            <label
+              htmlFor="transaction-split-switch"
+              className="flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-xl bg-muted px-4"
+            >
+              <span id="transaction-split" className="font-medium text-base">
+                Parcelar
+              </span>
+              <Switch
+                id="transaction-split-switch"
+                aria-labelledby="transaction-split"
+                checked={installments}
+                onCheckedChange={(on) => set({ installments: on, repeat: false })}
+              />
+            </label>
+          )}
+          {counted && (
             <>
               <ToggleGroup
                 type="single"
                 spacing={0}
                 value={draft.preset}
                 onValueChange={(preset: string) => preset && set({ preset })}
-                aria-label="Quantas vezes"
+                aria-label={installments ? "Quantas parcelas" : "Quantas vezes"}
                 className="grid w-full grid-cols-5 rounded-2xl bg-muted p-1"
               >
                 {PRESETS.map((preset) => (
@@ -199,7 +262,7 @@ const TransactionForm = ({
                 <div className="flex flex-col gap-1.5">
                   <Input
                     inputMode="numeric"
-                    aria-label="Meses"
+                    aria-label={installments ? "Parcelas" : "Meses"}
                     placeholder="De 2 a 60"
                     value={draft.custom}
                     onChange={(event) => set({ custom: event.target.value.replace(/\D/g, "").slice(0, 2) })}
@@ -209,14 +272,27 @@ const TransactionForm = ({
                   />
                   {submitted && !monthsValid && (
                     <p id="transaction-months-error" role="alert" className="text-destructive text-sm">
-                      Escolha de 2 a 60 meses.
+                      {installments ? "Escolha de 2 a 60 parcelas." : "Escolha de 2 a 60 meses."}
                     </p>
                   )}
                 </div>
               )}
-              {monthsValid && (
+              {draft.repeat && monthsValid && (
                 <p className="text-muted-foreground text-sm">
                   {amount && `${months}× ${formatMoney(amount, currency)} · `}até {lastMonth(draft.date, months)}
+                </p>
+              )}
+              {split && splitValid && (
+                <p className="text-muted-foreground text-sm">
+                  {split[0] === split[months - 1]
+                    ? `${months}× ${money(split[0])}`
+                    : `${months - 1}× ${money(split[0])} + ${money(split[months - 1])} na última`}{" "}
+                  · até {lastMonth(draft.date, months)}
+                </p>
+              )}
+              {submitted && !splitValid && (
+                <p role="alert" className="text-destructive text-sm">
+                  Valor pequeno demais para {months} parcelas.
                 </p>
               )}
               {Number(draft.date.slice(8)) >= 29 && (
@@ -257,7 +333,18 @@ const TransactionForm = ({
         <ScopeRadio legend="Aplicar em" series={series} value={draft.scope} onChange={(scope) => set({ scope })} />
       )}
 
-      <BrandButton type="submit">Salvar</BrandButton>
+      {draft.simulate && <Simulation rows={rows} countInvalid={Boolean(amount) && counted && !monthsValid} />}
+
+      {draft.simulate ? (
+        <div className="flex flex-col gap-2">
+          <BrandButton type="submit">Lançar de verdade</BrandButton>
+          <Button type="button" variant="ghost" className="h-12 w-full text-base" onClick={onDiscard}>
+            Descartar
+          </Button>
+        </div>
+      ) : (
+        <BrandButton type="submit">Salvar</BrandButton>
+      )}
     </form>
   );
 };
@@ -299,8 +386,10 @@ export const TransactionSheet = ({
 
   const save = (fields: NewTransaction, scope?: Scope) => {
     onOpenChange(false);
-    const done = (fallback: string) =>
+    const done = (fallback: string) => {
+      if (fields.installments) return toast.success(`${fields.installments} parcelas lançadas`);
       toast.success(fields.repeat_months ? `${fields.repeat_months} lançamentos criados` : fallback);
+    };
     if (!transaction) return create.mutate(fields, { onSuccess: () => done("Lançado"), onError: failed });
     const { category: _category, ...patch } = fields;
     update.mutate(
@@ -333,7 +422,14 @@ export const TransactionSheet = ({
     );
   };
 
-  const repeat = { repeat: false, preset: "12", custom: "", scope: "this" } as const;
+  const repeat = {
+    repeat: false,
+    installments: false,
+    simulate: false,
+    preset: "12",
+    custom: "",
+    scope: "this",
+  } as const;
   const initial: Draft = transaction
     ? {
         kind: transaction.kind,
@@ -359,6 +455,7 @@ export const TransactionSheet = ({
         transaction={transaction}
         onSave={save}
         onConvert={billSheet && setConverting}
+        onDiscard={() => onOpenChange(false)}
       />
       {converting &&
         billSheet?.({

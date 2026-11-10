@@ -1,6 +1,8 @@
 import { type QueryClient, queryOptions, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, dataOrThrow, okOrThrow, type Schemas } from "@/shared/api/client";
+import { installmentCents } from "@/shared/lib/installments";
+import { cents, fromCents } from "@/shared/lib/tier";
 
 export type Transaction = Schemas["Transaction"];
 
@@ -34,8 +36,9 @@ export const useCreateTransaction = () => {
       const { queryKey } = transactionsQuery(input.date.slice(0, 7));
       await client.cancelQueries({ queryKey });
       const previous = client.getQueryData(queryKey);
-      const { category_id: _id, ...row } = input;
-      client.setQueryData(queryKey, (list) => list && [{ ...row, id: `optimistic-${Date.now()}` }, ...list]);
+      const { category_id: _id, installments, ...row } = input;
+      const amount = installments ? fromCents(installmentCents(cents(row.amount), installments)[0]) : row.amount;
+      client.setQueryData(queryKey, (list) => list && [{ ...row, amount, id: `optimistic-${Date.now()}` }, ...list]);
       return { queryKey, previous };
     },
     onError: (_error, _input, context) => {

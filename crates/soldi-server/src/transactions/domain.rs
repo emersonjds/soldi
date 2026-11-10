@@ -1,5 +1,5 @@
 use chrono::{Datelike, Months, NaiveDate};
-use rust_decimal::Decimal;
+use rust_decimal::{Decimal, RoundingStrategy};
 use soldi_types::categories::{Category, CategoryKind};
 use soldi_types::transactions::{CreateTransaction, Transaction};
 use uuid::Uuid;
@@ -12,9 +12,13 @@ pub fn check(input: CreateTransaction) -> Result<CreateTransaction, AppError> {
     if input.amount <= Decimal::ZERO {
         return Err(AppError::invalid("amount", "must be greater than zero"));
     }
+    if !(2000..=2100).contains(&input.date.year()) {
+        return Err(AppError::invalid("date", "must be from 2000 to 2100"));
+    }
     let amount = check_money("amount", input.amount)?;
     let note = input.note.as_deref().map(check_note).transpose()?.flatten();
     input.repeat_months.map(check_repeat).transpose()?;
+    check_installments(&input, amount)?;
     Ok(CreateTransaction {
         amount,
         note,
@@ -40,6 +44,37 @@ pub fn check_repeat(months: i16) -> Result<i16, AppError> {
         return Err(AppError::invalid("repeat_months", "must be 2 to 60"));
     }
     Ok(months)
+}
+
+/// R9 (D16 rule 3): `total` in `count` parcelas, each truncated to cents; the last takes the rest.
+pub fn installment_amounts(total: Decimal, count: i16) -> Vec<Decimal> {
+    let rest = count.saturating_sub(1);
+    let each = (total / Decimal::from(count)).round_dp_with_strategy(2, RoundingStrategy::ToZero);
+    let mut amounts = vec![each; usize::try_from(rest).unwrap_or(0)];
+    amounts.push(total - each * Decimal::from(rest));
+    amounts
+}
+
+fn check_installments(input: &CreateTransaction, amount: Decimal) -> Result<(), AppError> {
+    let Some(count) = input.installments else {
+        return Ok(());
+    };
+    if input.repeat_months.is_some() {
+        return Err(AppError::invalid(
+            "installments",
+            "cannot be combined with repeat_months",
+        ));
+    }
+    if !(2..=60).contains(&count) {
+        return Err(AppError::invalid("installments", "must be 2 to 60"));
+    }
+    if installment_amounts(amount, count)[0] <= Decimal::ZERO {
+        return Err(AppError::invalid(
+            "installments",
+            "must leave every installment above zero",
+        ));
+    }
+    Ok(())
 }
 
 /// R1: the dates of the `months - 1` copies, each the original's day in its own month.
@@ -158,6 +193,7 @@ mod tests {
             category_id: Uuid::nil(),
             note: note.map(String::from),
             repeat_months: None,
+            installments: None,
         }
     }
 
@@ -218,6 +254,53 @@ mod tests {
             ..entry("10", None)
         };
         assert_eq!(field(check(once)), "repeat_months");
+    }
+
+    fn amounts(total: &str, count: i16) -> Vec<String> {
+        installment_amounts(total.parse().unwrap(), count)
+            .iter()
+            .map(|amount| amount.to_string())
+            .collect()
+    }
+
+    #[test]
+    fn r9_installments_truncate_each_to_cents_with_the_remainder_on_the_last() {
+        let ten = amounts("1000.01", 10);
+        assert_eq!(ten[..9], ["100.00"; 9]);
+        assert_eq!(ten[9], "100.01");
+        let sixty = amounts("10.00", 60);
+        assert_eq!(sixty[..59], ["0.16"; 59]);
+        assert_eq!(sixty[59], "0.56");
+        assert_eq!(amounts("100.00", 3), ["33.33", "33.33", "33.34"]);
+        assert_eq!(amounts("1000.00", 12)[11], "83.37");
+        assert_eq!(amounts("0.05", 2), ["0.02", "0.03"]);
+        let sum: Decimal = installment_amounts("1000.01".parse().unwrap(), 10)
+            .iter()
+            .sum();
+        assert_eq!(sum, "1000.01".parse::<Decimal>().unwrap());
+    }
+
+    #[test]
+    fn r9_installments_are_2_to_60_alone_and_never_leave_a_parcela_at_zero() {
+        let split =
+            |amount: &str, installments: i16, repeat_months: Option<i16>| CreateTransaction {
+                installments: Some(installments),
+                repeat_months,
+                ..entry(amount, None)
+            };
+        assert!(check(split("1000.01", 10, None)).is_ok());
+        assert!(check(split("10.00", 60, None)).is_ok());
+        assert!(check(split("0.06", 4, None)).is_ok());
+        assert!(check(split("0.02", 2, None)).is_ok());
+        for input in [
+            split("10", 1, None),
+            split("10", 61, None),
+            split("10", 3, Some(3)),
+            split("0.05", 6, None),
+            split("0.01", 2, None),
+        ] {
+            assert_eq!(field(check(input)), "installments");
+        }
     }
 
     #[test]
