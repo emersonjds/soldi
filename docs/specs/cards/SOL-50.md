@@ -9,11 +9,11 @@ Window = the month's days with `is_today || is_future` (server São Paulo day). 
 - **First red day**: first window day with `projected_tier == "red"` (balance < the user's `tier_red`, D16; `light_red` is not an alert). None → no alert at all.
 - **Lowest point**: window day with the smallest `projected_balance`; ties → the earliest.
 - **Recovers on**: first day after the lowest point with `projected_tier != "red"` (balance ≥ `tier_red`, finance rule 5). None → the month ends red, the recovery part is dropped.
-- **Cause** of a day: its single largest outflow among unpaid bills with `lands_on` on it and transactions dated on it with kind `bill` or `daily` (income and resgates never). Ties: conta fixa before Saída before Diário, then list order (bills by due day and name, transactions as the API returns them). A day with no outflow has no cause. Computed for the first red day and for the lowest point.
+- **Cause** of a day: its single largest outflow among unpaid bills with `lands_on` on it and transactions dated on it with kind `bill` or `daily` (income and resgates never). Ties: conta fixa before Saída before Diário, then list order (bills by due day and name, transactions as the API returns them). A day with no outflow has no cause. A day whose `projected_balance` is not below the previous day's in `days` has no cause either (a red carried in from earlier gets no `Motivo da queda`); the month's first day has no previous day and keeps its largest outflow. Computed for the first red day and for the lowest point.
 
 ## Where it is computed: web, from `MonthView.days` + the month's transactions
 
-Pure functions in `web/src/entities/month/forecast-alert.ts`: `forecastAlert(days)` and `causeOf(date, transactions, bills)`. No contract change, no new endpoint, no extra query.
+Pure functions in `web/src/entities/month/forecast-alert.ts`: `forecastAlert(days)` and `causeOf(date, days, transactions, bills)`. No contract change, no new endpoint, no extra query.
 
 Why not a server `alert` field: every input is already on the client (`days`, `bills_of_month`, `useTransactions(month)`), so the server version would add a per-transaction query just for the cause (the month view only reads grouped sums); the comparisons are exact without Decimal (`cents()` integer compare, no arithmetic, `shared/lib/tier.ts` already does it for tiers); and SOL-52's `Simular` must find the red day client-side on a draft that never reaches the server (`03-ux.md` §4: "client-side projection, no server round-trip per edit") — the same `forecastAlert` runs there on the recolored days. One implementation, unit-tested with the owner's numbers. Money arithmetic stays on the server.
 

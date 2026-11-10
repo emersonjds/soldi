@@ -25,12 +25,15 @@ export const forecastAlert = (days: Day[]): ForecastAlert | null => {
 
 const RANK = { bill: 1, daily: 2 } as const;
 
-/** The day's largest outflow; ties go conta fixa, Saída, Diário, then list order. */
+/** The day's largest outflow, only when its projected balance fell from the day before; ties go conta fixa, Saída, Diário, then list order. */
 export const causeOf = (
   date: string,
+  days: Day[],
   transactions: Schemas["Transaction"][],
   bills: Schemas["BillOfMonth"][],
 ): string | null => {
+  const index = days.findIndex((day) => day.date === date);
+  if (index > 0 && cents(days[index].projected_balance) >= cents(days[index - 1].projected_balance)) return null;
   const outflows = [
     ...bills
       .filter((bill) => bill.lands_on === date)

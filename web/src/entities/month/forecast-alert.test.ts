@@ -56,6 +56,17 @@ describe("forecastAlert", () => {
     });
   });
 
+  it("counts the recovery from the lowest point, not from the first red day", () => {
+    const days = [
+      day("2026-11-10", "-100.00", "red", "today"),
+      day("2026-11-12", "500.00", "green"),
+      day("2026-11-20", "-900.00", "red"),
+      day("2026-11-25", "500.00", "green"),
+    ];
+
+    expect(forecastAlert(days)?.recoversOn).toBe("2026-11-25");
+  });
+
   it("has no recovery when the month ends red", () => {
     const days = [day("2026-11-10", "100.00", "yellow", "today"), day("2026-11-30", "-600.00", "red")];
 
@@ -72,8 +83,12 @@ describe("forecastAlert", () => {
 
 describe("causeOf", () => {
   it("picks the owner's Cartão on the 23rd over Seguro, and Financiamento on the 28th", () => {
-    expect(causeOf("2026-11-23", FORECAST_TRANSACTIONS, FORECAST_MONTH.bills_of_month)).toBe(CARTAO.bill_id);
-    expect(causeOf("2026-11-28", FORECAST_TRANSACTIONS, FORECAST_MONTH.bills_of_month)).toBe(FINANCIAMENTO.bill_id);
+    expect(causeOf("2026-11-23", FORECAST_MONTH.days, FORECAST_TRANSACTIONS, FORECAST_MONTH.bills_of_month)).toBe(
+      CARTAO.bill_id,
+    );
+    expect(causeOf("2026-11-28", FORECAST_MONTH.days, FORECAST_TRANSACTIONS, FORECAST_MONTH.bills_of_month)).toBe(
+      FINANCIAMENTO.bill_id,
+    );
   });
 
   it("on a tie prefers the conta fixa, then a Saída over a Diário; income never counts", () => {
@@ -84,11 +99,35 @@ describe("causeOf", () => {
     const entrada = { ...salario, id: "entrada", date: on, amount: "900.00" };
     const conta = { ...CARTAO, bill_id: "conta", amount: "100.00", lands_on: on };
 
-    expect(causeOf(on, [diario, saida, entrada], [conta])).toBe("conta");
-    expect(causeOf(on, [diario, saida, entrada], [])).toBe("saida");
+    expect(causeOf(on, [], [diario, saida, entrada], [conta])).toBe("conta");
+    expect(causeOf(on, [], [diario, saida, entrada], [])).toBe("saida");
   });
 
   it("has no cause on a day without outflow", () => {
-    expect(causeOf("2026-11-10", FORECAST_TRANSACTIONS, FORECAST_MONTH.bills_of_month)).toBeNull();
+    expect(causeOf("2026-11-10", FORECAST_MONTH.days, FORECAST_TRANSACTIONS, FORECAST_MONTH.bills_of_month)).toBeNull();
+  });
+
+  it("names no cause on a red day carried in without a drop, and the largest outflow on a real drop", () => {
+    const [, feira] = FORECAST_TRANSACTIONS;
+    const carried = [day("2026-11-24", "-675.00", "red", "past"), day("2026-11-25", "-675.00", "red", "today")];
+    const dropped = [day("2026-11-24", "-675.00", "red", "past"), day("2026-11-25", "-916.00", "red", "today")];
+
+    expect(causeOf("2026-11-25", carried, [feira], [])).toBeNull();
+    expect(causeOf("2026-11-25", dropped, [feira], [])).toBe(feira.id);
+  });
+
+  it("names the first day of the month's largest outflow, having no day before it", () => {
+    const [, feira] = FORECAST_TRANSACTIONS;
+
+    expect(causeOf("2026-11-25", [day("2026-11-25", "-916.00", "red", "today")], [feira], [])).toBe(feira.id);
+  });
+
+  it("counts an overdue bill landing today and ignores a paid one", () => {
+    const today = "2026-11-25";
+    const days = [day("2026-11-24", "0.00", "yellow", "past"), day(today, "-5000.00", "red", "today")];
+    const overdue = { ...CARTAO, bill_id: "atrasada", due_date: "2026-11-20", overdue: true, lands_on: today };
+    const paid = { ...FINANCIAMENTO, bill_id: "paga", amount: "9000.00", due_date: today, paid: true, lands_on: null };
+
+    expect(causeOf(today, days, [], [overdue, paid])).toBe("atrasada");
   });
 });
