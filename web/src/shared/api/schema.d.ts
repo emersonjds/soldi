@@ -276,38 +276,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/imports/xlsx": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["preview_xlsx"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/imports/xlsx/confirm": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["confirm_xlsx"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/me": {
         parameters: {
             query?: never;
@@ -625,23 +593,6 @@ export interface components {
             saved_this_month: string;
             total_saved: string;
         };
-        /** @description Replaces what an earlier import wrote for the same years; entries made by hand stay. */
-        ConfirmImport: {
-            /** @description The balance before the first imported day; may be negative. */
-            opening_balance: string;
-            /**
-             * Format: date
-             * @description On or before the earliest imported date.
-             */
-            opening_date: string;
-            /** @description Confirms a preview with errors, leaving out the cells it lists. */
-            skip_errors?: boolean;
-            /**
-             * Format: uuid
-             * @description The preview's token.
-             */
-            token: string;
-        };
         ConfirmPasswordReset: {
             /** @description 8 to 128 characters. */
             new_password: string;
@@ -772,35 +723,6 @@ export interface components {
             status: string;
             version: string;
         };
-        /** @description A cell the importer could not read; `cell` is in A1 notation. */
-        ImportError: {
-            cell: string;
-            message: string;
-            sheet: string;
-        };
-        /** @description `token` confirms this preview for 15 minutes; a preview with errors cannot be confirmed. */
-        ImportPreview: {
-            errors: components["schemas"]["ImportError"][];
-            /** Format: uuid */
-            token: string;
-            years: components["schemas"]["ImportYear"][];
-        };
-        ImportResult: {
-            skipped: components["schemas"]["SkippedCell"][];
-            /** Format: int32 */
-            transactions: number;
-            years: number[];
-        };
-        /** @description What the confirmation would write for one year; totals are of the transactions. */
-        ImportYear: {
-            bills_total: string;
-            daily_total: string;
-            income_total: string;
-            /** Format: int32 */
-            transactions: number;
-            /** Format: int32 */
-            year: number;
-        };
         /**
          * @description The month's savings (SOL-20): `saved` is `totals.saved`; `rate_pct` is `saved / income` as a
          *     percentage with one decimal, null when income is 0.
@@ -884,11 +806,6 @@ export interface components {
             name?: string | null;
             /** @description 8 to 128 characters. */
             password: string;
-        };
-        /** @description A cell left out because the preview could not read it. */
-        SkippedCell: {
-            cell: string;
-            sheet: string;
         };
         /**
          * @description The thermometer color of a balance; each lower bound is inclusive.
@@ -1022,14 +939,6 @@ export interface components {
             date: string;
             /** @description Up to 500 characters; blank means none. */
             note?: string | null;
-        };
-        /** @description `multipart/form-data` body of the preview. */
-        XlsxUpload: {
-            /**
-             * Format: binary
-             * @description The Termômetro workbook, at most 5 MB.
-             */
-            file: string;
         };
     };
     responses: never;
@@ -2012,115 +1921,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Health"];
-                };
-            };
-        };
-    };
-    preview_xlsx: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "multipart/form-data": components["schemas"]["XlsxUpload"];
-            };
-        };
-        responses: {
-            /** @description Rows and saved months found per year, with the cells that could not be read; only the preview is stored, for 15 minutes */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ImportPreview"];
-                };
-            };
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["Problem"];
-                };
-            };
-            /** @description `too-large`: the file is over 5 MB */
-            413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["Problem"];
-                };
-            };
-            /** @description No `file` part, or not an .xlsx workbook */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["Problem"];
-                };
-            };
-        };
-    };
-    confirm_xlsx: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ConfirmImport"];
-            };
-        };
-        responses: {
-            /** @description Opening balance and date saved, the preview's rows and saved months written under the `Importado` categories with note `Planilha {year}`, replacing an earlier import of the same years; the user is onboarded; with `skip_errors`, the cells the preview listed are left out and returned in `skipped` */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ImportResult"];
-                };
-            };
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["Problem"];
-                };
-            };
-            /** @description No preview of the caller with this token, or it was confirmed already */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["Problem"];
-                };
-            };
-            /** @description `import-expired`: the preview is older than 15 minutes */
-            410: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["Problem"];
-                };
-            };
-            /** @description `import-has-errors` when the preview listed errors and `skip_errors` is not true; `opening_date` after the earliest imported date; `opening_balance` with more than two places; `palette-full` when a new `Importado` category finds all 24 colors taken in its kind */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["Problem"];
                 };
             };
         };
