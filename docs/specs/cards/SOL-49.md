@@ -73,3 +73,9 @@ Data: balance R$ 6.150,00 through Nov 22. Nov 23: conta fixa Cartão R$ 4.900,00
 
 - A future month does not carry the unpaid bills of the months between today and it (it opens on committed rows only, as `projected_balance` already does). SOL-51 walks months and fixes it.
 - Hero line, cause, tap-to-scroll: SOL-50. Horizon: SOL-51. Parcelas, Simular: SOL-52.
+
+## Review notes (2026-11-10, qa)
+
+- A conta fixa due before `opening_date` never lands, is not overdue and is left out of `projected_balance`: it is already inside the opening balance (finance rule 7). Without this, a new user who types today's balance and a bill due earlier in the month starts in the red.
+- Any linked payment marks the bill paid; there are no partial payments.
+- Unpaid bills of earlier months are not carried into this month's forecast; follow-up card SOL-55.

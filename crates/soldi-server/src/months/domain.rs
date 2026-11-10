@@ -113,6 +113,8 @@ pub fn month_view(input: MonthInput) -> MonthView {
         .map(|bill| {
             let payment = payments.iter().find(|payment| payment.bill_id == bill.id);
             let due_date = due_date(month, bill.due_day);
+            // Due before the opening date: already inside the opening balance.
+            let open = payment.is_none() && due_date >= settings.opening_date;
             BillOfMonth {
                 bill_id: bill.id,
                 name: bill.name,
@@ -122,9 +124,8 @@ pub fn month_view(input: MonthInput) -> MonthView {
                 due_date,
                 paid: payment.is_some(),
                 transaction_id: payment.map(|payment| payment.transaction_id),
-                overdue: payment.is_none() && due_date < today,
-                lands_on: payment
-                    .is_none()
+                overdue: open && due_date < today,
+                lands_on: open
                     .then_some(due_date.max(today))
                     .filter(|day| *day <= end),
             }
@@ -173,7 +174,7 @@ pub fn month_view(input: MonthInput) -> MonthView {
     let projected = balance
         - bills_of_month
             .iter()
-            .filter(|bill| !bill.paid)
+            .filter(|bill| !bill.paid && bill.due_date >= settings.opening_date)
             .map(|bill| bill.amount)
             .sum::<Decimal>();
     MonthView {
@@ -546,6 +547,27 @@ mod tests {
         );
         assert_eq!(view.days[29].projected_balance, money("-600"));
         assert_eq!(view.projected_balance, money("-600"));
+    }
+
+    #[test]
+    fn forecast_rule_7_a_bill_due_before_the_opening_date_is_already_in_the_opening_balance() {
+        let view = with_bills(
+            "2026-11",
+            settings("1000", "2026-11-20"),
+            vec![],
+            vec![bill(1, "Aluguel", "1600", 5)],
+            vec![],
+            "2026-11-20",
+        );
+        let aluguel = &view.bills_of_month[0];
+
+        assert_eq!(
+            (aluguel.paid, aluguel.overdue, aluguel.lands_on),
+            (false, false, None)
+        );
+        assert_eq!(view.days[19].projected_balance, money("1000"));
+        assert_eq!(view.days[29].projected_balance, money("1000"));
+        assert_eq!(view.projected_balance, money("1000"));
     }
 
     #[test]

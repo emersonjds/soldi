@@ -72,10 +72,12 @@ const groupByDay = (days: Day[], transactions: Transaction[], bills: Due[]) =>
 const isForecast = (day: Day) => day.is_future || day.projected_balance !== day.balance;
 
 const DueRow = ({ bill }: { bill: Due }) => (
-  <li aria-label={bill.name} className="flex min-h-16 items-center gap-3 px-2 py-2">
+  <li aria-labelledby={`due-${bill.bill_id}`} className="flex min-h-16 items-center gap-3 px-2 py-2">
     <CategoryIcon icon={bill.icon} color={bill.color} />
     <span className="flex min-w-0 flex-1 flex-col">
-      <span className="truncate font-medium text-base">{bill.name}</span>
+      <span id={`due-${bill.bill_id}`} className="truncate font-medium text-base">
+        {bill.name}
+      </span>
       <span className={cn("text-xs", bill.overdue ? "text-expense" : "text-muted-foreground")}>
         {bill.overdue ? `Conta fixa · venceu dia ${dayMonth(bill.due_date)}` : "Conta fixa · a pagar"}
       </span>
