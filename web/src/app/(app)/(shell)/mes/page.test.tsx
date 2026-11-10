@@ -445,6 +445,28 @@ describe("Mês", () => {
     scroll.mockRestore();
   });
 
+  it("moves focus to the day after the jump, and a second tap restarts the 2 s ring", async () => {
+    open({
+      "GET /api/months/2026-11": { status: 200, body: FORECAST_MONTH },
+      "GET /api/transactions": { status: 200, body: FORECAST_TRANSACTIONS },
+    });
+
+    const hero = await screen.findByRole("region", { name: "Saldo hoje" });
+    const first = await within(hero).findByRole("button", { name: /^Dia 23 fica no vermelho/ });
+
+    vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
+    vi.setSystemTime(new Date(2026, 10, 5, 12));
+    fireEvent.click(first);
+    const day = document.getElementById("dia-2026-11-23");
+    expect(day).toHaveFocus();
+    act(() => vi.advanceTimersByTime(1500));
+    fireEvent.click(first);
+    act(() => vi.advanceTimersByTime(1999));
+    expect(day).toHaveClass("ring-2");
+    act(() => vi.advanceTimersByTime(1));
+    expect(day).not.toHaveClass("ring-2");
+  });
+
   it("says nothing in the hero when no day ahead is red", async () => {
     open();
 

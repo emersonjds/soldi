@@ -217,6 +217,7 @@ export const Ledger = ({
           <div
             key={day.date}
             id={`dia-${day.date}`}
+            tabIndex={-1}
             className={cn("scroll-mt-28 rounded-xl", highlight === day.date && "ring-2 ring-expense")}
           >
             <h3 className="sticky top-14 z-10 -mx-2 flex items-center justify-between gap-2 bg-card/95 px-2 py-2 font-semibold text-muted-foreground text-sm backdrop-blur lg:top-0">

@@ -30,7 +30,7 @@ const MonthScreen = () => {
   const settings = useQuery(settingsQuery);
   const [launching, setLaunching] = useState<"income" | "bill" | "daily" | null>(fromTour ? "income" : null);
   const [hint, setHint] = useState(fromTour);
-  const [highlight, setHighlight] = useState<string | null>(null);
+  const [highlight, setHighlight] = useState<{ date: string } | null>(null);
 
   useEffect(() => {
     if (fromTour) window.history.replaceState(null, "", "/mes");
@@ -58,15 +58,18 @@ const MonthScreen = () => {
 
   const entries = transactions.data;
   const bills = view.data.bills_of_month;
-  const alert = forecastAlert(view.data.days);
+  const days = view.data.days;
+  const alert = forecastAlert(days);
   const causes = new Set(
     (alert ? [alert.firstRed.date, alert.lowest.date] : [])
-      .map((date) => causeOf(date, entries, bills))
+      .map((date) => causeOf(date, days, entries, bills))
       .filter((id): id is string => id !== null),
   );
   const jump = (date: string) => {
-    document.getElementById(`dia-${date}`)?.scrollIntoView({ block: "start" });
-    setHighlight(date);
+    const group = document.getElementById(`dia-${date}`);
+    group?.scrollIntoView({ block: "start" });
+    group?.focus({ preventScroll: true });
+    setHighlight({ date });
   };
 
   return (
@@ -91,7 +94,7 @@ const MonthScreen = () => {
           view={view.data}
           transactions={entries}
           onLaunch={() => setLaunching("daily")}
-          highlight={highlight}
+          highlight={highlight?.date ?? null}
           causes={causes}
           className="lg:col-span-2 lg:col-start-1 lg:row-start-2"
         />
