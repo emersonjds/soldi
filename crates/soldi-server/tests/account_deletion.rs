@@ -130,6 +130,18 @@ async fn rows_of(pool: &PgPool, user_id: Uuid) -> Vec<(String, i64)> {
     .fetch_all(pool)
     .await
     .unwrap();
+    let all: Vec<String> = sqlx::query_scalar(
+        "SELECT table_name::text FROM information_schema.tables
+         WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
+           AND table_name NOT IN ('_sqlx_migrations', 'users') ORDER BY table_name",
+    )
+    .fetch_all(pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        all, tables,
+        "a table without user_id must be checked for user data"
+    );
     let mut rows = Vec::new();
     for table in tables.into_iter().chain(["users".to_string()]) {
         let column = if table == "users" { "id" } else { "user_id" };
@@ -268,4 +280,35 @@ async fn an_unknown_field_is_refused(pool: PgPool) {
         StatusCode::UNPROCESSABLE_ENTITY
     );
     assert_eq!(ana.get("/api/auth/me").await.0, StatusCode::OK);
+}
+
+#[sqlx::test]
+async fn a_hash_changed_since_the_check_deletes_nothing(pool: PgPool) {
+    let ana = TestApp::signed_in(pool.clone(), "ana@example.com").await;
+    let ana_id: Uuid = ana.get("/api/auth/me").await.1["id"]
+        .as_str()
+        .unwrap()
+        .parse()
+        .unwrap();
+    let mut conn = pool.acquire().await.unwrap();
+    let stale = soldi_server::auth::repo::find_password_hash(&mut conn, ana_id)
+        .await
+        .unwrap();
+    sqlx::query("UPDATE users SET password_hash = 'changed elsewhere' WHERE id = $1")
+        .bind(ana_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let deleted = soldi_server::auth::repo::delete_user(&mut conn, ana_id, stale.as_deref())
+        .await
+        .unwrap();
+
+    assert!(!deleted);
+    let left: i64 = sqlx::query_scalar("SELECT count(*) FROM users WHERE id = $1")
+        .bind(ana_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(left, 1);
 }

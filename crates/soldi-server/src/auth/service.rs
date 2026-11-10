@@ -108,14 +108,18 @@ pub async fn delete_account(
     user: &CurrentUser,
     input: DeleteAccount,
 ) -> Result<(), AppError> {
-    let mut conn = pool.acquire().await?;
-    let stored_hash = repo::find_password_hash(&mut conn, user.id).await?;
+    let stored_hash = {
+        let mut conn = pool.acquire().await?;
+        repo::find_password_hash(&mut conn, user.id).await?
+    };
     let checked = stored_hash
         .clone()
         .unwrap_or_else(domain::dummy_password_hash);
-    if !verify_in_background(input.password, checked).await?
-        || !repo::delete_user(&mut conn, user.id, stored_hash.as_deref()).await?
-    {
+    if !verify_in_background(input.password, checked).await? {
+        return Err(domain::wrong_password());
+    }
+    let mut conn = pool.acquire().await?;
+    if !repo::delete_user(&mut conn, user.id, stored_hash.as_deref()).await? {
         return Err(domain::wrong_password());
     }
     Ok(())
