@@ -18,6 +18,7 @@ import { BillsOfMonth } from "@/widgets/bills-of-month/bills-of-month";
 import { Ledger } from "@/widgets/ledger/ledger";
 import { MonthHeader } from "@/widgets/month-header/month-header";
 import { MonthSkeleton, MonthSummary, ThermometerCard } from "@/widgets/month-overview/month-overview";
+import { MonthsAhead } from "@/widgets/months-ahead/months-ahead";
 import { RedDayAlert } from "@/widgets/red-day-alert/red-day-alert";
 
 const MonthScreen = () => {
@@ -89,7 +90,16 @@ const MonthScreen = () => {
       </div>
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3 lg:items-start">
         <BillsOfMonth view={view.data} className="lg:col-span-2 lg:col-start-1 lg:row-start-1" />
-        <ThermometerCard view={view.data} className="lg:sticky lg:top-6 lg:col-start-3 lg:row-span-2 lg:row-start-1" />
+        <div className="flex flex-col gap-6 lg:sticky lg:top-6 lg:col-start-3 lg:row-span-2 lg:row-start-1">
+          <ThermometerCard view={view.data} />
+          <MonthsAhead
+            viewing={month}
+            onOpen={(next) => {
+              router.replace(`/mes?m=${next}`, { scroll: false });
+              window.scrollTo({ top: 0 });
+            }}
+          />
+        </div>
         <Ledger
           view={view.data}
           transactions={entries}

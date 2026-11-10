@@ -10,6 +10,18 @@ describe("TierPill", () => {
     expect(container).toHaveTextContent("-R$ 675,00Previsto · Crítico");
   });
 
+  it.each([
+    ["red", "Crítico", "text-tier-red-foreground"],
+    ["light_red", "Atenção", "text-tier-light-red-foreground"],
+    ["yellow", "Apertado", "text-tier-yellow-foreground"],
+    ["light_green", "Confortável", "text-tier-light-green-foreground"],
+    ["green", "Folga", "text-tier-green-foreground"],
+  ] as const)("writes %s in its AA text color, not the dot color", (tier, label, textClass) => {
+    render(<TierPill tier={tier} />);
+
+    expect(screen.getByText(label)).toHaveClass(textClass);
+  });
+
   it("keeps the plain label for a closed day", () => {
     render(<TierPill tier="yellow" />);
 

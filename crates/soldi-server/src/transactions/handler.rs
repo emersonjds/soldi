@@ -96,10 +96,10 @@ pub async fn delete_transactions(
 
 #[utoipa::path(post, path = "/api/transactions", tag = "transactions", request_body = CreateTransaction,
     responses(
-        (status = 201, body = Transaction, description = "The entry; with `repeat_months`, the first of its series, the copies written in the same database transaction"),
+        (status = 201, body = Transaction, description = "The entry; with `repeat_months` or `installments`, the first of its series (parcela 1), the rest written in the same database transaction"),
         (status = 401, body = Problem, content_type = "application/problem+json"),
         (status = 404, body = Problem, content_type = "application/problem+json", description = "The category is missing, archived or another user's"),
-        (status = 422, body = Problem, content_type = "application/problem+json", description = "Amount not above zero or with more than two places, note over 500 characters, a kind other than the category's (`category_id`), `repeat_months` not 2 to 60, or a date before the opening date (`before-opening-date`)")))]
+        (status = 422, body = Problem, content_type = "application/problem+json", description = "Amount not above zero or with more than two places, note over 500 characters, a kind other than the category's (`category_id`), `repeat_months` not 2 to 60, `installments` not 2 to 60, with `repeat_months`, or leaving a parcela at zero, a date outside 2000 to 2100, or a date before the opening date (`before-opening-date`)")))]
 pub async fn create_transaction(
     State(state): State<AppState>,
     user: CurrentUser,

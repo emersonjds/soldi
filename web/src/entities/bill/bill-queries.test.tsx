@@ -2,7 +2,18 @@ import { act, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { renderHookWithQuery } from "@/test/render";
-import { BILL_ALUGUEL, BILL_LUZ, BILLS, BILLS_OF_MONTH, MONTH, problem, stubApi, TRANSACTIONS } from "@/test/stub-api";
+import {
+  BILL_ALUGUEL,
+  BILL_LUZ,
+  BILLS,
+  BILLS_OF_MONTH,
+  CARRIED_ALUGUEL,
+  FORECAST,
+  MONTH,
+  problem,
+  stubApi,
+  TRANSACTIONS,
+} from "@/test/stub-api";
 
 import { useArchiveBill, useBills, useCreateBill, usePayBill, useUnpayBill, useUpdateBill } from "./bill-queries";
 
@@ -138,6 +149,21 @@ describe("usePayBill and useUnpayBill", () => {
     expect(isStale(view, ["transactions", "2026-11"])).toBe(true);
   });
 
+  it("pays with the forecast cached under the months, leaving it as it was until the refresh", async () => {
+    const requests = stubApi({ [`POST /api/bills/${BILL_ALUGUEL.id}/pay`]: { status: 201, body: PAYMENT } });
+    const view = seeded();
+    view.client.setQueryData(["month", "forecast"], FORECAST);
+
+    await act(() =>
+      view.result.current.pay.mutateAsync({ billId: BILL_ALUGUEL.id, month: "2026-11", date: "2026-11-05" }),
+    );
+
+    expect(requests).toHaveLength(1);
+    expect(rowOf(view, BILL_ALUGUEL.id)?.paid).toBe(true);
+    expect(view.client.getQueryData(["month", "forecast"])).toEqual(FORECAST);
+    expect(isStale(view, ["month", "forecast"])).toBe(true);
+  });
+
   it("keeps the bill's amount when none is given and clears the overdue mark", async () => {
     const requests = stubApi({ [`POST /api/bills/${BILL_LUZ.id}/pay`]: { status: 201, body: PAYMENT } });
     const release = gated();
@@ -164,6 +190,29 @@ describe("usePayBill and useUnpayBill", () => {
     );
 
     expect(rowOf(view, BILL_LUZ.id)).toEqual(BILLS_OF_MONTH[0]);
+  });
+
+  it("ticks only the paid month's row when one bill has two", async () => {
+    stubApi({ [`POST /api/bills/${BILL_ALUGUEL.id}/pay`]: { status: 201, body: PAYMENT } });
+    const release = gated();
+    const view = seeded();
+    view.client.setQueryData(["month", "2026-11"], {
+      ...WITH_BILLS,
+      bills_of_month: [CARRIED_ALUGUEL, ...BILLS_OF_MONTH],
+    });
+
+    act(() => view.result.current.pay.mutate({ billId: BILL_ALUGUEL.id, month: "2026-11", date: "2026-11-05" }));
+
+    await waitFor(() => {
+      const rows = view.client.getQueryData<typeof WITH_BILLS>(["month", "2026-11"])?.bills_of_month ?? [];
+      expect(rows.map((row) => [row.due_date, row.paid])).toEqual([
+        ["2026-10-10", false],
+        ["2026-11-02", false],
+        ["2026-11-10", true],
+      ]);
+    });
+    release();
+    await waitFor(() => expect(view.result.current.pay.isSuccess).toBe(true));
   });
 
   it("unpays at once, overdue again when the due date passed, and refreshes", async () => {

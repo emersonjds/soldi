@@ -244,6 +244,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/forecast": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_forecast"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/health": {
         parameters: {
             query?: never;
@@ -471,7 +487,8 @@ export interface components {
         /**
          * @description An active recurring bill in the month. `amount` is what was paid, or the bill's amount while
          *     unpaid; `due_date` clamps a late due day to the month's last day; `overdue` is unpaid with
-         *     `due_date` before today in São Paulo.
+         *     `due_date` before today in São Paulo. In the current month, a bill still unpaid in an earlier
+         *     month is listed again first, with that month's `due_date`, `overdue` and `lands_on` today (D17).
          */
         BillOfMonth: {
             amount: string;
@@ -678,6 +695,12 @@ export interface components {
             category_id: string;
             /** Format: date */
             date: string;
+            /**
+             * Format: int32
+             * @description 2 to 60 monthly parcelas splitting `amount`, the total: each `amount / n` truncated to
+             *     cents, the last takes the remainder (D16); dated like `repeat_months`; not with it.
+             */
+            installments?: number | null;
             /** @description Must equal the category's kind. */
             kind: components["schemas"]["CategoryKind"];
             /** @description Up to 500 characters; blank means none. */
@@ -729,6 +752,22 @@ export interface components {
             field: string;
             message: string;
         };
+        /**
+         * @description `days` run from today (the opening date, when later) through the last day of the 11th month
+         *     after today's, São Paulo (D13); empty when the opening date is past that.
+         */
+        Forecast: {
+            days: components["schemas"]["ForecastDay"][];
+            /** Format: date */
+            today: string;
+        };
+        /** @description One day ahead (D16): the balance with every unpaid bill landed, and its tier. */
+        ForecastDay: {
+            /** Format: date */
+            date: string;
+            projected_balance: string;
+            projected_tier: components["schemas"]["Tier"];
+        };
         Health: {
             status: string;
             version: string;
@@ -773,8 +812,9 @@ export interface components {
         };
         /**
          * @description `month` is `YYYY-MM`. `balance_today` is the balance at today, or at the month's last day
-         *     when the month is past. `projected_balance` is the balance at the month's end minus the
-         *     unpaid `bills_of_month`.
+         *     when the month is past. `projected_balance` is, for the current and a future month, the last
+         *     day's `projected_balance` (every unpaid bill landed, earlier months' included); for a past
+         *     month, the balance at its end minus its unpaid `bills_of_month`.
          */
         MonthView: {
             balance_today: string;
@@ -1929,6 +1969,34 @@ export interface operations {
             };
         };
     };
+    get_forecast: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Every day from today (the opening date, when later) to the end of the 11th month after today's, with every unpaid bill landed (D16, D17) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Forecast"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     health: {
         parameters: {
             query?: never;
@@ -2252,7 +2320,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description `month` is not `YYYY-MM` (`validation`), or is before the opening date's month (`month-before-opening`) */
+            /** @description `month` is not `YYYY-MM` from 2000 to 2100 (`validation`), or is before the opening date's month (`month-before-opening`) */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -2500,7 +2568,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description The entry; with `repeat_months`, the first of its series, the copies written in the same database transaction */
+            /** @description The entry; with `repeat_months` or `installments`, the first of its series (parcela 1), the rest written in the same database transaction */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -2526,7 +2594,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Amount not above zero or with more than two places, note over 500 characters, a kind other than the category's (`category_id`), `repeat_months` not 2 to 60, or a date before the opening date (`before-opening-date`) */
+            /** @description Amount not above zero or with more than two places, note over 500 characters, a kind other than the category's (`category_id`), `repeat_months` not 2 to 60, `installments` not 2 to 60, with `repeat_months`, or leaving a parcela at zero, a date outside 2000 to 2100, or a date before the opening date (`before-opening-date`) */
             422: {
                 headers: {
                     [name: string]: unknown;

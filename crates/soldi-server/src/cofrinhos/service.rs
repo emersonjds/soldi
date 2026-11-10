@@ -60,6 +60,7 @@ pub async fn withdraw(
         category_id: resgate.id,
         note: input.note,
         repeat_months: None,
+        installments: None,
     })?;
     transactions::service::check_opening(&mut tx, user, entry.date).await?;
     let balance = repo::balance(&mut tx, user.id, cofrinho.id, opening).await?;

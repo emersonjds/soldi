@@ -7,6 +7,27 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.18.0
+
+> Headline: twelve months ahead, and "can I buy this?" before buying
+
+### Added
+
+- `GET /api/forecast`: twelve months of projected days (`today`, `days[]` with `projected_balance` and `projected_tier`), from four queries whatever the horizon, built by the same engine as the month views.
+- `CreateTransaction.installments` (2 to 60): `amount` is the total; the server splits it truncated to cents with the remainder on the last parcela and writes one series in one transaction. Refused with 422 when combined with `repeat_months` or when a parcela would be zero.
+
+### Changed
+
+- Unpaid contas fixas of earlier months weigh on today's forecast and are listed first in the current month; future months open lower by every earlier unpaid month. A month is owed only when its due date is on or after the opening date and the bill's `active_since` (registration or resume day; migration `0018`), so a paused and resumed bill does not owe its paused months. Decision D17.
+- Months and entry dates are bounded to the years 2000 to 2100 (422).
+- A `following` edit of a series changes the members' amounts only when the amount changed.
+
+### Web
+
+- Mês: a `Próximos meses` card with a 6/12 toggle; one chip per month with its worst tier and red-day count, tap opens the month. A carried bill reads `Aluguel de outubro` and is paid inside its own month.
+- Lançar: `Simular` previews the next days (and months for parcelas) without writing, naming the first day the purchase turns red; `Parcelar` writes the total in N parcelas.
+- Contrast: the `Pago` pill and the category change in Para onde vai read at WCAG AA.
+
 ## 0.17.0
 
 > Headline: see the red day before it comes

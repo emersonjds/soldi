@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { Schemas } from "@/shared/api/client";
 import { FORECAST_MONTH, FORECAST_TRANSACTIONS } from "@/test/stub-api";
 
-import { causeOf, forecastAlert } from "./forecast-alert";
+import { billKey, causeOf, forecastAlert } from "./forecast-alert";
 
 const day = (
   date: string,
@@ -84,10 +84,10 @@ describe("forecastAlert", () => {
 describe("causeOf", () => {
   it("picks the owner's Cartão on the 23rd over Seguro, and Financiamento on the 28th", () => {
     expect(causeOf("2026-11-23", FORECAST_MONTH.days, FORECAST_TRANSACTIONS, FORECAST_MONTH.bills_of_month)).toBe(
-      CARTAO.bill_id,
+      billKey(CARTAO),
     );
     expect(causeOf("2026-11-28", FORECAST_MONTH.days, FORECAST_TRANSACTIONS, FORECAST_MONTH.bills_of_month)).toBe(
-      FINANCIAMENTO.bill_id,
+      billKey(FINANCIAMENTO),
     );
   });
 
@@ -99,7 +99,7 @@ describe("causeOf", () => {
     const entrada = { ...salario, id: "entrada", date: on, amount: "900.00" };
     const conta = { ...CARTAO, bill_id: "conta", amount: "100.00", lands_on: on };
 
-    expect(causeOf(on, [], [diario, saida, entrada], [conta])).toBe("conta");
+    expect(causeOf(on, [], [diario, saida, entrada], [conta])).toBe(billKey(conta));
     expect(causeOf(on, [], [diario, saida, entrada], [])).toBe("saida");
   });
 
@@ -128,6 +128,13 @@ describe("causeOf", () => {
     const overdue = { ...CARTAO, bill_id: "atrasada", due_date: "2026-11-20", overdue: true, lands_on: today };
     const paid = { ...FINANCIAMENTO, bill_id: "paga", amount: "9000.00", due_date: today, paid: true, lands_on: null };
 
-    expect(causeOf(today, days, [], [overdue, paid])).toBe("atrasada");
+    expect(causeOf(today, days, [], [overdue, paid])).toBe("atrasada@2026-11-20");
+  });
+
+  it("tells two rows of one bill apart: the carried one is the cause", () => {
+    const today = day("2026-11-20", "-2400.00", "red", "today");
+    const carried = { ...CARTAO, due_date: "2026-10-23", overdue: true, lands_on: "2026-11-20", amount: "1800.00" };
+    const own = { ...CARTAO, lands_on: "2026-11-23" };
+    expect(causeOf("2026-11-20", [today], [], [carried, own])).toBe(`${CARTAO.bill_id}@2026-10-23`);
   });
 });

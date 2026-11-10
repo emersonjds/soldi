@@ -423,6 +423,184 @@ async fn repeat_months_outside_2_to_60_is_refused(pool: PgPool) {
 }
 
 #[sqlx::test]
+async fn r9_ten_parcelas_of_1000_01_write_ten_entries_summing_the_total(pool: PgPool) {
+    let user = opened(pool, "ana@example.com").await;
+    let market = user.category_id("Mercado").await;
+
+    let (status, created) = user
+        .post(
+            "/api/transactions",
+            json!({ "date": "2027-01-31", "amount": "1000.01", "kind": "daily", "category_id": market, "installments": 10 }),
+        )
+        .await;
+
+    assert_eq!(status, StatusCode::CREATED, "{created}");
+    assert_eq!(
+        (created["amount"].as_str(), place(&created)),
+        (Some("100.00"), (1, 10))
+    );
+    let february = only(&user, "2027-02").await;
+    assert_eq!(
+        (february["date"].as_str(), february["amount"].as_str()),
+        (Some("2027-02-28"), Some("100.00"))
+    );
+    let october = only(&user, "2027-10").await;
+    assert_eq!(
+        (
+            october["date"].as_str(),
+            october["amount"].as_str(),
+            place(&october)
+        ),
+        (Some("2027-10-31"), Some("100.01"), (10, 10))
+    );
+    let mut cents = 0;
+    for of in 1..=10 {
+        let entry = only(&user, &format!("2027-{of:02}")).await;
+        cents += entry["amount"]
+            .as_str()
+            .unwrap()
+            .replace('.', "")
+            .parse::<i64>()
+            .unwrap();
+    }
+    assert_eq!(cents, 100_001);
+    assert!(month(&user, "2027-11").await.is_empty());
+}
+
+#[sqlx::test]
+async fn installments_out_of_range_with_repeat_or_too_small_are_refused(pool: PgPool) {
+    let user = opened(pool, "ana@example.com").await;
+    let market = user.category_id("Mercado").await;
+
+    for (amount, extra, message) in [
+        ("10", json!({ "installments": 1 }), "must be 2 to 60"),
+        ("10", json!({ "installments": 61 }), "must be 2 to 60"),
+        (
+            "10",
+            json!({ "installments": 3, "repeat_months": 3 }),
+            "cannot be combined with repeat_months",
+        ),
+        (
+            "0.05",
+            json!({ "installments": 6 }),
+            "must leave every installment above zero",
+        ),
+    ] {
+        let mut body = json!({ "date": "2026-11-05", "amount": amount, "kind": "daily", "category_id": market });
+        body.as_object_mut()
+            .unwrap()
+            .extend(extra.as_object().unwrap().clone());
+        let (status, problem) = user.post("/api/transactions", body).await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+        assert_eq!(problem["errors"][0]["field"], "installments");
+        assert_eq!(problem["errors"][0]["message"], message);
+    }
+    assert!(month(&user, "2026-11").await.is_empty());
+}
+
+#[sqlx::test]
+async fn r9_six_cents_in_four_parcelas_leave_the_remainder_on_the_last(pool: PgPool) {
+    let user = opened(pool, "ana@example.com").await;
+    let market = user.category_id("Mercado").await;
+
+    let (status, created) = user
+        .post(
+            "/api/transactions",
+            json!({ "date": "2026-11-05", "amount": "0.06", "kind": "daily", "category_id": market, "installments": 4 }),
+        )
+        .await;
+
+    assert_eq!(status, StatusCode::CREATED, "{created}");
+    let mut amounts = Vec::new();
+    for of in ["2026-11", "2026-12", "2027-01", "2027-02"] {
+        amounts.push(only(&user, of).await["amount"].clone());
+    }
+    assert_eq!(amounts, ["0.01", "0.01", "0.01", "0.03"]);
+}
+
+#[sqlx::test]
+async fn a_date_after_2100_is_refused(pool: PgPool) {
+    let user = opened(pool, "ana@example.com").await;
+    let market = user.category_id("Mercado").await;
+
+    let (status, problem) = user
+        .post(
+            "/api/transactions",
+            json!({ "date": "2101-01-31", "amount": "100", "kind": "daily", "category_id": market, "installments": 10 }),
+        )
+        .await;
+
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+    assert_eq!(problem["errors"][0]["field"], "date");
+}
+
+async fn parcelas(user: &TestApp, total: &str, count: i64) -> Value {
+    let market = user.category_id("Mercado").await;
+    let (status, created) = user
+        .post(
+            "/api/transactions",
+            json!({ "date": "2027-01-31", "amount": total, "kind": "daily", "category_id": market, "installments": count }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{created}");
+    created
+}
+
+#[sqlx::test]
+async fn r6_following_keeps_parcela_amounts_unless_the_amount_changes(pool: PgPool) {
+    let user = opened(pool, "ana@example.com").await;
+    let first = parcelas(&user, "1000.01", 10).await;
+    let following = format!("{}?scope=following", uri(&first));
+
+    let (status, edited) = user.patch(&following, json!({ "note": "sofá" })).await;
+
+    assert_eq!(status, StatusCode::OK, "{edited}");
+    let tenth = only(&user, "2027-10").await;
+    assert_eq!(
+        (tenth["amount"].as_str(), tenth["note"].as_str()),
+        (Some("100.01"), Some("sofá"))
+    );
+    let mut cents = 0;
+    for of in 1..=10 {
+        let entry = only(&user, &format!("2027-{of:02}")).await;
+        cents += entry["amount"]
+            .as_str()
+            .unwrap()
+            .replace('.', "")
+            .parse::<i64>()
+            .unwrap();
+    }
+    assert_eq!(cents, 100_001);
+
+    let (status, edited) = user.patch(&following, json!({ "amount": "150.00" })).await;
+
+    assert_eq!(status, StatusCode::OK, "{edited}");
+    for of in 1..=10 {
+        assert_eq!(
+            only(&user, &format!("2027-{of:02}")).await["amount"],
+            "150.00"
+        );
+    }
+}
+
+#[sqlx::test]
+async fn delete_following_on_parcelas_removes_parcelas_k_to_n(pool: PgPool) {
+    let user = opened(pool, "ana@example.com").await;
+    parcelas(&user, "1000.01", 10).await;
+    let seventh = only(&user, "2027-07").await;
+
+    let (status, _) = user
+        .delete(&format!("{}?scope=following", uri(&seventh)))
+        .await;
+
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    for of in 7..=10 {
+        assert!(month(&user, &format!("2027-{of:02}")).await.is_empty());
+    }
+    assert_eq!(place(&only(&user, "2027-06").await), (6, 6));
+}
+
+#[sqlx::test]
 async fn a_failing_copy_leaves_no_entry_at_all(pool: PgPool) {
     let user = opened(pool.clone(), "ana@example.com").await;
     sqlx::query("ALTER TABLE transactions ADD CONSTRAINT before_march CHECK (date < '2027-03-01')")

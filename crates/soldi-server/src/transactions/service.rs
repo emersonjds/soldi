@@ -73,7 +73,7 @@ pub async fn check_opening(
     Ok(())
 }
 
-/// R2: with `repeat_months`, the entry and its copies in one database transaction.
+/// R2, R9: with `repeat_months` or `installments`, the series in one database transaction.
 pub async fn create(
     pool: &PgPool,
     user: &CurrentUser,
@@ -84,23 +84,33 @@ pub async fn create(
     let category = active_category(&mut tx, user, input.category_id).await?;
     domain::check_kind(input.kind, &category)?;
     check_opening(&mut tx, user, input.date).await?;
-    let series_id = input.repeat_months.map(|_| Uuid::new_v4());
-    let id = repo::insert(&mut tx, user.id, &input, None, None, series_id).await?;
-    if let (Some(months), Some(series_id)) = (input.repeat_months, series_id) {
-        let dates = domain::repeat_dates(input.date, months);
-        repo::insert_copies(&mut tx, user.id, &input, series_id, &dates).await?;
+    let count = input.repeat_months.or(input.installments);
+    let amounts = match input.installments {
+        Some(parcelas) => domain::installment_amounts(input.amount, parcelas),
+        None => vec![input.amount; usize::try_from(count.unwrap_or(1)).unwrap_or(1)],
+    };
+    let first = CreateTransaction {
+        amount: amounts[0],
+        ..input
+    };
+    let series_id = count.map(|_| Uuid::new_v4());
+    let id = repo::insert(&mut tx, user.id, &first, None, None, series_id).await?;
+    if let (Some(count), Some(series_id)) = (count, series_id) {
+        let dates = domain::repeat_dates(first.date, count);
+        if dates.len() + 1 != amounts.len() {
+            return Err(AppError::invalid("date", "must leave room for every month"));
+        }
+        repo::insert_copies(&mut tx, user.id, &first, series_id, &dates, &amounts[1..]).await?;
     }
     tx.commit().await?;
-    let series = series_id
-        .zip(input.repeat_months)
-        .map(|(id, months)| TransactionSeries {
-            id,
-            position: 1,
-            total: months.into(),
-        });
+    let series = series_id.zip(count).map(|(id, total)| TransactionSeries {
+        id,
+        position: 1,
+        total: total.into(),
+    });
     Ok(Transaction {
         series,
-        ..domain::transaction(id, input, category, None)
+        ..domain::transaction(id, first, category, None)
     })
 }
 
@@ -130,6 +140,7 @@ pub async fn update(
         category_id: category.id,
         note: patch.note.unwrap_or(current.note),
         repeat_months: patch.repeat_months,
+        installments: None,
     })?;
     domain::check_kind(next.kind, &category)?;
     check_opening(&mut tx, user, next.date).await?;
@@ -140,7 +151,8 @@ pub async fn update(
         return Err(AppError::NotFound);
     }
     if let (Scope::Following, Some(series)) = (scope, &current.series) {
-        repo::update_following(&mut tx, user.id, series.id, current.date, &next).await?;
+        let amount = (next.amount != current.amount).then_some(next.amount);
+        repo::update_following(&mut tx, user.id, series.id, current.date, &next, amount).await?;
     }
     if let Some(months) = next.repeat_months {
         let series_id = Uuid::new_v4();
@@ -148,7 +160,8 @@ pub async fn update(
             return Err(domain::already_repeated());
         }
         let dates = domain::repeat_dates(next.date, months);
-        repo::insert_copies(&mut tx, user.id, &next, series_id, &dates).await?;
+        let amounts = vec![next.amount; dates.len()];
+        repo::insert_copies(&mut tx, user.id, &next, series_id, &dates, &amounts).await?;
     }
     let updated = repo::find(&mut tx, user.id, id)
         .await?

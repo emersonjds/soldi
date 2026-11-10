@@ -11,7 +11,7 @@ const nextMonthDay = (day: number) => {
   return new Date(Date.UTC(year, month, day)).toISOString().slice(0, 10);
 };
 
-test("an unpaid conta fixa paints next month's due day Crítico and the hero line jumps to it", async ({
+test("next month opens with this month's unpaid conta fixa and the worst-day line jumps to its due day", async ({
   page,
   request,
 }) => {
@@ -39,12 +39,13 @@ test("an unpaid conta fixa paints next month's due day Crítico and the hero lin
   await page.getByRole("button", { name: "Próximo mês" }).click();
   const ledger = page.getByRole("region", { name: "Lançamentos" });
   await expect(ledger.getByRole("heading", { level: 3 }).first()).toContainText(
-    /Agendado · 28 .*-R\$\s600,00.*Previsto · Crítico/,
+    /Agendado · 28 .*-R\$\s2\.200,00.*Previsto · Crítico/,
   );
   await expect(ledger.getByRole("listitem", { name: "Aluguel" })).toContainText("Conta fixa · a pagar");
 
   const hero = page.getByRole("region", { name: "Saldo hoje" });
-  await hero.getByRole("button", { name: /Dia 28 fica no vermelho: -R\$\s600,00/ }).click();
+  await expect(hero.getByRole("button", { name: /Dia 1 fica no vermelho: -R\$\s600,00/ })).toBeVisible();
+  await hero.getByRole("button", { name: /Pior dia: 28\/\d\d, -R\$\s2\.200,00/ }).click();
   await expect(page.locator(`#dia-${nextMonthDay(28)}`)).toHaveClass(/ring-2/);
   await expect(ledger.getByRole("listitem", { name: "Aluguel" })).toContainText("Motivo da queda");
 });

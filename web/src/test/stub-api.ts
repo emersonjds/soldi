@@ -1,6 +1,7 @@
 import { vi } from "vitest";
 
 import type { Schemas } from "@/shared/api/client";
+import { tierOf } from "@/shared/lib/tier";
 
 type Reply = { status: number; body?: unknown };
 
@@ -43,6 +44,7 @@ export const signedIn = (replies: Record<string, Reply> = {}, user: Schemas["Use
   stubApi({
     "GET /api/auth/me": { status: 200, body: user },
     "GET /api/settings": { status: 200, body: SETTINGS },
+    "GET /api/forecast": { status: 200, body: FORECAST_FLAT },
     ...replies,
   });
 
@@ -210,6 +212,14 @@ export const BILLS_OF_MONTH: Schemas["BillOfMonth"][] = [
     overdue: false,
   },
 ];
+
+/** October's rent still unpaid, carried into November and landed today (the 5th), D17. */
+export const CARRIED_ALUGUEL: Schemas["BillOfMonth"] = {
+  ...BILLS_OF_MONTH[1],
+  due_date: "2026-10-10",
+  overdue: true,
+  lands_on: "2026-11-05",
+};
 
 /** The owner's November (SOL-49/50), today the 5th: R$ 6.150,00 until the 22nd, red on the 23rd, worst on the 28th, back on the 30th. */
 const forecastProjection = (index: number): [string, Schemas["Tier"]] => {
@@ -381,3 +391,45 @@ export const fieldProblem = (status: number, field: string) => ({
   ...problem(status, "invalid"),
   errors: [{ field, message: "invalid" }],
 });
+
+const datesBetween = (from: string, to: string) => {
+  const dates: string[] = [];
+  for (let at = Date.parse(from); at <= Date.parse(to); at += 86_400_000)
+    dates.push(new Date(at).toISOString().slice(0, 10));
+  return dates;
+};
+
+/** Days `from` to `to`; each `[date, balance]` step holds until the next one. */
+export const forecastFixture = (
+  today: string,
+  from: string,
+  to: string,
+  steps: [string, string][],
+): Schemas["Forecast"] => ({
+  today,
+  days: datesBetween(from, to).map((date) => {
+    const balance = steps.filter(([on]) => on <= date).pop()?.[1] ?? steps[0][1];
+    return { date, projected_balance: balance, projected_tier: tierOf(balance, SETTINGS) };
+  }),
+});
+
+/** The owner's November and December from the 10th (SOL-49 data, no December salary typed); -R$ 7.577,00 holds from Dec 30 on. */
+export const FORECAST = forecastFixture("2026-11-10", "2026-11-10", "2027-10-31", [
+  ["2026-11-10", "6150.00"],
+  ["2026-11-23", "-675.00"],
+  ["2026-11-25", "-916.00"],
+  ["2026-11-28", "-2916.00"],
+  ["2026-11-30", "491.00"],
+  ["2026-12-23", "-4409.00"],
+  ["2026-12-28", "-6409.00"],
+  ["2026-12-30", "-7577.00"],
+]);
+
+/** Nothing typed ahead. */
+export const FORECAST_FLAT = forecastFixture("2026-11-10", "2026-11-10", "2027-10-31", [["2026-11-10", "1842.10"]]);
+
+/** Opening on 15/01/2027: November and December have no day. */
+export const FORECAST_LATE_OPENING = forecastFixture("2026-11-10", "2027-01-15", "2027-10-31", [
+  ["2027-01-15", "1000.00"],
+  ["2027-02-10", "2500.00"],
+]);

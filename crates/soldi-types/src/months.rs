@@ -63,7 +63,8 @@ pub struct Totals {
 
 /// An active recurring bill in the month. `amount` is what was paid, or the bill's amount while
 /// unpaid; `due_date` clamps a late due day to the month's last day; `overdue` is unpaid with
-/// `due_date` before today in São Paulo.
+/// `due_date` before today in São Paulo. In the current month, a bill still unpaid in an earlier
+/// month is listed again first, with that month's `due_date`, `overdue` and `lands_on` today (D17).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct BillOfMonth {
     pub bill_id: Uuid,
@@ -94,8 +95,9 @@ pub struct MonthSavings {
 }
 
 /// `month` is `YYYY-MM`. `balance_today` is the balance at today, or at the month's last day
-/// when the month is past. `projected_balance` is the balance at the month's end minus the
-/// unpaid `bills_of_month`.
+/// when the month is past. `projected_balance` is, for the current and a future month, the last
+/// day's `projected_balance` (every unpaid bill landed, earlier months' included); for a past
+/// month, the balance at its end minus its unpaid `bills_of_month`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct MonthView {
     pub month: String,
@@ -109,6 +111,23 @@ pub struct MonthView {
     pub projected_tier: Tier,
     pub bills_of_month: Vec<BillOfMonth>,
     pub savings: MonthSavings,
+}
+
+/// One day ahead (D16): the balance with every unpaid bill landed, and its tier.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+pub struct ForecastDay {
+    pub date: NaiveDate,
+    #[serde(serialize_with = "crate::money")]
+    pub projected_balance: Decimal,
+    pub projected_tier: Tier,
+}
+
+/// `days` run from today (the opening date, when later) through the last day of the 11th month
+/// after today's, São Paulo (D13); empty when the opening date is past that.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+pub struct Forecast {
+    pub today: NaiveDate,
+    pub days: Vec<ForecastDay>,
 }
 
 #[cfg(test)]
@@ -143,6 +162,19 @@ mod tests {
         assert_eq!(
             serde_json::to_value(Tier::LightGreen).unwrap(),
             "light_green"
+        );
+    }
+
+    #[test]
+    fn a_forecast_day_serializes_its_balance_as_a_string() {
+        let day = ForecastDay {
+            date: NaiveDate::from_ymd_opt(2026, 11, 23).unwrap(),
+            projected_balance: "-675".parse().unwrap(),
+            projected_tier: Tier::Red,
+        };
+        assert_eq!(
+            serde_json::to_value(&day).unwrap(),
+            json!({ "date": "2026-11-23", "projected_balance": "-675.00", "projected_tier": "red" })
         );
     }
 }

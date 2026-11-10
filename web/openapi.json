@@ -7,7 +7,7 @@
       "name": "AGPL-3.0-only",
       "identifier": "AGPL-3.0-only"
     },
-    "version": "0.17.0"
+    "version": "0.18.0"
   },
   "paths": {
     "/api/auth/me": {
@@ -1130,6 +1130,35 @@
         }
       }
     },
+    "/api/forecast": {
+      "get": {
+        "tags": [
+          "months"
+        ],
+        "operationId": "get_forecast",
+        "responses": {
+          "200": {
+            "description": "Every day from today (the opening date, when later) to the end of the 11th month after today's, with every unpaid bill landed (D16, D17)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Forecast"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/health": {
       "get": {
         "tags": [
@@ -1489,7 +1518,7 @@
             }
           },
           "422": {
-            "description": "`month` is not `YYYY-MM` (`validation`), or is before the opening date's month (`month-before-opening`)",
+            "description": "`month` is not `YYYY-MM` from 2000 to 2100 (`validation`), or is before the opening date's month (`month-before-opening`)",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -1786,7 +1815,7 @@
         },
         "responses": {
           "201": {
-            "description": "The entry; with `repeat_months`, the first of its series, the copies written in the same database transaction",
+            "description": "The entry; with `repeat_months` or `installments`, the first of its series (parcela 1), the rest written in the same database transaction",
             "content": {
               "application/json": {
                 "schema": {
@@ -1815,7 +1844,7 @@
             }
           },
           "422": {
-            "description": "Amount not above zero or with more than two places, note over 500 characters, a kind other than the category's (`category_id`), `repeat_months` not 2 to 60, or a date before the opening date (`before-opening-date`)",
+            "description": "Amount not above zero or with more than two places, note over 500 characters, a kind other than the category's (`category_id`), `repeat_months` not 2 to 60, `installments` not 2 to 60, with `repeat_months`, or leaving a parcela at zero, a date outside 2000 to 2100, or a date before the opening date (`before-opening-date`)",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -2118,7 +2147,7 @@
       },
       "BillOfMonth": {
         "type": "object",
-        "description": "An active recurring bill in the month. `amount` is what was paid, or the bill's amount while\nunpaid; `due_date` clamps a late due day to the month's last day; `overdue` is unpaid with\n`due_date` before today in São Paulo.",
+        "description": "An active recurring bill in the month. `amount` is what was paid, or the bill's amount while\nunpaid; `due_date` clamps a late due day to the month's last day; `overdue` is unpaid with\n`due_date` before today in São Paulo. In the current month, a bill still unpaid in an earlier\nmonth is listed again first, with that month's `due_date`, `overdue` and `lands_on` today (D17).",
         "required": [
           "bill_id",
           "name",
@@ -2646,6 +2675,16 @@
             "type": "string",
             "format": "date"
           },
+          "installments": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "2 to 60 monthly parcelas splitting `amount`, the total: each `amount / n` truncated to\ncents, the last takes the remainder (D16); dated like `repeat_months`; not with it.",
+            "maximum": 60,
+            "minimum": 2
+          },
           "kind": {
             "$ref": "#/components/schemas/CategoryKind",
             "description": "Must equal the category's kind."
@@ -2772,6 +2811,47 @@
           },
           "message": {
             "type": "string"
+          }
+        }
+      },
+      "Forecast": {
+        "type": "object",
+        "description": "`days` run from today (the opening date, when later) through the last day of the 11th month\nafter today's, São Paulo (D13); empty when the opening date is past that.",
+        "required": [
+          "today",
+          "days"
+        ],
+        "properties": {
+          "days": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ForecastDay"
+            }
+          },
+          "today": {
+            "type": "string",
+            "format": "date"
+          }
+        }
+      },
+      "ForecastDay": {
+        "type": "object",
+        "description": "One day ahead (D16): the balance with every unpaid bill landed, and its tier.",
+        "required": [
+          "date",
+          "projected_balance",
+          "projected_tier"
+        ],
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date"
+          },
+          "projected_balance": {
+            "type": "string"
+          },
+          "projected_tier": {
+            "$ref": "#/components/schemas/Tier"
           }
         }
       },
@@ -2917,7 +2997,7 @@
       },
       "MonthView": {
         "type": "object",
-        "description": "`month` is `YYYY-MM`. `balance_today` is the balance at today, or at the month's last day\nwhen the month is past. `projected_balance` is the balance at the month's end minus the\nunpaid `bills_of_month`.",
+        "description": "`month` is `YYYY-MM`. `balance_today` is the balance at today, or at the month's last day\nwhen the month is past. `projected_balance` is, for the current and a future month, the last\nday's `projected_balance` (every unpaid bill landed, earlier months' included); for a past\nmonth, the balance at its end minus its unpaid `bills_of_month`.",
         "required": [
           "month",
           "days",

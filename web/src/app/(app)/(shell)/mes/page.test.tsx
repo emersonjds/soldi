@@ -8,8 +8,10 @@ import { router, setSearch } from "@/test/next-navigation";
 import { renderWithQuery } from "@/test/render";
 import {
   BILLS_OF_MONTH,
+  CARRIED_ALUGUEL,
   CATEGORIES,
   ECONOMIA,
+  FORECAST,
   FORECAST_MONTH,
   FORECAST_TRANSACTIONS,
   MERCADO,
@@ -180,6 +182,20 @@ describe("Mês", () => {
     );
     expect(within(ledger()).getByRole("listitem", { name: "Luz (Enel)" })).toHaveTextContent(
       "Luz (Enel)Conta fixa · venceu dia 02/11R$ 284,10",
+    );
+  });
+
+  it("lands October's unpaid rent today next to November's, each named by its month", async () => {
+    const november = { ...BILLS_OF_MONTH[1], lands_on: "2026-11-05" };
+    open({
+      "GET /api/months/2026-11": { status: 200, body: { ...MONTH, bills_of_month: [CARRIED_ALUGUEL, november] } },
+    });
+    const region = await screen.findByRole("region", { name: "Lançamentos" });
+    expect(await within(region).findByRole("listitem", { name: "Aluguel Residencial de outubro" })).toHaveTextContent(
+      "Conta fixa · venceu em outubro",
+    );
+    expect(within(region).getByRole("listitem", { name: "Aluguel Residencial" })).toHaveTextContent(
+      "Conta fixa · a pagar",
     );
   });
 
@@ -472,5 +488,25 @@ describe("Mês", () => {
 
     const hero = await screen.findByRole("region", { name: "Saldo hoje" });
     expect(within(hero).queryByText(/no vermelho/)).not.toBeInTheDocument();
+  });
+
+  it("opens a month from Próximos meses at the top of the screen", async () => {
+    const scrollTo = vi.spyOn(window, "scrollTo").mockImplementation(() => undefined);
+    open({ "GET /api/forecast": { status: 200, body: FORECAST } });
+
+    const strip = await screen.findByRole("region", { name: "Próximos meses" });
+    await userEvent.click(await within(strip).findByRole("button", { name: /^dez 2026/ }));
+
+    expect(router.replace).toHaveBeenCalledWith("/mes?m=2026-12", { scroll: false });
+    expect(scrollTo).toHaveBeenCalledWith({ top: 0 });
+  });
+
+  it("keeps the month on screen when Próximos meses fails", async () => {
+    open({ "GET /api/forecast": { status: 500, body: problem(500, "Erro") } });
+
+    const strip = await screen.findByRole("region", { name: "Próximos meses" });
+    expect(await within(strip).findByText("Não foi possível carregar.")).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Saldo hoje" })).toBeInTheDocument();
+    expect(ledger()).toBeInTheDocument();
   });
 });

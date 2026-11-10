@@ -6,7 +6,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useMonth } from "@/entities/month/month-query";
 import type { Schemas } from "@/shared/api/client";
 import { renderWithQuery } from "@/test/render";
-import { BILL_ALUGUEL, BILL_LUZ, BILLS_OF_MONTH, MONTH, problem, signedIn, TRANSACTIONS } from "@/test/stub-api";
+import {
+  BILL_ALUGUEL,
+  BILL_LUZ,
+  BILLS_OF_MONTH,
+  CARRIED_ALUGUEL,
+  MONTH,
+  problem,
+  signedIn,
+  TRANSACTIONS,
+} from "@/test/stub-api";
 
 import { BillsOfMonth } from "./bills-of-month";
 
@@ -94,6 +103,9 @@ describe("Contas do Mês", () => {
     expect(
       await within(rowOf("Aluguel Residencial")).findByRole("button", { name: "Pago: desfazer Aluguel Residencial" }),
     ).toHaveTextContent("Pago");
+    expect(within(rowOf("Aluguel Residencial")).getByRole("button", { name: /^Pago/ })).toHaveClass(
+      "text-tier-green-foreground",
+    );
     const post = requests.find((request) => request.method === "POST");
     expect(new URL(post?.url ?? "").searchParams.get("month")).toBe("2026-11");
     expect(await post?.json()).toEqual({ date: "2026-11-05" });
@@ -176,6 +188,91 @@ describe("Contas do Mês", () => {
 
     await waitFor(() => expect(requests.some((request) => request.method === "POST")).toBe(true));
     expect(await requests.find((request) => request.method === "POST")?.json()).toEqual({ date: "2026-12-10" });
+  });
+
+  it("lists October's unpaid rent first, says so, and pays it in October on its due date", async () => {
+    const { requests } = show([CARRIED_ALUGUEL, ...BILLS_OF_MONTH], {
+      [`POST /api/bills/${BILL_ALUGUEL.id}/pay`]: { status: 201, body: PAYMENT },
+    });
+    await loaded();
+
+    expect(card()).toHaveTextContent("2 obrigações cadastradas");
+    const october = rowOf("Aluguel Residencial de outubro");
+    expect(october).toHaveTextContent("Venceu em outubro");
+    await userEvent.click(
+      within(october).getByRole("button", { name: "Pagar Aluguel Residencial de outubro, vencida" }),
+    );
+
+    await waitFor(() => expect(requests.some((request) => request.method === "POST")).toBe(true));
+    const post = requests.find((request) => request.method === "POST");
+    expect(new URL(post?.url ?? "").searchParams.get("month")).toBe("2026-10");
+    expect(await post?.json()).toEqual({ date: "2026-10-10" });
+    expect(
+      within(rowOf("Aluguel Residencial")).getByRole("button", { name: "Pagar Aluguel Residencial" }),
+    ).toBeInTheDocument();
+  });
+
+  it("opens Pagar for October's rent in October", async () => {
+    show([CARRIED_ALUGUEL, ...BILLS_OF_MONTH]);
+    await loaded();
+
+    await userEvent.click(
+      within(rowOf("Aluguel Residencial de outubro")).getByRole("button", { name: /ajustar pagamento/ }),
+    );
+    const sheet = await screen.findByRole("dialog", { name: "Pagar Aluguel Residencial" });
+    expect(sheet).toHaveTextContent("Conta de outubro: a data do pagamento fica em outubro.");
+  });
+
+  it("ticks October's rent at once in November and ignores a second tap while paying", async () => {
+    show([CARRIED_ALUGUEL, ...BILLS_OF_MONTH]);
+    await loaded();
+    const sent: Request[] = [];
+    const stubbed = globalThis.fetch;
+    vi.stubGlobal("fetch", (request: Request) => {
+      if (request.method === "GET") return stubbed(request);
+      sent.push(request);
+      return new Promise<Response>(() => undefined);
+    });
+
+    await userEvent.click(within(rowOf("Aluguel Residencial de outubro")).getByRole("button", { name: /^Pagar/ }));
+    const paid = await within(rowOf("Aluguel Residencial de outubro")).findByRole("button", {
+      name: "Pago: desfazer Aluguel Residencial de outubro",
+    });
+    expect(paid).toBeDisabled();
+    await userEvent.click(paid);
+    await userEvent.click(within(rowOf("Aluguel Residencial")).getByRole("button", { name: /^Pagar/ }));
+
+    expect(sent.map((request) => `${request.method} ${new URL(request.url).search}`)).toEqual(["POST ?month=2026-10"]);
+  });
+
+  it("keeps an October payment inside October: no Hoje or Ontem, dated on its due day", async () => {
+    const { requests } = show([CARRIED_ALUGUEL, ...BILLS_OF_MONTH], {
+      [`POST /api/bills/${BILL_ALUGUEL.id}/pay`]: { status: 201, body: PAYMENT },
+    });
+    await loaded();
+
+    await userEvent.click(
+      within(rowOf("Aluguel Residencial de outubro")).getByRole("button", { name: /ajustar pagamento/ }),
+    );
+    const sheet = await screen.findByRole("dialog", { name: "Pagar Aluguel Residencial" });
+    expect(within(sheet).queryByRole("button", { name: "Hoje" })).not.toBeInTheDocument();
+    expect(within(sheet).queryByRole("button", { name: "Ontem" })).not.toBeInTheDocument();
+    const date = within(sheet).getByLabelText("Outra data");
+    expect(date).toHaveValue("2026-10-10");
+    expect(date).toHaveAttribute("min", "2026-10-01");
+    expect(date).toHaveAttribute("max", "2026-10-31");
+    await userEvent.click(within(sheet).getByRole("button", { name: "Confirmar" }));
+
+    await waitFor(() => expect(requests.some((request) => request.method === "POST")).toBe(true));
+    const post = requests.find((request) => request.method === "POST");
+    expect(new URL(post?.url ?? "").searchParams.get("month")).toBe("2026-10");
+    expect(await post?.json()).toMatchObject({ date: "2026-10-10" });
+  });
+
+  it("names the year of a carried month from another year", async () => {
+    show([{ ...CARRIED_ALUGUEL, due_date: "2025-12-10" }, ...BILLS_OF_MONTH]);
+    await loaded();
+    expect(rowOf("Aluguel Residencial de dezembro de 2025")).toHaveTextContent("Venceu em dezembro de 2025");
   });
 
   it("filters Pendentes and Pagas on desktop", async () => {
