@@ -1,6 +1,6 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 
-use chrono::{Datelike, NaiveDate};
+use chrono::{Datelike, Months, NaiveDate};
 use rust_decimal::Decimal;
 use soldi_types::categories::CategoryKind;
 use soldi_types::months::{BillOfMonth, Day, MonthSavings, MonthView, Tier, Totals};
@@ -19,7 +19,7 @@ pub struct DaySum {
     pub amount: Decimal,
 }
 
-/// An active bill with its category's icon and color.
+/// An active bill with its category's icon and color, and the São Paulo day it was registered.
 pub struct MonthBill {
     pub id: Uuid,
     pub name: String,
@@ -27,17 +27,19 @@ pub struct MonthBill {
     pub color: String,
     pub amount: Decimal,
     pub due_day: i16,
+    pub created_on: NaiveDate,
 }
 
-/// A bill's entry dated in the month.
+/// A bill's entry and its date.
 pub struct Payment {
     pub bill_id: Uuid,
     pub transaction_id: Uuid,
     pub amount: Decimal,
+    pub date: NaiveDate,
 }
 
-/// `month` is its first day; `sums` cover `opening_date` to the month's end; `saved` is the
-/// month's bills under `Economia` minus its resgates.
+/// `month` is its first day; `sums` and `payments` cover `opening_date` to the month's end;
+/// `saved` is the month's bills under `Economia` minus its resgates.
 pub struct MonthInput {
     pub month: NaiveDate,
     pub settings: Settings,
@@ -80,6 +82,85 @@ pub fn tier(balance: Decimal, thresholds: &Settings) -> Tier {
     }
 }
 
+/// One month of a bill with no payment dated in it (D17).
+pub struct Unpaid<'a> {
+    pub bill: &'a MonthBill,
+    pub due_date: NaiveDate,
+    pub lands_on: NaiveDate,
+}
+
+fn first_of(date: NaiveDate) -> NaiveDate {
+    date.with_day(1).unwrap_or(date)
+}
+
+/// D17: each unpaid month of `bills` from the opening date's month to `to`'s, oldest first. Its
+/// due date must be on or after the opening date and, before today's month, on or after the day
+/// the bill was registered. It lands on `max(due_date, today)`.
+pub fn unpaid<'a>(
+    bills: &'a [MonthBill],
+    payments: &[Payment],
+    opening: NaiveDate,
+    today: NaiveDate,
+    to: NaiveDate,
+) -> Vec<Unpaid<'a>> {
+    let paid: HashSet<(Uuid, NaiveDate)> = payments
+        .iter()
+        .map(|payment| (payment.bill_id, first_of(payment.date)))
+        .collect();
+    let current = first_of(today);
+    let months = std::iter::successors(Some(first_of(opening)), |month| {
+        month.checked_add_months(Months::new(1))
+    })
+    .take_while(|month| *month <= to);
+    let mut found = Vec::new();
+    for month in months {
+        for bill in bills {
+            let due = due_date(month, bill.due_day);
+            let registered = month >= current || due >= bill.created_on;
+            if due >= opening && registered && !paid.contains(&(bill.id, month)) {
+                found.push(Unpaid {
+                    bill,
+                    due_date: due,
+                    lands_on: due.max(today),
+                });
+            }
+        }
+    }
+    found
+}
+
+/// What `unpaid` took before `from`, and what it takes on each day `from..=to`.
+fn landing(
+    unpaid: &[Unpaid],
+    from: NaiveDate,
+    to: NaiveDate,
+) -> (Decimal, BTreeMap<NaiveDate, Decimal>) {
+    let mut before = Decimal::ZERO;
+    let mut on = BTreeMap::new();
+    for late in unpaid {
+        if late.lands_on < from {
+            before += late.bill.amount;
+        } else if late.lands_on <= to {
+            *on.entry(late.lands_on).or_default() += late.bill.amount;
+        }
+    }
+    (before, on)
+}
+
+fn flows_by_day(sums: Vec<DaySum>) -> BTreeMap<NaiveDate, Flows> {
+    let mut flows: BTreeMap<NaiveDate, Flows> = BTreeMap::new();
+    for sum in sums {
+        let flow = flows.entry(sum.date).or_default();
+        match sum.kind {
+            CategoryKind::Income if sum.withdrawn => flow.withdrawn += sum.amount,
+            CategoryKind::Income => flow.income += sum.amount,
+            CategoryKind::Bill => flow.bills += sum.amount,
+            CategoryKind::Daily => flow.daily += sum.amount,
+        }
+    }
+    flows
+}
+
 /// The opening balance stands before the opening date's entries, and on the days before it.
 pub fn month_view(input: MonthInput) -> MonthView {
     let MonthInput {
@@ -91,16 +172,7 @@ pub fn month_view(input: MonthInput) -> MonthView {
         saved,
         today,
     } = input;
-    let mut flows: BTreeMap<NaiveDate, Flows> = BTreeMap::new();
-    for sum in sums {
-        let flow = flows.entry(sum.date).or_default();
-        match sum.kind {
-            CategoryKind::Income if sum.withdrawn => flow.withdrawn += sum.amount,
-            CategoryKind::Income => flow.income += sum.amount,
-            CategoryKind::Bill => flow.bills += sum.amount,
-            CategoryKind::Daily => flow.daily += sum.amount,
-        }
-    }
+    let flows = flows_by_day(sums);
     let end = month_end(month);
     let today_or_end = today.min(end);
     let balance_today = settings.opening_balance
@@ -108,36 +180,47 @@ pub fn month_view(input: MonthInput) -> MonthView {
             .range(..=today_or_end)
             .map(|(_, flow)| flow.net())
             .sum::<Decimal>();
-    let bills_of_month: Vec<BillOfMonth> = bills
-        .into_iter()
-        .map(|bill| {
-            let payment = payments.iter().find(|payment| payment.bill_id == bill.id);
-            let due_date = due_date(month, bill.due_day);
-            // Due before the opening date: already inside the opening balance.
-            let open = payment.is_none() && due_date >= settings.opening_date;
-            BillOfMonth {
-                bill_id: bill.id,
-                name: bill.name,
-                icon: bill.icon,
-                color: bill.color,
-                amount: payment.map_or(bill.amount, |payment| payment.amount),
-                due_date,
-                paid: payment.is_some(),
-                transaction_id: payment.map(|payment| payment.transaction_id),
-                overdue: open && due_date < today,
-                lands_on: open
-                    .then_some(due_date.max(today))
-                    .filter(|day| *day <= end),
-            }
-        })
-        .collect();
-    let mut landing: BTreeMap<NaiveDate, Decimal> = BTreeMap::new();
-    for bill in &bills_of_month {
-        if let Some(day) = bill.lands_on {
-            *landing.entry(day).or_default() += bill.amount;
+    let unpaid_months = unpaid(&bills, &payments, settings.opening_date, today, end);
+    let current = (month..=end).contains(&today);
+    let carried = unpaid_months
+        .iter()
+        .filter(|late| current && late.due_date < month)
+        .map(|late| BillOfMonth {
+            bill_id: late.bill.id,
+            name: late.bill.name.clone(),
+            icon: late.bill.icon.clone(),
+            color: late.bill.color.clone(),
+            amount: late.bill.amount,
+            due_date: late.due_date,
+            paid: false,
+            transaction_id: None,
+            overdue: true,
+            lands_on: Some(late.lands_on),
+        });
+    let own = bills.iter().map(|bill| {
+        let payment = payments
+            .iter()
+            .find(|payment| payment.bill_id == bill.id && (month..=end).contains(&payment.date));
+        let due_date = due_date(month, bill.due_day);
+        // Due before the opening date: already inside the opening balance.
+        let open = payment.is_none() && due_date >= settings.opening_date;
+        BillOfMonth {
+            bill_id: bill.id,
+            name: bill.name.clone(),
+            icon: bill.icon.clone(),
+            color: bill.color.clone(),
+            amount: payment.map_or(bill.amount, |payment| payment.amount),
+            due_date,
+            paid: payment.is_some(),
+            transaction_id: payment.map(|payment| payment.transaction_id),
+            overdue: open && due_date < today,
+            lands_on: open
+                .then_some(due_date.max(today))
+                .filter(|day| *day <= end),
         }
-    }
-    let mut pending = Decimal::ZERO;
+    });
+    let bills_of_month: Vec<BillOfMonth> = carried.chain(own).collect();
+    let (mut pending, lands) = landing(&unpaid_months, month, end);
     let mut balance = settings.opening_balance
         + flows
             .range(..month)
@@ -150,7 +233,7 @@ pub fn month_view(input: MonthInput) -> MonthView {
         .map(|date| {
             let flow = flows.get(&date).copied().unwrap_or_default();
             balance += flow.net();
-            pending += landing.get(&date).copied().unwrap_or_default();
+            pending += lands.get(&date).copied().unwrap_or_default();
             let projected_balance = balance - pending;
             totals.income += flow.income;
             totals.withdrawn += flow.withdrawn;
@@ -171,12 +254,16 @@ pub fn month_view(input: MonthInput) -> MonthView {
             }
         })
         .collect();
-    let projected = balance
-        - bills_of_month
-            .iter()
-            .filter(|bill| !bill.paid && bill.due_date >= settings.opening_date)
-            .map(|bill| bill.amount)
-            .sum::<Decimal>();
+    let projected = if today <= end {
+        balance - pending
+    } else {
+        balance
+            - bills_of_month
+                .iter()
+                .filter(|bill| !bill.paid && bill.due_date >= settings.opening_date)
+                .map(|bill| bill.amount)
+                .sum::<Decimal>()
+    };
     MonthView {
         month: month.format("%Y-%m").to_string(),
         days,
@@ -325,14 +412,16 @@ mod tests {
             color: "cat-6".into(),
             amount: money(amount),
             due_day,
+            created_on: date("2026-01-01"),
         }
     }
 
-    fn payment(bill: u128, transaction: u128, amount: &str) -> Payment {
+    fn payment(bill: u128, transaction: u128, amount: &str, on: &str) -> Payment {
         Payment {
             bill_id: uuid::Uuid::from_u128(bill),
             transaction_id: uuid::Uuid::from_u128(transaction),
             amount: money(amount),
+            date: date(on),
         }
     }
 
@@ -374,7 +463,7 @@ mod tests {
             settings("1000", "2026-11-01"),
             vec![sum("2026-11-05", Bill, "2300")],
             vec![bill(1, "Aluguel", "2259.56", 5)],
-            vec![payment(1, 9, "2300")],
+            vec![payment(1, 9, "2300", "2026-11-05")],
             "2026-11-20",
         );
 
@@ -422,7 +511,7 @@ mod tests {
             settings("1000", "2026-11-01"),
             vec![sum("2026-12-10", Bill, "50")],
             vec![bill(1, "Luz", "120", 31), bill(2, "Internet", "50", 10)],
-            vec![payment(2, 9, "50")],
+            vec![payment(2, 9, "50", "2026-12-10")],
             "2027-01-15",
         );
 
@@ -603,15 +692,126 @@ mod tests {
 
         assert_eq!(view.days.len(), 28);
         assert_eq!(view.bills_of_month[0].lands_on, Some(date("2027-02-28")));
-        assert_eq!(view.days[26].projected_balance, money("1000"));
+        assert_eq!(view.days[26].projected_balance, money("100"));
         assert_eq!(
             (
                 view.days[27].projected_balance,
                 view.days[27].projected_tier
             ),
-            (money("700"), Tier::Yellow)
+            (money("-200"), Tier::LightRed)
         );
         assert_eq!(view.projected_balance, view.days[27].projected_balance);
+    }
+
+    #[test]
+    fn sol55_last_months_unpaid_bill_lands_today_beside_this_months() {
+        let view = with_bills(
+            "2026-11",
+            settings("1200", "2026-10-01"),
+            vec![sum("2026-11-10", Bill, "1800")],
+            vec![bill(1, "Aluguel", "1800", 10)],
+            vec![payment(1, 9, "1800", "2026-11-10")],
+            "2026-11-20",
+        );
+
+        assert_eq!(
+            view.bills_of_month
+                .iter()
+                .map(|bill| (bill.due_date, bill.paid, bill.overdue, bill.lands_on))
+                .collect::<Vec<_>>(),
+            [
+                (date("2026-10-10"), false, true, Some(date("2026-11-20"))),
+                (date("2026-11-10"), true, false, None)
+            ]
+        );
+        assert_eq!(view.bills_of_month[0].transaction_id, None);
+        assert_eq!(view.bills_of_month[0].amount, money("1800"));
+        assert_eq!(view.days[18].projected_balance, money("-600"));
+        assert_eq!(
+            (
+                view.days[19].projected_balance,
+                view.days[19].projected_tier,
+                view.days[19].balance
+            ),
+            (money("-2400"), Tier::Red, money("-600"))
+        );
+        assert_eq!(view.days[29].projected_balance, money("-2400"));
+        assert_eq!(view.projected_balance, money("-2400"));
+    }
+
+    #[test]
+    fn sol55_a_month_carries_from_the_opening_date_and_the_bills_creation_on() {
+        let made = |id, name, due_day, on: &str| MonthBill {
+            created_on: date(on),
+            ..bill(id, name, "100", due_day)
+        };
+        let view = with_bills(
+            "2026-11",
+            settings("1000", "2026-10-15"),
+            vec![],
+            vec![
+                made(1, "Luz", 10, "2026-01-01"),
+                made(2, "Internet", 20, "2026-10-25"),
+                made(3, "Gás", 25, "2026-10-01"),
+            ],
+            vec![],
+            "2026-11-05",
+        );
+
+        assert_eq!(
+            view.bills_of_month
+                .iter()
+                .map(|bill| bill.due_date)
+                .collect::<Vec<_>>(),
+            [
+                date("2026-10-25"),
+                date("2026-11-10"),
+                date("2026-11-20"),
+                date("2026-11-25")
+            ]
+        );
+        assert_eq!(view.days[4].projected_balance, money("900"));
+        assert_eq!(view.projected_balance, money("600"));
+    }
+
+    #[test]
+    fn sol55_two_unpaid_months_land_today_and_a_past_month_never_moves() {
+        let bills = || vec![bill(1, "Luz", "100", 5)];
+        let november = with_bills(
+            "2026-11",
+            settings("1000", "2026-09-01"),
+            vec![],
+            bills(),
+            vec![],
+            "2026-11-03",
+        );
+        let october = with_bills(
+            "2026-10",
+            settings("1000", "2026-09-01"),
+            vec![],
+            bills(),
+            vec![],
+            "2026-11-03",
+        );
+
+        assert_eq!(
+            november
+                .bills_of_month
+                .iter()
+                .map(|bill| bill.due_date)
+                .collect::<Vec<_>>(),
+            [date("2026-09-05"), date("2026-10-05"), date("2026-11-05")]
+        );
+        assert_eq!(november.days[1].projected_balance, money("1000"));
+        assert_eq!(november.days[2].projected_balance, money("800"));
+        assert_eq!(november.days[4].projected_balance, money("700"));
+        assert_eq!(october.bills_of_month.len(), 1);
+        assert!(
+            october
+                .days
+                .iter()
+                .all(|day| day.projected_balance == day.balance)
+        );
     }
 
     fn balances(view: &MonthView) -> Vec<Decimal> {

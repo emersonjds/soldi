@@ -27,14 +27,15 @@ pub async fn day_sums(
     .await
 }
 
-/// Active, unarchived bills by due day, then name.
+/// Active, unarchived bills by due day, then name, with the São Paulo day each was registered.
 pub async fn bills(conn: &mut PgConnection, user_id: Uuid) -> Result<Vec<MonthBill>, sqlx::Error> {
     sqlx::query_as!(
         MonthBill,
-        "SELECT b.id, b.name, c.icon, c.color, b.amount, b.due_day
-         FROM recurring_bills b JOIN categories c ON c.user_id = b.user_id AND c.id = b.category_id
-         WHERE b.user_id = $1 AND b.active AND b.archived_at IS NULL
-         ORDER BY b.due_day, lower(b.name), b.id",
+        r#"SELECT b.id, b.name, c.icon, c.color, b.amount, b.due_day,
+                  (b.created_at AT TIME ZONE 'America/Sao_Paulo')::date AS "created_on!"
+           FROM recurring_bills b JOIN categories c ON c.user_id = b.user_id AND c.id = b.category_id
+           WHERE b.user_id = $1 AND b.active AND b.archived_at IS NULL
+           ORDER BY b.due_day, lower(b.name), b.id"#,
         user_id
     )
     .fetch_all(&mut *conn)
@@ -64,6 +65,7 @@ pub async fn saved(
     .await
 }
 
+/// Every bill entry dated `from` to `to`.
 pub async fn payments(
     conn: &mut PgConnection,
     user_id: Uuid,
@@ -72,7 +74,7 @@ pub async fn payments(
 ) -> Result<Vec<Payment>, sqlx::Error> {
     sqlx::query_as!(
         Payment,
-        r#"SELECT recurring_bill_id AS "bill_id!", id AS transaction_id, amount
+        r#"SELECT recurring_bill_id AS "bill_id!", id AS transaction_id, amount, date
            FROM transactions
            WHERE user_id = $1 AND recurring_bill_id IS NOT NULL AND date BETWEEN $2 AND $3"#,
         user_id,
