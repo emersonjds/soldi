@@ -6,7 +6,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useMonth } from "@/entities/month/month-query";
 import type { Schemas } from "@/shared/api/client";
 import { renderWithQuery } from "@/test/render";
-import { BILL_ALUGUEL, BILL_LUZ, BILLS_OF_MONTH, MONTH, problem, signedIn, TRANSACTIONS } from "@/test/stub-api";
+import {
+  BILL_ALUGUEL,
+  BILL_LUZ,
+  BILLS_OF_MONTH,
+  CARRIED_ALUGUEL,
+  MONTH,
+  problem,
+  signedIn,
+  TRANSACTIONS,
+} from "@/test/stub-api";
 
 import { BillsOfMonth } from "./bills-of-month";
 
@@ -176,6 +185,45 @@ describe("Contas do Mês", () => {
 
     await waitFor(() => expect(requests.some((request) => request.method === "POST")).toBe(true));
     expect(await requests.find((request) => request.method === "POST")?.json()).toEqual({ date: "2026-12-10" });
+  });
+
+  it("lists October's unpaid rent first, says so, and pays it in October on its due date", async () => {
+    const { requests } = show([CARRIED_ALUGUEL, ...BILLS_OF_MONTH], {
+      [`POST /api/bills/${BILL_ALUGUEL.id}/pay`]: { status: 201, body: PAYMENT },
+    });
+    await loaded();
+
+    expect(card()).toHaveTextContent("2 obrigações cadastradas");
+    const october = rowOf("Aluguel Residencial de outubro");
+    expect(october).toHaveTextContent("Venceu em outubro");
+    await userEvent.click(
+      within(october).getByRole("button", { name: "Pagar Aluguel Residencial de outubro, vencida" }),
+    );
+
+    await waitFor(() => expect(requests.some((request) => request.method === "POST")).toBe(true));
+    const post = requests.find((request) => request.method === "POST");
+    expect(new URL(post?.url ?? "").searchParams.get("month")).toBe("2026-10");
+    expect(await post?.json()).toEqual({ date: "2026-10-10" });
+    expect(
+      within(rowOf("Aluguel Residencial")).getByRole("button", { name: "Pagar Aluguel Residencial" }),
+    ).toBeInTheDocument();
+  });
+
+  it("opens Pagar for October's rent in October", async () => {
+    show([CARRIED_ALUGUEL, ...BILLS_OF_MONTH]);
+    await loaded();
+
+    await userEvent.click(
+      within(rowOf("Aluguel Residencial de outubro")).getByRole("button", { name: /ajustar pagamento/ }),
+    );
+    const sheet = await screen.findByRole("dialog", { name: "Pagar Aluguel Residencial" });
+    expect(sheet).toHaveTextContent("Conta de outubro: a data do pagamento fica em outubro.");
+  });
+
+  it("names the year of a carried month from another year", async () => {
+    show([{ ...CARRIED_ALUGUEL, due_date: "2025-12-10" }, ...BILLS_OF_MONTH]);
+    await loaded();
+    expect(rowOf("Aluguel Residencial de dezembro de 2025")).toHaveTextContent("Venceu em dezembro de 2025");
   });
 
   it("filters Pendentes and Pagas on desktop", async () => {

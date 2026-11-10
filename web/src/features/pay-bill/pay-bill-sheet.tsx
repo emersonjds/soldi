@@ -5,6 +5,8 @@ import { type FormEvent, useState } from "react";
 import { toast } from "sonner";
 
 import { type BillOfMonth, payDateFor, usePayBill } from "@/entities/bill/bill-queries";
+import { billKey } from "@/entities/month/forecast-alert";
+import { monthName, todayISO } from "@/shared/lib/date";
 import { positiveAmount } from "@/shared/lib/money";
 import { BrandButton } from "@/shared/ui/brand-button";
 import { DateChips } from "@/shared/ui/date-chips";
@@ -57,10 +59,14 @@ export const PayBillSheet = ({ month, bill, open, onOpenChange }: PayBillSheetPr
       open={open}
       onOpenChange={onOpenChange}
       title={bill ? `Pagar ${bill.name}` : "Pagar"}
-      description="Valor e data do pagamento desta conta."
+      description={
+        month === todayISO().slice(0, 7)
+          ? "Valor e data do pagamento desta conta."
+          : `Conta de ${monthName(month, month)}: a data do pagamento fica em ${monthName(month, month)}.`
+      }
     >
       {bill && (
-        <PayForm key={bill.bill_id} bill={bill} month={month} onPay={(payment) => confirm(bill.bill_id, payment)} />
+        <PayForm key={billKey(bill)} bill={bill} month={month} onPay={(payment) => confirm(bill.bill_id, payment)} />
       )}
     </ResponsiveSheet>
   );

@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { categoriesQuery, categoryLabel } from "@/entities/category/categories-query";
+import { billKey } from "@/entities/month/forecast-alert";
 import { ScopeRadio } from "@/entities/transaction/scope-radio";
 import {
   type Scope,
@@ -20,7 +21,7 @@ import { TransactionSheet } from "@/features/add-transaction/transaction-sheet";
 import { EditBillSheet } from "@/features/edit-bill/edit-bill-sheet";
 import { cn } from "@/lib/utils";
 import type { Schemas } from "@/shared/api/client";
-import { dayMonth, shortDay, todayISO, yesterdayISO } from "@/shared/lib/date";
+import { dayMonth, monthName, shortDay, todayISO, yesterdayISO } from "@/shared/lib/date";
 import { BrandButton } from "@/shared/ui/brand-button";
 import { CategoryIcon } from "@/shared/ui/category-icon";
 import { Money } from "@/shared/ui/money";
@@ -73,15 +74,20 @@ const isForecast = (day: Day) => day.is_future || day.projected_balance !== day.
 
 const Cause = () => <span className="text-expense text-xs">Motivo da queda</span>;
 
-const DueRow = ({ bill, cause }: { bill: Due; cause: boolean }) => (
-  <li aria-labelledby={`due-${bill.bill_id}`} className="flex min-h-16 items-center gap-3 px-2 py-2">
+const dueCaption = (bill: Due, month: string) => {
+  if (!bill.due_date.startsWith(month)) return `Conta fixa · venceu em ${monthName(bill.due_date, month)}`;
+  return bill.overdue ? `Conta fixa · venceu dia ${dayMonth(bill.due_date)}` : "Conta fixa · a pagar";
+};
+
+const DueRow = ({ bill, month, cause }: { bill: Due; month: string; cause: boolean }) => (
+  <li aria-labelledby={`due-${billKey(bill)}`} className="flex min-h-16 items-center gap-3 px-2 py-2">
     <CategoryIcon icon={bill.icon} color={bill.color} />
     <span className="flex min-w-0 flex-1 flex-col">
-      <span id={`due-${bill.bill_id}`} className="truncate font-medium text-base">
+      <span id={`due-${billKey(bill)}`} className="truncate font-medium text-base">
         {bill.name}
       </span>
       <span className={cn("text-xs", bill.overdue ? "text-expense" : "text-muted-foreground")}>
-        {bill.overdue ? `Conta fixa · venceu dia ${dayMonth(bill.due_date)}` : "Conta fixa · a pagar"}
+        {dueCaption(bill, month)}
       </span>
     </span>
     <span className="flex flex-col items-end gap-0.5">
@@ -128,7 +134,7 @@ type LedgerProps = {
   onLaunch: () => void;
   /** The day ringed after a jump from the hero. */
   highlight?: string | null;
-  /** Ids (`transaction.id` or `bill.bill_id`) captioned `Motivo da queda`. */
+  /** Ids (`transaction.id` or `billKey(bill)`) captioned `Motivo da queda`. */
   causes?: ReadonlySet<string>;
   className?: string;
 };
@@ -235,7 +241,7 @@ export const Ledger = ({
                 />
               ))}
               {due.map((bill) => (
-                <DueRow key={bill.bill_id} bill={bill} cause={causes.has(bill.bill_id)} />
+                <DueRow key={billKey(bill)} bill={bill} month={view.month} cause={causes.has(billKey(bill))} />
               ))}
             </ul>
           </div>

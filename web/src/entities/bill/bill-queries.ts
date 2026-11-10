@@ -73,7 +73,9 @@ const patchRow = async (
     (view) =>
       view && {
         ...view,
-        bills_of_month: view.bills_of_month.map((row) => (row.bill_id === billId ? { ...row, ...patch(row) } : row)),
+        bills_of_month: view.bills_of_month.map((row) =>
+          row.bill_id === billId && row.due_date.startsWith(month) ? { ...row, ...patch(row) } : row,
+        ),
       },
   );
   return () => client.setQueryData(queryKey, previous);

@@ -8,6 +8,7 @@ import { router, setSearch } from "@/test/next-navigation";
 import { renderWithQuery } from "@/test/render";
 import {
   BILLS_OF_MONTH,
+  CARRIED_ALUGUEL,
   CATEGORIES,
   ECONOMIA,
   FORECAST_MONTH,
@@ -181,6 +182,14 @@ describe("Mês", () => {
     expect(within(ledger()).getByRole("listitem", { name: "Luz (Enel)" })).toHaveTextContent(
       "Luz (Enel)Conta fixa · venceu dia 02/11R$ 284,10",
     );
+  });
+
+  it("lands October's unpaid rent today in the ledger, named by its month", async () => {
+    open({ "GET /api/months/2026-11": { status: 200, body: { ...MONTH, bills_of_month: [CARRIED_ALUGUEL] } } });
+    const rent = await within(await screen.findByRole("region", { name: "Lançamentos" })).findByRole("listitem", {
+      name: "Aluguel Residencial",
+    });
+    expect(rent).toHaveTextContent("Conta fixa · venceu em outubro");
   });
 
   it("lists a month whose only entry is scheduled instead of the empty state", async () => {

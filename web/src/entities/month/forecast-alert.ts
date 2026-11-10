@@ -23,6 +23,9 @@ export const forecastAlert = (days: Day[]): ForecastAlert | null => {
   };
 };
 
+/** A bill row's identity: one bill can be listed twice, carried from an earlier month (D17). */
+export const billKey = (bill: Schemas["BillOfMonth"]) => `${bill.bill_id}@${bill.due_date}`;
+
 const RANK = { bill: 1, daily: 2 } as const;
 
 /** The day's largest outflow, only when its projected balance fell from the day before; ties go conta fixa, Saída, Diário, then list order. */
@@ -37,7 +40,7 @@ export const causeOf = (
   const outflows = [
     ...bills
       .filter((bill) => bill.lands_on === date)
-      .map((bill) => ({ id: bill.bill_id, amount: cents(bill.amount), rank: 0 })),
+      .map((bill) => ({ id: billKey(bill), amount: cents(bill.amount), rank: 0 })),
     ...transactions.flatMap((transaction) =>
       transaction.date === date && transaction.kind !== "income"
         ? [{ id: transaction.id, amount: cents(transaction.amount), rank: RANK[transaction.kind] }]
