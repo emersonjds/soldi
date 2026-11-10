@@ -1,4 +1,4 @@
-# SOL-55 — Conta fixa atrasada de mês anterior entra no hoje
+# SOL-55 — An unpaid conta fixa of an earlier month lands today
 
 Epic SOL-40, sprint 3, card 1 of 3 (build order SOL-55 → SOL-51 → SOL-52). Follow-up named in SOL-49's review notes. Rules: D16, D17, `docs/specs/forecast/02-finance.md` rules 2 and 7. Plan: `docs/plans/2026-11-10-forecast-sprint-3.md` tasks 1–4.
 

@@ -1,4 +1,4 @@
-# SOL-37 — Esqueci minha senha
+# SOL-37 — Forgot password (Esqueci minha senha)
 
 Owner, 2026-11-10: "tem que criar uma mecânica de resetar senha … manda um link, a pessoa reseta e pronto". The link goes only to the account's e-mail: showing it on screen would let anyone who types an e-mail take the account. E-mail is sent through Resend (free tier, 3 000/month, 100/day); domain `getsoldi.app` is verified (region `sa-east-1`), and Railway already has `RESEND_API_KEY` (sending-only, this domain), `SOLDI_MAIL_FROM=Soldi <nao-responda@getsoldi.app>` and `SOLDI_PUBLIC_URL=https://getsoldi.app`.
 

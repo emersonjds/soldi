@@ -1,4 +1,4 @@
-# SOL-27 — Tour de boas-vindas: como o Soldi funciona
+# SOL-27 — Welcome tour: how Soldi works
 
 Owner, 2026-11-05: "ao acessar, monte um step by step de como funciona a ferramenta: saídas, entradas, projeção do fim do mês e a parte de economia".
 

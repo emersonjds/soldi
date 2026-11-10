@@ -1,4 +1,4 @@
-# SOL-49 — Dia futuro com cor (projected days)
+# SOL-49 — Future days with their color (projected days)
 
 Epic SOL-40, sprint 2, card 1 of 4. Rules: D16, `docs/specs/forecast/02-finance.md` rules 1, 2, 7; screens: `03-ux.md` §2 (day rows), §7 card 1. Plan: `docs/plans/2026-11-10-forecast-sprint-2.md` tasks 1–4.
 

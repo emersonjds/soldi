@@ -1,4 +1,4 @@
-# SOL-3 — Transações, categorias e tela Mês com termômetro
+# SOL-3 — Transactions, categories and the Mês screen with the thermometer
 
 Panel of 2026-11-05 (product, ux, finance, architect; recorded by the orchestrating session). Spec sections 4–7; design `docs/design/tokens.md` and `docs/design/stitch/mes-*.png`.
 

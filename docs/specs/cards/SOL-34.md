@@ -1,4 +1,4 @@
-# SOL-34 — Botão + cria categoria ou subcategoria de uma existente
+# SOL-34 — The + creates a category or a subcategory of an existing one
 
 Owner, 2026-11-08: "quando eu clico nesse + eu posso criar uma categoria ou uma subcategoria de uma já existente ... pense em como construir isso para ficar com uma ux e ui bacana tanto no mobile quanto na tela do computador."
 
