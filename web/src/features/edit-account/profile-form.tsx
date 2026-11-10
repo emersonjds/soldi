@@ -28,7 +28,10 @@ export const ProfileForm = ({ user }: { user: User }) => {
     setSubmitted(true);
     if (!trimmed) return;
     rename.mutate(trimmed, {
-      onSuccess: () => toast.success("Nome salvo"),
+      onSuccess: (saved) => {
+        setName(saved.name);
+        toast.success("Nome salvo");
+      },
       onError: () => toast.error("Não foi possível salvar."),
     });
   };

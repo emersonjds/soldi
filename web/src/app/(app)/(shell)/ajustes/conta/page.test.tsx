@@ -51,6 +51,7 @@ describe("Ajustes › Minha conta", () => {
     const patch = requests.find((request) => request.method === "PATCH");
     expect(await patch?.json()).toEqual({ name: "Ana Paula" });
     expect(client.getQueryData(meQuery.queryKey)?.name).toBe("Ana Paula");
+    expect(name).toHaveValue("Ana Paula");
   });
 
   it("blocks an empty name and one over 60 characters before sending", async () => {
@@ -79,7 +80,7 @@ describe("Ajustes › Minha conta", () => {
   });
 
   it("changes the password and clears the fields", async () => {
-    const { requests } = open({ "POST /api/me/password": { status: 204 } });
+    const { requests, client } = open({ "POST /api/me/password": { status: 204 } });
 
     const current = await screen.findByLabelText("Senha atual");
     const next = screen.getByLabelText("Nova senha");
@@ -104,22 +105,72 @@ describe("Ajustes › Minha conta", () => {
     expect(current).toHaveValue("");
     expect(next).toHaveValue("");
     expect(next).not.toHaveAttribute("aria-invalid", "true");
+    await waitFor(() => expect(client.getMutationCache().getAll()).toHaveLength(0));
+  });
+
+  it("counts characters, not code units, and caps the new password at 128", async () => {
+    const { requests } = open({ "POST /api/me/password": { status: 204 } });
+
+    await userEvent.type(await screen.findByLabelText("Senha atual"), "senha-antiga");
+    const next = screen.getByLabelText("Nova senha");
+    await userEvent.click(next);
+    await userEvent.paste("😀".repeat(7));
+    await userEvent.click(screen.getByRole("button", { name: "Trocar senha" }));
+    expect(screen.getByRole("alert")).toHaveTextContent("Mínimo de 8 caracteres");
+
+    await userEvent.clear(next);
+    await userEvent.paste("a".repeat(129));
+    await userEvent.click(screen.getByRole("button", { name: "Trocar senha" }));
+    expect(screen.getByRole("alert")).toHaveTextContent("A senha pode ter até 128 caracteres.");
+    expect(posts(requests, "/api/me/password")).toHaveLength(0);
+
+    await userEvent.clear(next);
+    await userEvent.paste("😀".repeat(8));
+    await userEvent.click(screen.getByRole("button", { name: "Trocar senha" }));
+    expect(await screen.findByText("Senha trocada. Os outros aparelhos foram desconectados.")).toBeInTheDocument();
+  });
+
+  it("marks the new password when the server refuses its length", async () => {
+    open({
+      "POST /api/me/password": {
+        status: 422,
+        body: { ...problem(422, "No."), errors: [{ field: "password", message: "too short" }] },
+      },
+    });
+
+    await userEvent.type(await screen.findByLabelText("Senha atual"), "senha-antiga");
+    const next = screen.getByLabelText("Nova senha");
+    await userEvent.type(next, "nova-senha-longa");
+    await userEvent.click(screen.getByRole("button", { name: "Trocar senha" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Mínimo de 8 caracteres");
+    expect(next).toHaveAttribute("aria-invalid", "true");
+    await userEvent.type(next, "x");
+    expect(next).not.toHaveAttribute("aria-invalid", "true");
   });
 
   it("tells a wrong current password apart from any other failure", async () => {
-    open({
+    const { client } = open({
       "POST /api/me/password": {
         status: 422,
         body: { ...problem(422, "No."), type: "urn:soldi:error:wrong-password" },
       },
     });
 
-    await userEvent.type(await screen.findByLabelText("Senha atual"), "errada-demais");
+    const current = await screen.findByLabelText("Senha atual");
+    await userEvent.type(current, "errada-demais");
     await userEvent.type(screen.getByLabelText("Nova senha"), "nova-senha-longa");
     await userEvent.click(screen.getByRole("button", { name: "Trocar senha" }));
 
-    expect(await screen.findByText("Senha atual incorreta")).toBeInTheDocument();
-    expect(screen.getByLabelText("Senha atual")).toHaveValue("errada-demais");
+    expect(await screen.findByRole("alert")).toHaveTextContent("Senha atual incorreta");
+    expect(await screen.findAllByText("Senha atual incorreta")).toHaveLength(2);
+    expect(current).toHaveValue("errada-demais");
+    expect(current).toHaveAttribute("aria-invalid", "true");
+    await waitFor(() => expect(client.getMutationCache().getAll()).toHaveLength(0));
+
+    await userEvent.type(current, "!");
+    expect(current).not.toHaveAttribute("aria-invalid", "true");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("says so when the password change fails for another reason", async () => {
@@ -133,9 +184,10 @@ describe("Ajustes › Minha conta", () => {
   });
 
   it("signs out everywhere only after confirming, then goes to sign-in", async () => {
-    const { requests } = open({ "POST /api/auth/sign-out-everywhere": { status: 204 } });
+    const { requests, client } = open({ "POST /api/auth/sign-out-everywhere": { status: 204 } });
 
     expect(await screen.findByRole("button", { name: "Sair" })).toBeInTheDocument();
+    client.setQueryData(["months", "2026-11"], { balance: "10.00" });
     await userEvent.click(screen.getByRole("button", { name: "Sair de todos os aparelhos" }));
     let dialog = await screen.findByRole("alertdialog", { name: "Sair de todos os aparelhos?" });
     expect(within(dialog).getByText("Você vai precisar entrar de novo em cada um.")).toBeInTheDocument();
@@ -149,6 +201,13 @@ describe("Ajustes › Minha conta", () => {
 
     await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/entrar"));
     expect(posts(requests, "/api/auth/sign-out-everywhere")).toHaveLength(1);
+    expect(client.getQueryData(meQuery.queryKey)).toBeNull();
+    expect(
+      client
+        .getQueryCache()
+        .getAll()
+        .map((query) => query.queryKey),
+    ).toEqual([meQuery.queryKey]);
   });
 
   it("says so when signing out everywhere fails", async () => {
