@@ -115,10 +115,11 @@ pub async fn request_password_reset(
         return Ok(());
     };
     let token = domain::new_reset_token();
+    repo::lock_password_resets(&mut tx, found.user.id).await?;
     repo::delete_password_resets(&mut tx, found.user.id).await?;
     repo::insert_password_reset(&mut tx, found.user.id, &domain::hash_token(&token)).await?;
     tx.commit().await?;
-    let link = format!("{public_url}/redefinir-senha?token={token}");
+    let link = format!("{public_url}/redefinir-senha#token={token}");
     mailer
         .send_password_reset(&found.user.email, &found.user.name, &link)
         .await
@@ -131,11 +132,17 @@ pub async fn confirm_password_reset(
     input: ConfirmPasswordReset,
 ) -> Result<(), AppError> {
     domain::check_password(&input.new_password)?;
+    let token_hash = domain::hash_token(&input.token);
+    let live = {
+        let mut conn = pool.acquire().await?;
+        repo::password_reset_is_live(&mut conn, &token_hash).await?
+    };
+    if !live {
+        return Err(domain::invalid_reset_link());
+    }
     let password_hash = hash_in_background(input.new_password).await?;
     let mut tx = pool.begin().await?;
-    let Some(user_id) =
-        repo::take_password_reset(&mut tx, &domain::hash_token(&input.token)).await?
-    else {
+    let Some(user_id) = repo::take_password_reset(&mut tx, &token_hash).await? else {
         return Err(domain::invalid_reset_link());
     };
     repo::set_password_hash(&mut tx, user_id, &password_hash).await?;

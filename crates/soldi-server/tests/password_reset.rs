@@ -113,6 +113,13 @@ async fn an_unknown_and_a_real_email_get_the_same_202_and_only_the_real_one_gets
 
     assert_eq!(unknown.status(), StatusCode::ACCEPTED);
     assert_eq!(real.status(), StatusCode::ACCEPTED);
+    for name in [header::CONTENT_TYPE, header::CONTENT_LENGTH] {
+        assert_eq!(
+            unknown.headers().get(&name),
+            real.headers().get(&name),
+            "{name}"
+        );
+    }
     assert_eq!(body_json(unknown).await, Value::Null);
     assert_eq!(body_json(real).await, Value::Null);
     let sent = mail.sent().await;
@@ -122,7 +129,7 @@ async fn an_unknown_and_a_real_email_get_the_same_202_and_only_the_real_one_gets
     assert_eq!(message.subject, "Redefinir sua senha do Soldi");
     let token = token_in(message);
     assert_eq!(token.len(), 43, "{token}");
-    let link = format!("http://localhost:8080/redefinir-senha?token={token}");
+    let link = format!("http://localhost:8080/redefinir-senha#token={token}");
     assert!(message.text.starts_with("Olá, ana."), "{}", message.text);
     assert!(message.text.contains(&link), "{}", message.text);
     assert!(message.html.contains(&format!("href=\"{link}\"")));
@@ -207,6 +214,48 @@ async fn a_second_request_deletes_the_first_link(pool: PgPool) {
         confirm(&app, &second, NEW_PASSWORD).await.0,
         StatusCode::NO_CONTENT
     );
+}
+
+#[sqlx::test]
+async fn confirming_one_link_voids_every_other_pending_link_of_the_user(pool: PgPool) {
+    let (app, mail) = app(pool.clone());
+    app.another_user("ana@example.com").await;
+    request_reset(&app, "ana@example.com").await;
+    let first = token_in(&mail.sent().await[0]);
+    sqlx::query(
+        "INSERT INTO password_resets (user_id, token_hash) \
+         SELECT id, $1 FROM users WHERE email = 'ana@example.com'",
+    )
+    .bind(hash_token("second"))
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    assert_eq!(
+        confirm(&app, &first, NEW_PASSWORD).await.0,
+        StatusCode::NO_CONTENT
+    );
+    let (status, problem) = confirm(&app, "second", "another long one").await;
+    assert_invalid_link(status, &problem);
+}
+
+#[sqlx::test]
+async fn concurrent_requests_leave_one_live_link(pool: PgPool) {
+    let (app, mail) = app(pool.clone());
+    app.another_user("ana@example.com").await;
+
+    tokio::join!(
+        request_reset(&app, "ana@example.com"),
+        request_reset(&app, "ana@example.com"),
+        request_reset(&app, "ana@example.com"),
+    );
+    assert_eq!(mail.sent().await.len(), 3);
+
+    let links: i64 = sqlx::query_scalar("SELECT count(*) FROM password_resets")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(links, 1);
 }
 
 #[sqlx::test]

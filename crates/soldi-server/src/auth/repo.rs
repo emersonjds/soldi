@@ -148,6 +148,34 @@ pub async fn insert_password_reset(
     Ok(())
 }
 
+/// Serializes link requests of one user until the transaction ends, so only one link stays live.
+pub async fn lock_password_resets(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        "SELECT pg_advisory_xact_lock(hashtext('password_resets:' || $1::text))",
+        user_id.to_string()
+    )
+    .execute(&mut *conn)
+    .await?;
+    Ok(())
+}
+
+/// Cheap check before the argon2 hash; `take_password_reset` still decides in the transaction.
+pub async fn password_reset_is_live(
+    conn: &mut PgConnection,
+    token_hash: &[u8],
+) -> Result<bool, sqlx::Error> {
+    let live = sqlx::query_scalar!(
+        r#"SELECT EXISTS (SELECT 1 FROM password_resets WHERE token_hash = $1 AND expires_at > now()) AS "live!""#,
+        token_hash
+    )
+    .fetch_one(&mut *conn)
+    .await?;
+    Ok(live)
+}
+
 pub async fn delete_password_resets(
     conn: &mut PgConnection,
     user_id: Uuid,
