@@ -2,11 +2,13 @@ import { expect, test } from "@playwright/test";
 
 const API = process.env.E2E_API_URL ?? "http://localhost:8080";
 
-/** `YYYY-MM-DD` of `day` next month, in the browser's calendar. */
+/** `YYYY-MM-DD` of `day` next month, in the server's São Paulo calendar. */
 const nextMonthDay = (day: number) => {
-  const now = new Date();
-  const next = new Date(now.getFullYear(), now.getMonth() + 1, day);
-  return `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  const [year, month] = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" })
+    .format(new Date())
+    .split("-")
+    .map(Number);
+  return new Date(Date.UTC(year, month, day)).toISOString().slice(0, 10);
 };
 
 test("an unpaid conta fixa paints next month's due day Crítico and the hero line jumps to it", async ({
