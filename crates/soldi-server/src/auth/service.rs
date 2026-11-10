@@ -1,5 +1,5 @@
 use chrono::{Duration, Utc};
-use soldi_types::auth::{SignIn, SignUp, User};
+use soldi_types::auth::{ChangePassword, SignIn, SignUp, UpdateMe, User};
 use sqlx::{PgConnection, PgPool};
 use uuid::Uuid;
 
@@ -51,6 +51,50 @@ pub async fn sign_in(pool: &PgPool, input: SignIn) -> Result<(User, String), App
 pub async fn sign_out(pool: &PgPool, user: &CurrentUser) -> Result<(), AppError> {
     let mut conn = pool.acquire().await?;
     repo::delete_session(&mut conn, user).await?;
+    Ok(())
+}
+
+/// Revokes every session of the user, this one included.
+pub async fn sign_out_everywhere(pool: &PgPool, user: &CurrentUser) -> Result<(), AppError> {
+    let mut conn = pool.acquire().await?;
+    Ok(repo::delete_all_sessions(&mut conn, user.id).await?)
+}
+
+pub async fn update_me(
+    pool: &PgPool,
+    user: &CurrentUser,
+    input: UpdateMe,
+) -> Result<User, AppError> {
+    let name = domain::check_name(&input.name)?;
+    let mut conn = pool.acquire().await?;
+    Ok(repo::update_name(&mut conn, user.id, &name).await?)
+}
+
+/// Other devices are signed out; the session that made the request stays.
+pub async fn change_password(
+    pool: &PgPool,
+    user: &CurrentUser,
+    input: ChangePassword,
+) -> Result<(), AppError> {
+    domain::check_password(&input.new_password)?;
+    let stored_hash = {
+        let mut conn = pool.acquire().await?;
+        repo::find_password_hash(&mut conn, user.id).await?
+    };
+    let checked = stored_hash
+        .clone()
+        .unwrap_or_else(domain::dummy_password_hash);
+    if !verify_in_background(input.current_password, checked).await? {
+        return Err(domain::wrong_password());
+    }
+    let password_hash = hash_in_background(input.new_password).await?;
+    let mut tx = pool.begin().await?;
+    if !repo::update_password_hash(&mut tx, user.id, stored_hash.as_deref(), &password_hash).await?
+    {
+        return Err(domain::wrong_password());
+    }
+    repo::delete_other_sessions(&mut tx, user).await?;
+    tx.commit().await?;
     Ok(())
 }
 

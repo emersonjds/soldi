@@ -45,6 +45,19 @@ pub fn check_password(password: &str) -> Result<(), AppError> {
     Ok(())
 }
 
+pub fn check_name(name: &str) -> Result<String, AppError> {
+    reject_nul("name", name)?;
+    let name = name.trim();
+    if name.is_empty() || name.chars().count() > 60 {
+        return Err(AppError::invalid("name", "must have 1 to 60 characters"));
+    }
+    Ok(name.to_string())
+}
+
+pub fn wrong_password() -> AppError {
+    AppError::rule("wrong-password", "The current password is wrong.")
+}
+
 /// The given name trimmed, or the part of the (normalized) e-mail before `@` when blank.
 pub fn display_name(name: Option<&str>, email: &str) -> Result<String, AppError> {
     let name = name.map(str::trim).filter(|name| !name.is_empty());
@@ -209,6 +222,15 @@ mod tests {
             display_name(None, &long_local).unwrap().chars().count(),
             100
         );
+    }
+
+    #[test]
+    fn a_new_name_is_trimmed_with_1_to_60_characters() {
+        assert_eq!(check_name("  Ana Souza ").unwrap(), "Ana Souza");
+        assert_eq!(check_name(&"á".repeat(60)).unwrap(), "á".repeat(60));
+        assert!(check_name("   ").is_err());
+        assert!(check_name(&"x".repeat(61)).is_err());
+        assert!(check_name("a\0").is_err());
     }
 
     #[test]

@@ -4,7 +4,7 @@ use axum::http::header::SET_COOKIE;
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::IntoResponse;
 use soldi_types::Problem;
-use soldi_types::auth::{SignIn, SignUp, User};
+use soldi_types::auth::{ChangePassword, SignIn, SignUp, UpdateMe, User};
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
 
@@ -18,8 +18,11 @@ pub fn router() -> OpenApiRouter<AppState> {
         .routes(routes!(sign_up))
         .routes(routes!(sign_in))
         .routes(routes!(sign_out))
+        .routes(routes!(sign_out_everywhere))
         .routes(routes!(me))
         .routes(routes!(tour_seen))
+        .routes(routes!(update_me))
+        .routes(routes!(change_password))
 }
 
 #[utoipa::path(post, path = "/api/auth/sign-up", tag = "auth", request_body = SignUp,
@@ -68,6 +71,20 @@ pub async fn sign_out(
     Ok((StatusCode::NO_CONTENT, [(SET_COOKIE, cookie)]))
 }
 
+#[utoipa::path(post, path = "/api/auth/sign-out-everywhere", tag = "auth",
+    responses(
+        (status = 204, description = "Every session of the caller revoked, this one included; cookie cleared"),
+        (status = 401, body = Problem, content_type = "application/problem+json")))]
+pub async fn sign_out_everywhere(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    user: CurrentUser,
+) -> Result<impl IntoResponse, AppError> {
+    service::sign_out_everywhere(&state.pool, &user).await?;
+    let cookie = domain::expired_session_cookie(domain::is_https(&headers));
+    Ok((StatusCode::NO_CONTENT, [(SET_COOKIE, cookie)]))
+}
+
 #[utoipa::path(get, path = "/api/auth/me", tag = "auth",
     responses(
         (status = 200, body = User),
@@ -85,5 +102,33 @@ pub async fn tour_seen(
     user: CurrentUser,
 ) -> Result<StatusCode, AppError> {
     service::mark_tour_seen(&state.pool, &user).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[utoipa::path(patch, path = "/api/me", tag = "auth", request_body = UpdateMe,
+    responses(
+        (status = 200, body = User, description = "Renamed"),
+        (status = 401, body = Problem, content_type = "application/problem+json"),
+        (status = 422, body = Problem, content_type = "application/problem+json", description = "`name` blank, over 60 characters or with NUL")))]
+pub async fn update_me(
+    State(state): State<AppState>,
+    user: CurrentUser,
+    JsonBody(input): JsonBody<UpdateMe>,
+) -> Result<Json<User>, AppError> {
+    Ok(Json(service::update_me(&state.pool, &user, input).await?))
+}
+
+#[utoipa::path(post, path = "/api/me/password", tag = "auth", request_body = ChangePassword,
+    responses(
+        (status = 204, description = "Password changed; every other session of the caller is revoked, this one stays"),
+        (status = 401, body = Problem, content_type = "application/problem+json"),
+        (status = 422, body = Problem, content_type = "application/problem+json", description = "`wrong-password` for a wrong current password; field `password` when the new one has not 8 to 128 characters"),
+        (status = 429, body = Problem, content_type = "application/problem+json", description = "Rate limited; wait `Retry-After` seconds")))]
+pub async fn change_password(
+    State(state): State<AppState>,
+    user: CurrentUser,
+    JsonBody(input): JsonBody<ChangePassword>,
+) -> Result<StatusCode, AppError> {
+    service::change_password(&state.pool, &user, input).await?;
     Ok(StatusCode::NO_CONTENT)
 }

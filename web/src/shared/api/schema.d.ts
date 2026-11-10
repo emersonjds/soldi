@@ -52,6 +52,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/auth/sign-out-everywhere": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["sign_out_everywhere"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/auth/sign-up": {
         parameters: {
             query?: never;
@@ -238,6 +254,38 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["confirm_xlsx"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["update_me"];
+        trace?: never;
+    };
+    "/api/me/password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["change_password"];
         delete?: never;
         options?: never;
         head?: never;
@@ -484,6 +532,11 @@ export interface components {
             /** @example 26.0 */
             pct: string;
             previous_amount: string;
+        };
+        ChangePassword: {
+            current_password: string;
+            /** @description 8 to 128 characters. */
+            new_password: string;
         };
         /**
          * @description A subcategory of `Economia`, or `Economia` itself as `Sem objetivo` (`parent`). `balance` is
@@ -824,6 +877,10 @@ export interface components {
             parent_id?: string | null;
             target?: string | null;
         };
+        UpdateMe: {
+            /** @description Trimmed; 1 to 60 characters. */
+            name: string;
+        };
         /** @description Absent fields stay as they are. */
         UpdateSettings: {
             currency?: components["schemas"]["Currency"] | null;
@@ -973,6 +1030,32 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Session revoked; cookie cleared */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    sign_out_everywhere: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Every session of the caller revoked, this one included; cookie cleared */
             204: {
                 headers: {
                     [name: string]: unknown;
@@ -1828,6 +1911,95 @@ export interface operations {
             };
             /** @description `import-has-errors` when the preview listed errors and `skip_errors` is not true; `opening_date` after the earliest imported date; `opening_balance` with more than two places; `palette-full` when a new `Importado` category finds all 24 colors taken in its kind */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    update_me: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateMe"];
+            };
+        };
+        responses: {
+            /** @description Renamed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["User"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description `name` blank, over 60 characters or with NUL */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    change_password: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangePassword"];
+            };
+        };
+        responses: {
+            /** @description Password changed; every other session of the caller is revoked, this one stays */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description `wrong-password` for a wrong current password; field `password` when the new one has not 8 to 128 characters */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Rate limited; wait `Retry-After` seconds */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };

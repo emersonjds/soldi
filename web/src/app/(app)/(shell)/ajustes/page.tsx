@@ -12,6 +12,7 @@ import {
   Tags,
   Thermometer,
   Trash2,
+  UserRound,
   Wallet,
 } from "lucide-react";
 
@@ -69,28 +70,33 @@ const Group = ({ title, children }: { title: string; children: ReactNode }) => (
   </section>
 );
 
+const Row = ({ href, label, hint, icon: Icon }: Item) => (
+  <li>
+    <Link href={href} className="flex min-h-16 items-center gap-3 px-4 py-2 transition-colors hover:bg-muted">
+      <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-secondary text-primary">
+        <Icon className="size-5" aria-hidden />
+      </span>
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="font-medium text-base">{label}</span>
+        <span className="truncate text-muted-foreground text-xs">{hint}</span>
+      </span>
+      <ChevronRight className="size-5 text-muted-foreground" aria-hidden />
+    </Link>
+  </li>
+);
+
 const AjustesPage = () => (
   <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
     <h1 className="font-bold text-[22px] leading-7">Ajustes</h1>
     {GROUPS.map((group) => (
       <Group key={group.title} title={group.title}>
-        {group.items.map(({ href, label, hint, icon: Icon }) => (
-          <li key={href}>
-            <Link href={href} className="flex min-h-16 items-center gap-3 px-4 py-2 transition-colors hover:bg-muted">
-              <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-secondary text-primary">
-                <Icon className="size-5" aria-hidden />
-              </span>
-              <span className="flex min-w-0 flex-1 flex-col">
-                <span className="font-medium text-base">{label}</span>
-                <span className="truncate text-muted-foreground text-xs">{hint}</span>
-              </span>
-              <ChevronRight className="size-5 text-muted-foreground" aria-hidden />
-            </Link>
-          </li>
+        {group.items.map((item) => (
+          <Row key={item.href} {...item} />
         ))}
       </Group>
     ))}
     <Group title="Conta">
+      <Row href="/ajustes/conta" label="Minha conta" hint="Nome, e-mail e senha" icon={UserRound} />
       <li>
         <SignOutButton />
       </li>
