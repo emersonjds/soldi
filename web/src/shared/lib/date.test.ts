@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { addMonths, dayMonth, monthName, monthYear } from "./date";
+import { addMonths, dayMonth, monthName, monthYear, repeatDates } from "./date";
 
 describe("monthYear", () => {
   it("writes a deadline as the month and year", () => {
@@ -22,5 +22,11 @@ describe("monthYear", () => {
     expect(addMonths("2026-11", 0)).toBe("2026-11");
     expect(addMonths("2026-11", 2)).toBe("2027-01");
     expect(addMonths("2026-12", 11)).toBe("2027-11");
+  });
+
+  it("dates the copies of a repeat like the server, clamped to short months", () => {
+    expect(repeatDates("2027-01-31", 4)).toEqual(["2027-02-28", "2027-03-31", "2027-04-30"]);
+    expect(repeatDates("2028-01-31", 2)).toEqual(["2028-02-29"]);
+    expect(repeatDates("2026-11-05", 1)).toEqual([]);
   });
 });

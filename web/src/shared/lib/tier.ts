@@ -42,6 +42,12 @@ export const cents = (amount: string) => {
   return Number(whole) * 100 + sign * Number(fraction.padEnd(2, "0"));
 };
 
+/** Whole cents back to an API decimal: `-67500` → `-675.00`. */
+export const fromCents = (value: number) => {
+  const digits = String(Math.abs(value)).padStart(3, "0");
+  return `${value < 0 ? "-" : ""}${digits.slice(0, -2)}.${digits.slice(-2)}`;
+};
+
 /** The server's rule: each bound is the lowest balance of the next tier up. */
 export const tierOf = (balance: string, bounds: TierBounds): Tier => {
   const value = cents(balance);

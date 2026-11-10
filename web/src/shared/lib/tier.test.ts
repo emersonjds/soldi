@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { TIER_LABEL, TIER_ORDER, TIER_STYLE, tierOf } from "./tier";
+import { fromCents, TIER_LABEL, TIER_ORDER, TIER_STYLE, tierOf } from "./tier";
 
 describe("tier", () => {
   it("names the five tiers from worst to best as the sheet does", () => {
@@ -30,5 +30,15 @@ describe("tier", () => {
     expect(tierOf("1000.49", bounds)).toBe("yellow");
     expect(tierOf("1000.50", bounds)).toBe("light_green");
     expect(tierOf("2000", bounds)).toBe("green");
+  });
+
+  it("turns cents back into an API decimal", () => {
+    expect([fromCents(-67_500), fromCents(5), fromCents(-5), fromCents(0), fromCents(615_000)]).toEqual([
+      "-675.00",
+      "0.05",
+      "-0.05",
+      "0.00",
+      "6150.00",
+    ]);
   });
 });

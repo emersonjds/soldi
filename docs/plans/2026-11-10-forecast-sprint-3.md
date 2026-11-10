@@ -1993,13 +1993,16 @@ import { describe, expect, it } from "vitest";
 import { installmentCents } from "./installments";
 
 describe("installmentCents", () => {
-  it("splits half-even with the remainder on the last, like the server", () => {
+  it("truncates each parcela to cents and puts the remainder on the last, like the server", () => {
     expect(installmentCents(100_001, 10)).toEqual([...Array(9).fill(10_000), 10_001]);
-    expect(installmentCents(10_000, 3)).toEqual([3333, 3333, 3334]);
-    expect(installmentCents(100_000, 12).at(-1)).toBe(8337);
+    expect(installmentCents(1000, 60)).toEqual([...Array(59).fill(16), 56]);
     expect(installmentCents(5, 2)).toEqual([2, 3]);
-    expect(installmentCents(6, 4)).toEqual([2, 2, 2, 0]);
-    expect(installmentCents(1, 2)).toEqual([0, 1]);
+    expect(installmentCents(10_000, 3)).toEqual([3333, 3333, 3334]);
+    expect(installmentCents(6, 4)).toEqual([1, 1, 1, 3]);
+  });
+
+  it("leaves parcelas at zero when the total is under one cent each, for the caller to refuse", () => {
+    expect(installmentCents(5, 6)).toEqual([0, 0, 0, 0, 0, 5]);
   });
 });
 ```
@@ -2047,12 +2050,9 @@ Run: `pnpm vitest run src/shared/lib src/entities/transaction/transaction-querie
 `shared/lib/installments.ts`:
 
 ```ts
-/** D16 rule 3 in whole cents, the server's `installment_amounts`: `total / count` half-even, the last takes the remainder. */
+/** D16 rule 3 in whole cents, the server's `installment_amounts`: `total / count` truncated, the last takes the remainder. */
 export const installmentCents = (total: number, count: number) => {
-  const quotient = Math.floor(total / count);
-  const remainder = total - quotient * count;
-  const roundsUp = remainder * 2 > count || (remainder * 2 === count && quotient % 2 === 1);
-  const each = quotient + (roundsUp ? 1 : 0);
+  const each = Math.trunc(total / count);
   return [...Array.from({ length: count - 1 }, () => each), total - each * (count - 1)];
 };
 ```
@@ -2283,12 +2283,12 @@ describe("draftRows", () => {
   it("refuses a parcela at zero and offers Parcelar only on Saída and Diário, never when editing", async () => {
     setup();
     await userEvent.click(screen.getByLabelText("Valor"));
-    await userEvent.keyboard("0,06");
+    await userEvent.keyboard("0,05");
     await userEvent.click(await screen.findByRole("switch", { name: "Parcelar" }));
     await userEvent.click(within(screen.getByRole("group", { name: "Quantas parcelas" })).getByRole("radio", { name: "Outro" }));
-    await userEvent.type(screen.getByLabelText("Parcelas"), "4");
+    await userEvent.type(screen.getByLabelText("Parcelas"), "6");
     await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
-    expect(screen.getByRole("alert")).toHaveTextContent("Valor pequeno demais para 4 parcelas.");
+    expect(screen.getByRole("alert")).toHaveTextContent("Valor pequeno demais para 6 parcelas.");
 
     await userEvent.click(screen.getByRole("radio", { name: "Entrada" }));
     expect(screen.queryByRole("switch", { name: "Parcelar" })).not.toBeInTheDocument();

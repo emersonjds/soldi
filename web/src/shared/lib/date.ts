@@ -54,3 +54,13 @@ export const addMonths = (month: string, count: number) => {
   const index = Number(month.slice(0, 4)) * 12 + Number(month.slice(5, 7)) - 1 + count;
   return `${Math.floor(index / 12)}-${pad((index % 12) + 1)}`;
 };
+
+const lastDay = (month: string) =>
+  new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0)).getUTCDate();
+
+/** The server's `repeat_dates`: `date`'s day in each of the next `count - 1` months, clamped to the month's last day. */
+export const repeatDates = (date: string, count: number) =>
+  Array.from({ length: count - 1 }, (_, index) => {
+    const month = addMonths(date.slice(0, 7), index + 1);
+    return `${month}-${pad(Math.min(Number(date.slice(8, 10)), lastDay(month)))}`;
+  });

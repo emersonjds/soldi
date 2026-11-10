@@ -80,6 +80,29 @@ describe("useCreateTransaction", () => {
     expect(isStale(view, ["transactions", "2026-11"])).toBe(true);
   });
 
+  it("shows parcela 1 optimistically, never the total", async () => {
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    stubApi({ "POST /api/transactions": { status: 201, body: CREATED } });
+    const stubbed = globalThis.fetch;
+    vi.stubGlobal("fetch", async (request: Request) => {
+      await gate;
+      return stubbed(request);
+    });
+    const view = seeded();
+
+    act(() => view.result.current.create.mutate({ ...NEW, amount: "1000.01", installments: 10, category: MERCADO }));
+
+    await waitFor(() =>
+      expect(view.client.getQueryData(transactionsQuery("2026-11").queryKey)?.[0]).toMatchObject({ amount: "100.00" }),
+    );
+    expect(view.client.getQueryData(transactionsQuery("2026-11").queryKey)?.[0]).not.toHaveProperty("installments");
+    release();
+    await waitFor(() => expect(view.result.current.create.isSuccess).toBe(true));
+  });
+
   it("sends exactly the API fields", async () => {
     const requests = stubApi({ "POST /api/transactions": { status: 201, body: CREATED } });
     const view = seeded();

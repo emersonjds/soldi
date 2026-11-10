@@ -9,7 +9,7 @@ Epic SOL-40, sprint 3, card 3 of 3, built on SOL-51's `GET /api/forecast` and `m
 | Question | Options | Winner | Why |
 |---|---|---|---|
 | How does the API write parcelas? | (a) client sends `repeat_months` with `total/n` (copies one amount, remainder lost); (b) client posts N entries (not atomic, no shared series); (c) `CreateTransaction.installments` | **(c)** | Rule 3 wants the last parcela to carry the cents; `repeat_months` copies one amount by definition (D14). (c) reuses the series insert in one database transaction; position/total still counted at read time. |
-| `amount` with `installments` | per parcela, total | **total** | The user types the price of the thing; the server splits (Decimal, half-even), the web shows the same split from the same vectors. |
+| `amount` with `installments` | per parcela, total | **total** | The user types the price of the thing; the server splits (Decimal, truncated to cents), the web shows the same split from the same vectors. |
 | Combine with `repeat_months` | allow, refuse | **refuse** (422 `installments`) | A repeated parcelamento is two features in one field. |
 | Kinds | any, `bill`/`daily` only | **any on the server; the web offers `Parcelar` on Saída and Diário only** | No rule needs to refuse income; the UI keeps the offer where a purchase lives. |
 | Where the preview runs | server dry-run endpoint, client | **client**: `withDraft(forecast.days, rows, bounds)` in cents | ux §4: no round-trip per keystroke; nothing is written. Same split vectors tested on both sides. |
@@ -20,26 +20,27 @@ Epic SOL-40, sprint 3, card 3 of 3, built on SOL-51's `GET /api/forecast` and `m
 `CreateTransaction` gains, after `repeat_months`:
 
 ```rust
-/// 2 to 60 monthly parcelas splitting `amount`, the total: each `amount / n` half-even to cents,
+/// 2 to 60 monthly parcelas splitting `amount`, the total: each `amount / n` truncated to cents,
 /// the last takes the remainder (D16); dated like `repeat_months`; not with `repeat_months`.
 #[serde(default)]
 #[schema(minimum = 2, maximum = 60)]
 pub installments: Option<i16>,
 ```
 
-`POST /api/transactions` 201 body: the first parcela (`amount` = parcela 1, `series` `{position: 1, total: n}`). New 422 cases, all `field: "installments"`: not 2..60 (`must be 2 to 60`), with `repeat_months` (`cannot be combined with repeat_months`), a parcela at or below zero (`must leave every installment above zero`). `UpdateTransaction` unchanged (no parcelar on edit).
+`POST /api/transactions` 201 body: the first parcela (`amount` = parcela 1, `series` `{position: 1, total: n}`). New 422 cases, all `field: "installments"`: not 2..60 (`must be 2 to 60`), with `repeat_months` (`cannot be combined with repeat_months`), a parcela at zero, i.e. total under n cents (`must leave every installment above zero`). `UpdateTransaction` unchanged (no parcelar on edit).
 
-Split (`transactions::domain::installment_amounts`, `shared/lib/installments.ts`): `each = round_half_even(total / n, 2)`; parcelas 1..n−1 = `each`; parcela n = `total − each × (n − 1)`.
+Split (`transactions::domain::installment_amounts`, `shared/lib/installments.ts`): `each = truncate(total / n, 2)` (toward zero; `Math.trunc(totalCents / n)` in the web); parcelas 1..n−1 = `each`; parcela n = `total − each × (n − 1)`, never below `each`. Refused only when `each` is 0.00.
 
 | total, n | parcelas | |
 |---|---|---|
 | 1000.01, 10 | 9 × 100.00 + 100.01 | rule 3 example |
 | 100.00, 3 | 2 × 33.33 + 33.34 | |
 | 1000.00, 12 | 11 × 83.33 + 83.37 | |
-| 0.05, 2 | 0.02 + 0.03 | 0.025 → 0.02 (half-even) |
-| 0.06, 4 | 0.02 × 3 + 0.00 | refused |
+| 0.05, 2 | 0.02 + 0.03 | 0.025 → 0.02 (truncated) |
+| 0.06, 4 | 0.01 × 3 + 0.03 | accepted |
+| 10.00, 60 | 59 × 0.16 + 0.56 | truncation keeps the last ≥ the others |
+| 0.05, 6 | 0.00 × 5 + 0.05 | refused: `each` is 0.00 |
 | 0.01, 2 | 0.00 + 0.01 | refused |
-| 10.00, 60 | 59 × 0.17 + -0.03 | refused: half-even rounds each up, the remainder goes negative (only when a parcela is under ~R$ 0,30; rule 3 as finance wrote it) |
 
 Dates: `repeat_dates` (D14): the start day in each following month, clamped to its last day.
 
@@ -47,7 +48,7 @@ Dates: `repeat_dates` (D14): the start day in each following month, clamped to i
 
 - First row of the form, above the kind control: switch `Simular` (same row style as `Repetir`), helper `Veja o efeito antes de lançar.` Off by default; editing never shows it.
 - `Parcelar` switch below `Repetir` (Saída and Diário only); turning one on turns the other off. Shares the presets (`2x 3x 6x 12x Outro`, default 12); toggle `aria-label="Quantas parcelas"`, custom input `aria-label="Parcelas"`, placeholder `De 2 a 60`, error `Escolha de 2 a 60 parcelas.`
-- Parcelar summary under the presets (amount valid): `10× R$ 100,00 · até ago 2027`; with a remainder `9× R$ 100,00 + R$ 100,01 na última · até ago 2027`; a parcela at zero → on submit `Valor pequeno demais para 4 parcelas.` (`role="alert"`).
+- Parcelar summary under the presets (amount valid): `10× R$ 100,00 · até ago 2027`; with a remainder `9× R$ 100,00 + R$ 100,01 na última · até ago 2027`; a parcela at zero (R$ 0,05 em 6x) → on submit `Valor pequeno demais para 6 parcelas.` (`role="alert"`).
 - Simular on: below Observação, region `Simulação` (`features/add-transaction/simulation.tsx`):
   - `ol aria-label="Próximos 7 dias"`: 7 forecast days from `max(first draft date, forecast's first day)`, each `DD/MM` + `TierPill size="sm"` (tier label) of the draft-applied balance;
   - verdict `p role="status"`: `Com essa compra, hoje vira Crítico` / `Com essa compra, dia 23 vira Crítico` (same month as today) / `Com essa compra, dia 23/12 vira Crítico` (another month) / `Essa compra não cria dia vermelho novo.` (red days already there, none added) / `Nenhum dia vermelho com essa compra.`;
@@ -77,7 +78,7 @@ Draft rows (`draftRows`, feature): `[draft.date, ...repeatDates(draft.date, n)]`
 ## Acceptance (forecast fixture `FORECAST`, today 10/11/2026, R$ 6.150,00 until 22/11)
 
 - Server: `{"amount":"1000.01","installments":10,"date":"2027-01-31"}` → 201 `amount` 100.00, series (1, 10); 2027-02 holds 100.00 on 2027-02-28; 2027-10 holds 100.01 on 2027-10-31; the ten amounts sum to 1000.01; 2027-11 empty.
-- Server: `installments` 1, 61, with `repeat_months: 3`, `amount 0.06` em 4x → 422 `installments`, nothing written.
+- Server: `installments` 1, 61, with `repeat_months: 3`, `amount 0.05` em 6x → 422 `installments`, nothing written; `amount 0.06` em 4x → 201 (0.01 × 3 + 0.03).
 - Simular, Saída R$ 6.700,00 hoje → `Com essa compra, hoje vira Crítico`; 7 pills from 10/11, the first `Crítico`.
 - Simular, Diário R$ 100,00 on 24/11 → `Essa compra não cria dia vermelho novo.`
 - Simular on a flat forecast (R$ 1.842,10), Saída R$ 50,00 → `Nenhum dia vermelho com essa compra.`
