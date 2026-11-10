@@ -158,11 +158,14 @@ const TransactionForm = ({
             <span id="transaction-simulate" className="font-medium text-base">
               Simular
             </span>
-            <span className="text-muted-foreground text-xs">Veja o efeito antes de lançar.</span>
+            <span id="transaction-simulate-help" className="text-muted-foreground text-xs">
+              Veja o efeito antes de lançar.
+            </span>
           </span>
           <Switch
             id="transaction-simulate-switch"
             aria-labelledby="transaction-simulate"
+            aria-describedby="transaction-simulate-help"
             checked={draft.simulate}
             onCheckedChange={(simulate) => set({ simulate })}
           />
@@ -172,7 +175,9 @@ const TransactionForm = ({
         type="single"
         spacing={0}
         value={draft.kind}
-        onValueChange={(kind: Kind | "") => kind && set({ kind, category: undefined })}
+        onValueChange={(kind: Kind | "") =>
+          kind && set({ kind, category: undefined, installments: draft.installments && kind !== "income" })
+        }
         aria-label="Tipo"
         className="grid w-full grid-cols-3 rounded-2xl bg-muted p-1"
       >
@@ -328,7 +333,7 @@ const TransactionForm = ({
         <ScopeRadio legend="Aplicar em" series={series} value={draft.scope} onChange={(scope) => set({ scope })} />
       )}
 
-      {draft.simulate && <Simulation rows={rows} />}
+      {draft.simulate && <Simulation rows={rows} countInvalid={Boolean(amount) && counted && !monthsValid} />}
 
       {draft.simulate ? (
         <div className="flex flex-col gap-2">

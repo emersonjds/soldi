@@ -51,9 +51,9 @@ Dates: `repeat_dates` (D14): the start day in each following month, clamped to i
 - Parcelar summary under the presets (amount valid): `10× R$ 100,00 · até ago 2027`; with a remainder `9× R$ 100,00 + R$ 100,01 na última · até ago 2027`; a parcela at zero (R$ 0,05 em 6x) → on submit `Valor pequeno demais para 6 parcelas.` (`role="alert"`).
 - Simular on: below Observação, region `Simulação` (`features/add-transaction/simulation.tsx`):
   - `ol aria-label="Próximos 7 dias"`: 7 forecast days from `max(first draft date, forecast's first day)`, each `DD/MM` + `TierPill size="sm"` (tier label) of the draft-applied balance;
-  - verdict `p role="status"`: `Com essa compra, hoje vira Crítico` / `Com essa compra, dia 23 vira Crítico` (same month as today) / `Com essa compra, dia 23/12 vira Crítico` (another month) / `Essa compra não cria dia vermelho novo.` (red days already there, none added) / `Nenhum dia vermelho com essa compra.`;
+  - verdict `p role="status"`: `Com essa compra, hoje vira Crítico` / `Com essa compra, dia 23 vira Crítico` (same month as today) / `Com essa compra, dia 23/12 vira Crítico` (another month) / `Essa compra não cria dia vermelho novo.` (red days already there, none added) / `Nenhum dia vermelho com essa compra.`; for an Entrada every line reads `esse lançamento` instead (`Com esse lançamento, …` / `Esse lançamento não cria dia vermelho novo.` / `Nenhum dia vermelho com esse lançamento.`); the status is mounted with the region (empty while loading) so the first verdict is announced;
   - draft over more than one month (Repetir or Parcelar): `h3` `Meses com essa compra` + `MonthChips` of the 12 months, static (no tap);
-  - no valid amount yet: `Digite um valor para simular.`; loading: 7 `Skeleton` pills; error: `Não foi possível carregar.` + `Tentar de novo`.
+  - no valid amount yet: `Digite um valor para simular.`; valid amount but Repetir/Parcelar count outside 2..60: `Escolha de 2 a 60 parcelas para simular.`; loading: 7 `Skeleton` pills; error: `Não foi possível carregar.` + `Tentar de novo`.
   - Buttons, stacked full width: `Lançar de verdade` (`BrandButton`, submit — exactly today's Salvar) and `Descartar` (ghost, closes the sheet, nothing written, no confirm).
 - Simular off: `Salvar`, as today.
 - Toast after a parcelamento: `10 parcelas lançadas` (repeat keeps `N lançamentos criados`, single keeps `Lançado`).
@@ -67,12 +67,13 @@ Draft rows (`draftRows`, feature): `[draft.date, ...repeatDates(draft.date, n)]`
 |---|---|
 | Simular off | unchanged (Salvar) |
 | Simular on, no amount | `Digite um valor para simular.`; buttons shown, submit validates as today |
+| Simular on, count outside 2..60 | `Escolha de 2 a 60 parcelas para simular.` |
 | Forecast loading / error | skeleton / `Não foi possível carregar.` + `Tentar de novo`; `Lançar de verdade` still works |
 | Draft turns a day red | 7 pills recolored + `Com essa compra, dia 23 vira Crítico` |
 | Already red ahead, draft adds none | `Essa compra não cria dia vermelho novo.` |
 | All clear | `Nenhum dia vermelho com essa compra.` |
 | Parcelar / Repetir on | + `Meses com essa compra` chips |
-| Date after the horizon | 7-day list empty → hidden; verdict `Nenhum dia vermelho com essa compra.` |
+| Date after the horizon | 7-day list empty → hidden; verdict `Nenhum dia vermelho com essa compra.`, even with red days ahead |
 | Lançar de verdade | posts once, closes, toast; Descartar posts nothing |
 
 ## Acceptance (forecast fixture `FORECAST`, today 10/11/2026, R$ 6.150,00 until 22/11)

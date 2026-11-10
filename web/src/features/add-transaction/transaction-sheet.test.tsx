@@ -517,6 +517,33 @@ describe("TransactionSheet", () => {
     expect(screen.queryByRole("switch", { name: "Parcelar" })).not.toBeInTheDocument();
   });
 
+  it("describes Simular with its helper", async () => {
+    setup();
+    expect(await screen.findByRole("switch", { name: "Simular" })).toHaveAccessibleDescription(
+      "Veja o efeito antes de lançar.",
+    );
+  });
+
+  it("asks for 2 to 60 parcelas to simulate when the count is missing", async () => {
+    setup({}, simulated());
+    await userEvent.click(await screen.findByRole("switch", { name: "Simular" }));
+    await userEvent.click(screen.getByLabelText("Valor"));
+    await userEvent.keyboard("300,00");
+    await userEvent.click(screen.getByRole("switch", { name: "Parcelar" }));
+    await userEvent.click(screen.getByRole("radio", { name: "Outro" }));
+    const simulation = screen.getByRole("region", { name: "Simulação" });
+    expect(simulation).toHaveTextContent("Escolha de 2 a 60 parcelas para simular.");
+    expect(simulation).not.toHaveTextContent("Digite um valor para simular.");
+  });
+
+  it("drops Parcelar on Entrada", async () => {
+    setup();
+    await userEvent.click(await screen.findByRole("switch", { name: "Parcelar" }));
+    await userEvent.click(screen.getByRole("radio", { name: "Entrada" }));
+    await userEvent.click(screen.getByRole("radio", { name: "Saída" }));
+    expect(screen.getByRole("switch", { name: "Parcelar" })).not.toBeChecked();
+  });
+
   it("offers no Simular nor Parcelar when editing", async () => {
     setup({ transaction: MERCADO_ROW });
     await screen.findByRole("dialog", { name: "Editar lançamento" });
