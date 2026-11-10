@@ -63,18 +63,20 @@ const Footer = ({ bills }: { bills: BillOfMonth[] }) => {
 
 // The pill draws 32px tall like the design; the ::after stretches the touch target to 44px.
 const pill =
-  "relative inline-flex h-8 shrink-0 items-center gap-1 rounded-full px-3 font-semibold text-sm transition-colors after:absolute after:inset-x-0 after:-inset-y-1.5 focus-visible:outline-2 focus-visible:outline-ring lg:h-10 lg:px-4 lg:text-base";
+  "relative inline-flex h-8 shrink-0 items-center gap-1 rounded-full px-3 font-semibold text-sm transition-colors after:absolute after:inset-x-0 after:-inset-y-1.5 focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-60 lg:h-10 lg:px-4 lg:text-base";
 
 const Pill = ({
   bill,
   label,
   onPay,
   onUnpay,
+  busy,
 }: {
   bill: BillOfMonth;
   label: string;
   onPay: () => void;
   onUnpay: () => void;
+  busy: boolean;
 }) => {
   if (bill.paid)
     return (
@@ -82,6 +84,7 @@ const Pill = ({
         type="button"
         aria-label={`Pago: desfazer ${label}`}
         onClick={onUnpay}
+        disabled={busy}
         className={cn(pill, "bg-income-soft text-income")}
       >
         <Check className="size-4" aria-hidden />
@@ -94,6 +97,7 @@ const Pill = ({
         type="button"
         aria-label={`Pagar ${label}, vencida`}
         onClick={onPay}
+        disabled={busy}
         className={cn(pill, "bg-expense/15 text-expense")}
       >
         <TriangleAlert className="hidden size-4 sm:block" aria-hidden />
@@ -105,6 +109,7 @@ const Pill = ({
       type="button"
       aria-label={`Pagar ${label}`}
       onClick={onPay}
+      disabled={busy}
       className={cn(pill, "bg-secondary text-primary hover:bg-secondary/70")}
     >
       Pagar
@@ -122,12 +127,14 @@ const Row = ({
   onPay,
   onUnpay,
   onAdjust,
+  busy,
 }: {
   bill: BillOfMonth;
   month: string;
   onPay: () => void;
   onUnpay: () => void;
   onAdjust: () => void;
+  busy: boolean;
 }) => {
   const currency = useCurrency();
   const late = carriedFrom(bill, month);
@@ -170,7 +177,7 @@ const Row = ({
           {amount}
         </button>
       )}
-      <Pill bill={bill} label={label} onPay={onPay} onUnpay={onUnpay} />
+      <Pill bill={bill} label={label} onPay={onPay} onUnpay={onUnpay} busy={busy} />
     </li>
   );
 };
@@ -198,7 +205,7 @@ export const BillsOfMonth = ({ view, className }: { view: Schemas["MonthView"]; 
 
   const undo = (bill: BillOfMonth) =>
     unpay.mutate(
-      { billId: bill.bill_id, month: view.month },
+      { billId: bill.bill_id, month: bill.due_date.slice(0, 7) },
       {
         onSuccess: () => toast("Pagamento desfeito"),
         onError: () => toast.error("Não foi possível desfazer o pagamento."),
@@ -280,6 +287,7 @@ export const BillsOfMonth = ({ view, className }: { view: Schemas["MonthView"]; 
                   onPay={() => payNow(bill)}
                   onUnpay={() => undo(bill)}
                   onAdjust={() => adjust(bill)}
+                  busy={pay.isPending || unpay.isPending}
                 />
               ))}
             </ul>

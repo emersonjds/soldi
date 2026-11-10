@@ -20,6 +20,7 @@ const PayForm = ({ bill, month, onPay }: { bill: BillOfMonth; month: string; onP
   const [date, setDate] = useState(payDateFor(month, bill.due_date));
   const [submitted, setSubmitted] = useState(false);
   const amount = positiveAmount(input);
+  const [year, number] = month.split("-").map(Number);
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -31,7 +32,13 @@ const PayForm = ({ bill, month, onPay }: { bill: BillOfMonth; month: string; onP
   return (
     <form noValidate onSubmit={submit} className="flex flex-col gap-6">
       <HeroAmount id="pay-amount" value={input} onChange={setInput} invalid={submitted && !amount} />
-      <DateChips legend="Quando pagou?" value={date} onChange={setDate} />
+      <DateChips
+        legend="Quando pagou?"
+        value={date}
+        onChange={setDate}
+        min={`${month}-01`}
+        max={`${month}-${new Date(year, number, 0).getDate()}`}
+      />
       <BrandButton type="submit">Confirmar</BrandButton>
     </form>
   );

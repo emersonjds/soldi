@@ -220,6 +220,52 @@ describe("Contas do Mês", () => {
     expect(sheet).toHaveTextContent("Conta de outubro: a data do pagamento fica em outubro.");
   });
 
+  it("ticks October's rent at once in November and ignores a second tap while paying", async () => {
+    show([CARRIED_ALUGUEL, ...BILLS_OF_MONTH]);
+    await loaded();
+    const sent: Request[] = [];
+    const stubbed = globalThis.fetch;
+    vi.stubGlobal("fetch", (request: Request) => {
+      if (request.method === "GET") return stubbed(request);
+      sent.push(request);
+      return new Promise<Response>(() => undefined);
+    });
+
+    await userEvent.click(within(rowOf("Aluguel Residencial de outubro")).getByRole("button", { name: /^Pagar/ }));
+    const paid = await within(rowOf("Aluguel Residencial de outubro")).findByRole("button", {
+      name: "Pago: desfazer Aluguel Residencial de outubro",
+    });
+    expect(paid).toBeDisabled();
+    await userEvent.click(paid);
+    await userEvent.click(within(rowOf("Aluguel Residencial")).getByRole("button", { name: /^Pagar/ }));
+
+    expect(sent.map((request) => `${request.method} ${new URL(request.url).search}`)).toEqual(["POST ?month=2026-10"]);
+  });
+
+  it("keeps an October payment inside October: no Hoje or Ontem, dated on its due day", async () => {
+    const { requests } = show([CARRIED_ALUGUEL, ...BILLS_OF_MONTH], {
+      [`POST /api/bills/${BILL_ALUGUEL.id}/pay`]: { status: 201, body: PAYMENT },
+    });
+    await loaded();
+
+    await userEvent.click(
+      within(rowOf("Aluguel Residencial de outubro")).getByRole("button", { name: /ajustar pagamento/ }),
+    );
+    const sheet = await screen.findByRole("dialog", { name: "Pagar Aluguel Residencial" });
+    expect(within(sheet).queryByRole("button", { name: "Hoje" })).not.toBeInTheDocument();
+    expect(within(sheet).queryByRole("button", { name: "Ontem" })).not.toBeInTheDocument();
+    const date = within(sheet).getByLabelText("Outra data");
+    expect(date).toHaveValue("2026-10-10");
+    expect(date).toHaveAttribute("min", "2026-10-01");
+    expect(date).toHaveAttribute("max", "2026-10-31");
+    await userEvent.click(within(sheet).getByRole("button", { name: "Confirmar" }));
+
+    await waitFor(() => expect(requests.some((request) => request.method === "POST")).toBe(true));
+    const post = requests.find((request) => request.method === "POST");
+    expect(new URL(post?.url ?? "").searchParams.get("month")).toBe("2026-10");
+    expect(await post?.json()).toMatchObject({ date: "2026-10-10" });
+  });
+
   it("names the year of a carried month from another year", async () => {
     show([{ ...CARRIED_ALUGUEL, due_date: "2025-12-10" }, ...BILLS_OF_MONTH]);
     await loaded();
