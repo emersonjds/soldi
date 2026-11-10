@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 
 import { useMe } from "@/entities/user/session";
+import { DeleteAccountButton } from "@/features/delete-account/delete-account-button";
 import { PasswordForm } from "@/features/edit-account/password-form";
 import { ProfileForm } from "@/features/edit-account/profile-form";
 import { SignOutButton } from "@/features/sign-out/sign-out-button";
@@ -45,6 +46,9 @@ const ContaPage = () => {
                 <SignOutEverywhereButton />
               </li>
             </ul>
+          </Section>
+          <Section title="Excluir conta">
+            <DeleteAccountButton />
           </Section>
         </>
       ) : (

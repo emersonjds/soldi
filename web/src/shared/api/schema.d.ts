@@ -302,7 +302,7 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        delete?: never;
+        delete: operations["delete_me"];
         options?: never;
         head?: never;
         patch: operations["update_me"];
@@ -703,6 +703,10 @@ export interface components {
             is_today: boolean;
             tier: components["schemas"]["Tier"];
             withdrawn: string;
+        };
+        DeleteAccount: {
+            /** @description The current password. */
+            password: string;
         };
         /** @description How many of the caller's entries a period deletion removed. */
         DeletedTransactions: {
@@ -2032,6 +2036,54 @@ export interface operations {
             };
             /** @description `import-has-errors` when the preview listed errors and `skip_errors` is not true; `opening_date` after the earliest imported date; `opening_balance` with more than two places; `palette-full` when a new `Importado` category finds all 24 colors taken in its kind */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    delete_me: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeleteAccount"];
+            };
+        };
+        responses: {
+            /** @description Account and every row of it deleted; cookie cleared. The e-mail can sign up again */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description `wrong-password`; nothing deleted */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Rate limited with the password-change budget; wait `Retry-After` seconds */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };

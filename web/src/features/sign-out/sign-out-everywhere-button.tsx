@@ -15,9 +15,8 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { useLeave } from "@/entities/user/session";
 import { api, okOrThrow } from "@/shared/api/client";
-
-import { useLeave } from "./sign-out-button";
 
 /** Ends every session of the user, this one included, after a confirmation. */
 export const SignOutEverywhereButton = () => {
