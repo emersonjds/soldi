@@ -12,6 +12,9 @@ pub fn check(input: CreateTransaction) -> Result<CreateTransaction, AppError> {
     if input.amount <= Decimal::ZERO {
         return Err(AppError::invalid("amount", "must be greater than zero"));
     }
+    if !(2000..=2100).contains(&input.date.year()) {
+        return Err(AppError::invalid("date", "must be from 2000 to 2100"));
+    }
     let amount = check_money("amount", input.amount)?;
     let note = input.note.as_deref().map(check_note).transpose()?.flatten();
     input.repeat_months.map(check_repeat).transpose()?;

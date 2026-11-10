@@ -97,6 +97,9 @@ pub async fn create(
     let id = repo::insert(&mut tx, user.id, &first, None, None, series_id).await?;
     if let (Some(count), Some(series_id)) = (count, series_id) {
         let dates = domain::repeat_dates(first.date, count);
+        if dates.len() + 1 != amounts.len() {
+            return Err(AppError::invalid("date", "must leave room for every month"));
+        }
         repo::insert_copies(&mut tx, user.id, &first, series_id, &dates, &amounts[1..]).await?;
     }
     tx.commit().await?;
@@ -148,7 +151,8 @@ pub async fn update(
         return Err(AppError::NotFound);
     }
     if let (Scope::Following, Some(series)) = (scope, &current.series) {
-        repo::update_following(&mut tx, user.id, series.id, current.date, &next).await?;
+        let amount = (next.amount != current.amount).then_some(next.amount);
+        repo::update_following(&mut tx, user.id, series.id, current.date, &next, amount).await?;
     }
     if let Some(months) = next.repeat_months {
         let series_id = Uuid::new_v4();

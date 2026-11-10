@@ -228,22 +228,24 @@ pub async fn set_series(
     Ok(result.rows_affected() == 1)
 }
 
-/// R6: the series' members dated after `from` take `entry`'s amount, kind, category and note.
+/// R6: the series' members dated after `from` take `entry`'s kind, category and note, and
+/// `amount` when given; without it each keeps its own (parcelas differ by the remainder).
 pub async fn update_following(
     conn: &mut PgConnection,
     user_id: Uuid,
     series_id: Uuid,
     from: NaiveDate,
     entry: &CreateTransaction,
+    amount: Option<Decimal>,
 ) -> Result<(), sqlx::Error> {
     sqlx::query!(
         "UPDATE transactions
-         SET amount = $4, kind = $5, category_id = $6, note = $7, updated_at = now()
+         SET amount = COALESCE($4, amount), kind = $5, category_id = $6, note = $7, updated_at = now()
          WHERE user_id = $1 AND series_id = $2 AND date > $3",
         user_id,
         series_id,
         from,
-        entry.amount,
+        amount,
         entry.kind.as_str(),
         entry.category_id,
         entry.note
