@@ -244,6 +244,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/forecast": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_forecast"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/health": {
         parameters: {
             query?: never;
@@ -729,6 +745,22 @@ export interface components {
         FieldError: {
             field: string;
             message: string;
+        };
+        /**
+         * @description `days` run from today (the opening date, when later) through the last day of the 11th month
+         *     after today's, São Paulo (D13); empty when the opening date is past that.
+         */
+        Forecast: {
+            days: components["schemas"]["ForecastDay"][];
+            /** Format: date */
+            today: string;
+        };
+        /** @description One day ahead (D16): the balance with every unpaid bill landed, and its tier. */
+        ForecastDay: {
+            /** Format: date */
+            date: string;
+            projected_balance: string;
+            projected_tier: components["schemas"]["Tier"];
         };
         Health: {
             status: string;
@@ -1922,6 +1954,34 @@ export interface operations {
             };
             /** @description A bad field, `insufficient-cofrinho` above the balance, `before-opening-date`, or `not-a-cofrinho` */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    get_forecast: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Every day from today (the opening date, when later) to the end of the 11th month after today's, with every unpaid bill landed (D16, D17) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Forecast"];
+                };
+            };
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };

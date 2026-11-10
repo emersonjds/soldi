@@ -1130,6 +1130,35 @@
         }
       }
     },
+    "/api/forecast": {
+      "get": {
+        "tags": [
+          "months"
+        ],
+        "operationId": "get_forecast",
+        "responses": {
+          "200": {
+            "description": "Every day from today (the opening date, when later) to the end of the 11th month after today's, with every unpaid bill landed (D16, D17)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Forecast"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/health": {
       "get": {
         "tags": [
@@ -2772,6 +2801,47 @@
           },
           "message": {
             "type": "string"
+          }
+        }
+      },
+      "Forecast": {
+        "type": "object",
+        "description": "`days` run from today (the opening date, when later) through the last day of the 11th month\nafter today's, São Paulo (D13); empty when the opening date is past that.",
+        "required": [
+          "today",
+          "days"
+        ],
+        "properties": {
+          "days": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ForecastDay"
+            }
+          },
+          "today": {
+            "type": "string",
+            "format": "date"
+          }
+        }
+      },
+      "ForecastDay": {
+        "type": "object",
+        "description": "One day ahead (D16): the balance with every unpaid bill landed, and its tier.",
+        "required": [
+          "date",
+          "projected_balance",
+          "projected_tier"
+        ],
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date"
+          },
+          "projected_balance": {
+            "type": "string"
+          },
+          "projected_tier": {
+            "$ref": "#/components/schemas/Tier"
           }
         }
       },

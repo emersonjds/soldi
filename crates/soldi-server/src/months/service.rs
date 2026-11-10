@@ -1,5 +1,5 @@
 use chrono::Datelike;
-use soldi_types::months::MonthView;
+use soldi_types::months::{Forecast, MonthView};
 use sqlx::PgPool;
 
 use super::domain::{self, MonthInput};
@@ -32,5 +32,24 @@ pub async fn get(pool: &PgPool, user: &CurrentUser, month: &str) -> Result<Month
         payments,
         saved,
         today: crate::today_sao_paulo(),
+    }))
+}
+
+/// D16: 4 queries whatever the horizon.
+pub async fn forecast(pool: &PgPool, user: &CurrentUser) -> Result<Forecast, AppError> {
+    let today = crate::today_sao_paulo();
+    let mut conn = pool.acquire().await?;
+    let settings = settings::repo::find(&mut conn, user.id).await?;
+    let opening = settings.opening_date;
+    let to = domain::horizon_end(today);
+    let sums = repo::day_sums(&mut conn, user.id, opening, to).await?;
+    let bills = repo::bills(&mut conn, user.id).await?;
+    let payments = repo::payments(&mut conn, user.id, domain::first_of(opening), to).await?;
+    Ok(domain::forecast(domain::ForecastInput {
+        settings,
+        sums,
+        bills,
+        payments,
+        today,
     }))
 }

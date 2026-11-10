@@ -1,7 +1,7 @@
 use axum::Json;
 use axum::extract::State;
 use soldi_types::Problem;
-use soldi_types::months::MonthView;
+use soldi_types::months::{Forecast, MonthView};
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
 
@@ -11,7 +11,9 @@ use crate::error::AppError;
 use crate::extract::{CurrentUser, PathParams};
 
 pub fn router() -> OpenApiRouter<AppState> {
-    OpenApiRouter::new().routes(routes!(get_month))
+    OpenApiRouter::new()
+        .routes(routes!(get_month))
+        .routes(routes!(get_forecast))
 }
 
 #[utoipa::path(get, path = "/api/months/{month}", tag = "months",
@@ -26,4 +28,15 @@ pub async fn get_month(
     PathParams(month): PathParams<String>,
 ) -> Result<Json<MonthView>, AppError> {
     Ok(Json(service::get(&state.pool, &user, &month).await?))
+}
+
+#[utoipa::path(get, path = "/api/forecast", tag = "months",
+    responses(
+        (status = 200, body = Forecast, description = "Every day from today (the opening date, when later) to the end of the 11th month after today's, with every unpaid bill landed (D16, D17)"),
+        (status = 401, body = Problem, content_type = "application/problem+json")))]
+pub async fn get_forecast(
+    State(state): State<AppState>,
+    user: CurrentUser,
+) -> Result<Json<Forecast>, AppError> {
+    Ok(Json(service::forecast(&state.pool, &user).await?))
 }
