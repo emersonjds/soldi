@@ -67,10 +67,16 @@ pub async fn sign_in(
     peer: Peer,
     JsonBody(input): JsonBody<SignIn>,
 ) -> Result<impl IntoResponse, AppError> {
+    let email = input.email.trim();
+    if email.len() > domain::MAX_EMAIL_BYTES {
+        return Err(AppError::invalid("email", "must be an email address"));
+    }
+    let email = email.to_lowercase();
     let ip = client_ip(&headers, peer);
-    let email = input.email.trim().to_lowercase();
+    let email_ip = ip.as_ref().map(|ip| format!("{ip} {email}"));
     state.limiter.check(&[
         (limits::SIGN_IN_IP, ip),
+        (limits::SIGN_IN_EMAIL_IP, email_ip),
         (limits::SIGN_IN_EMAIL, Some(email)),
     ])?;
     let (user, session) = service::sign_in(&state.pool, input).await?;

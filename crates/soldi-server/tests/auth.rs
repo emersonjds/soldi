@@ -499,18 +499,24 @@ async fn assert_rate_limited(response: axum::response::Response, window_seconds:
 }
 
 #[sqlx::test]
-async fn the_eleventh_sign_in_for_one_email_is_limited_without_touching_the_database(pool: PgPool) {
+async fn one_email_gets_ten_sign_ins_per_ip_and_fifty_overall_without_touching_the_database(
+    pool: PgPool,
+) {
     let app = TestApp::anonymous(pool.clone());
     app.another_user("ana@example.com").await;
+    let attempt = |from: String| {
+        app.send(forwarded(
+            sign_in_request("ana@example.com", "wrong horse"),
+            &from,
+        ))
+    };
     for _ in 0..10 {
-        let response = app
-            .send(forwarded(
-                sign_in_request("ana@example.com", "wrong horse"),
-                "203.0.113.1",
-            ))
-            .await;
-        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(
+            attempt("203.0.113.1".into()).await.status(),
+            StatusCode::UNAUTHORIZED
+        );
     }
+    assert_rate_limited(attempt("203.0.113.1".into()).await, 900).await;
     let other_email = app
         .send(forwarded(
             sign_in_request("bia@example.com", "wrong horse"),
@@ -518,16 +524,42 @@ async fn the_eleventh_sign_in_for_one_email_is_limited_without_touching_the_data
         ))
         .await;
     assert_eq!(other_email.status(), StatusCode::UNAUTHORIZED);
+    for ip in 2..=5 {
+        for _ in 0..10 {
+            let response = attempt(format!("203.0.113.{ip}")).await;
+            assert_eq!(response.status(), StatusCode::UNAUTHORIZED, "{ip}");
+        }
+    }
 
     pool.close().await;
     let response = app
         .send(forwarded(
             sign_in_request(" ANA@Example.com ", PASSWORD),
-            "203.0.113.2",
+            "203.0.113.6",
         ))
         .await;
 
     assert_rate_limited(response, 900).await;
+}
+
+#[sqlx::test]
+async fn an_email_over_254_bytes_is_refused_before_spending_the_ip_budget(pool: PgPool) {
+    let app = TestApp::anonymous(pool);
+    let long = format!("{}@example.com", "a".repeat(243));
+    assert_eq!(long.len(), 255);
+    for _ in 0..21 {
+        let request = forwarded(sign_in_request(&long, "wrong horse"), "203.0.113.1");
+        let response = app.send(request).await;
+        assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+        let problem = body_json(response).await;
+        assert_eq!(problem["errors"][0]["field"], "email");
+    }
+
+    let request = forwarded(
+        sign_in_request("ana@example.com", "wrong horse"),
+        "203.0.113.1",
+    );
+    assert_eq!(app.send(request).await.status(), StatusCode::UNAUTHORIZED);
 }
 
 #[sqlx::test]
