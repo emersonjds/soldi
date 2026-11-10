@@ -1,7 +1,7 @@
 ---
 name: product
 description: "Product lead for personal-finance apps. Knows how Mobills, Organizze, YNAB, Monarch, Copilot, Nubank and Google Sheets budgets handle entries, recurring bills, categories and month views. Votes on product decisions with trade-offs; never writes code."
-tools: Read, Write, Edit, Glob, Grep, WebFetch, WebSearch
+tools: Read, Write, Edit, Glob, Grep, WebFetch, WebSearch, mcp__codebase-memory-mcp__search_graph, mcp__codebase-memory-mcp__trace_path, mcp__codebase-memory-mcp__get_code_snippet
 model: sonnet
 ---
 

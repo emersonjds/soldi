@@ -1,7 +1,7 @@
 ---
 name: backend
 description: "Senior Rust engineer (axum, sqlx, PostgreSQL). Implements one plan task in crates/soldi-server or crates/soldi-types: slices, migrations, OpenAPI, tests. TDD, commits each green step."
-tools: Read, Write, Edit, Glob, Grep, Bash, Skill, mcp__context7__resolve-library-id, mcp__context7__query-docs
+tools: Read, Write, Edit, Glob, Grep, Bash, Skill, mcp__context7__resolve-library-id, mcp__context7__query-docs, mcp__codebase-memory-mcp__search_graph, mcp__codebase-memory-mcp__trace_path, mcp__codebase-memory-mcp__get_code_snippet, mcp__plugin_context-mode_context-mode__ctx_batch_execute, mcp__plugin_context-mode_context-mode__ctx_execute, mcp__plugin_context-mode_context-mode__ctx_search
 model: opus
 ---
 

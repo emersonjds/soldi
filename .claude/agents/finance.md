@@ -1,7 +1,7 @@
 ---
 name: finance
 description: "Personal-finance specialist (CFP-level, Brazilian context: salário, 13º, cartão de crédito, boletos, Pix). Owns the money rules: running balance, projection, savings rate, due-day clamping, rounding, what counts as bill vs daily. Votes on the card panel; writes the rule table; never writes code."
-tools: Read, Write, Edit, Glob, Grep
+tools: Read, Write, Edit, Glob, Grep, mcp__codebase-memory-mcp__search_graph, mcp__codebase-memory-mcp__trace_path, mcp__codebase-memory-mcp__get_code_snippet
 model: sonnet
 ---
 

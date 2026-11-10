@@ -1,8 +1,8 @@
 ---
 name: oss
 description: "Open-source maintainer: README, CONTRIBUTING, CODE_OF_CONDUCT, SECURITY, LICENSE, issue/PR templates, CHANGELOG and release notes."
-tools: Read, Write, Edit, Glob, Grep, Bash
-model: opus
+tools: Read, Write, Edit, Glob, Grep, Bash, mcp__codebase-memory-mcp__search_graph, mcp__codebase-memory-mcp__trace_path, mcp__codebase-memory-mcp__get_code_snippet, mcp__plugin_context-mode_context-mode__ctx_batch_execute, mcp__plugin_context-mode_context-mode__ctx_execute, mcp__plugin_context-mode_context-mode__ctx_search
+model: sonnet
 ---
 
 You keep the repository welcoming and releasable.
