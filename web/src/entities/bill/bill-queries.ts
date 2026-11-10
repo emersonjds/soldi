@@ -1,6 +1,5 @@
 import { type QueryClient, queryOptions, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { monthQuery } from "@/entities/month/month-query";
 import { api, dataOrThrow, okOrThrow, type Schemas } from "@/shared/api/client";
 import { todayISO } from "@/shared/lib/date";
 
@@ -59,24 +58,28 @@ export const useArchiveBill = () => {
 
 type Payment = { billId: string; month: string };
 
-/** Rewrites one row of the cached month and hands back how to undo it. */
+/** Rewrites one row in every cached month that shows it (a carried row sits in the next month too) and hands back how to undo it. */
 const patchRow = async (
   client: QueryClient,
   { billId, month }: Payment,
   patch: (row: BillOfMonth) => Partial<BillOfMonth>,
 ) => {
-  const { queryKey } = monthQuery(month);
-  await client.cancelQueries({ queryKey });
-  const previous = client.getQueryData(queryKey);
-  client.setQueryData(
-    queryKey,
+  const filters = { queryKey: ["month"] };
+  await client.cancelQueries(filters);
+  const previous = client.getQueriesData<Schemas["MonthView"]>(filters);
+  client.setQueriesData<Schemas["MonthView"]>(
+    filters,
     (view) =>
       view && {
         ...view,
-        bills_of_month: view.bills_of_month.map((row) => (row.bill_id === billId ? { ...row, ...patch(row) } : row)),
+        bills_of_month: view.bills_of_month.map((row) =>
+          row.bill_id === billId && row.due_date.startsWith(month) ? { ...row, ...patch(row) } : row,
+        ),
       },
   );
-  return () => client.setQueryData(queryKey, previous);
+  return () => {
+    for (const [queryKey, view] of previous) client.setQueryData(queryKey, view);
+  };
 };
 
 export const usePayBill = () => {

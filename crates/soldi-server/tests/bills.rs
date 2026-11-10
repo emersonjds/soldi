@@ -198,6 +198,43 @@ async fn patch_changes_the_given_fields_and_inactive_bills_leave_the_default_lis
     }
 }
 
+async fn active_since(pool: &PgPool) -> chrono::NaiveDate {
+    sqlx::query_scalar("SELECT active_since FROM recurring_bills")
+        .fetch_one(pool)
+        .await
+        .unwrap()
+}
+
+async fn set_active_since(pool: &PgPool, date: &str) {
+    sqlx::query("UPDATE recurring_bills SET active_since = $1::date")
+        .bind(date)
+        .execute(pool)
+        .await
+        .unwrap();
+}
+
+#[sqlx::test]
+async fn d13_a_bill_owes_from_today_when_created_or_resumed(pool: PgPool) {
+    let ana = TestApp::signed_in(pool.clone(), "ana@example.com").await;
+    let created = create(&ana, rent(category_id(&ana, "Aluguel").await)).await;
+    let uri = bill_uri(&created);
+    let today = soldi_server::today_sao_paulo();
+    let january: chrono::NaiveDate = "2026-01-01".parse().unwrap();
+    assert_eq!(active_since(&pool).await, today);
+    set_active_since(&pool, "2026-01-01").await;
+
+    ana.patch(&uri, json!({ "name": "Casa", "active": true }))
+        .await;
+    assert_eq!(active_since(&pool).await, january);
+    ana.patch(&uri, json!({ "active": false })).await;
+    assert_eq!(active_since(&pool).await, january);
+    let (status, resumed) = ana.patch(&uri, json!({ "active": true })).await;
+
+    assert_eq!(status, StatusCode::OK, "{resumed}");
+    assert_eq!(resumed["active"], true);
+    assert_eq!(active_since(&pool).await, today);
+}
+
 #[sqlx::test]
 async fn delete_archives_the_bill(pool: PgPool) {
     let ana = TestApp::signed_in(pool, "ana@example.com").await;

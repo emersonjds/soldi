@@ -22,7 +22,7 @@ pub async fn get(pool: &PgPool, user: &CurrentUser, month: &str) -> Result<Month
     let end = domain::month_end(month);
     let sums = repo::day_sums(&mut conn, user.id, opening, end).await?;
     let bills = repo::bills(&mut conn, user.id).await?;
-    let payments = repo::payments(&mut conn, user.id, month, end).await?;
+    let payments = repo::payments(&mut conn, user.id, domain::first_of(opening), end).await?;
     let saved = repo::saved(&mut conn, user.id, month, end).await?;
     Ok(domain::month_view(MonthInput {
         month,

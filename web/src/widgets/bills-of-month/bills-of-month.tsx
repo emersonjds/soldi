@@ -9,11 +9,12 @@ import { toast } from "sonner";
 
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { type BillOfMonth, payDateFor, usePayBill, useUnpayBill } from "@/entities/bill/bill-queries";
+import { billKey } from "@/entities/month/forecast-alert";
 import { PayBillSheet } from "@/features/pay-bill/pay-bill-sheet";
 import { cn } from "@/lib/utils";
 import type { Schemas } from "@/shared/api/client";
 import { useCurrency } from "@/shared/lib/currency";
-import { dayMonth, todayISO } from "@/shared/lib/date";
+import { dayMonth, monthName, todayISO } from "@/shared/lib/date";
 import { formatMoney } from "@/shared/lib/money";
 import { CategoryIcon } from "@/shared/ui/category-icon";
 import { Money } from "@/shared/ui/money";
@@ -62,15 +63,28 @@ const Footer = ({ bills }: { bills: BillOfMonth[] }) => {
 
 // The pill draws 32px tall like the design; the ::after stretches the touch target to 44px.
 const pill =
-  "relative inline-flex h-8 shrink-0 items-center gap-1 rounded-full px-3 font-semibold text-sm transition-colors after:absolute after:inset-x-0 after:-inset-y-1.5 focus-visible:outline-2 focus-visible:outline-ring lg:h-10 lg:px-4 lg:text-base";
+  "relative inline-flex h-8 shrink-0 items-center gap-1 rounded-full px-3 font-semibold text-sm transition-colors after:absolute after:inset-x-0 after:-inset-y-1.5 focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-60 lg:h-10 lg:px-4 lg:text-base";
 
-const Pill = ({ bill, onPay, onUnpay }: { bill: BillOfMonth; onPay: () => void; onUnpay: () => void }) => {
+const Pill = ({
+  bill,
+  label,
+  onPay,
+  onUnpay,
+  busy,
+}: {
+  bill: BillOfMonth;
+  label: string;
+  onPay: () => void;
+  onUnpay: () => void;
+  busy: boolean;
+}) => {
   if (bill.paid)
     return (
       <button
         type="button"
-        aria-label={`Pago: desfazer ${bill.name}`}
+        aria-label={`Pago: desfazer ${label}`}
         onClick={onUnpay}
+        disabled={busy}
         className={cn(pill, "bg-income-soft text-income")}
       >
         <Check className="size-4" aria-hidden />
@@ -81,8 +95,9 @@ const Pill = ({ bill, onPay, onUnpay }: { bill: BillOfMonth; onPay: () => void; 
     return (
       <button
         type="button"
-        aria-label={`Pagar ${bill.name}, vencida`}
+        aria-label={`Pagar ${label}, vencida`}
         onClick={onPay}
+        disabled={busy}
         className={cn(pill, "bg-expense/15 text-expense")}
       >
         <TriangleAlert className="hidden size-4 sm:block" aria-hidden />
@@ -92,8 +107,9 @@ const Pill = ({ bill, onPay, onUnpay }: { bill: BillOfMonth; onPay: () => void; 
   return (
     <button
       type="button"
-      aria-label={`Pagar ${bill.name}`}
+      aria-label={`Pagar ${label}`}
       onClick={onPay}
+      disabled={busy}
       className={cn(pill, "bg-secondary text-primary hover:bg-secondary/70")}
     >
       Pagar
@@ -101,18 +117,28 @@ const Pill = ({ bill, onPay, onUnpay }: { bill: BillOfMonth; onPay: () => void; 
   );
 };
 
+/** The earlier month a carried row is still unpaid in (D17), or null for the viewed month's own row. */
+const carriedFrom = (bill: BillOfMonth, month: string) =>
+  bill.due_date.startsWith(month) ? null : monthName(bill.due_date, month);
+
 const Row = ({
   bill,
+  month,
   onPay,
   onUnpay,
   onAdjust,
+  busy,
 }: {
   bill: BillOfMonth;
+  month: string;
   onPay: () => void;
   onUnpay: () => void;
   onAdjust: () => void;
+  busy: boolean;
 }) => {
   const currency = useCurrency();
+  const late = carriedFrom(bill, month);
+  const label = late ? `${bill.name} de ${late}` : bill.name;
   const amount = (
     <Money
       amount={bill.amount}
@@ -121,7 +147,7 @@ const Row = ({
   );
   return (
     <li
-      aria-label={bill.name}
+      aria-label={label}
       className={cn(
         "-mx-2 flex min-h-16 items-center gap-2 rounded-xl px-2 py-2 sm:gap-3",
         bill.overdue && "bg-expense/10",
@@ -133,7 +159,7 @@ const Row = ({
         {bill.overdue ? (
           <span className="flex items-start gap-1 text-expense text-xs">
             <Clock className="mt-px size-3.5 shrink-0" aria-hidden />
-            Venceu dia {dayMonth(bill.due_date)}
+            {late ? `Venceu em ${late}` : `Venceu dia ${dayMonth(bill.due_date)}`}
           </span>
         ) : (
           <span className="text-muted-foreground text-xs">Vence dia {dayMonth(bill.due_date)}</span>
@@ -144,14 +170,14 @@ const Row = ({
       ) : (
         <button
           type="button"
-          aria-label={`${formatMoney(bill.amount, currency)}: ajustar pagamento de ${bill.name}`}
+          aria-label={`${formatMoney(bill.amount, currency)}: ajustar pagamento de ${label}`}
           onClick={onAdjust}
           className="min-h-11 shrink-0 rounded-lg transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"
         >
           {amount}
         </button>
       )}
-      <Pill bill={bill} onPay={onPay} onUnpay={onUnpay} />
+      <Pill bill={bill} label={label} onPay={onPay} onUnpay={onUnpay} busy={busy} />
     </li>
   );
 };
@@ -167,17 +193,19 @@ export const BillsOfMonth = ({ view, className }: { view: Schemas["MonthView"]; 
   const unpay = useUnpayBill();
   const bills = view.bills_of_month;
   const shown = bills.filter((bill) => filter === "all" || bill.paid === (filter === "paid"));
-  const count = bills.length;
+  const count = bills.filter((bill) => bill.due_date.startsWith(view.month)).length;
 
-  const payNow = (bill: BillOfMonth) =>
+  const payNow = (bill: BillOfMonth) => {
+    const month = bill.due_date.slice(0, 7);
     pay.mutate(
-      { billId: bill.bill_id, month: view.month, date: payDateFor(view.month, bill.due_date) },
+      { billId: bill.bill_id, month, date: payDateFor(month, bill.due_date) },
       { onError: () => toast.error("Não foi possível marcar como paga.") },
     );
+  };
 
   const undo = (bill: BillOfMonth) =>
     unpay.mutate(
-      { billId: bill.bill_id, month: view.month },
+      { billId: bill.bill_id, month: bill.due_date.slice(0, 7) },
       {
         onSuccess: () => toast("Pagamento desfeito"),
         onError: () => toast.error("Não foi possível desfazer o pagamento."),
@@ -253,11 +281,13 @@ export const BillsOfMonth = ({ view, className }: { view: Schemas["MonthView"]; 
             <ul className="flex flex-col gap-1">
               {shown.map((bill) => (
                 <Row
-                  key={bill.bill_id}
+                  key={billKey(bill)}
                   bill={bill}
+                  month={view.month}
                   onPay={() => payNow(bill)}
                   onUnpay={() => undo(bill)}
                   onAdjust={() => adjust(bill)}
+                  busy={pay.isPending || unpay.isPending}
                 />
               ))}
             </ul>
@@ -266,7 +296,12 @@ export const BillsOfMonth = ({ view, className }: { view: Schemas["MonthView"]; 
         </>
       )}
 
-      <PayBillSheet month={view.month} bill={adjusting} open={sheetOpen} onOpenChange={setSheetOpen} />
+      <PayBillSheet
+        month={adjusting?.due_date.slice(0, 7) ?? view.month}
+        bill={adjusting}
+        open={sheetOpen}
+        onOpenChange={setSheetOpen}
+      />
     </section>
   );
 };

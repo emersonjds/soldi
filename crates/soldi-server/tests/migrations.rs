@@ -182,3 +182,27 @@ async fn unique_colors_recolor_later_duplicates_and_children_wear_the_parents(po
         Some("categories_top_color_idx")
     );
 }
+
+#[sqlx::test(migrations = false)]
+async fn active_since_backfills_the_sao_paulo_day_each_bill_was_registered(pool: PgPool) {
+    migrate_before(&pool, 18).await;
+    let ana = user(&pool, "ana@example.com").await;
+    let luz = category(&pool, ana, "Luz", "bill", "cat-1", None, false).await;
+    sqlx::query(
+        "INSERT INTO recurring_bills (user_id, name, amount, due_day, category_id, created_at)
+         VALUES ($1, 'Luz', 100, 10, $2, '2026-03-01T01:00:00Z')",
+    )
+    .bind(ana)
+    .bind(luz)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    migrate_from(&pool, 18).await;
+
+    let since: chrono::NaiveDate = sqlx::query_scalar("SELECT active_since FROM recurring_bills")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(since, "2026-02-28".parse().unwrap());
+}

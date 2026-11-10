@@ -168,7 +168,7 @@ async fn only_the_callers_entries_count(pool: PgPool) {
 async fn a_bad_month_is_422_and_no_session_401(pool: PgPool) {
     let user = TestApp::signed_in(pool.clone(), "ana@example.com").await;
 
-    for month in ["2026-13", "2026-1", "november"] {
+    for month in ["2026-13", "2026-1", "november", "9999-12", "1999-12"] {
         let (status, problem) = user.get(&format!("/api/months/{month}")).await;
         assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{month}");
         assert_eq!(problem["errors"][0]["field"], "month");
@@ -191,15 +191,25 @@ async fn add_bill(user: &TestApp, name: &str, amount: &str, due_day: i64, catego
     bill
 }
 
+/// Every bill starts owing on `date`, as if registered or resumed then.
+async fn owing_since(pool: &PgPool, date: &str) {
+    sqlx::query("UPDATE recurring_bills SET active_since = $1::date")
+        .bind(date)
+        .execute(pool)
+        .await
+        .unwrap();
+}
+
 fn last_balance(view: &Value) -> &Value {
     &view["days"].as_array().unwrap().last().unwrap()["balance"]
 }
 
 #[sqlx::test]
 async fn rule_1_end_to_end_unpaid_then_paid_then_unpaid(pool: PgPool) {
-    let user = TestApp::signed_in(pool, "ana@example.com").await;
+    let user = TestApp::signed_in(pool.clone(), "ana@example.com").await;
     open_at(&user, "1000", "2026-11-01").await;
     let bill = add_bill(&user, "Aluguel", "2259.56", 5, "Aluguel").await;
+    owing_since(&pool, "2026-11-01").await;
     let pay = format!("/api/bills/{}/pay", bill["id"].as_str().unwrap());
     let overdue = soldi_server::today_sao_paulo() > "2026-11-05".parse().unwrap();
     let today = soldi_server::today_sao_paulo();
@@ -241,10 +251,11 @@ async fn rule_1_end_to_end_unpaid_then_paid_then_unpaid(pool: PgPool) {
 
 #[sqlx::test]
 async fn rules_6_8_and_9_due_dates_clamp_and_past_months_stay_overdue(pool: PgPool) {
-    let user = TestApp::signed_in(pool, "ana@example.com").await;
+    let user = TestApp::signed_in(pool.clone(), "ana@example.com").await;
     open_at(&user, "1000", "2026-09-01").await;
     add_bill(&user, "Cartão", "300", 31, "Cartão").await;
     add_bill(&user, "Luz", "100", 1, "Luz").await;
+    owing_since(&pool, "2026-09-01").await;
 
     let (_, october) = user.get("/api/months/2026-10").await;
     let (_, february) = user.get("/api/months/2027-02").await;
@@ -332,7 +343,7 @@ async fn forecast_an_unpaid_bill_dips_its_clamped_due_day_two_months_ahead(pool:
     let (before, last) = (&days[days.len() - 2], days.last().unwrap());
     assert_eq!(
         (&before["projected_balance"], &before["projected_tier"]),
-        (&json!("1000.00"), &json!("light_green"))
+        (&json!("-2200.00"), &json!("red"))
     );
     assert_eq!(
         (
@@ -340,8 +351,101 @@ async fn forecast_an_unpaid_bill_dips_its_clamped_due_day_two_months_ahead(pool:
             &last["projected_tier"],
             &last["balance"]
         ),
-        (&json!("-600.00"), &json!("red"), &json!("1000.00"))
+        (&json!("-3800.00"), &json!("red"), &json!("1000.00"))
     );
     assert_eq!(view["bills_of_month"][0]["lands_on"], last["date"]);
-    assert_eq!(view["projected_balance"], "-600.00");
+    assert_eq!(view["projected_balance"], "-3800.00");
+}
+
+#[sqlx::test]
+async fn sol55_last_months_unpaid_bill_lands_today_until_paid_in_its_own_month(pool: PgPool) {
+    use chrono::{Datelike, Months};
+    let user = TestApp::signed_in(pool.clone(), "ana@example.com").await;
+    let bia = user.another_user("bia@example.com").await;
+    let today = soldi_server::today_sao_paulo();
+    let this_month = today.with_day(1).unwrap();
+    let last_month = this_month.checked_sub_months(Months::new(1)).unwrap();
+    open_at(&user, "1000", &last_month.to_string()).await;
+    open_at(&bia, "1000", &last_month.to_string()).await;
+    let aluguel = add_bill(&user, "Aluguel", "1800", 1, "Aluguel").await;
+    add_bill(&bia, "Aluguel", "999", 1, "Aluguel").await;
+    owing_since(&pool, &last_month.to_string()).await;
+    let path = format!("/api/months/{}", this_month.format("%Y-%m"));
+
+    let (status, view) = user.get(&path).await;
+
+    assert_eq!(status, StatusCode::OK, "{view}");
+    let rows: Vec<(String, bool)> = view["bills_of_month"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|bill| {
+            (
+                bill["due_date"].as_str().unwrap().into(),
+                bill["overdue"] == true,
+            )
+        })
+        .collect();
+    assert_eq!(
+        rows,
+        [
+            (last_month.to_string(), true),
+            (this_month.to_string(), today > this_month)
+        ]
+    );
+    assert_eq!(view["bills_of_month"][0]["bill_id"], aluguel["id"]);
+    assert_eq!(view["bills_of_month"][0]["lands_on"], today.to_string());
+    let index = usize::try_from(today.day() - 1).unwrap();
+    assert_eq!(view["days"][index]["projected_balance"], "-2600.00");
+    assert_eq!(view["projected_balance"], "-2600.00");
+
+    let pay = format!(
+        "/api/bills/{}/pay?month={}",
+        aluguel["id"].as_str().unwrap(),
+        last_month.format("%Y-%m")
+    );
+    let (status, entry) = user
+        .post(&pay, json!({ "date": last_month.to_string() }))
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{entry}");
+    let (_, paid) = user.get(&path).await;
+    assert_eq!(paid["bills_of_month"].as_array().unwrap().len(), 1);
+    assert_eq!(paid["balance_today"], "-800.00");
+    assert_eq!(paid["projected_balance"], "-2600.00");
+}
+
+#[sqlx::test]
+async fn sol55_a_payment_before_a_moved_opening_still_pays_its_month(pool: PgPool) {
+    let user = TestApp::signed_in(pool.clone(), "ana@example.com").await;
+    open_at(&user, "1000", "2026-10-01").await;
+    let luz = add_bill(&user, "Luz", "100", 25, "Luz").await;
+    owing_since(&pool, "2026-10-01").await;
+    let (status, entry) = user
+        .post(
+            &format!("/api/bills/{}/pay", luz["id"].as_str().unwrap()),
+            json!({ "date": "2026-10-10" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{entry}");
+    open_at(&user, "1000", "2026-10-15").await;
+
+    let (_, october) = user.get("/api/months/2026-10").await;
+    let (_, current) = user
+        .get(&format!(
+            "/api/months/{}",
+            soldi_server::today_sao_paulo().format("%Y-%m")
+        ))
+        .await;
+
+    assert_eq!(october["bills_of_month"][0]["paid"], true);
+    assert_eq!(october["bills_of_month"][0]["transaction_id"], entry["id"]);
+    assert_eq!(last_balance(&october), "1000.00");
+    assert!(
+        current["bills_of_month"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|bill| bill["due_date"] != "2026-10-25"),
+        "{current}"
+    );
 }

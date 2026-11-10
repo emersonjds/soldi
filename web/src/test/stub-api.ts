@@ -211,6 +211,14 @@ export const BILLS_OF_MONTH: Schemas["BillOfMonth"][] = [
   },
 ];
 
+/** October's rent still unpaid, carried into November and landed today (the 5th), D17. */
+export const CARRIED_ALUGUEL: Schemas["BillOfMonth"] = {
+  ...BILLS_OF_MONTH[1],
+  due_date: "2026-10-10",
+  overdue: true,
+  lands_on: "2026-11-05",
+};
+
 /** The owner's November (SOL-49/50), today the 5th: R$ 6.150,00 until the 22nd, red on the 23rd, worst on the 28th, back on the 30th. */
 const forecastProjection = (index: number): [string, Schemas["Tier"]] => {
   if (index < 22) return ["6150.00", "green"];
