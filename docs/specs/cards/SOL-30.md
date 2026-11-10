@@ -1,4 +1,4 @@
-# SOL-30 — Apagar lançamentos (mês, ano ou tudo)
+# SOL-30 — Delete entries (month, year or all)
 
 Owner, 2026-11-05: "coloque alguma mecânica de resetar tudo ... ou resetar só o ano coisas do tipo ... e assim tudo é apagado".
 

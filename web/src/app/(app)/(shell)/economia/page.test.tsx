@@ -262,25 +262,25 @@ describe("Cofrinhos", () => {
       within(await screen.findByRole("dialog", { name: "Editar cofrinho" })).getByRole("button", { name: "Excluir" }),
     );
 
-    expect(await screen.findByText("Resgate tudo antes de arquivar")).toBeInTheDocument();
+    expect(await screen.findByText("Resgate tudo antes de excluir")).toBeInTheDocument();
     expect(sent(requests, "DELETE")).toHaveLength(0);
   });
 
-  it("offers neither Editar nor Arquivar on Sem objetivo", async () => {
+  it("offers neither Editar nor Excluir on Sem objetivo", async () => {
     open({ [`GET /api/cofrinhos/${ECONOMIA.id}/movements`]: { status: 200, body: [] } });
 
     const sheet = await detail("Sem objetivo");
     expect(within(sheet).getByRole("button", { name: "Guardar" })).toBeInTheDocument();
     expect(within(sheet).queryByRole("button", { name: "Editar" })).not.toBeInTheDocument();
-    expect(within(sheet).queryByRole("button", { name: "Arquivar" })).not.toBeInTheDocument();
+    expect(within(sheet).queryByRole("button", { name: "Excluir" })).not.toBeInTheDocument();
   });
 
   it("will not archive a cofrinho that still holds money", async () => {
     const requests = open();
 
-    await userEvent.click(within(await detail("Reserva")).getByRole("button", { name: "Arquivar" }));
+    await userEvent.click(within(await detail("Reserva")).getByRole("button", { name: "Excluir" }));
 
-    expect(await screen.findByText("Resgate tudo antes de arquivar")).toBeInTheDocument();
+    expect(await screen.findByText("Resgate tudo antes de excluir")).toBeInTheDocument();
     expect(sent(requests, "DELETE")).toHaveLength(0);
   });
 
@@ -300,7 +300,7 @@ describe("Cofrinhos", () => {
       const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
       await user.click(await card("Viagem"));
       await user.click(
-        within(await screen.findByRole("dialog", { name: "Viagem" })).getByRole("button", { name: "Arquivar" }),
+        within(await screen.findByRole("dialog", { name: "Viagem" })).getByRole("button", { name: "Excluir" }),
       );
       return user;
     };
@@ -310,7 +310,7 @@ describe("Cofrinhos", () => {
 
       await archive();
 
-      expect(await screen.findByText("Cofrinho arquivado")).toBeInTheDocument();
+      expect(await screen.findByText("Cofrinho excluído")).toBeInTheDocument();
       expect(screen.queryByRole("button", { name: /^Viagem/ })).not.toBeInTheDocument();
       act(() => vi.advanceTimersByTime(6000));
       await waitFor(() => expect(sent(requests, "DELETE")).toHaveLength(1));
@@ -331,10 +331,10 @@ describe("Cofrinhos", () => {
       open(replies({ status: 422, body: { ...problem(422, "No."), type: "urn:soldi:error:cofrinho-not-empty" } }));
 
       await archive();
-      await screen.findByText("Cofrinho arquivado");
+      await screen.findByText("Cofrinho excluído");
       act(() => vi.advanceTimersByTime(6000));
 
-      expect(await screen.findByText("Resgate tudo antes de arquivar")).toBeInTheDocument();
+      expect(await screen.findByText("Resgate tudo antes de excluir")).toBeInTheDocument();
       expect(await card("Viagem")).toBeInTheDocument();
     });
 
@@ -342,10 +342,10 @@ describe("Cofrinhos", () => {
       open(replies({ status: 500, body: problem(500, "Falhou.") }));
 
       await archive();
-      await screen.findByText("Cofrinho arquivado");
+      await screen.findByText("Cofrinho excluído");
       act(() => vi.advanceTimersByTime(6000));
 
-      expect(await screen.findByText("Não foi possível arquivar o cofrinho.")).toBeInTheDocument();
+      expect(await screen.findByText("Não foi possível excluir o cofrinho.")).toBeInTheDocument();
     });
   });
 });

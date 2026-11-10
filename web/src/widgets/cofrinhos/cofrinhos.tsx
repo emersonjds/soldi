@@ -2,7 +2,7 @@
 
 import { type CSSProperties, useState } from "react";
 
-import { Archive, ArrowDownToLine, ArrowUpFromLine, Check, ChevronRight, Pencil, PiggyBank, Plus } from "lucide-react";
+import { ArrowDownToLine, ArrowUpFromLine, Check, ChevronRight, Pencil, PiggyBank, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -81,7 +81,7 @@ const Balance = ({ cofrinho, large = false }: { cofrinho: Cofrinho; large?: bool
 const Status = ({ cofrinho }: { cofrinho: Cofrinho }) => {
   if (cofrinho.done)
     return (
-      <span className="inline-flex items-center gap-1 font-medium text-income text-sm">
+      <span className="inline-flex items-center gap-1 font-medium text-income-text text-sm">
         <Check className="size-4" aria-hidden />
         Meta batida
       </span>
@@ -167,7 +167,7 @@ type DetailProps = {
 
 const action = "min-h-12 justify-start gap-3 text-base";
 
-/** The cofrinho's sheet: Guardar, Resgatar, its movements, Editar and Arquivar; `Sem objetivo` is only Economia. */
+/** The cofrinho's sheet: Guardar, Resgatar, its movements, Editar and Excluir; `Sem objetivo` is only Economia. */
 const CofrinhoDetail = ({ cofrinho, onOpenChange, onSave, onEdit, onArchive }: DetailProps) => {
   const [withdrawing, setWithdrawing] = useState(false);
 
@@ -219,8 +219,8 @@ const CofrinhoDetail = ({ cofrinho, onOpenChange, onSave, onEdit, onArchive }: D
                     className={cn(action, "text-destructive hover:text-destructive")}
                     onClick={() => onArchive(cofrinho)}
                   >
-                    <Archive className="size-5" />
-                    Arquivar
+                    <Trash2 className="size-5" />
+                    Excluir
                   </Button>
                 </div>
               )}
@@ -299,7 +299,7 @@ export const CofrinhosView = () => {
   // ponytail: no unarchive endpoint, so the DELETE waits for the toast, as in Ajustes › Categorias.
   const archiveLater = (id: string, balance: string) => {
     setSelectedId(undefined);
-    if (positiveAmount(balance)) return toast.error("Resgate tudo antes de arquivar");
+    if (positiveAmount(balance)) return toast.error("Resgate tudo antes de excluir");
     const restore = () => setArchiving((current) => current.filter((each) => each !== id));
     setArchiving((current) => [...current, id]);
     let undone = false;
@@ -310,13 +310,13 @@ export const CofrinhosView = () => {
           restore();
           toast.error(
             hasProblem(error, "cofrinho-not-empty")
-              ? "Resgate tudo antes de arquivar"
-              : "Não foi possível arquivar o cofrinho.",
+              ? "Resgate tudo antes de excluir"
+              : "Não foi possível excluir o cofrinho.",
           );
         },
       });
     };
-    toast("Cofrinho arquivado", {
+    toast("Cofrinho excluído", {
       duration: 5000,
       action: {
         label: "Desfazer",

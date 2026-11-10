@@ -1,4 +1,4 @@
-# SOL-36 — Minha conta
+# SOL-36 — My account (Minha conta)
 
 Owner, 2026-11-09: "crie uma área de configurações do usuário, isso não existe hoje, quando eu clicar sobre meu nome". Account deletion is SOL-43; forgot-password by e-mail is SOL-37.
 

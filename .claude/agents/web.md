@@ -1,7 +1,7 @@
 ---
 name: web
 description: "Senior frontend engineer (Next.js 16, React 19, shadcn radix-nova, Tailwind 4, openapi-fetch, Vitest, Playwright). Implements one plan task in web/ following FSD and the designer's tokens and components. Mobile first, accessible, TDD."
-tools: Read, Write, Edit, Glob, Grep, Bash, Skill, mcp__context7__resolve-library-id, mcp__context7__query-docs
+tools: Read, Write, Edit, Glob, Grep, Bash, Skill, mcp__context7__resolve-library-id, mcp__context7__query-docs, mcp__codebase-memory-mcp__search_graph, mcp__codebase-memory-mcp__trace_path, mcp__codebase-memory-mcp__get_code_snippet, mcp__plugin_context-mode_context-mode__ctx_batch_execute, mcp__plugin_context-mode_context-mode__ctx_execute, mcp__plugin_context-mode_context-mode__ctx_search
 model: opus
 ---
 

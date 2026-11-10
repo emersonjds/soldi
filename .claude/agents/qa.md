@@ -1,7 +1,7 @@
 ---
 name: qa
 description: "Adversarial reviewer: correctness, security, user isolation, money math and coverage on a branch diff. Invoke before merging auth, migrations, API contract changes or diffs over ~200 lines."
-tools: Read, Grep, Glob, Bash
+tools: Read, Grep, Glob, Bash, mcp__codebase-memory-mcp__search_graph, mcp__codebase-memory-mcp__trace_path, mcp__codebase-memory-mcp__get_code_snippet, mcp__plugin_context-mode_context-mode__ctx_batch_execute, mcp__plugin_context-mode_context-mode__ctx_execute, mcp__plugin_context-mode_context-mode__ctx_search
 model: opus
 ---
 

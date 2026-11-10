@@ -17,7 +17,7 @@ export const Money = ({
     <span
       className={cn(
         "whitespace-nowrap tabular-nums",
-        income && "text-income",
+        income && "text-income-text",
         amount.startsWith("-") && "text-expense",
         className,
       )}

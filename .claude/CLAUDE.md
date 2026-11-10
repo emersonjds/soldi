@@ -36,3 +36,12 @@ Personal-finance thermometer: a web product that replaces the owner's `Termômet
 ## Containers
 
 `compose.yaml` runs PostgreSQL 16 on Docker Desktop. Only Soldi containers run during a Soldi session.
+
+## Cost discipline (owner, 2026-11-05)
+
+- One card per session, `/clear` at the end. Never a second card in the same session.
+- Every agent navigates with the graph (`search_graph`, `trace_path`, `get_code_snippet`) and gathers with context-mode (`ctx_batch_execute`, `ctx_execute`, `ctx_search`); raw `Read`/`Grep` only to edit a file or for a literal. Test, build and log output always through context-mode.
+- Panel: one agent for a small card (ux writes the brief; product and finance only when money rules or product scope are open). `architect` only when the model or the contract changes.
+- Review: `qa` for auth, migration, contract, user isolation or > 200 lines; `pixel` only when a token or component is new. Small post-review fixes are done by the orchestrating session, not by a new agent.
+- Models: `opus` for code that lands in the repo and adversarial review; `sonnet` for briefs, votes, copy, docs and screenshots; `haiku` for mechanical diffs. Never Fable in a subagent.
+- No waiting turns: the orchestrator answers only when a result arrives.

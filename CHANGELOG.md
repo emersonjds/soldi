@@ -7,6 +7,24 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.19.0
+
+> Headline: one address, and screens that read clearly
+
+### Added
+
+- Requests to `www.` hosts get a permanent redirect to the bare domain, keeping the path and query.
+
+### Changed
+
+- A race test pins the parent lock when an existing category moves under a parent that is being recolored.
+
+### Web
+
+- Income amounts use an AA green on white; the brand green stays on fills.
+- Opening a sheet clears the toasts, so none can cover it.
+- Cofrinhos say `Excluir`, the same as categories.
+
 ## 0.18.0
 
 > Headline: twelve months ahead, and "can I buy this?" before buying

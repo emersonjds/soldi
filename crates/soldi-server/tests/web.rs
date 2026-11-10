@@ -145,3 +145,36 @@ async fn without_an_export_only_the_api_answers() {
         assert_eq!(content_type(&response), "application/problem+json");
     }
 }
+
+#[tokio::test]
+async fn the_www_host_redirects_to_the_bare_domain_keeping_path_and_query() {
+    let app = app(None);
+    let request = Request::builder()
+        .uri("/mes?m=2026-11")
+        .header(header::HOST, "www.getsoldi.app")
+        .body(Body::empty())
+        .unwrap();
+
+    let response = app.clone().oneshot(request).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::PERMANENT_REDIRECT);
+    assert_eq!(
+        response.headers()[header::LOCATION],
+        "https://getsoldi.app/mes?m=2026-11"
+    );
+}
+
+#[tokio::test]
+async fn the_bare_domain_is_served_as_is() {
+    let app = app(None);
+    let request = Request::builder()
+        .uri("/api/missing")
+        .header(header::HOST, "getsoldi.app")
+        .body(Body::empty())
+        .unwrap();
+
+    let response = app.clone().oneshot(request).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    assert!(response.headers().get(header::LOCATION).is_none());
+}

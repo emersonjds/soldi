@@ -1,4 +1,4 @@
-# SOL-20 — Cofrinhos: Economia como categoria de Saída com subcategorias
+# SOL-20 — Cofrinhos: Economia as a Saída category with subcategories
 
 Owner, 2026-11-05 (final wording): "na parte de saídas, coloque a parte de economia e aí dá pra criar subcategorias; quando for selecionada uma saída do tipo economia ela vai pra parte de economia como dinheiro guardado por aquela categoria". Replaces the earlier draft of this card.
 

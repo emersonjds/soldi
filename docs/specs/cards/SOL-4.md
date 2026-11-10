@@ -1,4 +1,4 @@
-# SOL-4 — Contas fixas, pago/a pagar e saldo projetado
+# SOL-4 — Contas fixas, paid/unpaid and the projected balance
 
 Panel of 2026-11-05 (product, ux, finance, architect). Depends on SOL-3. Spec sections 4–7; design `docs/design/stitch/mes-*.png` ("Contas do Mês" card).
 

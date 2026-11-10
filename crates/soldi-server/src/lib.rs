@@ -106,6 +106,7 @@ pub fn app(state: AppState, web_dir: Option<&Path>) -> Router {
     };
     router
         .layer(middleware::from_fn(extract::reject_cross_site_writes))
+        .layer(middleware::from_fn(extract::redirect_www))
         .layer(SetResponseHeaderLayer::if_not_present(
             X_CONTENT_TYPE_OPTIONS,
             HeaderValue::from_static("nosniff"),

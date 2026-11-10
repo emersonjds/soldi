@@ -1,4 +1,4 @@
-# SOL-33 — Editar e excluir visíveis em toda categoria e subcategoria
+# SOL-33 — Edit and delete visible on every category and subcategory
 
 Owner, 2026-11-08: "sub categorias podem ser excluídas ou editadas, assim como categorias" and, on "Importado (diário)": "isso pode remover ...". Today: row click opens the edit sheet (chevron hints it); delete lives inside the sheet as "Arquivar" with a 5 s undo toast; entries keep the archived category.
 
