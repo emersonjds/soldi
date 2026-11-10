@@ -15,7 +15,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .connect(&database_url)
         .await?;
     sqlx::migrate!().run(&pool).await?;
-    let state = soldi_server::AppState::new(pool);
+    let mailer = match std::env::var("RESEND_API_KEY") {
+        Ok(api_key) => {
+            let from = std::env::var("SOLDI_MAIL_FROM")
+                .unwrap_or_else(|_| "Soldi <nao-responda@getsoldi.app>".into());
+            soldi_server::mail::Mailer::resend(api_key, from)?
+        }
+        Err(_) => soldi_server::mail::Mailer::Log,
+    };
+    let public_url = std::env::var("SOLDI_PUBLIC_URL")
+        .unwrap_or_else(|_| "http://localhost:8080".into())
+        .trim_end_matches('/')
+        .to_string();
+    let state = soldi_server::AppState {
+        mailer,
+        public_url,
+        ..soldi_server::AppState::new(pool)
+    };
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{port}")).await?;
     tracing::info!(%port, %web_dir, "listening");
     axum::serve(
