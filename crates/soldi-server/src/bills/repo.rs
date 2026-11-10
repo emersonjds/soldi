@@ -57,7 +57,8 @@ pub async fn insert(
     .await
 }
 
-/// `Ok(None)` when the user has no unarchived bill with this id.
+/// `Ok(None)` when the user has no unarchived bill with this id. D13: resuming a paused bill
+/// moves `active_since` to the São Paulo today.
 pub async fn update(
     conn: &mut PgConnection,
     user_id: Uuid,
@@ -69,6 +70,9 @@ pub async fn update(
         Bill,
         "UPDATE recurring_bills
          SET name = $3, amount = $4, due_day = $5, category_id = $6, active = $7,
+             active_since = CASE WHEN $7 AND NOT active
+                                 THEN (now() AT TIME ZONE 'America/Sao_Paulo')::date
+                                 ELSE active_since END,
              updated_at = now()
          WHERE user_id = $1 AND id = $2 AND archived_at IS NULL
          RETURNING id, category_id, name, amount, due_day, active",

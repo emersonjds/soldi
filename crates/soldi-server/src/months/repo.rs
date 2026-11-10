@@ -27,12 +27,12 @@ pub async fn day_sums(
     .await
 }
 
-/// Active, unarchived bills by due day, then name, with the São Paulo day each was registered.
+/// Active, unarchived bills by due day, then name, with the day each started owing.
 pub async fn bills(conn: &mut PgConnection, user_id: Uuid) -> Result<Vec<MonthBill>, sqlx::Error> {
     sqlx::query_as!(
         MonthBill,
         r#"SELECT b.id, b.name, c.icon, c.color, b.amount, b.due_day,
-                  (b.created_at AT TIME ZONE 'America/Sao_Paulo')::date AS "created_on!"
+                  b.active_since
            FROM recurring_bills b JOIN categories c ON c.user_id = b.user_id AND c.id = b.category_id
            WHERE b.user_id = $1 AND b.active AND b.archived_at IS NULL
            ORDER BY b.due_day, lower(b.name), b.id"#,

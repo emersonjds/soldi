@@ -19,7 +19,7 @@ pub fn router() -> OpenApiRouter<AppState> {
     responses(
         (status = 200, body = MonthView, description = "Every calendar day with its balance and tier, carried from the opening balance"),
         (status = 401, body = Problem, content_type = "application/problem+json"),
-        (status = 422, body = Problem, content_type = "application/problem+json", description = "`month` is not `YYYY-MM` (`validation`), or is before the opening date's month (`month-before-opening`)")))]
+        (status = 422, body = Problem, content_type = "application/problem+json", description = "`month` is not `YYYY-MM` from 2000 to 2100 (`validation`), or is before the opening date's month (`month-before-opening`)")))]
 pub async fn get_month(
     State(state): State<AppState>,
     user: CurrentUser,
