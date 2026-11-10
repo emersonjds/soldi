@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Toaster } from "sonner";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -10,6 +10,8 @@ import {
   BILLS_OF_MONTH,
   CATEGORIES,
   ECONOMIA,
+  FORECAST_MONTH,
+  FORECAST_TRANSACTIONS,
   MERCADO,
   MONTH,
   MOVEMENTS,
@@ -411,5 +413,42 @@ describe("Mês", () => {
     const bill = await screen.findByRole("dialog", { name: "Nova conta" });
     expect(within(bill).getByLabelText("Nome")).toHaveValue("Aluguel");
     expect(within(bill).getByLabelText("Vence dia")).toHaveValue("4");
+  });
+
+  it("warns of the first red day and the worst day; a tap jumps to the day, rings it for 2 s and names the cause", async () => {
+    const scroll = vi.spyOn(Element.prototype, "scrollIntoView");
+    open({
+      "GET /api/months/2026-11": { status: 200, body: FORECAST_MONTH },
+      "GET /api/transactions": { status: 200, body: FORECAST_TRANSACTIONS },
+    });
+
+    const hero = await screen.findByRole("region", { name: "Saldo hoje" });
+    const first = await within(hero).findByRole("button", { name: /^Dia 23 fica no vermelho: -R\$\s675,00$/ });
+    expect(
+      within(hero).getByRole("button", { name: /^Pior dia: 28\/11, -R\$\s2\.916,00 · recupera em 30\/11$/ }),
+    ).toBeVisible();
+    expect(within(ledger()).getByRole("listitem", { name: "Cartão" })).toHaveTextContent("Motivo da queda");
+    expect(within(ledger()).getByRole("listitem", { name: "Financiamento" })).toHaveTextContent("Motivo da queda");
+    expect(within(ledger()).getByRole("button", { name: /Seguro/ })).not.toHaveTextContent("Motivo da queda");
+
+    vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
+    vi.setSystemTime(new Date(2026, 10, 5, 12));
+    fireEvent.click(first);
+    const day = document.getElementById("dia-2026-11-23");
+    expect(scroll).toHaveBeenLastCalledWith({ block: "start" });
+    expect(scroll.mock.contexts.at(-1)).toBe(day);
+    expect(day).toHaveClass("ring-2");
+    act(() => vi.advanceTimersByTime(1999));
+    expect(day).toHaveClass("ring-2");
+    act(() => vi.advanceTimersByTime(1));
+    expect(day).not.toHaveClass("ring-2");
+    scroll.mockRestore();
+  });
+
+  it("says nothing in the hero when no day ahead is red", async () => {
+    open();
+
+    const hero = await screen.findByRole("region", { name: "Saldo hoje" });
+    expect(within(hero).queryByText(/no vermelho/)).not.toBeInTheDocument();
   });
 });

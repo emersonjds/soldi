@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 
 import { useQuery } from "@tanstack/react-query";
 
+import { causeOf, forecastAlert } from "@/entities/month/forecast-alert";
 import { useMonth } from "@/entities/month/month-query";
 import { settingsQuery } from "@/entities/settings/settings-query";
 import { useTransactions } from "@/entities/transaction/transaction-queries";
@@ -17,6 +18,7 @@ import { BillsOfMonth } from "@/widgets/bills-of-month/bills-of-month";
 import { Ledger } from "@/widgets/ledger/ledger";
 import { MonthHeader } from "@/widgets/month-header/month-header";
 import { MonthSkeleton, MonthSummary, ThermometerCard } from "@/widgets/month-overview/month-overview";
+import { RedDayAlert } from "@/widgets/red-day-alert/red-day-alert";
 
 const MonthScreen = () => {
   const router = useRouter();
@@ -28,10 +30,17 @@ const MonthScreen = () => {
   const settings = useQuery(settingsQuery);
   const [launching, setLaunching] = useState<"income" | "bill" | "daily" | null>(fromTour ? "income" : null);
   const [hint, setHint] = useState(fromTour);
+  const [highlight, setHighlight] = useState<string | null>(null);
 
   useEffect(() => {
     if (fromTour) window.history.replaceState(null, "", "/mes");
   }, [fromTour]);
+
+  useEffect(() => {
+    if (!highlight) return;
+    const timer = setTimeout(() => setHighlight(null), 2000);
+    return () => clearTimeout(timer);
+  }, [highlight]);
 
   if (view.isError || transactions.isError)
     return (
@@ -47,6 +56,19 @@ const MonthScreen = () => {
     );
   if (!view.data || !transactions.data) return <MonthSkeleton />;
 
+  const entries = transactions.data;
+  const bills = view.data.bills_of_month;
+  const alert = forecastAlert(view.data.days);
+  const causes = new Set(
+    (alert ? [alert.firstRed.date, alert.lowest.date] : [])
+      .map((date) => causeOf(date, entries, bills))
+      .filter((id): id is string => id !== null),
+  );
+  const jump = (date: string) => {
+    document.getElementById(`dia-${date}`)?.scrollIntoView({ block: "start" });
+    setHighlight(date);
+  };
+
   return (
     <div className="flex flex-col gap-6">
       <h1 className="sr-only">Mês</h1>
@@ -57,7 +79,9 @@ const MonthScreen = () => {
           balance={view.data.balance_today}
           tier={view.data.balance_today_tier}
           onMonthChange={(next) => router.replace(`/mes?m=${next}`, { scroll: false })}
-        />
+        >
+          {alert && <RedDayAlert alert={alert} onJump={jump} />}
+        </MonthHeader>
         <MonthSummary view={view.data} onLaunch={setLaunching} />
       </div>
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3 lg:items-start">
@@ -65,8 +89,10 @@ const MonthScreen = () => {
         <ThermometerCard view={view.data} className="lg:sticky lg:top-6 lg:col-start-3 lg:row-span-2 lg:row-start-1" />
         <Ledger
           view={view.data}
-          transactions={transactions.data}
+          transactions={entries}
           onLaunch={() => setLaunching("daily")}
+          highlight={highlight}
+          causes={causes}
           className="lg:col-span-2 lg:col-start-1 lg:row-start-2"
         />
       </div>

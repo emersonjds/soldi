@@ -71,7 +71,9 @@ const groupByDay = (days: Day[], transactions: Transaction[], bills: Due[]) =>
 /** A day ahead, or today once an unpaid bill landed on it. */
 const isForecast = (day: Day) => day.is_future || day.projected_balance !== day.balance;
 
-const DueRow = ({ bill }: { bill: Due }) => (
+const Cause = () => <span className="text-expense text-xs">Motivo da queda</span>;
+
+const DueRow = ({ bill, cause }: { bill: Due; cause: boolean }) => (
   <li aria-labelledby={`due-${bill.bill_id}`} className="flex min-h-16 items-center gap-3 px-2 py-2">
     <CategoryIcon icon={bill.icon} color={bill.color} />
     <span className="flex min-w-0 flex-1 flex-col">
@@ -82,11 +84,16 @@ const DueRow = ({ bill }: { bill: Due }) => (
         {bill.overdue ? `Conta fixa · venceu dia ${dayMonth(bill.due_date)}` : "Conta fixa · a pagar"}
       </span>
     </span>
-    <Money amount={bill.amount} className="font-bold text-base" />
+    <span className="flex flex-col items-end gap-0.5">
+      <Money amount={bill.amount} className="font-bold text-base" />
+      {cause && <Cause />}
+    </span>
   </li>
 );
 
-const Row = ({ transaction, entry, onOpen }: { transaction: Transaction; entry: Entry; onOpen: () => void }) => (
+type RowProps = { transaction: Transaction; entry: Entry; cause: boolean; onOpen: () => void };
+
+const Row = ({ transaction, entry, cause, onOpen }: RowProps) => (
   <li>
     <button
       type="button"
@@ -107,7 +114,10 @@ const Row = ({ transaction, entry, onOpen }: { transaction: Transaction; entry: 
           )}
         </span>
       </span>
-      <Money amount={transaction.amount} income={transaction.kind === "income"} className="font-bold text-base" />
+      <span className="flex flex-col items-end gap-0.5">
+        <Money amount={transaction.amount} income={transaction.kind === "income"} className="font-bold text-base" />
+        {cause && <Cause />}
+      </span>
     </button>
   </li>
 );
@@ -116,11 +126,22 @@ type LedgerProps = {
   view: Schemas["MonthView"];
   transactions: Transaction[];
   onLaunch: () => void;
+  /** The day ringed after a jump from the hero. */
+  highlight?: string | null;
+  /** Ids (`transaction.id` or `bill.bill_id`) captioned `Motivo da queda`. */
+  causes?: ReadonlySet<string>;
   className?: string;
 };
 
 /** `Lançamentos`: entries grouped by day; a row opens Editar / Excluir, and Excluir can be undone for 5 s. */
-export const Ledger = ({ view, transactions, onLaunch, className }: LedgerProps) => {
+export const Ledger = ({
+  view,
+  transactions,
+  onLaunch,
+  highlight = null,
+  causes = new Set<string>(),
+  className,
+}: LedgerProps) => {
   const categories = useQuery(categoriesQuery).data;
   const describe = (transaction: Transaction) => entryOf(transaction, categories);
   const [selected, setSelected] = useState<Transaction>();
@@ -193,7 +214,11 @@ export const Ledger = ({ view, transactions, onLaunch, className }: LedgerProps)
         </div>
       ) : (
         groups.map(({ day, entries, due }) => (
-          <div key={day.date}>
+          <div
+            key={day.date}
+            id={`dia-${day.date}`}
+            className={cn("scroll-mt-28 rounded-xl", highlight === day.date && "ring-2 ring-expense")}
+          >
             <h3 className="sticky top-14 z-10 -mx-2 flex items-center justify-between gap-2 bg-card/95 px-2 py-2 font-semibold text-muted-foreground text-sm backdrop-blur lg:top-0">
               {dayLabel(day)}
               <TierPill tier={day.projected_tier} amount={day.projected_balance} forecast={isForecast(day)} size="sm" />
@@ -204,11 +229,12 @@ export const Ledger = ({ view, transactions, onLaunch, className }: LedgerProps)
                   key={transaction.id}
                   entry={describe(transaction)}
                   transaction={transaction}
+                  cause={causes.has(transaction.id)}
                   onOpen={() => open(transaction)}
                 />
               ))}
               {due.map((bill) => (
-                <DueRow key={bill.bill_id} bill={bill} />
+                <DueRow key={bill.bill_id} bill={bill} cause={causes.has(bill.bill_id)} />
               ))}
             </ul>
           </div>
