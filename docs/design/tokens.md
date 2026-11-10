@@ -25,13 +25,15 @@ Dark: background `#0F1222`, card `#1A1E36`, header `#141734`, foreground `#F0EFF
 
 ## Thermometer tiers (balance pills, strip, labels)
 
-| Tier | Label | Color | Soft bg |
-|------|-------|-------|---------|
-| red | Crítico | `#DC2626` | `#FEE2E2` |
-| light-red | Atenção | `#F87171` | `#FEE2E2` |
-| yellow | Apertado | `#F59E0B` | `#FEF3C7` |
-| light-green | Confortável | `#4ADE80` | `#DCFCE7` |
-| green | Folga | `#16A34A` | `#DCFCE7` |
+| Tier | Label | Dot / strip | Soft bg | Pill text | Text on soft | Dot on soft (not text) |
+|------|-------|-------------|---------|-----------|--------------|------------------------|
+| red | Crítico | `#DC2626` | `#FEE2E2` | `#991B1B` | 6.80:1 | 3.95:1 |
+| light-red | Atenção | `#F87171` | `#FEE2E2` | `#B91C1C` | 5.30:1 | 2.26:1 |
+| yellow | Apertado | `#F59E0B` | `#FEF3C7` | `#92400E` | 6.37:1 | 1.93:1 |
+| light-green | Confortável | `#4ADE80` | `#DCFCE7` | `#166534` | 6.49:1 | 1.59:1 |
+| green | Folga | `#16A34A` | `#DCFCE7` | `#14532D` | 8.30:1 | 3.00:1 |
+
+Tokens: `--tier-<tier>` (dot, strip), `--tier-<tier>-soft` (pill background), `--tier-<tier>-foreground` (pill text, AA ≥ 4.5:1 on soft). `TIER_STYLE` in `web/src/shared/lib/tier.ts` is the only map; `TierPill` (ledger day headers, Mês header and overview, Simular preview, welcome tour) and the Próximos meses chips all read it. The strong color never carries text: it fills the dot beside the label and the `ThermometerStrip` segments, whose labels sit on the page in `foreground` / `muted-foreground`. The red-days badge on a chip is white on `#DC2626` (4.83:1).
 
 The strip under "Termômetro do Mês" shows the five segments and highlights the current one. Color is never alone: the label travels with the pill.
 
