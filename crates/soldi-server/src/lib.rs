@@ -5,6 +5,7 @@ pub mod cofrinhos;
 pub mod error;
 pub mod extract;
 pub mod imports;
+pub mod limits;
 pub mod months;
 pub mod onboarding;
 pub mod reports;
@@ -36,11 +37,15 @@ use crate::error::AppError;
 #[derive(Clone)]
 pub struct AppState {
     pub pool: PgPool,
+    pub limiter: std::sync::Arc<limits::Limiter>,
 }
 
 impl AppState {
     pub fn new(pool: PgPool) -> Self {
-        AppState { pool }
+        AppState {
+            pool,
+            limiter: Default::default(),
+        }
     }
 }
 

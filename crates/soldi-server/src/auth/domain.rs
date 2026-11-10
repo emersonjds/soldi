@@ -16,6 +16,8 @@ pub const SESSION_DAYS: i64 = 30;
 /// e-mail is unknown, so both failures cost the same time.
 const DUMMY_PASSWORD_HASH: &str = "$argon2id$v=19$m=19456,t=2,p=1$LQzD6bTFuUbWQ35+CFbKXw$7x8VZQkRMrI/ptiG/Um0Ural4C1PMr9El05qYAXieyU";
 
+pub const MAX_EMAIL_BYTES: usize = 254;
+
 pub fn normalize_email(email: &str) -> Result<String, AppError> {
     reject_nul("email", email)?;
     let email = email.trim().to_lowercase();
@@ -24,7 +26,7 @@ pub fn normalize_email(email: &str) -> Result<String, AppError> {
     };
     let mut labels = domain.split('.');
     let valid = !local.is_empty()
-        && email.len() <= 254
+        && email.len() <= MAX_EMAIL_BYTES
         && !domain.contains('@')
         && !email.chars().any(char::is_whitespace)
         && labels.clone().count() >= 2

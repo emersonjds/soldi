@@ -7,7 +7,7 @@ import { toast } from "sonner";
 
 import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { ApiError, api, hasProblem, okOrThrow, type Schemas } from "@/shared/api/client";
+import { ApiError, api, hasProblem, hasStatus, okOrThrow, type Schemas } from "@/shared/api/client";
 import { BrandButton } from "@/shared/ui/brand-button";
 
 const TOO_SHORT = "Mínimo de 8 caracteres";
@@ -51,6 +51,7 @@ export const PasswordForm = () => {
             toast.error("Senha atual incorreta");
           } else if (error instanceof ApiError && error.errors.some(({ field }) => field === "password"))
             setRefused("next");
+          else if (hasStatus(error, 429)) toast.error("Muitas tentativas. Espere um pouco e tente de novo.");
           else toast.error("Não foi possível trocar a senha.");
         },
         onSettled: () => change.reset(),
