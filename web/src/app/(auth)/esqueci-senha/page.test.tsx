@@ -44,7 +44,8 @@ describe("Esqueci minha senha", () => {
       await screen.findByText(
         "Se existir uma conta com esse e-mail, enviamos um link para redefinir a senha. Ele vale por 1 hora.",
       ),
-    ).toBeInTheDocument();
+    ).toHaveFocus();
+    expect(screen.getByRole("status")).toHaveAttribute("tabindex", "-1");
     expect(screen.getByRole("link", { name: "Voltar para Entrar" })).toHaveAttribute("href", "/entrar");
     const sent = requests.find((request) => request.method === "POST");
     expect(await sent?.json()).toEqual({ email: "ana@example.com" });

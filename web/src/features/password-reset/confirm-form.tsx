@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -24,14 +24,17 @@ const lengthProblem = (password: string) => {
   return undefined;
 };
 
-/** Sets a new password with the token of the e-mailed link. */
-export const ConfirmForm = ({ token }: { token: string }) => {
+const focus = (node: HTMLElement | null) => node?.focus();
+
+/** Sets a new password with the token the e-mailed link carries in its fragment. */
+export const ConfirmForm = () => {
+  const [token, setToken] = useState<string>();
   const router = useRouter();
   const [password, setPassword] = useState("");
   const [repeat, setRepeat] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [refused, setRefused] = useState(false);
-  const [expired, setExpired] = useState(!token);
+  const [expired, setExpired] = useState(false);
   const confirm = useMutation({
     mutationFn: async (body: Schemas["ConfirmPasswordReset"]) =>
       okOrThrow(await api.POST("/api/auth/password-reset/confirm", { body })),
@@ -39,10 +42,24 @@ export const ConfirmForm = ({ token }: { token: string }) => {
   const passwordError = (submitted && lengthProblem(password)) || (refused ? TOO_SHORT : undefined);
   const repeatError = submitted && password !== repeat ? "As senhas não são iguais." : undefined;
 
-  if (expired)
+  useEffect(() => {
+    const found = new URLSearchParams(window.location.hash.slice(1)).get("token");
+    if (found !== null) window.history.replaceState(null, "", "/redefinir-senha");
+    // Strict Mode runs this twice; the second run sees the cleaned URL.
+    setToken((current) => current || found || "");
+  }, []);
+
+  if (token === undefined) return null;
+
+  if (expired || !token)
     return (
       <div className="flex flex-col gap-4">
-        <p role="alert" className="rounded-xl bg-expense-soft px-4 py-3 font-medium text-sm text-tier-red-foreground">
+        <p
+          ref={focus}
+          tabIndex={-1}
+          role="alert"
+          className="rounded-xl bg-expense-soft px-4 py-3 font-medium text-sm text-tier-red-foreground"
+        >
           Este link expirou ou já foi usado.
         </p>
         <Link

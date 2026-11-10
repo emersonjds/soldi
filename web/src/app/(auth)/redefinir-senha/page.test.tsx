@@ -31,7 +31,9 @@ const posts = (requests: Request[]) => requests.filter((request) => request.meth
 describe("Redefinir senha", () => {
   beforeEach(() => {
     router.replace.mockClear();
-    setSearch("token=abc123");
+    vi.restoreAllMocks();
+    setSearch("");
+    window.history.replaceState(null, "", "/redefinir-senha#token=abc123");
   });
 
   it("blocks different passwords before calling the API", async () => {
@@ -73,7 +75,11 @@ describe("Redefinir senha", () => {
 
   it("saves the new password and sends to Entrar", async () => {
     const requests = anonymous({ "POST /api/auth/password-reset/confirm": { status: 204 } });
+    const replaceState = vi.spyOn(window.history, "replaceState");
     renderPage();
+
+    expect(replaceState).toHaveBeenCalledWith(null, "", "/redefinir-senha");
+    expect(window.location.hash).toBe("");
 
     await submit("segredo123", "segredo123");
 
@@ -93,18 +99,30 @@ describe("Redefinir senha", () => {
 
     await submit("segredo123", "segredo123");
 
-    expect(await screen.findByText("Este link expirou ou já foi usado.")).toBeInTheDocument();
+    expect(await screen.findByText("Este link expirou ou já foi usado.")).toHaveFocus();
     expect(screen.getByRole("link", { name: "Pedir outro link" })).toHaveAttribute("href", "/esqueci-senha");
     expect(router.replace).not.toHaveBeenCalled();
   });
 
   it("says the link expired when the URL has no token", () => {
-    setSearch("");
+    window.history.replaceState(null, "", "/redefinir-senha");
+    const requests = anonymous();
+    renderPage();
+
+    expect(screen.getByRole("alert")).toHaveTextContent("Este link expirou ou já foi usado.");
+    expect(screen.getByRole("alert")).toHaveFocus();
+    expect(screen.getByRole("link", { name: "Pedir outro link" })).toHaveAttribute("href", "/esqueci-senha");
+    expect(screen.queryByRole("button", { name: "Salvar nova senha" })).not.toBeInTheDocument();
+    expect(posts(requests)).toHaveLength(0);
+  });
+
+  it("ignores a token in the query string", () => {
+    window.history.replaceState(null, "", "/redefinir-senha?token=abc123");
+    setSearch("token=abc123");
     const requests = anonymous();
     renderPage();
 
     expect(screen.getByText("Este link expirou ou já foi usado.")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Pedir outro link" })).toHaveAttribute("href", "/esqueci-senha");
     expect(screen.queryByRole("button", { name: "Salvar nova senha" })).not.toBeInTheDocument();
     expect(posts(requests)).toHaveLength(0);
   });

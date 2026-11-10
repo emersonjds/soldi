@@ -22,6 +22,8 @@ const failure = (error: Error) =>
     ? "Muitas tentativas. Espere um pouco e tente de novo."
     : "Não foi possível enviar agora. Tente de novo.";
 
+const focus = (node: HTMLElement | null) => node?.focus();
+
 /** Asks for a reset link; the answer never tells whether the e-mail has an account. */
 export const RequestForm = () => {
   const form = useForm<RequestReset>({ resolver: zodResolver(formSchema), defaultValues: { email: "" } });
@@ -32,7 +34,7 @@ export const RequestForm = () => {
   if (send.isSuccess)
     return (
       <div className="flex flex-col gap-4">
-        <p role="status" className="text-base">
+        <p ref={focus} tabIndex={-1} role="status" className="text-base">
           Se existir uma conta com esse e-mail, enviamos um link para redefinir a senha. Ele vale por 1 hora.
         </p>
         <Link href="/entrar" className="inline-flex min-h-11 items-center self-center font-semibold text-primary">
