@@ -2254,7 +2254,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description `month` is not `YYYY-MM` (`validation`), or is before the opening date's month (`month-before-opening`) */
+            /** @description `month` is not `YYYY-MM` from 2000 to 2100 (`validation`), or is before the opening date's month (`month-before-opening`) */
             422: {
                 headers: {
                     [name: string]: unknown;
