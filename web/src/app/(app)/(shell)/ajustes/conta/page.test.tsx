@@ -298,11 +298,34 @@ describe("Ajustes › Minha conta", () => {
     expect(await within(dialog).findByText("Senha incorreta")).toBeInTheDocument();
     const password = within(dialog).getByLabelText("Senha");
     expect(password).toHaveAttribute("aria-invalid", "true");
+    expect(password).toHaveFocus();
+    expect(password).toHaveAccessibleDescription("Senha incorreta");
     expect(screen.getByRole("alertdialog")).toBeInTheDocument();
     expect(router.replace).not.toHaveBeenCalled();
 
     await userEvent.type(password, "!");
     expect(within(dialog).queryByText("Senha incorreta")).not.toBeInTheDocument();
+  });
+
+  it("keeps the dialog open and Cancelar off while the deletion is on its way", async () => {
+    open();
+    const dialog = await openDeletion();
+    let release = (): void => undefined;
+    vi.stubGlobal(
+      "fetch",
+      () =>
+        new Promise<Response>((resolve) => {
+          release = () => resolve(new Response(null, { status: 204 }));
+        }),
+    );
+
+    await fillDeletion(dialog);
+
+    expect(within(dialog).getByRole("button", { name: "Cancelar" })).toBeDisabled();
+    await userEvent.keyboard("{Escape}");
+    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+    release();
+    await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/entrar"));
   });
 
   it("asks to wait when there were too many deletion attempts", async () => {
