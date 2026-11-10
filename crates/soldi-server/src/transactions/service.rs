@@ -1,3 +1,4 @@
+use chrono::Datelike;
 use soldi_types::categories::Category;
 use soldi_types::transactions::{
     CreateTransaction, Scope, Transaction, TransactionSeries, UpdateTransaction,
@@ -114,7 +115,7 @@ pub async fn create(
     })
 }
 
-/// R6: `following` also rewrites the series' later members; `repeat_months` starts a series.
+/// R6: `following` also rewrites the series' later members; `repeat_months` starts a series or resizes it (D19).
 pub async fn update(
     pool: &PgPool,
     user: &CurrentUser,
@@ -154,20 +155,57 @@ pub async fn update(
         let amount = (next.amount != current.amount).then_some(next.amount);
         repo::update_following(&mut tx, user.id, series.id, current.date, &next, amount).await?;
     }
-    if let Some(months) = next.repeat_months {
-        let series_id = Uuid::new_v4();
-        if !repo::set_series(&mut tx, user.id, id, series_id).await? {
-            return Err(domain::already_repeated());
+    match (next.repeat_months, &current.series) {
+        (Some(months), Some(series)) => resize(&mut tx, user, id, series.id, months, &next).await?,
+        (Some(months), None) => {
+            let series_id = Uuid::new_v4();
+            if !repo::set_series(&mut tx, user.id, id, series_id).await? {
+                return Err(domain::already_repeated());
+            }
+            let dates = domain::repeat_dates(next.date, months);
+            let amounts = vec![next.amount; dates.len()];
+            repo::insert_copies(&mut tx, user.id, &next, series_id, &dates, &amounts).await?;
         }
-        let dates = domain::repeat_dates(next.date, months);
-        let amounts = vec![next.amount; dates.len()];
-        repo::insert_copies(&mut tx, user.id, &next, series_id, &dates, &amounts).await?;
+        (None, _) => {}
     }
     let updated = repo::find(&mut tx, user.id, id)
         .await?
         .ok_or(AppError::NotFound)?;
     tx.commit().await?;
     Ok(updated)
+}
+
+/// L1–L4 (D19): the series ends after `months` entries; growth copies the edited member `next`.
+async fn resize(
+    conn: &mut PgConnection,
+    user: &CurrentUser,
+    id: Uuid,
+    series_id: Uuid,
+    months: i16,
+    next: &CreateTransaction,
+) -> Result<(), AppError> {
+    let edited = repo::find(conn, user.id, id)
+        .await?
+        .and_then(|entry| entry.series)
+        .ok_or(AppError::NotFound)?;
+    let months = domain::check_series_length(months, edited.position)?;
+    let total = edited.total;
+    if i64::from(months) < total {
+        repo::delete_beyond(conn, user.id, series_id, months.into()).await?;
+    } else if i64::from(months) > total {
+        let start = repo::series_start(conn, user.id, series_id)
+            .await?
+            .ok_or(AppError::NotFound)?;
+        let dates = domain::repeat_dates(start, months);
+        let added = usize::try_from(total - 1)
+            .ok()
+            .and_then(|kept| dates.get(kept..))
+            .filter(|added| added.iter().all(|date| date.year() <= 2100))
+            .ok_or_else(|| AppError::invalid("date", "must leave room for every month"))?;
+        let amounts = vec![next.amount; added.len()];
+        repo::insert_copies(conn, user.id, next, series_id, added, &amounts).await?;
+    }
+    Ok(())
 }
 
 /// `following` on a series member also deletes the members dated after it.

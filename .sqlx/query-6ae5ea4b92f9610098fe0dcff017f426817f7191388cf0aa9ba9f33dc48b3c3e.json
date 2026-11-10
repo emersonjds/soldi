@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM transactions WHERE user_id = $1 AND id IN (\n             SELECT id FROM transactions WHERE user_id = $1 AND series_id = $2\n             ORDER BY date, id OFFSET $3)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6ae5ea4b92f9610098fe0dcff017f426817f7191388cf0aa9ba9f33dc48b3c3e"
+}

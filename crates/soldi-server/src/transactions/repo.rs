@@ -273,6 +273,41 @@ pub async fn delete_following(
     Ok(())
 }
 
+/// L1: the date of the series' first member, the grid growth follows.
+pub async fn series_start(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    series_id: Uuid,
+) -> Result<Option<NaiveDate>, sqlx::Error> {
+    sqlx::query_scalar!(
+        "SELECT min(date) FROM transactions WHERE user_id = $1 AND series_id = $2",
+        user_id,
+        series_id
+    )
+    .fetch_one(&mut *conn)
+    .await
+}
+
+/// L3: deletes the series' members ranked after the first `keep` by `(date, id)`.
+pub async fn delete_beyond(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    series_id: Uuid,
+    keep: i64,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        "DELETE FROM transactions WHERE user_id = $1 AND id IN (
+             SELECT id FROM transactions WHERE user_id = $1 AND series_id = $2
+             ORDER BY date, id OFFSET $3)",
+        user_id,
+        series_id,
+        keep
+    )
+    .execute(&mut *conn)
+    .await?;
+    Ok(())
+}
+
 /// R8: the entry becomes the bill's payment; false unless it is a standalone `bill` entry.
 pub async fn link_bill(
     conn: &mut PgConnection,
