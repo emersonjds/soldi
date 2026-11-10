@@ -3,7 +3,9 @@ use std::collections::{BTreeMap, HashSet};
 use chrono::{Datelike, Months, NaiveDate};
 use rust_decimal::Decimal;
 use soldi_types::categories::CategoryKind;
-use soldi_types::months::{BillOfMonth, Day, MonthSavings, MonthView, Tier, Totals};
+use soldi_types::months::{
+    BillOfMonth, Day, Forecast, ForecastDay, MonthSavings, MonthView, Tier, Totals,
+};
 use soldi_types::settings::Settings;
 use uuid::Uuid;
 
@@ -289,6 +291,58 @@ pub fn month_view(input: MonthInput) -> MonthView {
             rate_pct: percent(saved, totals.income),
         },
     }
+}
+
+/// `sums` cover `opening_date` to `horizon_end(today)`, `payments` the opening date's month to it.
+pub struct ForecastInput {
+    pub settings: Settings,
+    pub sums: Vec<DaySum>,
+    pub bills: Vec<MonthBill>,
+    pub payments: Vec<Payment>,
+    pub today: NaiveDate,
+}
+
+/// D16: the last day of the 11th month after today's.
+pub fn horizon_end(today: NaiveDate) -> NaiveDate {
+    let first = first_of(today);
+    month_end(first.checked_add_months(Months::new(11)).unwrap_or(first))
+}
+
+/// D16, D17: each day from today (the opening date, when later) to `horizon_end`, walked like
+/// `month_view` with every unpaid month landed.
+pub fn forecast(input: ForecastInput) -> Forecast {
+    let ForecastInput {
+        settings,
+        sums,
+        bills,
+        payments,
+        today,
+    } = input;
+    let flows = flows_by_day(sums);
+    let from = today.max(settings.opening_date);
+    let to = horizon_end(today);
+    let unpaid_months = unpaid(&bills, &payments, settings.opening_date, today, to);
+    let (mut pending, lands) = landing(&unpaid_months, from, to);
+    let mut balance = settings.opening_balance
+        + flows
+            .range(..from)
+            .map(|(_, flow)| flow.net())
+            .sum::<Decimal>();
+    let days = from
+        .iter_days()
+        .take_while(|date| *date <= to)
+        .map(|date| {
+            balance += flows.get(&date).map_or(Decimal::ZERO, Flows::net);
+            pending += lands.get(&date).copied().unwrap_or_default();
+            let projected_balance = balance - pending;
+            ForecastDay {
+                date,
+                projected_balance,
+                projected_tier: tier(projected_balance, &settings),
+            }
+        })
+        .collect();
+    Forecast { today, days }
 }
 
 /// The first day of a `YYYY-MM` month, years 2000 to 2100 (SOL-30's bound).
@@ -1258,5 +1312,150 @@ mod tests {
                 money("1010")
             ]
         );
+    }
+    fn owners_sums() -> Vec<DaySum> {
+        vec![
+            sum("2026-11-23", Bill, "1925"),
+            sum("2026-11-25", Daily, "241"),
+            sum("2026-11-30", Income, "4575"),
+        ]
+    }
+
+    fn owners_bills() -> Vec<MonthBill> {
+        vec![
+            bill(1, "Cartão", "4900", 23),
+            bill(2, "Financiamento", "2000", 28),
+            bill(3, "Condomínio", "1168", 30),
+        ]
+    }
+
+    fn ahead(
+        settings: Settings,
+        sums: Vec<DaySum>,
+        bills: Vec<MonthBill>,
+        today: &str,
+    ) -> Forecast {
+        forecast(ForecastInput {
+            settings,
+            sums,
+            bills,
+            payments: vec![],
+            today: date(today),
+        })
+    }
+
+    fn at(forecast: &Forecast, on: &str) -> (Decimal, Tier) {
+        let day = forecast
+            .days
+            .iter()
+            .find(|day| day.date == date(on))
+            .unwrap();
+        (day.projected_balance, day.projected_tier)
+    }
+
+    #[test]
+    fn sol51_the_horizon_runs_from_today_to_the_end_of_the_eleventh_month_after() {
+        let flat = ahead(settings("1000", "2026-11-01"), vec![], vec![], "2026-11-10");
+
+        assert_eq!(flat.today, date("2026-11-10"));
+        assert_eq!(flat.days.len(), 356);
+        assert_eq!(flat.days[0].date, date("2026-11-10"));
+        assert_eq!(flat.days.last().unwrap().date, date("2027-10-31"));
+        assert!(
+            flat.days
+                .iter()
+                .all(|day| (day.projected_balance, day.projected_tier)
+                    == (money("1000"), Tier::LightGreen))
+        );
+        assert_eq!(horizon_end(date("2027-03-31")), date("2028-02-29"));
+    }
+
+    #[test]
+    fn sol51_the_owners_november_runs_into_a_red_december_without_a_salary() {
+        let year = ahead(
+            settings("6150", "2026-11-01"),
+            owners_sums(),
+            owners_bills(),
+            "2026-11-10",
+        );
+
+        assert_eq!(at(&year, "2026-11-22"), (money("6150"), Tier::Green));
+        assert_eq!(at(&year, "2026-11-23"), (money("-675"), Tier::Red));
+        assert_eq!(at(&year, "2026-11-28"), (money("-2916"), Tier::Red));
+        assert_eq!(at(&year, "2026-11-30"), (money("491"), Tier::Yellow));
+        assert_eq!(at(&year, "2026-12-22"), (money("491"), Tier::Yellow));
+        assert_eq!(at(&year, "2026-12-23"), (money("-4409"), Tier::Red));
+        assert_eq!(at(&year, "2026-12-31"), (money("-7577"), Tier::Red));
+    }
+
+    #[test]
+    fn sol51_every_forecast_day_equals_its_month_views_day() {
+        let carried = || {
+            (
+                settings("1200", "2026-10-01"),
+                vec![
+                    sum("2026-10-25", Bill, "90"),
+                    sum("2026-12-05", Income, "3000"),
+                ],
+                vec![bill(1, "Aluguel", "1800", 10), bill(2, "Luz", "100", 25)],
+                vec![payment(2, 9, "90", "2026-10-25")],
+                "2026-11-20",
+            )
+        };
+        let owners = || {
+            (
+                settings("6150", "2026-11-01"),
+                owners_sums(),
+                owners_bills(),
+                vec![],
+                "2026-11-10",
+            )
+        };
+        for scenario in [owners, carried] {
+            let (settings, sums, bills, payments, today) = scenario();
+            let year = forecast(ForecastInput {
+                settings,
+                sums,
+                bills,
+                payments,
+                today: date(today),
+            });
+            for month in ["2026-11", "2026-12", "2027-10"] {
+                let (settings, sums, bills, payments, _) = scenario();
+                let view = with_bills(month, settings, sums, bills, payments, today);
+                for day in view.days.iter().filter(|day| day.date >= date(today)) {
+                    assert_eq!(
+                        at(&year, &day.date.to_string()),
+                        (day.projected_balance, day.projected_tier),
+                        "{}",
+                        day.date
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sol51_a_carried_bill_lands_today_and_the_next_months_on_their_due_day() {
+        let year = ahead(
+            settings("1200", "2026-10-01"),
+            vec![],
+            vec![bill(1, "Aluguel", "1800", 10)],
+            "2026-11-20",
+        );
+
+        assert_eq!(at(&year, "2026-11-20"), (money("-2400"), Tier::Red));
+        assert_eq!(at(&year, "2026-12-09").0, money("-2400"));
+        assert_eq!(at(&year, "2026-12-10").0, money("-4200"));
+    }
+
+    #[test]
+    fn sol51_a_later_opening_date_starts_the_horizon_and_one_past_it_leaves_none() {
+        let later = ahead(settings("500", "2027-01-15"), vec![], vec![], "2026-11-10");
+        let beyond = ahead(settings("500", "2028-01-01"), vec![], vec![], "2026-11-10");
+
+        assert_eq!(later.days[0].date, date("2027-01-15"));
+        assert_eq!(later.days[0].projected_balance, money("500"));
+        assert!(beyond.days.is_empty());
     }
 }
