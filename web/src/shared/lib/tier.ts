@@ -36,7 +36,7 @@ export const TIER_STYLE: Record<Tier, { pill: string; dot: string }> = {
 export type TierBounds = Pick<Schemas["Settings"], "tier_red" | "tier_zero" | "tier_yellow" | "tier_green">;
 
 /** An API decimal in whole cents: integer math, exact up to 2^53 cents. */
-const cents = (amount: string) => {
+export const cents = (amount: string) => {
   const [whole, fraction = ""] = amount.split(".");
   const sign = whole.startsWith("-") ? -1 : 1;
   return Number(whole) * 100 + sign * Number(fraction.padEnd(2, "0"));
