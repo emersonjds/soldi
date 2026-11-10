@@ -8,6 +8,7 @@ import {
   BILLS,
   BILLS_OF_MONTH,
   CARRIED_ALUGUEL,
+  FORECAST,
   MONTH,
   problem,
   stubApi,
@@ -146,6 +147,21 @@ describe("usePayBill and useUnpayBill", () => {
     expect(await requests[0].json()).toEqual({ date: "2026-11-05", amount: "2300.00" });
     expect(isStale(view, ["month", "2026-11"])).toBe(true);
     expect(isStale(view, ["transactions", "2026-11"])).toBe(true);
+  });
+
+  it("pays with the forecast cached under the months, leaving it as it was until the refresh", async () => {
+    const requests = stubApi({ [`POST /api/bills/${BILL_ALUGUEL.id}/pay`]: { status: 201, body: PAYMENT } });
+    const view = seeded();
+    view.client.setQueryData(["month", "forecast"], FORECAST);
+
+    await act(() =>
+      view.result.current.pay.mutateAsync({ billId: BILL_ALUGUEL.id, month: "2026-11", date: "2026-11-05" }),
+    );
+
+    expect(requests).toHaveLength(1);
+    expect(rowOf(view, BILL_ALUGUEL.id)?.paid).toBe(true);
+    expect(view.client.getQueryData(["month", "forecast"])).toEqual(FORECAST);
+    expect(isStale(view, ["month", "forecast"])).toBe(true);
   });
 
   it("keeps the bill's amount when none is given and clears the overdue mark", async () => {

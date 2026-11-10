@@ -449,3 +449,62 @@ async fn sol55_a_payment_before_a_moved_opening_still_pays_its_month(pool: PgPoo
         "{current}"
     );
 }
+
+#[sqlx::test]
+async fn sol51_the_forecast_walks_twelve_months_of_the_callers_bills(pool: PgPool) {
+    use chrono::{Datelike, Months};
+    let user = TestApp::signed_in(pool.clone(), "ana@example.com").await;
+    let bia = user.another_user("bia@example.com").await;
+    let today = soldi_server::today_sao_paulo();
+    let first = today.with_day(1).unwrap();
+    open_at(&user, "1000", &first.to_string()).await;
+    open_at(&bia, "1000", &first.to_string()).await;
+    add_bill(&user, "Aluguel", "1600", 28, "Aluguel").await;
+    add_bill(&bia, "Aluguel", "999", 1, "Aluguel").await;
+    owing_since(&pool, &first.to_string()).await;
+
+    let (status, forecast) = user.get("/api/forecast").await;
+
+    assert_eq!(status, StatusCode::OK, "{forecast}");
+    assert_eq!(forecast["today"], today.to_string());
+    let days = forecast["days"].as_array().unwrap();
+    let last = first
+        .checked_add_months(Months::new(12))
+        .unwrap()
+        .pred_opt()
+        .unwrap();
+    assert_eq!(days[0]["date"], today.to_string());
+    assert_eq!(days.last().unwrap()["date"], last.to_string());
+    let next = first.checked_add_months(Months::new(1)).unwrap();
+    let next_28 = next.with_day(28).unwrap().to_string();
+    let day = days
+        .iter()
+        .find(|day| day["date"] == next_28.as_str())
+        .unwrap();
+    assert_eq!(
+        (&day["projected_balance"], &day["projected_tier"]),
+        (&json!("-2200.00"), &json!("red"))
+    );
+    for month in [first, next] {
+        let (_, view) = user
+            .get(&format!("/api/months/{}", month.format("%Y-%m")))
+            .await;
+        for day in view["days"].as_array().unwrap() {
+            if day["date"].as_str().unwrap() >= today.to_string().as_str() {
+                let ahead = days
+                    .iter()
+                    .find(|ahead| ahead["date"] == day["date"])
+                    .unwrap();
+                assert_eq!(
+                    (&ahead["projected_balance"], &ahead["projected_tier"]),
+                    (&day["projected_balance"], &day["projected_tier"]),
+                    "{}",
+                    day["date"]
+                );
+            }
+        }
+    }
+
+    let (status, _) = TestApp::anonymous(pool).get("/api/forecast").await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { dayMonth, monthName, monthYear } from "./date";
+import { addMonths, dayMonth, monthName, monthYear } from "./date";
 
 describe("monthYear", () => {
   it("writes a deadline as the month and year", () => {
@@ -16,5 +16,11 @@ describe("monthYear", () => {
     expect(monthName("2026-10-10", "2026-11")).toBe("outubro");
     expect(monthName("2025-12-05", "2026-01")).toBe("dezembro de 2025");
     expect(monthName("2026-03", "2026-03")).toBe("março");
+  });
+
+  it("adds months across a year", () => {
+    expect(addMonths("2026-11", 0)).toBe("2026-11");
+    expect(addMonths("2026-11", 2)).toBe("2027-01");
+    expect(addMonths("2026-12", 11)).toBe("2027-11");
   });
 });

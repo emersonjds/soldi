@@ -20,7 +20,7 @@ import {
 } from "@/entities/transaction/transaction-queries";
 import type { Schemas } from "@/shared/api/client";
 import { useCurrency } from "@/shared/lib/currency";
-import { monthYear, todayISO } from "@/shared/lib/date";
+import { addMonths, monthYear, todayISO } from "@/shared/lib/date";
 import { formatMoney, positiveAmount } from "@/shared/lib/money";
 import { BrandButton } from "@/shared/ui/brand-button";
 import { DateChips } from "@/shared/ui/date-chips";
@@ -53,10 +53,7 @@ type Draft = {
 };
 
 /** `out 2027`: the month of the last of `months` entries from `date`; the day clamp never changes the month. */
-const lastMonth = (date: string, months: number) => {
-  const index = Number(date.slice(0, 4)) * 12 + Number(date.slice(5, 7)) - 1 + months - 1;
-  return monthYear(`${Math.floor(index / 12)}-${String((index % 12) + 1).padStart(2, "0")}`);
-};
+const lastMonth = (date: string, months: number) => monthYear(addMonths(date.slice(0, 7), months - 1));
 
 type Source = Transaction | NewTransaction;
 

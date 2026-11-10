@@ -1,4 +1,11 @@
-import { type QueryClient, queryOptions, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  type QueryClient,
+  type QueryFilters,
+  queryOptions,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 
 import { api, dataOrThrow, okOrThrow, type Schemas } from "@/shared/api/client";
 import { todayISO } from "@/shared/lib/date";
@@ -64,7 +71,7 @@ const patchRow = async (
   { billId, month }: Payment,
   patch: (row: BillOfMonth) => Partial<BillOfMonth>,
 ) => {
-  const filters = { queryKey: ["month"] };
+  const filters: QueryFilters = { queryKey: ["month"], predicate: ({ queryKey }) => queryKey[1] !== "forecast" };
   await client.cancelQueries(filters);
   const previous = client.getQueriesData<Schemas["MonthView"]>(filters);
   client.setQueriesData<Schemas["MonthView"]>(
