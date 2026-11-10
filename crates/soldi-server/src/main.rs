@@ -9,24 +9,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let database_url = std::env::var("DATABASE_URL")?;
     let port = std::env::var("PORT").unwrap_or_else(|_| "8080".into());
     let web_dir = std::env::var("SOLDI_WEB_DIR").unwrap_or_else(|_| "web/out".into());
+    let public_url = std::env::var("SOLDI_PUBLIC_URL")
+        .unwrap_or_else(|_| "http://localhost:8080".into())
+        .trim_end_matches('/')
+        .to_string();
+    let mailer = soldi_server::mail::Mailer::from_env(
+        std::env::var("RESEND_API_KEY").ok(),
+        std::env::var("SOLDI_MAIL_FROM").ok(),
+        &public_url,
+    )?;
     let pool = sqlx::postgres::PgPoolOptions::new()
         .max_connections(10)
         .acquire_timeout(std::time::Duration::from_secs(5))
         .connect(&database_url)
         .await?;
     sqlx::migrate!().run(&pool).await?;
-    let mailer = match std::env::var("RESEND_API_KEY") {
-        Ok(api_key) => {
-            let from = std::env::var("SOLDI_MAIL_FROM")
-                .unwrap_or_else(|_| "Soldi <nao-responda@getsoldi.app>".into());
-            soldi_server::mail::Mailer::resend(api_key, from)?
-        }
-        Err(_) => soldi_server::mail::Mailer::Log,
-    };
-    let public_url = std::env::var("SOLDI_PUBLIC_URL")
-        .unwrap_or_else(|_| "http://localhost:8080".into())
-        .trim_end_matches('/')
-        .to_string();
     let state = soldi_server::AppState {
         mailer,
         public_url,

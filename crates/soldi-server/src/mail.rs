@@ -58,6 +58,32 @@ impl Mailer {
         })
     }
 
+    /// Fails closed: a blank setting or a missing key outside a local URL stops the server.
+    pub fn from_env(
+        api_key: Option<String>,
+        from: Option<String>,
+        public_url: &str,
+    ) -> Result<Self, String> {
+        let Some(api_key) = api_key else {
+            let local = ["http://localhost", "http://127.0.0.1"]
+                .iter()
+                .any(|prefix| public_url.starts_with(prefix));
+            return if local {
+                Ok(Mailer::Log)
+            } else {
+                Err(format!("RESEND_API_KEY is required for {public_url}"))
+            };
+        };
+        if api_key.trim().is_empty() {
+            return Err("RESEND_API_KEY is blank".into());
+        }
+        let from = from.unwrap_or_else(|| "Soldi <nao-responda@getsoldi.app>".into());
+        if from.trim().is_empty() {
+            return Err("SOLDI_MAIL_FROM is blank".into());
+        }
+        Mailer::resend(api_key, from).map_err(|error| error.to_string())
+    }
+
     pub async fn send_password_reset(
         &self,
         to: &str,
@@ -203,6 +229,53 @@ mod tests {
             Mailer::resend("re_key".into(), "Soldi <a@b.c>".into()),
             Ok(Mailer::Resend { .. })
         ));
+    }
+
+    fn from_env(key: Option<&str>, from: Option<&str>, public_url: &str) -> Result<Mailer, String> {
+        Mailer::from_env(key.map(Into::into), from.map(Into::into), public_url)
+    }
+
+    #[test]
+    fn a_key_sends_through_resend_with_the_default_or_given_sender() {
+        let url = "https://getsoldi.app";
+        assert!(matches!(
+            from_env(Some("re_key"), None, url),
+            Ok(Mailer::Resend { from, .. }) if from == "Soldi <nao-responda@getsoldi.app>"
+        ));
+        assert!(matches!(
+            from_env(Some("re_key"), Some("Soldi <a@b.c>"), url),
+            Ok(Mailer::Resend { from, .. }) if from == "Soldi <a@b.c>"
+        ));
+    }
+
+    #[test]
+    fn a_blank_key_or_sender_refuses_to_start() {
+        for (key, from) in [
+            (" ", None),
+            ("", None),
+            ("re_key", Some("")),
+            ("re_key", Some(" \t")),
+        ] {
+            let refused = from_env(Some(key), from, "http://localhost:8080");
+            assert!(refused.is_err(), "{key:?} {from:?}");
+        }
+    }
+
+    #[test]
+    fn no_key_logs_only_on_a_local_url() {
+        for url in ["http://localhost:8080", "http://127.0.0.1:3000"] {
+            assert!(
+                matches!(from_env(None, None, url), Ok(Mailer::Log)),
+                "{url}"
+            );
+        }
+        for url in [
+            "https://getsoldi.app",
+            "http://getsoldi.app",
+            "https://localhost",
+        ] {
+            assert!(from_env(None, None, url).is_err(), "{url}");
+        }
     }
 
     #[derive(Clone, Default)]
