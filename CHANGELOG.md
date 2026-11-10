@@ -7,6 +7,15 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.20.0
+
+> Headline: no spreadsheet importer
+
+### Removed
+
+- The `Termômetro.xlsx` importer: `POST /api/imports/xlsx` and `POST /api/imports/xlsx/confirm`, the Ajustes › Importar planilha screen and the `calamine` dependency. Every spreadsheet has its own layout, so one parser could not serve other users (D18).
+- Migration `0019` drops the `import_previews` table and the `import_batch_id`/`import_year` columns. Entries imported earlier stay as ordinary entries.
+
 ## 0.19.0
 
 > Headline: one address, and screens that read clearly
