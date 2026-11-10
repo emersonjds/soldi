@@ -9,10 +9,13 @@ import {
   BILL_ALUGUEL,
   CATEGORIES,
   EXTRA,
+  FORECAST,
+  FORECAST_FLAT,
   MERCADO,
   problem,
   RESERVA,
   SALARIO,
+  SETTINGS,
   stubApi,
   TRANSACTIONS,
   WITH_COFRINHOS,
@@ -401,6 +404,124 @@ describe("TransactionSheet", () => {
 
     await userEvent.click(await screen.findByRole("radio", { name: "Saída" }));
     expect(screen.queryByRole("button", { name: "Transformar em conta fixa" })).not.toBeInTheDocument();
+  });
+
+  const simulated = (forecast = FORECAST) => ({
+    "GET /api/forecast": { status: 200, body: forecast },
+    "GET /api/settings": { status: 200, body: SETTINGS },
+  });
+
+  it("simulates without writing: the verdict follows each keystroke, Descartar closes", async () => {
+    const { requests, onOpenChange } = setup({}, simulated());
+
+    await userEvent.click(await screen.findByRole("switch", { name: "Simular" }));
+    expect(screen.getByText("Digite um valor para simular.")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("radio", { name: "Saída" }));
+    await userEvent.click(screen.getByLabelText("Valor"));
+    await userEvent.keyboard("6700,00");
+
+    const simulation = await screen.findByRole("region", { name: "Simulação" });
+    expect(await within(simulation).findByRole("status")).toHaveTextContent("Com essa compra, hoje vira Crítico");
+    const week = within(simulation).getByRole("list", { name: "Próximos 7 dias" });
+    expect(within(week).getAllByRole("listitem")).toHaveLength(7);
+    expect(within(week).getAllByRole("listitem")[0]).toHaveTextContent("10/11Crítico");
+    expect(screen.queryByRole("button", { name: "Salvar" })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("switch", { name: "Simular" }));
+    expect(screen.queryByRole("region", { name: "Simulação" })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("switch", { name: "Simular" }));
+    await userEvent.click(screen.getByRole("button", { name: "Descartar" }));
+
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+    expect(requests.filter((request) => request.method === "POST")).toHaveLength(0);
+    expect(requests.filter((request) => request.url.endsWith("/api/forecast"))).toHaveLength(1);
+  });
+
+  it("says when red days were already there", async () => {
+    setup({}, simulated());
+    await userEvent.click(await screen.findByRole("switch", { name: "Simular" }));
+    await userEvent.click(screen.getByLabelText("Valor"));
+    await userEvent.keyboard("100,00");
+    fireEvent.change(screen.getByLabelText("Outra data"), { target: { value: "2026-11-24" } });
+    expect(await screen.findByRole("status")).toHaveTextContent("Essa compra não cria dia vermelho novo.");
+  });
+
+  it("is clear on a flat forecast", async () => {
+    setup({}, simulated(FORECAST_FLAT));
+    await userEvent.click(await screen.findByRole("switch", { name: "Simular" }));
+    await userEvent.click(screen.getByLabelText("Valor"));
+    await userEvent.keyboard("50,00");
+    expect(await screen.findByRole("status")).toHaveTextContent("Nenhum dia vermelho com essa compra.");
+  });
+
+  it("parcela 1.000,01 em 10x: summary, the months strip, and Lançar de verdade posts the total once", async () => {
+    const { sent } = setup({}, simulated());
+    await userEvent.click(await screen.findByRole("switch", { name: "Simular" }));
+    await userEvent.click(screen.getByLabelText("Valor"));
+    await userEvent.keyboard("1000,01");
+    await userEvent.click(screen.getByRole("switch", { name: "Repetir" }));
+    await userEvent.click(screen.getByRole("switch", { name: "Parcelar" }));
+    expect(screen.getByRole("switch", { name: "Repetir" })).not.toBeChecked();
+    expect(screen.getByRole("radiogroup", { name: "Quantas parcelas" })).toBeInTheDocument();
+    expect(screen.getByText("11× R$ 83,33 + R$ 83,38 na última · até out 2027")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("radio", { name: "Outro" }));
+    await userEvent.type(screen.getByLabelText("Parcelas"), "10");
+
+    expect(screen.getByText("9× R$ 100,00 + R$ 100,01 na última · até ago 2027")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Meses com essa compra" })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Lançar de verdade" }));
+
+    const body = await sent("POST");
+    expect(body).toMatchObject({ amount: "1000.01", installments: 10 });
+    expect(body).not.toHaveProperty("repeat_months");
+    expect(await screen.findByText("10 parcelas lançadas")).toBeInTheDocument();
+  });
+
+  it("sums an even split in one line, and Repetir turns Parcelar off", async () => {
+    setup();
+    await userEvent.click(screen.getByLabelText("Valor"));
+    await userEvent.keyboard("300,00");
+    await userEvent.click(await screen.findByRole("switch", { name: "Parcelar" }));
+    await userEvent.click(screen.getByRole("radio", { name: "3x" }));
+    expect(screen.getByText("3× R$ 100,00 · até jan 2027")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Transformar em conta fixa" })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("switch", { name: "Repetir" }));
+    expect(screen.getByRole("switch", { name: "Parcelar" })).not.toBeChecked();
+  });
+
+  it("asks for 2 to 60 parcelas in Outro", async () => {
+    const { requests } = setup();
+    await userEvent.click(screen.getByLabelText("Valor"));
+    await userEvent.keyboard("300,00");
+    await userEvent.click(await screen.findByRole("switch", { name: "Parcelar" }));
+    await userEvent.click(screen.getByRole("radio", { name: "Outro" }));
+    const parcelas = screen.getByLabelText("Parcelas");
+    await userEvent.type(parcelas, "61");
+    await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
+    expect(parcelas).toHaveAccessibleDescription("Escolha de 2 a 60 parcelas.");
+    expect(requests.filter((request) => request.method === "POST")).toHaveLength(0);
+  });
+
+  it("refuses a parcela at zero and offers Parcelar only on Saída and Diário", async () => {
+    const { requests } = setup();
+    await userEvent.click(screen.getByLabelText("Valor"));
+    await userEvent.keyboard("0,05");
+    await userEvent.click(await screen.findByRole("switch", { name: "Parcelar" }));
+    await userEvent.click(screen.getByRole("radio", { name: "Outro" }));
+    await userEvent.type(screen.getByLabelText("Parcelas"), "6");
+    await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
+    expect(screen.getByRole("alert")).toHaveTextContent("Valor pequeno demais para 6 parcelas.");
+    expect(requests.filter((request) => request.method === "POST")).toHaveLength(0);
+
+    await userEvent.click(screen.getByRole("radio", { name: "Entrada" }));
+    expect(screen.queryByRole("switch", { name: "Parcelar" })).not.toBeInTheDocument();
+  });
+
+  it("offers no Simular nor Parcelar when editing", async () => {
+    setup({ transaction: MERCADO_ROW });
+    await screen.findByRole("dialog", { name: "Editar lançamento" });
+    expect(screen.queryByRole("switch", { name: "Simular" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("switch", { name: "Parcelar" })).not.toBeInTheDocument();
   });
 
   it("is a centered dialog from 1024px", async () => {
