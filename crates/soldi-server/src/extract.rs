@@ -53,6 +53,23 @@ impl FromRequestParts<AppState> for CurrentUser {
     }
 }
 
+/// Middleware: `www.<domain>` answers 308 to the same path on `https://<domain>`, so one host
+/// holds the session cookie.
+pub async fn redirect_www(request: Request, next: Next) -> Response {
+    let host = request
+        .headers()
+        .get(axum::http::header::HOST)
+        .and_then(|host| host.to_str().ok());
+    let Some(bare) = host.and_then(|host| host.strip_prefix("www.")) else {
+        return next.run(request).await;
+    };
+    let path = request
+        .uri()
+        .path_and_query()
+        .map_or("/", |path| path.as_str());
+    axum::response::Redirect::permanent(&format!("https://{bare}{path}")).into_response()
+}
+
 /// Middleware: answers 403 to cross-site browser writes before any handler runs.
 pub async fn reject_cross_site_writes(request: Request, next: Next) -> Response {
     let authority = request
