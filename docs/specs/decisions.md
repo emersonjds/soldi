@@ -61,3 +61,7 @@ pt-BR only product (D3): the server computes `today` in `America/Sao_Paulo` (chr
 ## D15 — Category colors are unique per kind; subcategories wear the parent's (2026-11-08, owner)
 
 Among a user's active top-level categories of one kind no two share a color; the palette grows to 24 tokens so the defaults fit. Every subcategory, cofrinhos included, takes its parent's color and has no picker. Rejected: uniqueness across kinds (about 40 tokens, too close to tell apart) and cofrinhos keeping their own colors (an exception to a rule the owner wants without exceptions). Detail: `docs/specs/cards/SOL-32.md`.
+
+## D16 — Forecast is computed from what the user entered, never guessed (2026-11-10, owner + product/finance/ux panel)
+
+Future days show a projected balance built from committed future entries and unpaid contas fixas on their due day (a past-due one lands today); nothing is stored ahead (D8 holds). Future daily spending is not averaged in: false alarms cost more trust than late ones. Salary stays an entry repeated with D14, no recurring-income entity. The alert is the user's red tier, not "below zero". Horizon tops out at 12 months. "Posso comprar isso?" previews a draft without writing it; installments are a D14 series with the cents remainder on the last one. Rejected: bank sync, multi-year or multi-scenario models, envelope budgeting. Detail: `docs/specs/forecast/`.
