@@ -1,5 +1,8 @@
 use axum::Json;
-use axum::extract::State;
+use std::net::SocketAddr;
+
+use axum::Extension;
+use axum::extract::{ConnectInfo, State};
 use axum::http::header::SET_COOKIE;
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::IntoResponse;
@@ -12,6 +15,14 @@ use super::{domain, service};
 use crate::AppState;
 use crate::error::AppError;
 use crate::extract::{CurrentUser, JsonBody};
+use crate::limits;
+
+type Peer = Option<Extension<ConnectInfo<SocketAddr>>>;
+
+fn client_ip(headers: &HeaderMap, peer: Peer) -> Option<String> {
+    let peer = peer.map(|Extension(ConnectInfo(address))| address);
+    limits::client_ip(headers, peer).map(|ip| ip.to_string())
+}
 
 pub fn router() -> OpenApiRouter<AppState> {
     OpenApiRouter::new()
@@ -34,8 +45,11 @@ pub fn router() -> OpenApiRouter<AppState> {
 pub async fn sign_up(
     State(state): State<AppState>,
     headers: HeaderMap,
+    peer: Peer,
     JsonBody(input): JsonBody<SignUp>,
 ) -> Result<impl IntoResponse, AppError> {
+    let ip = client_ip(&headers, peer);
+    state.limiter.check(&[(limits::SIGN_UP_IP, ip)])?;
     let (user, session) = service::sign_up(&state.pool, input).await?;
     let cookie = domain::session_cookie(&session, domain::is_https(&headers));
     Ok((StatusCode::CREATED, [(SET_COOKIE, cookie)], Json(user)))
@@ -50,8 +64,15 @@ pub async fn sign_up(
 pub async fn sign_in(
     State(state): State<AppState>,
     headers: HeaderMap,
+    peer: Peer,
     JsonBody(input): JsonBody<SignIn>,
 ) -> Result<impl IntoResponse, AppError> {
+    let ip = client_ip(&headers, peer);
+    let email = input.email.trim().to_lowercase();
+    state.limiter.check(&[
+        (limits::SIGN_IN_IP, ip),
+        (limits::SIGN_IN_EMAIL, Some(email)),
+    ])?;
     let (user, session) = service::sign_in(&state.pool, input).await?;
     let cookie = domain::session_cookie(&session, domain::is_https(&headers));
     Ok(([(SET_COOKIE, cookie)], Json(user)))
@@ -129,6 +150,10 @@ pub async fn change_password(
     user: CurrentUser,
     JsonBody(input): JsonBody<ChangePassword>,
 ) -> Result<StatusCode, AppError> {
+    let user_id = Some(user.id.to_string());
+    state
+        .limiter
+        .check(&[(limits::PASSWORD_CHANGE_USER, user_id)])?;
     service::change_password(&state.pool, &user, input).await?;
     Ok(StatusCode::NO_CONTENT)
 }
