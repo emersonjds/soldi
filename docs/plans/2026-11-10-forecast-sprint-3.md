@@ -1715,10 +1715,13 @@ git commit -m "test(web): SOL-51 chips paint the coming months and open one"
     }
 
     #[test]
-    fn r9_installments_split_half_even_with_the_remainder_on_the_last() {
+    fn r9_installments_truncate_each_to_cents_with_the_remainder_on_the_last() {
         let ten = amounts("1000.01", 10);
-        assert_eq!(ten[..9], vec!["100.00"; 9]);
+        assert_eq!(ten[..9], ["100.00"; 9]);
         assert_eq!(ten[9], "100.01");
+        let sixty = amounts("10.00", 60);
+        assert_eq!(sixty[..59], ["0.16"; 59]);
+        assert_eq!(sixty[59], "0.56");
         assert_eq!(amounts("100.00", 3), ["33.33", "33.33", "33.34"]);
         assert_eq!(amounts("1000.00", 12)[11], "83.37");
         assert_eq!(amounts("0.05", 2), ["0.02", "0.03"]);
@@ -1734,12 +1737,14 @@ git commit -m "test(web): SOL-51 chips paint the coming months and open one"
             ..entry(amount, None)
         };
         assert!(check(split("1000.01", 10, None)).is_ok());
-        assert!(check(split("60", 60, None)).is_ok());
+        assert!(check(split("10.00", 60, None)).is_ok());
+        assert!(check(split("0.06", 4, None)).is_ok());
+        assert!(check(split("0.02", 2, None)).is_ok());
         for input in [
             split("10", 1, None),
             split("10", 61, None),
             split("10", 3, Some(3)),
-            split("0.06", 4, None),
+            split("0.05", 6, None),
             split("0.01", 2, None),
         ] {
             assert_eq!(field(check(input)), "installments");
@@ -1769,7 +1774,7 @@ Expected: `no field installments`, `cannot find function installment_amounts`.
 `soldi-types/src/transactions.rs`, after `repeat_months` in `CreateTransaction`:
 
 ```rust
-    /// 2 to 60 monthly parcelas splitting `amount`, the total: each `amount / n` half-even to
+    /// 2 to 60 monthly parcelas splitting `amount`, the total: each `amount / n` truncated to
     /// cents, the last takes the remainder (D16); dated like `repeat_months`; not with it.
     #[serde(default)]
     #[schema(minimum = 2, maximum = 60)]
@@ -1779,11 +1784,10 @@ Expected: `no field installments`, `cannot find function installment_amounts`.
 `transactions/domain.rs` (import `rust_decimal::RoundingStrategy`):
 
 ```rust
-/// R9 (D16 rule 3): `total` in `count` parcelas, half-even to cents; the last takes the remainder.
+/// R9 (D16 rule 3): `total` in `count` parcelas, each truncated to cents; the last takes the rest.
 pub fn installment_amounts(total: Decimal, count: i16) -> Vec<Decimal> {
     let rest = count.saturating_sub(1);
-    let each = (total / Decimal::from(count))
-        .round_dp_with_strategy(2, RoundingStrategy::MidpointNearestEven);
+    let each = (total / Decimal::from(count)).round_dp_with_strategy(2, RoundingStrategy::ToZero);
     let mut amounts = vec![each; usize::try_from(rest).unwrap_or(0)];
     amounts.push(total - each * Decimal::from(rest));
     amounts
@@ -1802,10 +1806,7 @@ fn check_installments(input: &CreateTransaction, amount: Decimal) -> Result<(), 
     if !(2..=60).contains(&count) {
         return Err(AppError::invalid("installments", "must be 2 to 60"));
     }
-    if installment_amounts(amount, count)
-        .iter()
-        .any(|part| *part <= Decimal::ZERO)
-    {
+    if installment_amounts(amount, count)[0] <= Decimal::ZERO {
         return Err(AppError::invalid(
             "installments",
             "must leave every installment above zero",
@@ -1825,7 +1826,7 @@ Every other `CreateTransaction { … }` literal: `installments: None,`.
 
 ```bash
 git add crates
-git commit -m "feat(server): SOL-52 split a total into parcelas, half-even, remainder last"
+git commit -m "feat(server): SOL-52 split a total into parcelas, truncated, remainder last"
 ```
 
 ### Task 11: Write parcelas as a series (repo, service, integration, OpenAPI)
@@ -1877,7 +1878,7 @@ async fn installments_out_of_range_with_repeat_or_too_small_are_refused(pool: Pg
         ("10", json!({ "installments": 1 })),
         ("10", json!({ "installments": 61 })),
         ("10", json!({ "installments": 3, "repeat_months": 3 })),
-        ("0.06", json!({ "installments": 4 })),
+        ("0.05", json!({ "installments": 6 })),
     ] {
         let mut body = json!({ "date": "2026-11-05", "amount": amount, "kind": "daily", "category_id": market });
         body.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());

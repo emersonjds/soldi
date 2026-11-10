@@ -64,6 +64,11 @@ pub struct CreateTransaction {
     #[serde(default)]
     #[schema(minimum = 2, maximum = 60)]
     pub repeat_months: Option<i16>,
+    /// 2 to 60 monthly parcelas splitting `amount`, the total: each `amount / n` truncated to
+    /// cents, the last takes the remainder (D16); dated like `repeat_months`; not with it.
+    #[serde(default)]
+    #[schema(minimum = 2, maximum = 60)]
+    pub installments: Option<i16>,
 }
 
 /// Absent fields stay as they are; `"note": null` clears the note.
@@ -113,6 +118,11 @@ mod tests {
         .unwrap();
         assert_eq!(create.amount.to_string(), "10.005");
         assert_eq!(create.note, None);
+        let split: CreateTransaction = serde_json::from_value(json!({
+            "date": "2026-11-05", "amount": "1000.01", "kind": "bill", "category_id": uuid::Uuid::nil(), "installments": 10
+        }))
+        .unwrap();
+        assert_eq!((split.installments, create.installments), (Some(10), None));
 
         let patch: UpdateTransaction = serde_json::from_value(json!({ "note": null })).unwrap();
         assert_eq!(patch.note, Some(None));

@@ -427,6 +427,7 @@ mod tests {
             category_id: rent,
             note: None,
             repeat_months: None,
+            installments: None,
         };
         let member = insert(
             &mut conn,

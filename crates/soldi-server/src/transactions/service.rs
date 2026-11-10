@@ -130,6 +130,7 @@ pub async fn update(
         category_id: category.id,
         note: patch.note.unwrap_or(current.note),
         repeat_months: patch.repeat_months,
+        installments: None,
     })?;
     domain::check_kind(next.kind, &category)?;
     check_opening(&mut tx, user, next.date).await?;
