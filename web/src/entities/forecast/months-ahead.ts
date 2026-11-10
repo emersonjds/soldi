@@ -1,6 +1,6 @@
 import type { Schemas } from "@/shared/api/client";
 import { addMonths } from "@/shared/lib/date";
-import { cents, type Tier } from "@/shared/lib/tier";
+import { cents, fromCents, type Tier, type TierBounds, tierOf } from "@/shared/lib/tier";
 
 export type Forecast = Schemas["Forecast"];
 export type ForecastDay = Schemas["ForecastDay"];
@@ -23,3 +23,23 @@ export const isFlat = ({ days }: Forecast) =>
   days.length > 0 &&
   days[0].projected_tier !== "red" &&
   days.every((day) => cents(day.projected_balance) === cents(days[0].projected_balance));
+
+/** A draft entry in signed cents: an outflow is negative. */
+export type DraftRow = { date: string; cents: number };
+
+/** `days` with every draft row dated on or before each one added, recolored with the user's bounds. */
+export const withDraft = (days: ForecastDay[], rows: DraftRow[], bounds: TierBounds): ForecastDay[] =>
+  days.map((day) => {
+    const shift = rows.reduce((sum, row) => (row.date <= day.date ? sum + row.cents : sum), 0);
+    const balance = fromCents(cents(day.projected_balance) + shift);
+    return { ...day, projected_balance: balance, projected_tier: tierOf(balance, bounds) };
+  });
+
+export type Verdict = { kind: "turns-red"; date: string } | { kind: "already-red" } | { kind: "clear" };
+
+/** The first day the draft turns red; `already-red` when red days exist but the draft adds none. */
+export const draftVerdict = (before: ForecastDay[], after: ForecastDay[]): Verdict => {
+  const turned = after.find((day, index) => day.projected_tier === "red" && before[index].projected_tier !== "red");
+  if (turned) return { kind: "turns-red", date: turned.date };
+  return after.some((day) => day.projected_tier === "red") ? { kind: "already-red" } : { kind: "clear" };
+};
