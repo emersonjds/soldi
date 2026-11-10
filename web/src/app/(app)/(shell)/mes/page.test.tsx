@@ -69,7 +69,7 @@ describe("Mês", () => {
     expect(within(hero).getByText("Novembro 2026")).toBeInTheDocument();
 
     const summary = screen.getByRole("region", { name: "Resumo do mês" });
-    expect(within(summary).getByText("R$ 500,00")).toHaveClass("text-income");
+    expect(within(summary).getByText("R$ 500,00")).toHaveClass("text-income-text");
     expect(within(summary).getByText("R$ 1.384,31")).toBeInTheDocument();
     expect(within(summary).getByText("R$ 957,79")).toBeInTheDocument();
     expect(within(summary).getByText("Apertado")).toBeInTheDocument();
@@ -95,7 +95,7 @@ describe("Mês", () => {
     const groceries = within(ledger()).getByRole("button", { name: /Compras da semana/ });
     expect(groceries).toHaveTextContent("Compras da semanaDiárioR$ 184,31");
     expect(within(ledger()).getByRole("button", { name: /Aluguel/ })).toHaveTextContent("AluguelSaídaR$ 1.200,00");
-    expect(within(ledger()).getByText("+ R$ 500,00")).toHaveClass("text-income");
+    expect(within(ledger()).getByText("+ R$ 500,00")).toHaveClass("text-income-text");
   });
 
   it("shows saving into a cofrinho as Guardado and a resgate as Resgatado, in income color", async () => {
@@ -113,7 +113,7 @@ describe("Mês", () => {
       name: /^Resgate › Reserva/,
     });
     expect(resgate).toHaveTextContent("Resgate › ReservaResgatado+ R$ 50,00");
-    expect(within(resgate).getByText("+ R$ 50,00")).toHaveClass("text-income");
+    expect(within(resgate).getByText("+ R$ 50,00")).toHaveClass("text-income-text");
     expect(within(ledger()).getByRole("button", { name: /^Economia › Reserva.*R\$\s100,00/ })).toHaveTextContent(
       "Economia › ReservaGuardadoR$ 100,00",
     );

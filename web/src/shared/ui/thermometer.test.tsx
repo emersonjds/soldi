@@ -45,7 +45,7 @@ describe("Money", () => {
   it("signs income and paints it green", () => {
     render(<Money amount="500.00" income />);
 
-    expect(screen.getByText("+ R$ 500,00")).toHaveClass("text-income");
+    expect(screen.getByText("+ R$ 500,00")).toHaveClass("text-income-text");
   });
 
   it("paints a negative amount as expense", () => {

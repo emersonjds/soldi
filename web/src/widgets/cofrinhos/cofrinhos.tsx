@@ -81,7 +81,7 @@ const Balance = ({ cofrinho, large = false }: { cofrinho: Cofrinho; large?: bool
 const Status = ({ cofrinho }: { cofrinho: Cofrinho }) => {
   if (cofrinho.done)
     return (
-      <span className="inline-flex items-center gap-1 font-medium text-income text-sm">
+      <span className="inline-flex items-center gap-1 font-medium text-income-text text-sm">
         <Check className="size-4" aria-hidden />
         Meta batida
       </span>

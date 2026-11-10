@@ -73,7 +73,7 @@ export const MonthSummary = ({ view, onLaunch }: { view: MonthView; onLaunch?: (
         </span>
       }
     >
-      <Money amount={view.totals.income} className={cn(amount, "text-income")} />
+      <Money amount={view.totals.income} className={cn(amount, "text-income-text")} />
     </Figure>
     <Figure
       label="Saídas"

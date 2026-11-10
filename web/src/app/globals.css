@@ -54,6 +54,7 @@
   --color-hero-foreground: var(--hero-foreground);
   --color-income: var(--income);
   --color-income-soft: var(--income-soft);
+  --color-income-text: var(--income-text);
   --color-expense: var(--expense);
   --color-expense-soft: var(--expense-soft);
   --color-tier-red: var(--tier-red);
