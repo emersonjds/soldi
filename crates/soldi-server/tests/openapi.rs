@@ -55,3 +55,15 @@ fn operation_ids_are_unique() {
     }
     assert!(repeated.is_empty(), "{repeated:?}");
 }
+
+#[test]
+fn the_spreadsheet_importer_is_gone() {
+    let spec = serde_json::to_value(soldi_server::openapi()).unwrap();
+    let imports: Vec<&String> = spec["paths"]
+        .as_object()
+        .unwrap()
+        .keys()
+        .filter(|path| path.starts_with("/api/imports"))
+        .collect();
+    assert!(imports.is_empty(), "{imports:?}");
+}
