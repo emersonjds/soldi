@@ -25,7 +25,7 @@ type Props = { viewing: string; onOpen: (month: string) => void };
 
 const Body = ({ count, viewing, onOpen }: Props & { count: number }) => {
   const forecast = useForecast();
-  if (forecast.isError)
+  if (forecast.isError && !forecast.data)
     return (
       <p className="flex flex-wrap items-center gap-x-2 text-muted-foreground text-sm">
         Não foi possível carregar.

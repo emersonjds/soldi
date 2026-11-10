@@ -38,6 +38,13 @@ describe("isFlat", () => {
   it("is true when nothing lands ahead, false otherwise", () => {
     expect(isFlat(FORECAST_FLAT)).toBe(true);
     expect(isFlat(FORECAST)).toBe(false);
-    expect(isFlat({ today: "2026-11-10", days: [] })).toBe(true);
+  });
+
+  it("is false for a flat red balance: it shows its tier", () => {
+    expect(isFlat(forecastFixture("2026-11-10", "2026-11-10", "2027-10-31", [["2026-11-10", "-800.00"]]))).toBe(false);
+  });
+
+  it("is false without days: an opening after the horizon has nothing to teach", () => {
+    expect(isFlat({ today: "2026-11-10", days: [] })).toBe(false);
   });
 });

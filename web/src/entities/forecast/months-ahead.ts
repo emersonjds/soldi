@@ -18,6 +18,8 @@ export const monthsAhead = ({ today, days }: Forecast, count: number): MonthAhea
     return { month, lowest: low.projected_tier, redDays: inMonth.filter((day) => day.projected_tier === "red").length };
   });
 
-/** Nothing lands ahead: every day holds the first day's balance. */
+/** Nothing lands ahead: every day holds the first day's balance, and it is not red (a red one shows its tier). */
 export const isFlat = ({ days }: Forecast) =>
+  days.length > 0 &&
+  days[0].projected_tier !== "red" &&
   days.every((day) => cents(day.projected_balance) === cents(days[0].projected_balance));
