@@ -72,6 +72,46 @@ pub async fn mark_tour_seen(conn: &mut PgConnection, user_id: Uuid) -> Result<()
     Ok(())
 }
 
+pub async fn update_name(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    name: &str,
+) -> Result<User, sqlx::Error> {
+    sqlx::query_as!(
+        User,
+        r#"UPDATE users SET name = $2, updated_at = now() WHERE id = $1
+           RETURNING id, email::text AS "email!", name, onboarded_at IS NOT NULL AS "onboarded!", tour_seen_at IS NOT NULL AS "tour_seen!""#,
+        user_id,
+        name
+    )
+    .fetch_one(&mut *conn)
+    .await
+}
+
+pub async fn find_password_hash(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+) -> Result<Option<String>, sqlx::Error> {
+    sqlx::query_scalar!("SELECT password_hash FROM users WHERE id = $1", user_id)
+        .fetch_one(&mut *conn)
+        .await
+}
+
+pub async fn update_password_hash(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    password_hash: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        "UPDATE users SET password_hash = $2, updated_at = now() WHERE id = $1",
+        user_id,
+        password_hash
+    )
+    .execute(&mut *conn)
+    .await?;
+    Ok(())
+}
+
 pub async fn insert_session(
     conn: &mut PgConnection,
     user_id: Uuid,
@@ -113,6 +153,31 @@ pub async fn delete_session(
     )
     .execute(&mut *conn)
     .await?;
+    Ok(())
+}
+
+/// Every session of the user except the one that made the request.
+pub async fn delete_other_sessions(
+    conn: &mut PgConnection,
+    user: &CurrentUser,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        "DELETE FROM sessions WHERE user_id = $1 AND id <> $2",
+        user.id,
+        user.session_id
+    )
+    .execute(&mut *conn)
+    .await?;
+    Ok(())
+}
+
+pub async fn delete_all_sessions(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!("DELETE FROM sessions WHERE user_id = $1", user_id)
+        .execute(&mut *conn)
+        .await?;
     Ok(())
 }
 

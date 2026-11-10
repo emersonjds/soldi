@@ -260,3 +260,204 @@ async fn tour_seen_needs_a_session(pool: PgPool) {
     assert_eq!(status, StatusCode::UNAUTHORIZED);
     assert_eq!(problem["type"], "urn:soldi:error:unauthorized");
 }
+
+async fn sign_in(app: &TestApp, email: &str, password: &str) -> (StatusCode, TestApp) {
+    let body = json!({ "email": email, "password": password });
+    let response = app
+        .send(json_request(
+            Method::POST,
+            "/api/auth/sign-in",
+            None,
+            Some(body),
+        ))
+        .await;
+    let status = response.status();
+    let cookie = (status == StatusCode::OK).then(|| session_cookie(&response));
+    let session = TestApp {
+        router: app.router.clone(),
+        cookie,
+    };
+    (status, session)
+}
+
+#[sqlx::test]
+async fn rename_trims_and_returns_the_user(pool: PgPool) {
+    let ana = TestApp::signed_in(pool, "ana@example.com").await;
+    let bia = ana.another_user("bia@example.com").await;
+
+    let (status, user) = ana
+        .patch("/api/me", json!({ "name": "  Ana Souza " }))
+        .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(user["name"], "Ana Souza");
+    assert_eq!(user["email"], "ana@example.com");
+    assert_eq!(ana.get("/api/auth/me").await.1, user);
+    assert_eq!(bia.get("/api/auth/me").await.1["name"], "bia");
+    let sixty = "x".repeat(60);
+    let (status, user) = ana.patch("/api/me", json!({ "name": sixty })).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(user["name"], sixty);
+}
+
+#[sqlx::test]
+async fn rename_refuses_blank_long_and_nul_names(pool: PgPool) {
+    let ana = TestApp::signed_in(pool, "ana@example.com").await;
+
+    for name in ["   ".to_string(), "x".repeat(61), "a\0b".to_string()] {
+        let (status, problem) = ana.patch("/api/me", json!({ "name": name })).await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{name:?}");
+        assert_eq!(problem["errors"][0]["field"], "name");
+    }
+    assert_eq!(ana.get("/api/auth/me").await.1["name"], "ana");
+}
+
+#[sqlx::test]
+async fn a_wrong_current_password_changes_nothing(pool: PgPool) {
+    let ana = TestApp::signed_in(pool, "ana@example.com").await;
+
+    let (status, problem) = ana
+        .post(
+            "/api/me/password",
+            json!({ "current_password": "wrong horse", "new_password": "battery staple" }),
+        )
+        .await;
+
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(problem["type"], "urn:soldi:error:wrong-password");
+    assert_eq!(ana.get("/api/auth/me").await.0, StatusCode::OK);
+    assert_eq!(
+        sign_in(&ana, "ana@example.com", PASSWORD).await.0,
+        StatusCode::OK
+    );
+}
+
+#[sqlx::test]
+async fn a_short_new_password_is_refused(pool: PgPool) {
+    let ana = TestApp::signed_in(pool, "ana@example.com").await;
+
+    let (status, problem) = ana
+        .post(
+            "/api/me/password",
+            json!({ "current_password": PASSWORD, "new_password": "short" }),
+        )
+        .await;
+
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(problem["errors"][0]["field"], "password");
+    assert_eq!(
+        sign_in(&ana, "ana@example.com", PASSWORD).await.0,
+        StatusCode::OK
+    );
+}
+
+#[sqlx::test]
+async fn changing_the_password_ends_only_the_other_sessions(pool: PgPool) {
+    let ana = TestApp::signed_in(pool, "ana@example.com").await;
+    let bia = ana.another_user("bia@example.com").await;
+    let (_, ana_phone) = sign_in(&ana, "ana@example.com", PASSWORD).await;
+
+    let (status, body) = ana
+        .post(
+            "/api/me/password",
+            json!({ "current_password": PASSWORD, "new_password": "battery staple" }),
+        )
+        .await;
+
+    assert_eq!(status, StatusCode::NO_CONTENT, "{body}");
+    assert_eq!(ana.get("/api/auth/me").await.0, StatusCode::OK);
+    assert_eq!(
+        ana_phone.get("/api/auth/me").await.0,
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(bia.get("/api/auth/me").await.0, StatusCode::OK);
+    assert_eq!(
+        sign_in(&ana, "ana@example.com", PASSWORD).await.0,
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        sign_in(&ana, "ana@example.com", "battery staple").await.0,
+        StatusCode::OK
+    );
+    assert_eq!(
+        sign_in(&ana, "bia@example.com", PASSWORD).await.0,
+        StatusCode::OK
+    );
+}
+
+#[sqlx::test]
+async fn sign_out_everywhere_ends_every_session_of_the_caller(pool: PgPool) {
+    let ana = TestApp::signed_in(pool, "ana@example.com").await;
+    let bia = ana.another_user("bia@example.com").await;
+    let (_, ana_phone) = sign_in(&ana, "ana@example.com", PASSWORD).await;
+
+    let response = ana
+        .send(json_request(
+            Method::POST,
+            "/api/auth/sign-out-everywhere",
+            ana.cookie.as_deref(),
+            None,
+        ))
+        .await;
+
+    assert_eq!(response.status(), StatusCode::NO_CONTENT);
+    let cleared = response.headers()[header::SET_COOKIE].to_str().unwrap();
+    assert!(cleared.starts_with("soldi_session=;"), "{cleared}");
+    assert!(cleared.contains("Max-Age=0"), "{cleared}");
+    assert_eq!(ana.get("/api/auth/me").await.0, StatusCode::UNAUTHORIZED);
+    assert_eq!(
+        ana_phone.get("/api/auth/me").await.0,
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(bia.get("/api/auth/me").await.0, StatusCode::OK);
+}
+
+#[sqlx::test]
+async fn account_routes_need_a_session(pool: PgPool) {
+    let app = TestApp::anonymous(pool);
+    let password = json!({ "current_password": PASSWORD, "new_password": "battery staple" });
+
+    let answers = [
+        app.patch("/api/me", json!({ "name": "Ana" })).await,
+        app.post("/api/me/password", password).await,
+        app.post("/api/auth/sign-out-everywhere", json!({})).await,
+    ];
+
+    for (status, problem) in answers {
+        assert_eq!(status, StatusCode::UNAUTHORIZED);
+        assert_eq!(problem["type"], "urn:soldi:error:unauthorized");
+    }
+}
+
+#[sqlx::test]
+async fn account_writes_from_another_origin_are_forbidden(pool: PgPool) {
+    let ana = TestApp::signed_in(pool, "ana@example.com").await;
+    let requests = [
+        (Method::PATCH, "/api/me", Some(json!({ "name": "Eve" }))),
+        (
+            Method::POST,
+            "/api/me/password",
+            Some(json!({ "current_password": PASSWORD, "new_password": "battery staple" })),
+        ),
+        (Method::POST, "/api/auth/sign-out-everywhere", None),
+    ];
+
+    for (method, uri, body) in requests {
+        let mut request = json_request(method, uri, ana.cookie.as_deref(), body);
+        let headers = request.headers_mut();
+        headers.insert(header::ORIGIN, "https://evil.example".parse().unwrap());
+        headers.insert(header::HOST, "soldi.app".parse().unwrap());
+        assert_eq!(
+            ana.send(request).await.status(),
+            StatusCode::FORBIDDEN,
+            "{uri}"
+        );
+    }
+
+    let (_, me) = ana.get("/api/auth/me").await;
+    assert_eq!(me["name"], "ana");
+    assert_eq!(
+        sign_in(&ana, "ana@example.com", PASSWORD).await.0,
+        StatusCode::OK
+    );
+}
