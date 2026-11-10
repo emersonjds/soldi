@@ -1,11 +1,14 @@
 use chrono::{Duration, Utc};
-use soldi_types::auth::{SignIn, SignUp, User};
+use soldi_types::auth::{
+    ChangePassword, ConfirmPasswordReset, DeleteAccount, SignIn, SignUp, UpdateMe, User,
+};
 use sqlx::{PgConnection, PgPool};
 use uuid::Uuid;
 
 use super::{domain, repo};
 use crate::error::AppError;
 use crate::extract::CurrentUser;
+use crate::mail::Mailer;
 
 /// Creates the user and signs them in; returns the user and the session token.
 pub async fn sign_up(pool: &PgPool, input: SignUp) -> Result<(User, String), AppError> {
@@ -51,6 +54,126 @@ pub async fn sign_in(pool: &PgPool, input: SignIn) -> Result<(User, String), App
 pub async fn sign_out(pool: &PgPool, user: &CurrentUser) -> Result<(), AppError> {
     let mut conn = pool.acquire().await?;
     repo::delete_session(&mut conn, user).await?;
+    Ok(())
+}
+
+/// Revokes every session of the user, this one included.
+pub async fn sign_out_everywhere(pool: &PgPool, user: &CurrentUser) -> Result<(), AppError> {
+    let mut conn = pool.acquire().await?;
+    Ok(repo::delete_all_sessions(&mut conn, user.id).await?)
+}
+
+pub async fn update_me(
+    pool: &PgPool,
+    user: &CurrentUser,
+    input: UpdateMe,
+) -> Result<User, AppError> {
+    let name = domain::check_name(&input.name)?;
+    let mut conn = pool.acquire().await?;
+    Ok(repo::update_name(&mut conn, user.id, &name).await?)
+}
+
+/// Other devices are signed out; the session that made the request stays.
+pub async fn change_password(
+    pool: &PgPool,
+    user: &CurrentUser,
+    input: ChangePassword,
+) -> Result<(), AppError> {
+    domain::check_password(&input.new_password)?;
+    let stored_hash = {
+        let mut conn = pool.acquire().await?;
+        repo::find_password_hash(&mut conn, user.id).await?
+    };
+    let checked = stored_hash
+        .clone()
+        .unwrap_or_else(domain::dummy_password_hash);
+    if !verify_in_background(input.current_password, checked).await? {
+        return Err(domain::wrong_password());
+    }
+    let password_hash = hash_in_background(input.new_password).await?;
+    let mut tx = pool.begin().await?;
+    if !repo::update_password_hash(&mut tx, user.id, stored_hash.as_deref(), &password_hash).await?
+    {
+        return Err(domain::wrong_password());
+    }
+    repo::delete_other_sessions(&mut tx, user).await?;
+    repo::delete_password_resets(&mut tx, user.id).await?;
+    tx.commit().await?;
+    Ok(())
+}
+
+/// Deletes the user and, by cascade, every row they own.
+pub async fn delete_account(
+    pool: &PgPool,
+    user: &CurrentUser,
+    input: DeleteAccount,
+) -> Result<(), AppError> {
+    let stored_hash = {
+        let mut conn = pool.acquire().await?;
+        repo::find_password_hash(&mut conn, user.id).await?
+    };
+    let checked = stored_hash
+        .clone()
+        .unwrap_or_else(domain::dummy_password_hash);
+    if !verify_in_background(input.password, checked).await? {
+        return Err(domain::wrong_password());
+    }
+    let mut conn = pool.acquire().await?;
+    if !repo::delete_user(&mut conn, user.id, stored_hash.as_deref()).await? {
+        return Err(domain::wrong_password());
+    }
+    Ok(())
+}
+
+/// Runs after the request was answered: an unknown or malformed e-mail does nothing.
+pub async fn request_password_reset(
+    pool: &PgPool,
+    mailer: &Mailer,
+    public_url: &str,
+    email: &str,
+) -> Result<(), AppError> {
+    let Ok(email) = domain::normalize_email(email) else {
+        return Ok(());
+    };
+    let mut tx = pool.begin().await?;
+    let Some(found) = repo::find_user_by_email(&mut tx, &email).await? else {
+        return Ok(());
+    };
+    let token = domain::new_reset_token();
+    repo::lock_password_resets(&mut tx, found.user.id).await?;
+    repo::delete_password_resets(&mut tx, found.user.id).await?;
+    repo::insert_password_reset(&mut tx, found.user.id, &domain::hash_token(&token)).await?;
+    tx.commit().await?;
+    let link = format!("{public_url}/redefinir-senha#token={token}");
+    mailer
+        .send_password_reset(&found.user.email, &found.user.name, &link)
+        .await
+        .map_err(|error| AppError::Internal(error.to_string()))
+}
+
+/// Sets the password and ends every session and every pending link of the user.
+pub async fn confirm_password_reset(
+    pool: &PgPool,
+    input: ConfirmPasswordReset,
+) -> Result<(), AppError> {
+    domain::check_password(&input.new_password)?;
+    let token_hash = domain::hash_token(&input.token);
+    let live = {
+        let mut conn = pool.acquire().await?;
+        repo::password_reset_is_live(&mut conn, &token_hash).await?
+    };
+    if !live {
+        return Err(domain::invalid_reset_link());
+    }
+    let password_hash = hash_in_background(input.new_password).await?;
+    let mut tx = pool.begin().await?;
+    let Some(user_id) = repo::take_password_reset(&mut tx, &token_hash).await? else {
+        return Err(domain::invalid_reset_link());
+    };
+    repo::set_password_hash(&mut tx, user_id, &password_hash).await?;
+    repo::delete_all_sessions(&mut tx, user_id).await?;
+    repo::delete_password_resets(&mut tx, user_id).await?;
+    tx.commit().await?;
     Ok(())
 }
 

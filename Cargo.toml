@@ -3,7 +3,7 @@ resolver = "3"
 members = ["crates/soldi-types", "crates/soldi-server"]
 
 [workspace.package]
-version = "0.15.0"
+version = "0.16.0"
 edition = "2024"
 rust-version = "1.97"
 license = "AGPL-3.0-only"
@@ -33,6 +33,8 @@ uuid = { version = "1", features = ["v4", "serde"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
 calamine = { version = "0.38", default-features = false }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
+base64 = "0.22"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

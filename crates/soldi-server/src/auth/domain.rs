@@ -2,6 +2,8 @@ use argon2::Argon2;
 use argon2::password_hash::{PasswordHasher, PasswordVerifier};
 use axum::http::header::{COOKIE, HOST, ORIGIN};
 use axum::http::{HeaderMap, Method};
+use base64::Engine;
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use sha2::{Digest, Sha256};
 
 use crate::error::{AppError, reject_nul};
@@ -16,6 +18,8 @@ pub const SESSION_DAYS: i64 = 30;
 /// e-mail is unknown, so both failures cost the same time.
 const DUMMY_PASSWORD_HASH: &str = "$argon2id$v=19$m=19456,t=2,p=1$LQzD6bTFuUbWQ35+CFbKXw$7x8VZQkRMrI/ptiG/Um0Ural4C1PMr9El05qYAXieyU";
 
+pub const MAX_EMAIL_BYTES: usize = 254;
+
 pub fn normalize_email(email: &str) -> Result<String, AppError> {
     reject_nul("email", email)?;
     let email = email.trim().to_lowercase();
@@ -24,7 +28,7 @@ pub fn normalize_email(email: &str) -> Result<String, AppError> {
     };
     let mut labels = domain.split('.');
     let valid = !local.is_empty()
-        && email.len() <= 254
+        && email.len() <= MAX_EMAIL_BYTES
         && !domain.contains('@')
         && !email.chars().any(char::is_whitespace)
         && labels.clone().count() >= 2
@@ -45,6 +49,19 @@ pub fn check_password(password: &str) -> Result<(), AppError> {
     Ok(())
 }
 
+pub fn check_name(name: &str) -> Result<String, AppError> {
+    reject_nul("name", name)?;
+    let name = name.trim();
+    if name.is_empty() || name.chars().count() > 60 {
+        return Err(AppError::invalid("name", "must have 1 to 60 characters"));
+    }
+    Ok(name.to_string())
+}
+
+pub fn wrong_password() -> AppError {
+    AppError::rule("wrong-password", "The current password is wrong.")
+}
+
 /// The given name trimmed, or the part of the (normalized) e-mail before `@` when blank.
 pub fn display_name(name: Option<&str>, email: &str) -> Result<String, AppError> {
     let name = name.map(str::trim).filter(|name| !name.is_empty());
@@ -59,11 +76,30 @@ pub fn display_name(name: Option<&str>, email: &str) -> Result<String, AppError>
     Ok(name.to_string())
 }
 
-/// 32 random bytes as lowercase hex.
-pub fn new_secret() -> String {
+fn random_bytes() -> [u8; 32] {
     let mut bytes = [0u8; 32];
     getrandom::fill(&mut bytes).expect("the operating system random source works");
-    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+    bytes
+}
+
+/// 32 random bytes as lowercase hex.
+pub fn new_secret() -> String {
+    random_bytes()
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
+}
+
+/// 32 random bytes, base64url without padding (43 characters), for the link in the e-mail.
+pub fn new_reset_token() -> String {
+    URL_SAFE_NO_PAD.encode(random_bytes())
+}
+
+pub fn invalid_reset_link() -> AppError {
+    AppError::rule(
+        "invalid-reset-link",
+        "This link expired or was already used.",
+    )
 }
 
 pub fn hash_token(token: &str) -> Vec<u8> {
@@ -209,6 +245,15 @@ mod tests {
             display_name(None, &long_local).unwrap().chars().count(),
             100
         );
+    }
+
+    #[test]
+    fn a_new_name_is_trimmed_with_1_to_60_characters() {
+        assert_eq!(check_name("  Ana Souza ").unwrap(), "Ana Souza");
+        assert_eq!(check_name(&"á".repeat(60)).unwrap(), "á".repeat(60));
+        assert!(check_name("   ").is_err());
+        assert!(check_name(&"x".repeat(61)).is_err());
+        assert!(check_name("a\0").is_err());
     }
 
     #[test]

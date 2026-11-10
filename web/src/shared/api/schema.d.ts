@@ -20,6 +20,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/auth/password-reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["request_password_reset"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/password-reset/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["confirm_password_reset"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/auth/sign-in": {
         parameters: {
             query?: never;
@@ -46,6 +78,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["sign_out"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/sign-out-everywhere": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["sign_out_everywhere"];
         delete?: never;
         options?: never;
         head?: never;
@@ -238,6 +286,38 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["confirm_xlsx"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["delete_me"];
+        options?: never;
+        head?: never;
+        patch: operations["update_me"];
+        trace?: never;
+    };
+    "/api/me/password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["change_password"];
         delete?: never;
         options?: never;
         head?: never;
@@ -485,6 +565,11 @@ export interface components {
             pct: string;
             previous_amount: string;
         };
+        ChangePassword: {
+            current_password: string;
+            /** @description 8 to 128 characters. */
+            new_password: string;
+        };
         /**
          * @description A subcategory of `Economia`, or `Economia` itself as `Sem objetivo` (`parent`). `balance` is
          *     its entries minus its resgates since the opening date; `progress_pct` is `balance / target`
@@ -532,6 +617,12 @@ export interface components {
              * Format: uuid
              * @description The preview's token.
              */
+            token: string;
+        };
+        ConfirmPasswordReset: {
+            /** @description 8 to 128 characters. */
+            new_password: string;
+            /** @description The `token` of the link in the e-mail. */
             token: string;
         };
         CreateBill: {
@@ -612,6 +703,10 @@ export interface components {
             is_today: boolean;
             tier: components["schemas"]["Tier"];
             withdrawn: string;
+        };
+        DeleteAccount: {
+            /** @description The current password. */
+            password: string;
         };
         /** @description How many of the caller's entries a period deletion removed. */
         DeletedTransactions: {
@@ -703,6 +798,9 @@ export interface components {
             status: number;
             title: string;
             type: string;
+        };
+        RequestPasswordReset: {
+            email: string;
         };
         /**
          * @description Which entries of a series a change or a deletion reaches; `this` when absent.
@@ -824,6 +922,10 @@ export interface components {
             parent_id?: string | null;
             target?: string | null;
         };
+        UpdateMe: {
+            /** @description Trimmed; 1 to 60 characters. */
+            name: string;
+        };
         /** @description Absent fields stay as they are. */
         UpdateSettings: {
             currency?: components["schemas"]["Currency"] | null;
@@ -913,6 +1015,86 @@ export interface operations {
             };
         };
     };
+    request_password_reset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RequestPasswordReset"];
+            };
+        };
+        responses: {
+            /** @description Accepted whether or not an account has this e-mail; when one has, a reset link valid for 1 hour is e-mailed to it and older links stop working */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Field `email` over 254 bytes */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Rate limited; wait `Retry-After` seconds */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    confirm_password_reset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmPasswordReset"];
+            };
+        };
+        responses: {
+            /** @description Password set; every session and every pending reset link of the user end */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `invalid-reset-link` for an unknown, expired or used token; field `password` when the new one has not 8 to 128 characters */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Rate limited; wait `Retry-After` seconds */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     sign_in: {
         parameters: {
             query?: never;
@@ -973,6 +1155,32 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Session revoked; cookie cleared */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    sign_out_everywhere: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Every session of the caller revoked, this one included; cookie cleared */
             204: {
                 headers: {
                     [name: string]: unknown;
@@ -1828,6 +2036,143 @@ export interface operations {
             };
             /** @description `import-has-errors` when the preview listed errors and `skip_errors` is not true; `opening_date` after the earliest imported date; `opening_balance` with more than two places; `palette-full` when a new `Importado` category finds all 24 colors taken in its kind */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    delete_me: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeleteAccount"];
+            };
+        };
+        responses: {
+            /** @description Account and every row of it deleted; cookie cleared. The e-mail can sign up again */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description `wrong-password`; nothing deleted */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Rate limited with the password-change budget; wait `Retry-After` seconds */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    update_me: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateMe"];
+            };
+        };
+        responses: {
+            /** @description Renamed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["User"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description `name` blank, over 60 characters or with NUL */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    change_password: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangePassword"];
+            };
+        };
+        responses: {
+            /** @description Password changed; every other session of the caller is revoked, this one stays */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description `wrong-password` for a wrong current password; field `password` when the new one has not 8 to 128 characters */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Rate limited; wait `Retry-After` seconds */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };

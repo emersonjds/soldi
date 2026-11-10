@@ -72,6 +72,150 @@ pub async fn mark_tour_seen(conn: &mut PgConnection, user_id: Uuid) -> Result<()
     Ok(())
 }
 
+pub async fn update_name(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    name: &str,
+) -> Result<User, sqlx::Error> {
+    sqlx::query_as!(
+        User,
+        r#"UPDATE users SET name = $2, updated_at = now() WHERE id = $1
+           RETURNING id, email::text AS "email!", name, onboarded_at IS NOT NULL AS "onboarded!", tour_seen_at IS NOT NULL AS "tour_seen!""#,
+        user_id,
+        name
+    )
+    .fetch_one(&mut *conn)
+    .await
+}
+
+pub async fn find_password_hash(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+) -> Result<Option<String>, sqlx::Error> {
+    sqlx::query_scalar!("SELECT password_hash FROM users WHERE id = $1", user_id)
+        .fetch_one(&mut *conn)
+        .await
+}
+
+/// False when the stored hash is no longer `checked`: another change got there first.
+pub async fn update_password_hash(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    checked: Option<&str>,
+    password_hash: &str,
+) -> Result<bool, sqlx::Error> {
+    let updated = sqlx::query!(
+        "UPDATE users SET password_hash = $2, updated_at = now()
+         WHERE id = $1 AND password_hash IS NOT DISTINCT FROM $3",
+        user_id,
+        password_hash,
+        checked
+    )
+    .execute(&mut *conn)
+    .await?;
+    Ok(updated.rows_affected() == 1)
+}
+
+/// Every row of the user goes with it (FK cascades). False when the stored hash is no
+/// longer `checked`.
+pub async fn delete_user(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    checked: Option<&str>,
+) -> Result<bool, sqlx::Error> {
+    let deleted = sqlx::query!(
+        "DELETE FROM users WHERE id = $1 AND password_hash IS NOT DISTINCT FROM $2",
+        user_id,
+        checked
+    )
+    .execute(&mut *conn)
+    .await?;
+    Ok(deleted.rows_affected() == 1)
+}
+
+/// For a password reset, where no current password is checked.
+pub async fn set_password_hash(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    password_hash: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        "UPDATE users SET password_hash = $2, updated_at = now() WHERE id = $1",
+        user_id,
+        password_hash
+    )
+    .execute(&mut *conn)
+    .await?;
+    Ok(())
+}
+
+/// Expires in one hour.
+pub async fn insert_password_reset(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    token_hash: &[u8],
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        "INSERT INTO password_resets (user_id, token_hash) VALUES ($1, $2)",
+        user_id,
+        token_hash
+    )
+    .execute(&mut *conn)
+    .await?;
+    Ok(())
+}
+
+/// Serializes link requests of one user until the transaction ends, so only one link stays live.
+pub async fn lock_password_resets(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        "SELECT pg_advisory_xact_lock(hashtext('password_resets:' || $1::text))",
+        user_id.to_string()
+    )
+    .execute(&mut *conn)
+    .await?;
+    Ok(())
+}
+
+/// Cheap check before the argon2 hash; `take_password_reset` still decides in the transaction.
+pub async fn password_reset_is_live(
+    conn: &mut PgConnection,
+    token_hash: &[u8],
+) -> Result<bool, sqlx::Error> {
+    let live = sqlx::query_scalar!(
+        r#"SELECT EXISTS (SELECT 1 FROM password_resets WHERE token_hash = $1 AND expires_at > now()) AS "live!""#,
+        token_hash
+    )
+    .fetch_one(&mut *conn)
+    .await?;
+    Ok(live)
+}
+
+pub async fn delete_password_resets(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!("DELETE FROM password_resets WHERE user_id = $1", user_id)
+        .execute(&mut *conn)
+        .await?;
+    Ok(())
+}
+
+/// Spends a live reset link; the owner's id, or `None` for an unknown, expired or used one.
+pub async fn take_password_reset(
+    conn: &mut PgConnection,
+    token_hash: &[u8],
+) -> Result<Option<Uuid>, sqlx::Error> {
+    sqlx::query_scalar!(
+        "DELETE FROM password_resets WHERE token_hash = $1 AND expires_at > now() RETURNING user_id",
+        token_hash
+    )
+    .fetch_optional(&mut *conn)
+    .await
+}
+
 pub async fn insert_session(
     conn: &mut PgConnection,
     user_id: Uuid,
@@ -113,6 +257,31 @@ pub async fn delete_session(
     )
     .execute(&mut *conn)
     .await?;
+    Ok(())
+}
+
+/// Every session of the user except the one that made the request.
+pub async fn delete_other_sessions(
+    conn: &mut PgConnection,
+    user: &CurrentUser,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        "DELETE FROM sessions WHERE user_id = $1 AND id <> $2",
+        user.id,
+        user.session_id
+    )
+    .execute(&mut *conn)
+    .await?;
+    Ok(())
+}
+
+pub async fn delete_all_sessions(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!("DELETE FROM sessions WHERE user_id = $1", user_id)
+        .execute(&mut *conn)
+        .await?;
     Ok(())
 }
 

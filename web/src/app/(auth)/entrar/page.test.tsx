@@ -36,6 +36,7 @@ describe("Entrar", () => {
     expect(screen.getByText("Seu mês no verde.")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Entrar" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Criar conta" })).toHaveAttribute("href", "/criar-conta");
+    expect(screen.getByRole("link", { name: "Esqueci minha senha" })).toHaveAttribute("href", "/esqueci-senha");
   });
 
   it("checks the fields before calling the API", async () => {
