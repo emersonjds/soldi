@@ -2,7 +2,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { setPathname } from "@/test/next-navigation";
+import { router, setPathname } from "@/test/next-navigation";
 import { renderWithQuery } from "@/test/render";
 import { CATEGORIES, signedIn, TRANSACTIONS } from "@/test/stub-api";
 
@@ -101,6 +101,7 @@ describe("AppShell", () => {
   });
 
   it("takes the sidebar user card and the top-bar avatar to Minha conta", async () => {
+    signedIn({ "POST /api/auth/sign-out": { status: 204 } });
     renderWithQuery(<AppShell>conteúdo</AppShell>);
 
     const email = await screen.findByText("ana@example.com");
@@ -108,8 +109,10 @@ describe("AppShell", () => {
     expect(card).toHaveAttribute("href", "/ajustes/conta");
     expect(card).toContainElement(email);
     expect(within(card).queryByRole("button")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Sair" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Sua conta" })).toHaveAttribute("href", "/ajustes/conta");
+
+    await userEvent.click(screen.getByRole("button", { name: "Sair" }));
+    await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/entrar"));
   });
 
   it("shows who is signed in", async () => {
