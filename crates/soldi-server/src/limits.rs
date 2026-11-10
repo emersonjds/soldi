@@ -125,7 +125,8 @@ impl Limiter {
 
 /// The last `X-Forwarded-For` address, else the socket peer; IPv4-mapped addresses become IPv4
 /// and IPv6 is cut to its /64. Railway's edge appends the address it saw, so earlier entries come
-/// from the client and can be forged.
+/// from the client and can be forged. A loopback client (local runs and e2e, never behind Railway)
+/// gets no IP key.
 pub fn client_ip(headers: &HeaderMap, peer: Option<SocketAddr>) -> Option<IpAddr> {
     let ip = headers
         .get_all("x-forwarded-for")
@@ -134,8 +135,12 @@ pub fn client_ip(headers: &HeaderMap, peer: Option<SocketAddr>) -> Option<IpAddr
         .and_then(|value| value.to_str().ok())
         .and_then(|value| value.rsplit(',').next())
         .and_then(|last| last.trim().parse().ok())
-        .or(peer.map(|peer| peer.ip()))?;
-    Some(match ip.to_canonical() {
+        .or(peer.map(|peer| peer.ip()))?
+        .to_canonical();
+    if ip.is_loopback() {
+        return None;
+    }
+    Some(match ip {
         IpAddr::V6(v6) => IpAddr::V6(Ipv6Addr::from(u128::from(v6) & !u128::from(u64::MAX))),
         v4 => v4,
     })
@@ -144,6 +149,14 @@ pub fn client_ip(headers: &HeaderMap, peer: Option<SocketAddr>) -> Option<IpAddr
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_loopback_client_has_no_ip_key() {
+        let peer: SocketAddr = "127.0.0.1:4000".parse().unwrap();
+        assert_eq!(client_ip(&HeaderMap::new(), Some(peer)), None);
+        let v6: SocketAddr = "[::1]:4000".parse().unwrap();
+        assert_eq!(client_ip(&HeaderMap::new(), Some(v6)), None);
+    }
 
     const BUDGET: Budget = Budget {
         name: "test",

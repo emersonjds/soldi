@@ -14,6 +14,7 @@ A fixed-window counter in the server process (one Railway instance; `ponytail:` 
 | `POST /api/auth/password-reset` (SOL-37) | client IP: 10 per hour · lowercased e-mail: 3 per hour |
 
 - Client IP: the last entry of the last `X-Forwarded-For` header line, else the socket peer address. Railway's edge appends the address it saw, so that entry is the real client; earlier entries are client-supplied and can be forged. Malformed → peer address. IPv4-mapped IPv6 (`::ffff:1.2.3.4`) counts as IPv4; IPv6 is keyed by its /64, since one host owns a whole /64.
+- A loopback client (local runs, e2e) gets no IP key; behind Railway the client is never loopback.
 - CGNAT shares the IP budget among everyone behind one address; acceptable for v1.
 - The e-mail + IP budget is what an attacker spends guessing one account from one place; the global e-mail budget (50) caps a distributed guess without letting one IP lock the owner out (the owner signing in from another IP still has their own 10).
 - Sign-in e-mail longer than 254 bytes after trim → 422 field `email` before the limiter, so junk e-mails never become keys.
