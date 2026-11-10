@@ -105,17 +105,23 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
               </nav>
             </SidebarContent>
             <SidebarFooter className="p-3">
-              <div className="flex items-center gap-3 rounded-2xl bg-muted p-3">
-                <Avatar>
-                  <AvatarFallback className="bg-brand text-brand-foreground">{getInitials(name)}</AvatarFallback>
-                </Avatar>
-                <div className="grid min-w-0 text-sm leading-tight">
-                  <span className="truncate font-medium">{name}</span>
-                  <span className="truncate text-muted-foreground text-xs">{email}</span>
-                  <span className="text-[11px] text-muted-foreground/70 tabular-nums">
-                    v{process.env.NEXT_PUBLIC_APP_VERSION}
-                  </span>
-                </div>
+              <div className="flex items-center gap-1 rounded-2xl bg-muted p-1.5">
+                <Link
+                  href="/ajustes/conta"
+                  aria-label="Minha conta"
+                  className="flex min-w-0 flex-1 items-center gap-3 rounded-xl p-1.5 transition-colors hover:bg-background/60 focus-visible:outline-2 focus-visible:outline-ring"
+                >
+                  <Avatar>
+                    <AvatarFallback className="bg-brand text-brand-foreground">{getInitials(name)}</AvatarFallback>
+                  </Avatar>
+                  <div className="grid min-w-0 text-sm leading-tight">
+                    <span className="truncate font-medium">{name}</span>
+                    <span className="truncate text-muted-foreground text-xs">{email}</span>
+                    <span className="text-[11px] text-muted-foreground/70 tabular-nums">
+                      v{process.env.NEXT_PUBLIC_APP_VERSION}
+                    </span>
+                  </div>
+                </Link>
                 <SignOutButton compact />
               </div>
             </SidebarFooter>
@@ -126,7 +132,7 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
           <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b bg-background/90 px-4 backdrop-blur lg:hidden">
             <TodayLink className="-ml-2 text-xl" />
             <Link
-              href="/ajustes"
+              href="/ajustes/conta"
               aria-label="Sua conta"
               className="flex size-11 items-center justify-center rounded-full"
             >

@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -25,12 +25,16 @@ describe("Ajustes", () => {
       ["Apagar lançamentos", "/ajustes/apagar"],
       ["Moeda", "/ajustes/moeda"],
       ["Como funciona", "/tour?replay=1"],
+      ["Minha conta", "/ajustes/conta"],
     ])
       expect(screen.getByRole("link", { name: new RegExp(`^${name}`) })).toHaveAttribute("href", href);
-    expect(screen.getAllByRole("link")).toHaveLength(8);
+    expect(screen.getAllByRole("link")).toHaveLength(9);
     expect(screen.getByText("Traga seu Termômetro.xlsx")).toBeInTheDocument();
     expect(screen.getByText("Grupos e subcategorias")).toBeInTheDocument();
     expect(screen.getByText("Mês, ano ou tudo")).toBeInTheDocument();
+    expect(screen.getByText("Nome, e-mail e senha")).toBeInTheDocument();
+    const conta = within(screen.getByRole("region", { name: "Conta" }));
+    expect(conta.getByRole("link", { name: /^Minha conta/ })).toBeInTheDocument();
     const data = screen.getAllByRole("link").map((link) => link.getAttribute("href"));
     expect(data.indexOf("/ajustes/apagar")).toBe(data.indexOf("/ajustes/importar") + 1);
     expect(screen.queryByText(/em breve/i)).not.toBeInTheDocument();

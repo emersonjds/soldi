@@ -100,6 +100,18 @@ describe("AppShell", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   });
 
+  it("takes the sidebar user card and the top-bar avatar to Minha conta", async () => {
+    renderWithQuery(<AppShell>conteúdo</AppShell>);
+
+    const email = await screen.findByText("ana@example.com");
+    const card = screen.getByRole("link", { name: "Minha conta" });
+    expect(card).toHaveAttribute("href", "/ajustes/conta");
+    expect(card).toContainElement(email);
+    expect(within(card).queryByRole("button")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Sair" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Sua conta" })).toHaveAttribute("href", "/ajustes/conta");
+  });
+
   it("shows who is signed in", async () => {
     renderWithQuery(<AppShell>conteúdo</AppShell>);
 
