@@ -1,8 +1,9 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { type ReactNode, useEffect } from "react";
 
 import { ChevronLeft, X } from "lucide-react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
@@ -23,6 +24,10 @@ type ResponsiveSheetProps = {
 
 /** Bottom sheet below 1024px, centered dialog from there. */
 export const ResponsiveSheet = ({ open, onOpenChange, title, description, children, onBack }: ResponsiveSheetProps) => {
+  // A toast would sit over the sheet's rows; an undo toast is dismissed, which commits it.
+  useEffect(() => {
+    if (open) toast.dismiss();
+  }, [open]);
   const close = (
     <Button
       variant="ghost"
