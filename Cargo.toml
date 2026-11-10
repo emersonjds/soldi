@@ -3,7 +3,7 @@ resolver = "3"
 members = ["crates/soldi-types", "crates/soldi-server"]
 
 [workspace.package]
-version = "0.19.0"
+version = "0.20.0"
 edition = "2024"
 rust-version = "1.97"
 license = "AGPL-3.0-only"
@@ -11,7 +11,7 @@ repository = "https://github.com/emersonjds/soldi"
 
 [workspace.dependencies]
 soldi-types = { path = "crates/soldi-types" }
-axum = { version = "0.8.9", features = ["macros", "multipart"] }
+axum = { version = "0.8.9", features = ["macros"] }
 tokio = { version = "1.53", features = ["macros", "rt-multi-thread", "net", "time", "sync"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -32,7 +32,6 @@ getrandom = "0.4"
 uuid = { version = "1", features = ["v4", "serde"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
-calamine = { version = "0.38", default-features = false }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
 base64 = "0.22"
 

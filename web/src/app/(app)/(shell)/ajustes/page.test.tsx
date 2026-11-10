@@ -21,22 +21,19 @@ describe("Ajustes", () => {
       ["Contas fixas", "/ajustes/contas"],
       ["Termômetro", "/ajustes/termometro"],
       ["Saldo inicial", "/ajustes/saldo-inicial"],
-      ["Importar planilha", "/ajustes/importar"],
       ["Apagar lançamentos", "/ajustes/apagar"],
       ["Moeda", "/ajustes/moeda"],
       ["Como funciona", "/tour?replay=1"],
       ["Minha conta", "/ajustes/conta"],
     ])
       expect(screen.getByRole("link", { name: new RegExp(`^${name}`) })).toHaveAttribute("href", href);
-    expect(screen.getAllByRole("link")).toHaveLength(9);
-    expect(screen.getByText("Traga seu Termômetro.xlsx")).toBeInTheDocument();
+    expect(screen.getAllByRole("link")).toHaveLength(8);
+    expect(screen.queryByRole("link", { name: /Importar/ })).not.toBeInTheDocument();
     expect(screen.getByText("Grupos e subcategorias")).toBeInTheDocument();
     expect(screen.getByText("Mês, ano ou tudo")).toBeInTheDocument();
     expect(screen.getByText("Nome, e-mail e senha")).toBeInTheDocument();
     const conta = within(screen.getByRole("region", { name: "Conta" }));
     expect(conta.getByRole("link", { name: /^Minha conta/ })).toBeInTheDocument();
-    const data = screen.getAllByRole("link").map((link) => link.getAttribute("href"));
-    expect(data.indexOf("/ajustes/apagar")).toBe(data.indexOf("/ajustes/importar") + 1);
     expect(screen.queryByText(/em breve/i)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Sair" })).toHaveClass("text-destructive");
   });

@@ -8,9 +8,6 @@ use serde_json::{Value, json};
 use sqlx::PgPool;
 use uuid::Uuid;
 
-const SAMPLE: &[u8] = include_bytes!("fixtures/termometro-sample.xlsx");
-const BOUNDARY: &str = "soldi-boundary";
-
 fn delete_request(user: &TestApp, password: &str) -> Request<Body> {
     let body = json!({ "password": password });
     json_request(
@@ -25,48 +22,15 @@ async fn delete_account(user: &TestApp, password: &str) -> Response {
     user.send(delete_request(user, password)).await
 }
 
-async fn upload_sample(user: &TestApp) -> Value {
-    let mut body = format!(
-        "--{BOUNDARY}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"t.xlsx\"\r\n\
-         Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet\r\n\r\n"
-    )
-    .into_bytes();
-    body.extend_from_slice(SAMPLE);
-    body.extend_from_slice(format!("\r\n--{BOUNDARY}--\r\n").as_bytes());
-    let request = Request::builder()
-        .method(Method::POST)
-        .uri("/api/imports/xlsx")
-        .header(
-            header::CONTENT_TYPE,
-            format!("multipart/form-data; boundary={BOUNDARY}"),
-        )
-        .header(header::COOKIE, user.cookie.as_deref().unwrap())
-        .body(Body::from(body))
-        .unwrap();
-    let response = user.send(request).await;
-    assert_eq!(response.status(), StatusCode::OK);
-    body_json(response).await["token"].clone()
-}
-
 async fn created(user: &TestApp, uri: &str, body: Value) -> Value {
     let (status, created) = user.post(uri, body).await;
     assert_eq!(status, StatusCode::CREATED, "{uri} {created}");
     created
 }
 
-/// Imported year, a subcategory, a cofrinho with a deposit and a resgate, a recurring bill
-/// with a payment, a repeated series, a pending import preview and a reset link.
+/// A subcategory, a cofrinho with a deposit and a resgate, a recurring bill with a payment,
+/// a repeated series and a reset link.
 async fn fill_account(pool: &PgPool, user: &TestApp, email: &str) {
-    let token = upload_sample(user).await;
-    let (status, imported) = user
-        .post(
-            "/api/imports/xlsx/confirm",
-            json!({ "token": token, "opening_balance": "1000", "opening_date": "2025-02-28" }),
-        )
-        .await;
-    assert_eq!(status, StatusCode::OK, "{imported}");
-    upload_sample(user).await;
-
     let today = soldi_server::today_sao_paulo().to_string();
     let mercado = user.category_id("Mercado").await;
     let feira = created(

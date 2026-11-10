@@ -6,7 +6,6 @@ import {
   ChevronRight,
   CircleHelp,
   Coins,
-  FileSpreadsheet,
   type LucideIcon,
   ReceiptText,
   Tags,
@@ -38,15 +37,7 @@ const GROUPS: { title: string; items: Item[] }[] = [
   },
   {
     title: "Dados",
-    items: [
-      {
-        href: "/ajustes/importar",
-        label: "Importar planilha",
-        hint: "Traga seu Termômetro.xlsx",
-        icon: FileSpreadsheet,
-      },
-      { href: "/ajustes/apagar", label: "Apagar lançamentos", hint: "Mês, ano ou tudo", icon: Trash2 },
-    ],
+    items: [{ href: "/ajustes/apagar", label: "Apagar lançamentos", hint: "Mês, ano ou tudo", icon: Trash2 }],
   },
   {
     title: "Ajuda",

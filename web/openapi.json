@@ -7,7 +7,7 @@
       "name": "AGPL-3.0-only",
       "identifier": "AGPL-3.0-only"
     },
-    "version": "0.19.0"
+    "version": "0.20.0"
   },
   "paths": {
     "/api/auth/me": {
@@ -1171,134 +1171,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Health"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/imports/xlsx": {
-      "post": {
-        "tags": [
-          "imports"
-        ],
-        "operationId": "preview_xlsx",
-        "requestBody": {
-          "content": {
-            "multipart/form-data": {
-              "schema": {
-                "$ref": "#/components/schemas/XlsxUpload"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Rows and saved months found per year, with the cells that could not be read; only the preview is stored, for 15 minutes",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ImportPreview"
-                }
-              }
-            }
-          },
-          "401": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "413": {
-            "description": "`too-large`: the file is over 5 MB",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "No `file` part, or not an .xlsx workbook",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/imports/xlsx/confirm": {
-      "post": {
-        "tags": [
-          "imports"
-        ],
-        "operationId": "confirm_xlsx",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ConfirmImport"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Opening balance and date saved, the preview's rows and saved months written under the `Importado` categories with note `Planilha {year}`, replacing an earlier import of the same years; the user is onboarded; with `skip_errors`, the cells the preview listed are left out and returned in `skipped`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ImportResult"
-                }
-              }
-            }
-          },
-          "401": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "No preview of the caller with this token, or it was confirmed already",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "410": {
-            "description": "`import-expired`: the preview is older than 15 minutes",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "`import-has-errors` when the preview listed errors and `skip_errors` is not true; `opening_date` after the earliest imported date; `opening_balance` with more than two places; `palette-full` when a new `Importado` category finds all 24 colors taken in its kind",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
                 }
               }
             }
@@ -2522,36 +2394,6 @@
           }
         }
       },
-      "ConfirmImport": {
-        "type": "object",
-        "description": "Replaces what an earlier import wrote for the same years; entries made by hand stay.",
-        "required": [
-          "token",
-          "opening_balance",
-          "opening_date"
-        ],
-        "properties": {
-          "opening_balance": {
-            "type": "string",
-            "description": "The balance before the first imported day; may be negative."
-          },
-          "opening_date": {
-            "type": "string",
-            "format": "date",
-            "description": "On or before the earliest imported date."
-          },
-          "skip_errors": {
-            "type": "boolean",
-            "description": "Confirms a preview with errors, leaving out the cells it lists."
-          },
-          "token": {
-            "type": "string",
-            "format": "uuid",
-            "description": "The preview's token."
-          }
-        },
-        "additionalProperties": false
-      },
       "ConfirmPasswordReset": {
         "type": "object",
         "required": [
@@ -2870,112 +2712,6 @@
           }
         }
       },
-      "ImportError": {
-        "type": "object",
-        "description": "A cell the importer could not read; `cell` is in A1 notation.",
-        "required": [
-          "sheet",
-          "cell",
-          "message"
-        ],
-        "properties": {
-          "cell": {
-            "type": "string"
-          },
-          "message": {
-            "type": "string"
-          },
-          "sheet": {
-            "type": "string"
-          }
-        }
-      },
-      "ImportPreview": {
-        "type": "object",
-        "description": "`token` confirms this preview for 15 minutes; a preview with errors cannot be confirmed.",
-        "required": [
-          "years",
-          "errors",
-          "token"
-        ],
-        "properties": {
-          "errors": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ImportError"
-            }
-          },
-          "token": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "years": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ImportYear"
-            }
-          }
-        }
-      },
-      "ImportResult": {
-        "type": "object",
-        "required": [
-          "transactions",
-          "years",
-          "skipped"
-        ],
-        "properties": {
-          "skipped": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/SkippedCell"
-            }
-          },
-          "transactions": {
-            "type": "integer",
-            "format": "int32",
-            "minimum": 0
-          },
-          "years": {
-            "type": "array",
-            "items": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        }
-      },
-      "ImportYear": {
-        "type": "object",
-        "description": "What the confirmation would write for one year; totals are of the transactions.",
-        "required": [
-          "year",
-          "transactions",
-          "income_total",
-          "bills_total",
-          "daily_total"
-        ],
-        "properties": {
-          "bills_total": {
-            "type": "string"
-          },
-          "daily_total": {
-            "type": "string"
-          },
-          "income_total": {
-            "type": "string"
-          },
-          "transactions": {
-            "type": "integer",
-            "format": "int32",
-            "minimum": 0
-          },
-          "year": {
-            "type": "integer",
-            "format": "int32"
-          }
-        }
-      },
       "MonthSavings": {
         "type": "object",
         "description": "The month's savings (SOL-20): `saved` is `totals.saved`; `rate_pct` is `saved / income` as a\npercentage with one decimal, null when income is 0.",
@@ -3230,22 +2966,6 @@
           }
         },
         "additionalProperties": false
-      },
-      "SkippedCell": {
-        "type": "object",
-        "description": "A cell left out because the preview could not read it.",
-        "required": [
-          "sheet",
-          "cell"
-        ],
-        "properties": {
-          "cell": {
-            "type": "string"
-          },
-          "sheet": {
-            "type": "string"
-          }
-        }
       },
       "Tier": {
         "type": "string",
@@ -3655,20 +3375,6 @@
           }
         },
         "additionalProperties": false
-      },
-      "XlsxUpload": {
-        "type": "object",
-        "description": "`multipart/form-data` body of the preview.",
-        "required": [
-          "file"
-        ],
-        "properties": {
-          "file": {
-            "type": "string",
-            "format": "binary",
-            "description": "The Termômetro workbook, at most 5 MB."
-          }
-        }
       }
     }
   }
