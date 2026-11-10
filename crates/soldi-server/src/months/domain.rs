@@ -1411,8 +1411,28 @@ mod tests {
                 "2026-11-10",
             )
         };
-        for scenario in [owners, carried] {
+        let later = || {
+            (
+                settings("800", "2027-01-15"),
+                vec![
+                    sum("2027-02-03", Bill, "450"),
+                    sum("2027-02-05", Income, "3000"),
+                    sum("2027-03-10", Daily, "200"),
+                ],
+                vec![
+                    bill(1, "Internet", "450", 3),
+                    bill(2, "Aluguel", "1800", 20),
+                ],
+                vec![
+                    payment(1, 9, "450", "2026-12-03"),
+                    payment(1, 10, "450", "2027-02-03"),
+                ],
+                "2026-11-10",
+            )
+        };
+        for scenario in [owners, carried, later] {
             let (settings, sums, bills, payments, today) = scenario();
+            let from = date(today).max(settings.opening_date);
             let year = forecast(ForecastInput {
                 settings,
                 sums,
@@ -1420,18 +1440,26 @@ mod tests {
                 payments,
                 today: date(today),
             });
-            for month in ["2026-11", "2026-12", "2027-10"] {
+            let months = std::iter::successors(Some(first_of(date(today))), |month| {
+                month.checked_add_months(Months::new(1))
+            })
+            .take_while(|month| *month <= horizon_end(date(today)));
+            let mut checked = 0;
+            for month in months {
                 let (settings, sums, bills, payments, _) = scenario();
-                let view = with_bills(month, settings, sums, bills, payments, today);
-                for day in view.days.iter().filter(|day| day.date >= date(today)) {
+                let month = month.format("%Y-%m").to_string();
+                let view = with_bills(&month, settings, sums, bills, payments, today);
+                for day in view.days.iter().filter(|day| day.date >= from) {
                     assert_eq!(
                         at(&year, &day.date.to_string()),
                         (day.projected_balance, day.projected_tier),
-                        "{}",
+                        "{today} {}",
                         day.date
                     );
+                    checked += 1;
                 }
             }
+            assert_eq!(checked, year.days.len(), "{today}");
         }
     }
 
