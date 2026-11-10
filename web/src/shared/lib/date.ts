@@ -48,3 +48,9 @@ export const monthName = (date: string, viewing: string) => {
 
 /** `2026-11-02` → `02/11`. */
 export const dayMonth = (date: string) => `${date.slice(8, 10)}/${date.slice(5, 7)}`;
+
+/** `2026-11` plus 2 → `2027-01`. */
+export const addMonths = (month: string, count: number) => {
+  const index = Number(month.slice(0, 4)) * 12 + Number(month.slice(5, 7)) - 1 + count;
+  return `${Math.floor(index / 12)}-${pad((index % 12) + 1)}`;
+};
