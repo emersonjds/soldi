@@ -20,6 +20,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/auth/password-reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["request_password_reset"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/password-reset/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["confirm_password_reset"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/auth/sign-in": {
         parameters: {
             query?: never;
@@ -587,6 +619,12 @@ export interface components {
              */
             token: string;
         };
+        ConfirmPasswordReset: {
+            /** @description 8 to 128 characters. */
+            new_password: string;
+            /** @description The `token` of the link in the e-mail. */
+            token: string;
+        };
         CreateBill: {
             /** @description Greater than zero, up to two decimal places. */
             amount: string;
@@ -756,6 +794,9 @@ export interface components {
             status: number;
             title: string;
             type: string;
+        };
+        RequestPasswordReset: {
+            email: string;
         };
         /**
          * @description Which entries of a series a change or a deletion reaches; `this` when absent.
@@ -961,6 +1002,86 @@ export interface operations {
                 };
             };
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    request_password_reset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RequestPasswordReset"];
+            };
+        };
+        responses: {
+            /** @description Accepted whether or not an account has this e-mail; when one has, a reset link valid for 1 hour is e-mailed to it and older links stop working */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Field `email` over 254 bytes */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Rate limited; wait `Retry-After` seconds */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    confirm_password_reset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmPasswordReset"];
+            };
+        };
+        responses: {
+            /** @description Password set; every session and every pending reset link of the user end */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `invalid-reset-link` for an unknown, expired or used token; field `password` when the new one has not 8 to 128 characters */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Rate limited; wait `Retry-After` seconds */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
