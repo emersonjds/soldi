@@ -7,6 +7,23 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.16.0
+
+> Headline: your account, your password, your data
+
+### Added
+
+- `PATCH /api/me` (name), `POST /api/me/password` (current + new; other sessions end, applied only from the checked hash) and `POST /api/auth/sign-out-everywhere`.
+- Password reset by e-mail: `POST /api/auth/password-reset` always answers 202 and, for a real account, mails through Resend a single-use link valid for 1 hour; `POST /api/auth/password-reset/confirm` sets the password, ends every session and voids every other link. Only the SHA-256 of a link is stored (`password_resets`, migration `0017`). The server refuses to start without `RESEND_API_KEY` outside localhost.
+- `DELETE /api/me` with the password deletes the account and all its data in one statement.
+- Request limits, answered with 429 and `Retry-After` before any database or password work: sign-in 20 per 15 min per IP, 10 per 15 min per e-mail and IP, 50 per 15 min per e-mail; sign-up 10 per hour per IP; password change and account deletion 10 per 15 min per user; reset request 10 per hour per IP and 3 per hour per e-mail; reset confirm 20 per hour per IP.
+
+### Web
+
+- `Ajustes › Minha conta` (also from the name in the sidebar and the avatar on the phone): rename, change the password, sign out of every device, delete the account after the password and `EXCLUIR`.
+- `Entrar › Esqueci minha senha` asks for the e-mail; the link opens `Nova senha`, with the token kept out of the address bar.
+- README links to [getsoldi.app](https://getsoldi.app).
+
 ## 0.15.0
 
 > Headline: the logo takes you to today
