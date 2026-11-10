@@ -37,6 +37,13 @@ pub struct ChangePassword {
 
 #[derive(Clone, Serialize, Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
+pub struct DeleteAccount {
+    /// The current password.
+    pub password: String,
+}
+
+#[derive(Clone, Serialize, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
 pub struct RequestPasswordReset {
     pub email: String,
 }

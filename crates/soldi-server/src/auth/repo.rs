@@ -116,6 +116,23 @@ pub async fn update_password_hash(
     Ok(updated.rows_affected() == 1)
 }
 
+/// Every row of the user goes with it (FK cascades). False when the stored hash is no
+/// longer `checked`.
+pub async fn delete_user(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    checked: Option<&str>,
+) -> Result<bool, sqlx::Error> {
+    let deleted = sqlx::query!(
+        "DELETE FROM users WHERE id = $1 AND password_hash IS NOT DISTINCT FROM $2",
+        user_id,
+        checked
+    )
+    .execute(&mut *conn)
+    .await?;
+    Ok(deleted.rows_affected() == 1)
+}
+
 /// For a password reset, where no current password is checked.
 pub async fn set_password_hash(
     conn: &mut PgConnection,
