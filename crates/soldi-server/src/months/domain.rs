@@ -108,35 +108,6 @@ pub fn month_view(input: MonthInput) -> MonthView {
             .range(..=today_or_end)
             .map(|(_, flow)| flow.net())
             .sum::<Decimal>();
-    let mut balance = settings.opening_balance
-        + flows
-            .range(..month)
-            .map(|(_, flow)| flow.net())
-            .sum::<Decimal>();
-    let mut totals = Flows::default();
-    let days = month
-        .iter_days()
-        .take_while(|date| *date <= end)
-        .map(|date| {
-            let flow = flows.get(&date).copied().unwrap_or_default();
-            balance += flow.net();
-            totals.income += flow.income;
-            totals.withdrawn += flow.withdrawn;
-            totals.bills += flow.bills;
-            totals.daily += flow.daily;
-            Day {
-                date,
-                income: flow.income,
-                withdrawn: flow.withdrawn,
-                bills: flow.bills,
-                daily: flow.daily,
-                balance,
-                tier: tier(balance, &settings),
-                is_today: date == today,
-                is_future: date > today,
-            }
-        })
-        .collect();
     let bills_of_month: Vec<BillOfMonth> = bills
         .into_iter()
         .map(|bill| {
@@ -152,6 +123,50 @@ pub fn month_view(input: MonthInput) -> MonthView {
                 paid: payment.is_some(),
                 transaction_id: payment.map(|payment| payment.transaction_id),
                 overdue: payment.is_none() && due_date < today,
+                lands_on: payment
+                    .is_none()
+                    .then_some(due_date.max(today))
+                    .filter(|day| *day <= end),
+            }
+        })
+        .collect();
+    let mut landing: BTreeMap<NaiveDate, Decimal> = BTreeMap::new();
+    for bill in &bills_of_month {
+        if let Some(day) = bill.lands_on {
+            *landing.entry(day).or_default() += bill.amount;
+        }
+    }
+    let mut pending = Decimal::ZERO;
+    let mut balance = settings.opening_balance
+        + flows
+            .range(..month)
+            .map(|(_, flow)| flow.net())
+            .sum::<Decimal>();
+    let mut totals = Flows::default();
+    let days = month
+        .iter_days()
+        .take_while(|date| *date <= end)
+        .map(|date| {
+            let flow = flows.get(&date).copied().unwrap_or_default();
+            balance += flow.net();
+            pending += landing.get(&date).copied().unwrap_or_default();
+            let projected_balance = balance - pending;
+            totals.income += flow.income;
+            totals.withdrawn += flow.withdrawn;
+            totals.bills += flow.bills;
+            totals.daily += flow.daily;
+            Day {
+                date,
+                income: flow.income,
+                withdrawn: flow.withdrawn,
+                bills: flow.bills,
+                daily: flow.daily,
+                balance,
+                tier: tier(balance, &settings),
+                projected_balance,
+                projected_tier: tier(projected_balance, &settings),
+                is_today: date == today,
+                is_future: date > today,
             }
         })
         .collect();
@@ -346,6 +361,7 @@ mod tests {
                 paid: false,
                 transaction_id: None,
                 overdue: false,
+                lands_on: Some(date("2026-11-05")),
             }]
         );
     }
@@ -367,6 +383,12 @@ mod tests {
         assert!(paid.paid && !paid.overdue);
         assert_eq!(paid.transaction_id, Some(uuid::Uuid::from_u128(9)));
         assert_eq!(paid.amount, money("2300"));
+        assert_eq!(paid.lands_on, None);
+        assert!(
+            view.days
+                .iter()
+                .all(|day| day.projected_balance == day.balance)
+        );
     }
 
     #[test]
@@ -415,6 +437,16 @@ mod tests {
         );
         assert_eq!(view.projected_balance, money("830"));
         assert_eq!(view.projected_tier, Tier::Yellow);
+        assert!(
+            view.bills_of_month
+                .iter()
+                .all(|bill| bill.lands_on.is_none())
+        );
+        assert!(
+            view.days
+                .iter()
+                .all(|day| day.projected_balance == day.balance && day.projected_tier == day.tier)
+        );
     }
 
     #[test]
@@ -435,6 +467,129 @@ mod tests {
             .collect();
 
         assert_eq!(tiers, [Tier::Yellow, Tier::LightGreen, Tier::LightRed]);
+    }
+
+    #[test]
+    fn forecast_rule_1_the_owners_november_turns_red_on_the_23rd_and_back_on_the_30th() {
+        let view = with_bills(
+            "2026-11",
+            settings("6150", "2026-11-01"),
+            vec![
+                sum("2026-11-23", Bill, "1925"),
+                sum("2026-11-25", Daily, "241"),
+                sum("2026-11-30", Income, "4575"),
+            ],
+            vec![
+                bill(1, "Cartão", "4900", 23),
+                bill(2, "Financiamento", "2000", 28),
+                bill(3, "Condomínio", "1168", 30),
+            ],
+            vec![],
+            "2026-11-10",
+        );
+        let projected = |day: usize| {
+            let day = &view.days[day - 1];
+            (day.projected_balance, day.projected_tier)
+        };
+
+        assert!(
+            view.days[..22]
+                .iter()
+                .all(|day| day.projected_balance == day.balance)
+        );
+        assert_eq!(projected(22), (money("6150"), Tier::Green));
+        assert_eq!(projected(23), (money("-675"), Tier::Red));
+        assert_eq!(projected(25), (money("-916"), Tier::Red));
+        assert_eq!(projected(28), (money("-2916"), Tier::Red));
+        assert_eq!(projected(30), (money("491"), Tier::Yellow));
+        assert_eq!(view.days[22].balance, money("4225"));
+        assert_eq!(view.days[29].balance, money("8559"));
+        assert_eq!(view.projected_balance, view.days[29].projected_balance);
+        assert_eq!(
+            view.bills_of_month
+                .iter()
+                .map(|bill| bill.lands_on)
+                .collect::<Vec<_>>(),
+            [
+                Some(date("2026-11-23")),
+                Some(date("2026-11-28")),
+                Some(date("2026-11-30"))
+            ]
+        );
+    }
+
+    #[test]
+    fn forecast_rule_2_a_past_due_bill_lands_once_on_today() {
+        let view = with_bills(
+            "2026-11",
+            settings("1200", "2026-11-01"),
+            vec![],
+            vec![bill(1, "Aluguel", "1800", 10)],
+            vec![],
+            "2026-11-20",
+        );
+        let aluguel = &view.bills_of_month[0];
+
+        assert_eq!(
+            (aluguel.overdue, aluguel.lands_on),
+            (true, Some(date("2026-11-20")))
+        );
+        assert_eq!(view.days[9].projected_balance, money("1200"));
+        assert_eq!(view.days[18].projected_balance, money("1200"));
+        assert_eq!(
+            (
+                view.days[19].projected_balance,
+                view.days[19].projected_tier,
+                view.days[19].balance
+            ),
+            (money("-600"), Tier::Red, money("1200"))
+        );
+        assert_eq!(view.days[29].projected_balance, money("-600"));
+        assert_eq!(view.projected_balance, money("-600"));
+    }
+
+    #[test]
+    fn forecast_rule_2_a_bill_due_today_lands_today_without_being_overdue() {
+        let view = with_bills(
+            "2026-11",
+            settings("0", "2026-11-01"),
+            vec![],
+            vec![bill(1, "Luz", "100", 10)],
+            vec![],
+            "2026-11-10",
+        );
+        let luz = &view.bills_of_month[0];
+
+        assert_eq!(
+            (luz.overdue, luz.lands_on),
+            (false, Some(date("2026-11-10")))
+        );
+        assert_eq!(view.days[8].projected_balance, money("0"));
+        assert_eq!(view.days[9].projected_balance, money("-100"));
+    }
+
+    #[test]
+    fn forecast_a_late_due_day_lands_on_the_last_day_of_a_coming_month() {
+        let view = with_bills(
+            "2027-02",
+            settings("1000", "2026-11-01"),
+            vec![],
+            vec![bill(1, "Cartão", "300", 29)],
+            vec![],
+            "2026-11-10",
+        );
+
+        assert_eq!(view.days.len(), 28);
+        assert_eq!(view.bills_of_month[0].lands_on, Some(date("2027-02-28")));
+        assert_eq!(view.days[26].projected_balance, money("1000"));
+        assert_eq!(
+            (
+                view.days[27].projected_balance,
+                view.days[27].projected_tier
+            ),
+            (money("700"), Tier::Yellow)
+        );
+        assert_eq!(view.projected_balance, view.days[27].projected_balance);
     }
 
     fn balances(view: &MonthView) -> Vec<Decimal> {
@@ -486,6 +641,11 @@ mod tests {
                 saved: money("0"),
                 rate_pct: Some(money("0.0"))
             }
+        );
+        assert!(
+            view.days
+                .iter()
+                .all(|day| day.projected_balance == day.balance)
         );
     }
 
