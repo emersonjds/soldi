@@ -26,7 +26,7 @@ export const RedDayAlert = ({ alert, onJump }: { alert: ForecastAlert; onJump: (
   const recovery = recoversOn ? ` · recupera em ${dayMonth(recoversOn)}` : "";
   const worst = `Pior dia: ${dayMonth(lowest.date)}, ${formatMoney(lowest.balance, currency)}${recovery}`;
   return (
-    <div className="mt-4 flex flex-col items-center gap-1 lg:items-start">
+    <div className="mx-auto mt-4 flex w-fit max-w-full flex-col items-start gap-1 lg:mx-0">
       <Line text={first} onClick={() => onJump(firstRed.date)} />
       {lowest.date !== firstRed.date && <Line text={worst} onClick={() => onJump(lowest.date)} />}
     </div>
