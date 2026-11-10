@@ -483,6 +483,12 @@ export interface components {
             due_date: string;
             /** @description The category's lucide icon. */
             icon: string;
+            /**
+             * Format: date
+             * @description The day an unpaid bill enters the projection: its due date, or today once due; null when
+             *     paid or when that day falls after the month.
+             */
+            lands_on?: string | null;
             name: string;
             overdue: boolean;
             paid: boolean;
@@ -701,6 +707,12 @@ export interface components {
             income: string;
             is_future: boolean;
             is_today: boolean;
+            /**
+             * @description `balance` minus the unpaid bills landed on or before this day (`BillOfMonth::lands_on`);
+             *     equal to `balance` before today and in a past month.
+             */
+            projected_balance: string;
+            projected_tier: components["schemas"]["Tier"];
             tier: components["schemas"]["Tier"];
             withdrawn: string;
         };

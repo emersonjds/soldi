@@ -49,6 +49,7 @@ async fn the_sheets_first_days_come_back_with_balances_tiers_and_totals(pool: Pg
         json!({
             "date": "2026-11-03", "income": "0.00", "withdrawn": "0.00", "bills": "300.00", "daily": "50.00",
             "balance": "1150.00", "tier": "light_green",
+            "projected_balance": "1150.00", "projected_tier": "light_green",
             "is_today": view["days"][2]["is_today"], "is_future": view["days"][2]["is_future"]
         })
     );
@@ -201,6 +202,9 @@ async fn rule_1_end_to_end_unpaid_then_paid_then_unpaid(pool: PgPool) {
     let bill = add_bill(&user, "Aluguel", "2259.56", 5, "Aluguel").await;
     let pay = format!("/api/bills/{}/pay", bill["id"].as_str().unwrap());
     let overdue = soldi_server::today_sao_paulo() > "2026-11-05".parse().unwrap();
+    let today = soldi_server::today_sao_paulo();
+    let lands_on = (today <= "2026-11-30".parse::<chrono::NaiveDate>().unwrap())
+        .then(|| today.max("2026-11-05".parse().unwrap()).to_string());
 
     let (status, unpaid) = user.get("/api/months/2026-11").await;
     assert_eq!(status, StatusCode::OK, "{unpaid}");
@@ -209,7 +213,7 @@ async fn rule_1_end_to_end_unpaid_then_paid_then_unpaid(pool: PgPool) {
         json!([{
             "bill_id": bill["id"], "name": "Aluguel", "icon": "home", "color": "cat-6",
             "amount": "2259.56", "due_date": "2026-11-05", "paid": false,
-            "transaction_id": null, "overdue": overdue
+            "transaction_id": null, "overdue": overdue, "lands_on": lands_on
         }])
     );
     assert_eq!(last_balance(&unpaid), "1000.00");
@@ -304,4 +308,40 @@ async fn rule_10_paused_and_archived_bills_leave_the_month_but_keep_their_entrie
     assert_eq!(view["bills_of_month"], json!([]));
     assert_eq!(view["totals"]["bills"], "50.00");
     assert_eq!(view["projected_balance"], "950.00");
+}
+
+#[sqlx::test]
+async fn forecast_an_unpaid_bill_dips_its_clamped_due_day_two_months_ahead(pool: PgPool) {
+    use chrono::Datelike;
+    let user = TestApp::signed_in(pool, "ana@example.com").await;
+    let today = soldi_server::today_sao_paulo();
+    open_at(&user, "1000", &today.to_string()).await;
+    add_bill(&user, "Aluguel", "1600", 31, "Aluguel").await;
+    let month = today
+        .with_day(1)
+        .unwrap()
+        .checked_add_months(chrono::Months::new(2))
+        .unwrap();
+
+    let (status, view) = user
+        .get(&format!("/api/months/{}", month.format("%Y-%m")))
+        .await;
+
+    assert_eq!(status, StatusCode::OK, "{view}");
+    let days = view["days"].as_array().unwrap();
+    let (before, last) = (&days[days.len() - 2], days.last().unwrap());
+    assert_eq!(
+        (&before["projected_balance"], &before["projected_tier"]),
+        (&json!("1000.00"), &json!("light_green"))
+    );
+    assert_eq!(
+        (
+            &last["projected_balance"],
+            &last["projected_tier"],
+            &last["balance"]
+        ),
+        (&json!("-600.00"), &json!("red"), &json!("1000.00"))
+    );
+    assert_eq!(view["bills_of_month"][0]["lands_on"], last["date"]);
+    assert_eq!(view["projected_balance"], "-600.00");
 }
