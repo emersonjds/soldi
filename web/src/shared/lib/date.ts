@@ -24,3 +24,6 @@ export const shortDay = (date: string) => {
 
 /** `2027-06-30` → `jun 2027`. */
 export const monthYear = (date: string) => `${MONTHS[Number(date.slice(5, 7)) - 1]} ${date.slice(0, 4)}`;
+
+/** `2026-11-02` → `02/11`. */
+export const dayMonth = (date: string) => `${date.slice(8, 10)}/${date.slice(5, 7)}`;
