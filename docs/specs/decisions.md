@@ -73,3 +73,7 @@ One rule for every month, past, current and future: a month is owed only when it
 ## D18 — No spreadsheet importer (2026-11-10, owner, SOL-59)
 
 The `Termômetro.xlsx` importer (SOL-7) is removed: every spreadsheet has its own layout, so a parser written for one workbook cannot serve other users. Entries already imported stay as ordinary entries; only the import bookkeeping (`import_previews`, `transactions.import_batch_id`/`import_year`) is dropped. SOL-8, SOL-11 and SOL-22 die with it. Rejected: keeping the screen for the owner's workbook only (a feature nobody else can use), a column-mapping CSV importer (no demand yet; a new card if it comes).
+
+## D19 — A series is resized at its end, never re-split (2026-11-10, SOL-47 panel, architect arbitrated)
+
+`repeat_months` on a series member sets how many entries the series counts (2..60). Growing appends members on the first member's day grid (D14 clamp) copying the edited member as saved; shrinking deletes the last members, never one ranked before the edited member. Kept members keep their amounts, installment series included: the server stores no flag telling parcelas from a repeat, and the sheet names the rows added or removed before saving, so the total never changes silently. Rejected: re-splitting the remaining total (halves a repeat; needs a flag and a migration), refusing installment series (same flag), a floor at today (`Excluir · Toda a série` already reaches past members), a dedicated `/series` endpoint (two requests for one save). Detail: `docs/specs/cards/SOL-47.md`.
