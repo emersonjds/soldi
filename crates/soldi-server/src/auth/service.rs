@@ -77,16 +77,22 @@ pub async fn change_password(
     input: ChangePassword,
 ) -> Result<(), AppError> {
     domain::check_password(&input.new_password)?;
-    let mut conn = pool.acquire().await?;
-    let stored_hash = repo::find_password_hash(&mut conn, user.id)
-        .await?
+    let stored_hash = {
+        let mut conn = pool.acquire().await?;
+        repo::find_password_hash(&mut conn, user.id).await?
+    };
+    let checked = stored_hash
+        .clone()
         .unwrap_or_else(domain::dummy_password_hash);
-    if !verify_in_background(input.current_password, stored_hash).await? {
+    if !verify_in_background(input.current_password, checked).await? {
         return Err(domain::wrong_password());
     }
     let password_hash = hash_in_background(input.new_password).await?;
     let mut tx = pool.begin().await?;
-    repo::update_password_hash(&mut tx, user.id, &password_hash).await?;
+    if !repo::update_password_hash(&mut tx, user.id, stored_hash.as_deref(), &password_hash).await?
+    {
+        return Err(domain::wrong_password());
+    }
     repo::delete_other_sessions(&mut tx, user).await?;
     tx.commit().await?;
     Ok(())

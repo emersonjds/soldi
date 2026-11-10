@@ -97,19 +97,23 @@ pub async fn find_password_hash(
         .await
 }
 
+/// False when the stored hash is no longer `checked`: another change got there first.
 pub async fn update_password_hash(
     conn: &mut PgConnection,
     user_id: Uuid,
+    checked: Option<&str>,
     password_hash: &str,
-) -> Result<(), sqlx::Error> {
-    sqlx::query!(
-        "UPDATE users SET password_hash = $2, updated_at = now() WHERE id = $1",
+) -> Result<bool, sqlx::Error> {
+    let updated = sqlx::query!(
+        "UPDATE users SET password_hash = $2, updated_at = now()
+         WHERE id = $1 AND password_hash IS NOT DISTINCT FROM $3",
         user_id,
-        password_hash
+        password_hash,
+        checked
     )
     .execute(&mut *conn)
     .await?;
-    Ok(())
+    Ok(updated.rows_affected() == 1)
 }
 
 pub async fn insert_session(

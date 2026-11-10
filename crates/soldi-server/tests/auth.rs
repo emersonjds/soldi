@@ -315,6 +315,7 @@ async fn rename_refuses_blank_long_and_nul_names(pool: PgPool) {
 #[sqlx::test]
 async fn a_wrong_current_password_changes_nothing(pool: PgPool) {
     let ana = TestApp::signed_in(pool, "ana@example.com").await;
+    let (_, ana_phone) = sign_in(&ana, "ana@example.com", PASSWORD).await;
 
     let (status, problem) = ana
         .post(
@@ -326,6 +327,7 @@ async fn a_wrong_current_password_changes_nothing(pool: PgPool) {
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
     assert_eq!(problem["type"], "urn:soldi:error:wrong-password");
     assert_eq!(ana.get("/api/auth/me").await.0, StatusCode::OK);
+    assert_eq!(ana_phone.get("/api/auth/me").await.0, StatusCode::OK);
     assert_eq!(
         sign_in(&ana, "ana@example.com", PASSWORD).await.0,
         StatusCode::OK
@@ -335,6 +337,7 @@ async fn a_wrong_current_password_changes_nothing(pool: PgPool) {
 #[sqlx::test]
 async fn a_short_new_password_is_refused(pool: PgPool) {
     let ana = TestApp::signed_in(pool, "ana@example.com").await;
+    let (_, ana_phone) = sign_in(&ana, "ana@example.com", PASSWORD).await;
 
     let (status, problem) = ana
         .post(
@@ -345,6 +348,7 @@ async fn a_short_new_password_is_refused(pool: PgPool) {
 
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
     assert_eq!(problem["errors"][0]["field"], "password");
+    assert_eq!(ana_phone.get("/api/auth/me").await.0, StatusCode::OK);
     assert_eq!(
         sign_in(&ana, "ana@example.com", PASSWORD).await.0,
         StatusCode::OK
