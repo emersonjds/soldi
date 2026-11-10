@@ -105,11 +105,11 @@ describe("AppShell", () => {
     renderWithQuery(<AppShell>conteúdo</AppShell>);
 
     const email = await screen.findByText("ana@example.com");
-    const card = screen.getByRole("link", { name: "Minha conta" });
+    const card = screen.getByRole("link", { name: "Minha conta, Ana" });
     expect(card).toHaveAttribute("href", "/ajustes/conta");
     expect(card).toContainElement(email);
     expect(within(card).queryByRole("button")).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Sua conta" })).toHaveAttribute("href", "/ajustes/conta");
+    expect(screen.getByRole("link", { name: "Minha conta" })).toHaveAttribute("href", "/ajustes/conta");
 
     await userEvent.click(screen.getByRole("button", { name: "Sair" }));
     await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/entrar"));

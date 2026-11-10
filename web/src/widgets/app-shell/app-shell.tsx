@@ -108,7 +108,7 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
               <div className="flex items-center gap-1 rounded-2xl bg-muted p-1.5">
                 <Link
                   href="/ajustes/conta"
-                  aria-label="Minha conta"
+                  aria-label={`Minha conta, ${name}`}
                   className="flex min-w-0 flex-1 items-center gap-3 rounded-xl p-1.5 transition-colors hover:bg-background/60 focus-visible:outline-2 focus-visible:outline-ring"
                 >
                   <Avatar>
@@ -133,7 +133,7 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
             <TodayLink className="-ml-2 text-xl" />
             <Link
               href="/ajustes/conta"
-              aria-label="Sua conta"
+              aria-label="Minha conta"
               className="flex size-11 items-center justify-center rounded-full"
             >
               <Avatar>
