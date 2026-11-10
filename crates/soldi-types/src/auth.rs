@@ -35,6 +35,21 @@ pub struct ChangePassword {
     pub new_password: String,
 }
 
+#[derive(Clone, Serialize, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct RequestPasswordReset {
+    pub email: String,
+}
+
+#[derive(Clone, Serialize, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ConfirmPasswordReset {
+    /// The `token` of the link in the e-mail.
+    pub token: String,
+    /// 8 to 128 characters.
+    pub new_password: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct User {
     pub id: Uuid,

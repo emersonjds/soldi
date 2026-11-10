@@ -6,6 +6,7 @@ pub mod error;
 pub mod extract;
 pub mod imports;
 pub mod limits;
+pub mod mail;
 pub mod months;
 pub mod onboarding;
 pub mod reports;
@@ -38,6 +39,9 @@ use crate::error::AppError;
 pub struct AppState {
     pub pool: PgPool,
     pub limiter: std::sync::Arc<limits::Limiter>,
+    pub mailer: mail::Mailer,
+    /// Where links in e-mails point, without a trailing slash.
+    pub public_url: String,
 }
 
 impl AppState {
@@ -45,6 +49,8 @@ impl AppState {
         AppState {
             pool,
             limiter: Default::default(),
+            mailer: mail::Mailer::Log,
+            public_url: "http://localhost:8080".into(),
         }
     }
 }

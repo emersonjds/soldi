@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -77,6 +78,12 @@ export const SignInForm = () => {
                 aria-invalid={fieldState.invalid}
               />
               {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+              <Link
+                href="/esqueci-senha"
+                className="inline-flex min-h-11 items-center self-end font-semibold text-primary text-sm"
+              >
+                Esqueci minha senha
+              </Link>
             </Field>
           )}
         />

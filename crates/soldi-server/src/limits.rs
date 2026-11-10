@@ -56,6 +56,11 @@ pub const PASSWORD_RESET_EMAIL: Budget = Budget {
     limit: 3,
     window: ONE_HOUR,
 };
+pub const PASSWORD_RESET_CONFIRM_IP: Budget = Budget {
+    name: "password-reset-confirm-ip",
+    limit: 20,
+    window: ONE_HOUR,
+};
 
 struct Window {
     ends: Instant,

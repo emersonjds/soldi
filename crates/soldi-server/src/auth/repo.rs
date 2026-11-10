@@ -116,6 +116,89 @@ pub async fn update_password_hash(
     Ok(updated.rows_affected() == 1)
 }
 
+/// For a password reset, where no current password is checked.
+pub async fn set_password_hash(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    password_hash: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        "UPDATE users SET password_hash = $2, updated_at = now() WHERE id = $1",
+        user_id,
+        password_hash
+    )
+    .execute(&mut *conn)
+    .await?;
+    Ok(())
+}
+
+/// Expires in one hour.
+pub async fn insert_password_reset(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    token_hash: &[u8],
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        "INSERT INTO password_resets (user_id, token_hash) VALUES ($1, $2)",
+        user_id,
+        token_hash
+    )
+    .execute(&mut *conn)
+    .await?;
+    Ok(())
+}
+
+/// Serializes link requests of one user until the transaction ends, so only one link stays live.
+pub async fn lock_password_resets(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        "SELECT pg_advisory_xact_lock(hashtext('password_resets:' || $1::text))",
+        user_id.to_string()
+    )
+    .execute(&mut *conn)
+    .await?;
+    Ok(())
+}
+
+/// Cheap check before the argon2 hash; `take_password_reset` still decides in the transaction.
+pub async fn password_reset_is_live(
+    conn: &mut PgConnection,
+    token_hash: &[u8],
+) -> Result<bool, sqlx::Error> {
+    let live = sqlx::query_scalar!(
+        r#"SELECT EXISTS (SELECT 1 FROM password_resets WHERE token_hash = $1 AND expires_at > now()) AS "live!""#,
+        token_hash
+    )
+    .fetch_one(&mut *conn)
+    .await?;
+    Ok(live)
+}
+
+pub async fn delete_password_resets(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!("DELETE FROM password_resets WHERE user_id = $1", user_id)
+        .execute(&mut *conn)
+        .await?;
+    Ok(())
+}
+
+/// Spends a live reset link; the owner's id, or `None` for an unknown, expired or used one.
+pub async fn take_password_reset(
+    conn: &mut PgConnection,
+    token_hash: &[u8],
+) -> Result<Option<Uuid>, sqlx::Error> {
+    sqlx::query_scalar!(
+        "DELETE FROM password_resets WHERE token_hash = $1 AND expires_at > now() RETURNING user_id",
+        token_hash
+    )
+    .fetch_optional(&mut *conn)
+    .await
+}
+
 pub async fn insert_session(
     conn: &mut PgConnection,
     user_id: Uuid,
