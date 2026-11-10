@@ -2,7 +2,19 @@ import { expect, test } from "@playwright/test";
 
 const API = process.env.E2E_API_URL ?? "http://localhost:8080";
 
-test("an unpaid conta fixa paints its due day next month as Previsto · Crítico", async ({ page, request }) => {
+/** `YYYY-MM-DD` of `day` next month, in the server's São Paulo calendar. */
+const nextMonthDay = (day: number) => {
+  const [year, month] = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" })
+    .format(new Date())
+    .split("-")
+    .map(Number);
+  return new Date(Date.UTC(year, month, day)).toISOString().slice(0, 10);
+};
+
+test("an unpaid conta fixa paints next month's due day Crítico and the hero line jumps to it", async ({
+  page,
+  request,
+}) => {
   const health = await request.get(`${API}/api/health`).catch(() => null);
   test.skip(!health?.ok(), `Soldi server unreachable at ${API}/api/health; start it to run this flow.`);
 
@@ -30,4 +42,9 @@ test("an unpaid conta fixa paints its due day next month as Previsto · Crítico
     /Agendado · 28 .*-R\$\s600,00.*Previsto · Crítico/,
   );
   await expect(ledger.getByRole("listitem", { name: "Aluguel" })).toContainText("Conta fixa · a pagar");
+
+  const hero = page.getByRole("region", { name: "Saldo hoje" });
+  await hero.getByRole("button", { name: /Dia 28 fica no vermelho: -R\$\s600,00/ }).click();
+  await expect(page.locator(`#dia-${nextMonthDay(28)}`)).toHaveClass(/ring-2/);
+  await expect(ledger.getByRole("listitem", { name: "Aluguel" })).toContainText("Motivo da queda");
 });
