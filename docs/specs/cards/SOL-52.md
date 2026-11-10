@@ -1,5 +1,7 @@
 # SOL-52 — Posso comprar isso? (Simular + Parcelar)
 
+> **Override (orchestrator, 2026-11-10) — split rounding.** Each parcela is `total / n` **truncated toward zero** to cents (`RoundingStrategy::ToZero` in Rust, integer division of cents in TS), parcelas 1..n−1 = that value, the last = `total − each × (n − 1)`, so the last is always ≥ the others and never negative. Refuse only when `each` would be 0.00 (total under n cents). Vectors: 1000.01 in 10 → 9 × 100.00 + 100.01; 10.00 in 60 → 59 × 0.16 + 0.56; 0.05 in 2 → 0.02 + 0.03; 100.00 in 3 → 33.33 + 33.33 + 33.34; 0.05 in 6 → refused. Where the text and code below say half-even, this override wins.
+
 Epic SOL-40, sprint 3, card 3 of 3, built on SOL-51's `GET /api/forecast` and `monthsAhead`. Rules: D7, D14, D16, `02-finance.md` rule 3; screens: `03-ux.md` §4, §6, §7 card 4. Plan: `docs/plans/2026-11-10-forecast-sprint-3.md` tasks 10–15.
 
 ## Panel (architect challenge)
