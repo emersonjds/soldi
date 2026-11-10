@@ -7,7 +7,9 @@ use axum::http::header::SET_COOKIE;
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::IntoResponse;
 use soldi_types::Problem;
-use soldi_types::auth::{ChangePassword, SignIn, SignUp, UpdateMe, User};
+use soldi_types::auth::{
+    ChangePassword, ConfirmPasswordReset, RequestPasswordReset, SignIn, SignUp, UpdateMe, User,
+};
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
 
@@ -34,6 +36,8 @@ pub fn router() -> OpenApiRouter<AppState> {
         .routes(routes!(tour_seen))
         .routes(routes!(update_me))
         .routes(routes!(change_password))
+        .routes(routes!(request_password_reset))
+        .routes(routes!(confirm_password_reset))
 }
 
 #[utoipa::path(post, path = "/api/auth/sign-up", tag = "auth", request_body = SignUp,
@@ -161,5 +165,57 @@ pub async fn change_password(
         .limiter
         .check(&[(limits::PASSWORD_CHANGE_USER, user_id)])?;
     service::change_password(&state.pool, &user, input).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[utoipa::path(post, path = "/api/auth/password-reset", tag = "auth", request_body = RequestPasswordReset,
+    responses(
+        (status = 202, description = "Accepted whether or not an account has this e-mail; when one has, a reset link valid for 1 hour is e-mailed to it and older links stop working"),
+        (status = 422, body = Problem, content_type = "application/problem+json", description = "Field `email` over 254 bytes"),
+        (status = 429, body = Problem, content_type = "application/problem+json", description = "Rate limited; wait `Retry-After` seconds")))]
+pub async fn request_password_reset(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    peer: Peer,
+    JsonBody(input): JsonBody<RequestPasswordReset>,
+) -> Result<StatusCode, AppError> {
+    let email = input.email.trim();
+    if email.len() > domain::MAX_EMAIL_BYTES {
+        return Err(AppError::invalid("email", "must be an email address"));
+    }
+    let email = email.to_lowercase();
+    let ip = client_ip(&headers, peer);
+    state.limiter.check(&[
+        (limits::PASSWORD_RESET_IP, ip),
+        (limits::PASSWORD_RESET_EMAIL, Some(email.clone())),
+    ])?;
+    let mailer = state.mailer.clone();
+    let task = tokio::spawn(async move {
+        let sent =
+            service::request_password_reset(&state.pool, &state.mailer, &state.public_url, &email);
+        if let Err(error) = sent.await {
+            tracing::warn!(?error, "password reset request failed");
+        }
+    });
+    mailer.track(task);
+    Ok(StatusCode::ACCEPTED)
+}
+
+#[utoipa::path(post, path = "/api/auth/password-reset/confirm", tag = "auth", request_body = ConfirmPasswordReset,
+    responses(
+        (status = 204, description = "Password set; every session and every pending reset link of the user end"),
+        (status = 422, body = Problem, content_type = "application/problem+json", description = "`invalid-reset-link` for an unknown, expired or used token; field `password` when the new one has not 8 to 128 characters"),
+        (status = 429, body = Problem, content_type = "application/problem+json", description = "Rate limited; wait `Retry-After` seconds")))]
+pub async fn confirm_password_reset(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    peer: Peer,
+    JsonBody(input): JsonBody<ConfirmPasswordReset>,
+) -> Result<StatusCode, AppError> {
+    let ip = client_ip(&headers, peer);
+    state
+        .limiter
+        .check(&[(limits::PASSWORD_RESET_CONFIRM_IP, ip)])?;
+    service::confirm_password_reset(&state.pool, input).await?;
     Ok(StatusCode::NO_CONTENT)
 }

@@ -2,6 +2,8 @@ use argon2::Argon2;
 use argon2::password_hash::{PasswordHasher, PasswordVerifier};
 use axum::http::header::{COOKIE, HOST, ORIGIN};
 use axum::http::{HeaderMap, Method};
+use base64::Engine;
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use sha2::{Digest, Sha256};
 
 use crate::error::{AppError, reject_nul};
@@ -74,11 +76,30 @@ pub fn display_name(name: Option<&str>, email: &str) -> Result<String, AppError>
     Ok(name.to_string())
 }
 
-/// 32 random bytes as lowercase hex.
-pub fn new_secret() -> String {
+fn random_bytes() -> [u8; 32] {
     let mut bytes = [0u8; 32];
     getrandom::fill(&mut bytes).expect("the operating system random source works");
-    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+    bytes
+}
+
+/// 32 random bytes as lowercase hex.
+pub fn new_secret() -> String {
+    random_bytes()
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
+}
+
+/// 32 random bytes, base64url without padding (43 characters), for the link in the e-mail.
+pub fn new_reset_token() -> String {
+    URL_SAFE_NO_PAD.encode(random_bytes())
+}
+
+pub fn invalid_reset_link() -> AppError {
+    AppError::rule(
+        "invalid-reset-link",
+        "This link expired or was already used.",
+    )
 }
 
 pub fn hash_token(token: &str) -> Vec<u8> {

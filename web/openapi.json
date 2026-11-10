@@ -38,6 +38,92 @@
         }
       }
     },
+    "/api/auth/password-reset": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "operationId": "request_password_reset",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestPasswordReset"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted whether or not an account has this e-mail; when one has, a reset link valid for 1 hour is e-mailed to it and older links stop working"
+          },
+          "422": {
+            "description": "Field `email` over 254 bytes",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited; wait `Retry-After` seconds",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/password-reset/confirm": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "operationId": "confirm_password_reset",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmPasswordReset"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Password set; every session and every pending reset link of the user end"
+          },
+          "422": {
+            "description": "`invalid-reset-link` for an unknown, expired or used token; field `password` when the new one has not 8 to 128 characters",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited; wait `Retry-After` seconds",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/auth/sign-in": {
       "post": {
         "tags": [
@@ -2379,6 +2465,24 @@
         },
         "additionalProperties": false
       },
+      "ConfirmPasswordReset": {
+        "type": "object",
+        "required": [
+          "token",
+          "new_password"
+        ],
+        "properties": {
+          "new_password": {
+            "type": "string",
+            "description": "8 to 128 characters."
+          },
+          "token": {
+            "type": "string",
+            "description": "The `token` of the link in the e-mail."
+          }
+        },
+        "additionalProperties": false
+      },
       "CreateBill": {
         "type": "object",
         "required": [
@@ -2869,6 +2973,18 @@
             "type": "string"
           }
         }
+      },
+      "RequestPasswordReset": {
+        "type": "object",
+        "required": [
+          "email"
+        ],
+        "properties": {
+          "email": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
       },
       "Scope": {
         "type": "string",
