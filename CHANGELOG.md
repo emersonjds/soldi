@@ -7,6 +7,19 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.17.0
+
+> Headline: see the red day before it comes
+
+### Changed
+
+- `GET /api/months/{month}`: each `Day` has `projected_balance` and `projected_tier`; each `BillOfMonth` has `lands_on`, the day an unpaid conta fixa weighs on the forecast (its due day, or today once past due; none when paid or due before the opening date). Past days are unchanged. Decision D16.
+
+### Web
+
+- Mês: every day shows its balance with the thermometer tier, future days as `Previsto · <tier>`; an unpaid conta fixa appears on the day it lands (`Conta fixa · a pagar` / `venceu dia DD/MM`).
+- The hero warns `Dia 23 fica no vermelho: -R$ 675,00` and `Pior dia: 28/11, -R$ 2.916,00 · recupera em 30/11`; a tap jumps to that day, focuses it and rings it for 2 s, with `Motivo da queda` on the outflow that caused the drop.
+
 ## 0.16.0
 
 > Headline: your account, your password, your data
