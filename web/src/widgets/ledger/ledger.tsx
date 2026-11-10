@@ -80,12 +80,13 @@ const dueCaption = (bill: Due, month: string) => {
 };
 
 const DueRow = ({ bill, month, cause }: { bill: Due; month: string; cause: boolean }) => (
-  <li aria-labelledby={`due-${billKey(bill)}`} className="flex min-h-16 items-center gap-3 px-2 py-2">
+  <li
+    aria-label={bill.due_date.startsWith(month) ? bill.name : `${bill.name} de ${monthName(bill.due_date, month)}`}
+    className="flex min-h-16 items-center gap-3 px-2 py-2"
+  >
     <CategoryIcon icon={bill.icon} color={bill.color} />
     <span className="flex min-w-0 flex-1 flex-col">
-      <span id={`due-${billKey(bill)}`} className="truncate font-medium text-base">
-        {bill.name}
-      </span>
+      <span className="truncate font-medium text-base">{bill.name}</span>
       <span className={cn("text-xs", bill.overdue ? "text-expense" : "text-muted-foreground")}>
         {dueCaption(bill, month)}
       </span>

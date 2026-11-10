@@ -184,12 +184,18 @@ describe("Mês", () => {
     );
   });
 
-  it("lands October's unpaid rent today in the ledger, named by its month", async () => {
-    open({ "GET /api/months/2026-11": { status: 200, body: { ...MONTH, bills_of_month: [CARRIED_ALUGUEL] } } });
-    const rent = await within(await screen.findByRole("region", { name: "Lançamentos" })).findByRole("listitem", {
-      name: "Aluguel Residencial",
+  it("lands October's unpaid rent today next to November's, each named by its month", async () => {
+    const november = { ...BILLS_OF_MONTH[1], lands_on: "2026-11-05" };
+    open({
+      "GET /api/months/2026-11": { status: 200, body: { ...MONTH, bills_of_month: [CARRIED_ALUGUEL, november] } },
     });
-    expect(rent).toHaveTextContent("Conta fixa · venceu em outubro");
+    const region = await screen.findByRole("region", { name: "Lançamentos" });
+    expect(await within(region).findByRole("listitem", { name: "Aluguel Residencial de outubro" })).toHaveTextContent(
+      "Conta fixa · venceu em outubro",
+    );
+    expect(within(region).getByRole("listitem", { name: "Aluguel Residencial" })).toHaveTextContent(
+      "Conta fixa · a pagar",
+    );
   });
 
   it("lists a month whose only entry is scheduled instead of the empty state", async () => {
