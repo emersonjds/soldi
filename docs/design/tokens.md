@@ -17,6 +17,7 @@ The `designer` agent maps these onto the template's shadcn semantic tokens in `w
 | primary-container (accent) | `#6C5CE7` | FAB, primary buttons, "Lançar", hover `#5A4BD1` |
 | header gradient | `#1E1B4B → #312E81` | the month hero on `Mês`, auth top, `Para onde vai` short header |
 | income | `#16A34A` on `#DCFCE7` | entradas, "Pago" |
+| income-text | `#15803D` on white, 5.02:1 | income amounts (`Money income`), the Entradas total, a cofrinho's gain; `income` stays for fills and icons (3.30:1 on white) |
 | expense | `#DC2626` on `#FEE2E2` | saídas, "Vencido", negative projected |
 | destructive | `#BA1A1A` | delete, "Sair" |
 | border | `#C8C4D7` | outline-variant |

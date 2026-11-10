@@ -38,7 +38,7 @@ describe("Tour de boas-vindas", () => {
     expect(screen.getByText("Passo 1 de 4")).toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 1, name: "Entradas" })).toBeInTheDocument();
     expect(screen.getByText("Tudo que entra: salário, extras, reembolsos.")).toBeInTheDocument();
-    expect(screen.getByText("+ R$ 5.000,00")).toHaveClass("text-income");
+    expect(screen.getByText("+ R$ 5.000,00")).toHaveClass("text-income-text");
     await next();
 
     expect(screen.getByText("Passo 2 de 4")).toBeInTheDocument();
