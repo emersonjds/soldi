@@ -1,4 +1,4 @@
-# SOL-5 — Para onde vai e Economia
+# SOL-5 — Para onde vai and Economia
 
 Panel of 2026-11-05 (product, ux, finance, architect). Depends on SOL-3. Design `docs/design/stitch/para-onde-vai-*.png`, `economia-*.png`; features 1 and 2 of `docs/specs/market-analysis.md`.
 

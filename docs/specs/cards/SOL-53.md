@@ -1,4 +1,4 @@
-# SOL-53 — Limite de tentativas
+# SOL-53 — Request limits
 
 Found in SOL-36: the API documents 429 on sign-in and sign-up but nothing returns it, so passwords can be guessed as fast as the server answers.
 

@@ -1,4 +1,4 @@
-# SOL-21 — Repetir lançamento por N meses
+# SOL-21 — Repeat an entry for N months
 
 Panel: `product`, `ux`, `finance` voted; `architect` arbitrated (2026-11-05). Depends on SOL-4 (`due_date` clamp, `bills/domain.rs`), SOL-20 (cofrinho/resgate fields), D7 (Decimal), D8 (bills never pre-generate rows), D13 (opening_date floor).
 

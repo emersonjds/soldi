@@ -1,4 +1,4 @@
-# SOL-43 — Excluir minha conta
+# SOL-43 — Delete my account (Excluir minha conta)
 
 LGPD (art. 18, VI): the user can have their data deleted. Asked in SOL-36's thread; split into its own card.
 

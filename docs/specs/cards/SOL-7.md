@@ -1,4 +1,4 @@
-# SOL-7 — Importador da planilha Termômetro.xlsx
+# SOL-7 — Importer of the Termômetro.xlsx sheet
 
 Panel of 2026-11-05 (product, finance, architect). Depends on SOL-5 (savings). The owner's file lives at `~/Downloads/_Termômetro.xlsx` and never enters the repository; tests use a small synthetic workbook built in the test with the same layout.
 

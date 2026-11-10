@@ -1,4 +1,4 @@
-# SOL-50 — Hero avisa o dia vermelho
+# SOL-50 — The hero warns of the red day
 
 Epic SOL-40, sprint 2, card 2 of 4, built on SOL-49's `Day.projected_balance`/`projected_tier` and `BillOfMonth.lands_on`. Rules: D16, `02-finance.md` rule 5; screens: `03-ux.md` §2 (hero, cause), §5 states, §6 copy, §7 card 2. Plan: `docs/plans/2026-11-10-forecast-sprint-2.md` tasks 5–8.
 

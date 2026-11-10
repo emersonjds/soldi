@@ -1,4 +1,4 @@
-# SOL-51 — Próximos meses (6/12)
+# SOL-51 — Months ahead (Próximos meses, 6/12)
 
 Epic SOL-40, sprint 3, card 2 of 3, built on SOL-55's engine (`unpaid` months landed on `max(due_date, today)`). Rules: D16, D17, `02-finance.md` rules 4 and 7; screens: `03-ux.md` §3, §5, §6. Plan: `docs/plans/2026-11-10-forecast-sprint-3.md` tasks 5–9.
 

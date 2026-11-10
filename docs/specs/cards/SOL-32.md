@@ -1,4 +1,4 @@
-# SOL-32 — Cores de categoria únicas por tipo; subcategoria herda a cor do pai
+# SOL-32 — Unique category colors per kind; a subcategory wears its parent's color
 
 Owner, 2026-11-08: "se criei uma subcategoria ela deve seguir a mesma cor da categoria pai" and "todas as categorias têm cores diferentes, não podem ter as mesmas cores". Asked the same night: uniqueness is **per kind** (Entrada, Saída, Diário — what the screen shows together) and **cofrinhos inherit** like any subcategory. Decision D15.
 
