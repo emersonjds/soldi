@@ -184,20 +184,21 @@ pub async fn insert(
     .await
 }
 
-/// Copies of `entry` on each of `dates`, in `series_id`.
+/// Copies of `entry` on each of `dates`, in `series_id`, with `amounts[i]` on `dates[i]`.
 pub async fn insert_copies(
     conn: &mut PgConnection,
     user_id: Uuid,
     entry: &CreateTransaction,
     series_id: Uuid,
     dates: &[NaiveDate],
+    amounts: &[Decimal],
 ) -> Result<(), sqlx::Error> {
     sqlx::query!(
         "INSERT INTO transactions (user_id, date, amount, kind, category_id, note, series_id)
-         SELECT $1, d, $3, $4, $5, $6, $7 FROM UNNEST($2::date[]) AS d",
+         SELECT $1, c.d, c.a, $4, $5, $6, $7 FROM UNNEST($2::date[], $3::numeric[]) AS c(d, a)",
         user_id,
         dates,
-        entry.amount,
+        amounts,
         entry.kind.as_str(),
         entry.category_id,
         entry.note,

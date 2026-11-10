@@ -695,6 +695,12 @@ export interface components {
             category_id: string;
             /** Format: date */
             date: string;
+            /**
+             * Format: int32
+             * @description 2 to 60 monthly parcelas splitting `amount`, the total: each `amount / n` truncated to
+             *     cents, the last takes the remainder (D16); dated like `repeat_months`; not with it.
+             */
+            installments?: number | null;
             /** @description Must equal the category's kind. */
             kind: components["schemas"]["CategoryKind"];
             /** @description Up to 500 characters; blank means none. */
@@ -2562,7 +2568,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description The entry; with `repeat_months`, the first of its series, the copies written in the same database transaction */
+            /** @description The entry; with `repeat_months` or `installments`, the first of its series (parcela 1), the rest written in the same database transaction */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -2588,7 +2594,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Amount not above zero or with more than two places, note over 500 characters, a kind other than the category's (`category_id`), `repeat_months` not 2 to 60, or a date before the opening date (`before-opening-date`) */
+            /** @description Amount not above zero or with more than two places, note over 500 characters, a kind other than the category's (`category_id`), `repeat_months` not 2 to 60, `installments` not 2 to 60, with `repeat_months`, or leaving a parcela at zero, or a date before the opening date (`before-opening-date`) */
             422: {
                 headers: {
                     [name: string]: unknown;
