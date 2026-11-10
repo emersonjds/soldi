@@ -2594,7 +2594,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Amount not above zero or with more than two places, note over 500 characters, a kind other than the category's (`category_id`), `repeat_months` not 2 to 60, `installments` not 2 to 60, with `repeat_months`, or leaving a parcela at zero, or a date before the opening date (`before-opening-date`) */
+            /** @description Amount not above zero or with more than two places, note over 500 characters, a kind other than the category's (`category_id`), `repeat_months` not 2 to 60, `installments` not 2 to 60, with `repeat_months`, or leaving a parcela at zero, a date outside 2000 to 2100, or a date before the opening date (`before-opening-date`) */
             422: {
                 headers: {
                     [name: string]: unknown;
