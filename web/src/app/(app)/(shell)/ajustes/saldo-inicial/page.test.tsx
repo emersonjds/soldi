@@ -46,6 +46,20 @@ describe("Ajustes › Saldo inicial", () => {
     expect(await patch?.json()).toEqual({ opening_balance: "-1250.50", opening_date: "2026-10-01" });
   });
 
+  it("takes no opening date after today", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 10, 5, 12));
+    try {
+      open();
+      await userEvent.click(await screen.findByRole("button", { name: "Data, 01/11/2026" }));
+
+      expect(await screen.findByRole("button", { name: "sexta-feira, 6 de novembro de 2026" })).toBeDisabled();
+      expect(screen.getByRole("button", { name: /quinta-feira, 5 de novembro de 2026/ })).toBeEnabled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("says so when saving fails", async () => {
     open({ "PATCH /api/settings": { status: 422, body: problem(422, "before-opening-date") } });
 

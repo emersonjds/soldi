@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field";
 import { useUpdateSettings } from "@/entities/settings/settings-query";
 import type { Schemas } from "@/shared/api/client";
+import { todayISO } from "@/shared/lib/date";
 import { parseBRL } from "@/shared/lib/money";
 import { AmountInput } from "@/shared/ui/amount-input";
 import { BrandButton } from "@/shared/ui/brand-button";
@@ -55,7 +56,14 @@ export const OpeningForm = ({ settings }: { settings: Schemas["Settings"] }) => 
         </Field>
         <Field className="gap-1.5">
           <FieldLabel htmlFor="opening-date">Data</FieldLabel>
-          <DateField id="opening-date" label="Data" value={date} onChange={setDate} className="min-h-12" />
+          <DateField
+            id="opening-date"
+            label="Data"
+            value={date}
+            onChange={setDate}
+            max={todayISO()}
+            className="min-h-12"
+          />
         </Field>
       </div>
       <BrandButton type="submit" className="lg:w-auto lg:self-start lg:px-8">

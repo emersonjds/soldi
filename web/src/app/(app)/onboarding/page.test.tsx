@@ -44,6 +44,20 @@ describe("Onboarding", () => {
     router.replace.mockClear();
   });
 
+  it("takes no opening date after today", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 10, 5, 12));
+    try {
+      stub();
+      await renderOnboarding();
+      await userEvent.click(screen.getByRole("button", { name: "Data, 05/11/2026" }));
+
+      expect(await screen.findByRole("button", { name: "sexta-feira, 6 de novembro de 2026" })).toBeDisabled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("walks the four steps and saves the currency, the balance and a bill", async () => {
     const requests = stub();
     renderWithQuery(<OnboardingPage />);

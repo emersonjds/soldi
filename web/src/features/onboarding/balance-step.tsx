@@ -6,6 +6,7 @@ import { z } from "zod";
 
 import { Button } from "@/components/ui/button";
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { todayISO } from "@/shared/lib/date";
 import { parseBRL } from "@/shared/lib/money";
 import { AmountInput } from "@/shared/ui/amount-input";
 import { BrandButton } from "@/shared/ui/brand-button";
@@ -63,7 +64,14 @@ export const BalanceStep = ({
             control={form.control}
             name="date"
             render={({ field: { value, onChange } }) => (
-              <DateField id="opening-date" label="Data" value={value} onChange={onChange} className="min-h-12" />
+              <DateField
+                id="opening-date"
+                label="Data"
+                value={value}
+                onChange={onChange}
+                max={todayISO()}
+                className="min-h-12"
+              />
             )}
           />
         </Field>

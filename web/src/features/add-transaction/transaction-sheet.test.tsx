@@ -140,6 +140,17 @@ describe("TransactionSheet", () => {
     expect(await sent("POST")).toMatchObject({ date: "2026-10-28" });
   });
 
+  it("offers no day before the opening date: Ontem leaves and the calendar disables it", async () => {
+    setup({}, { "GET /api/settings": { status: 200, body: { ...SETTINGS, opening_date: "2026-11-05" } } });
+
+    const dialog = await screen.findByRole("dialog", { name: "Lançar" });
+    await waitFor(() => expect(within(dialog).queryByRole("button", { name: "Ontem" })).not.toBeInTheDocument());
+    expect(within(dialog).getByRole("button", { name: "Hoje" })).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole("button", { name: "Outra data, 05/11/2026" }));
+
+    expect(await screen.findByRole("button", { name: "quarta-feira, 4 de novembro de 2026" })).toBeDisabled();
+  });
+
   it("asks for an amount and a category inline, without calling the API", async () => {
     const { requests } = setup({}, { "GET /api/categories": { status: 200, body: [SALARIO] } });
 
