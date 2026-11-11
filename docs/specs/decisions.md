@@ -113,3 +113,25 @@ Rejected:
 Detail: `docs/specs/2026-11-10-dashboard-redesign.md`, plan `docs/specs/plans/SOL-61.md`.
 
 Update (2026-11-11, owner, SOL-69): C1 went back to the 0.23.0 hero, today's balance with its tier and the Entradas / Saídas / Projetado summary; the split bar "Para onde foi a entrada" is dropped from Mês. The rest of the grid stays.
+
+## D22 — The category palette is checked for color blindness; icon and label name a category, color only helps (2026-11-11, SOL-9, designer)
+
+Ten of the first twelve `cat-*` tokens get new hex values (`cat-5` Lazer and `cat-11` Salário stay). Names do not change, so stored categories keep their token and no migration runs. Each token keeps its hue family (Mercado still amber, Aluguel still indigo); most moved in lightness, the axis a dichromat still sees.
+
+Method: the dataviz `validate_palette.js` validator. It measures OKLab ΔE between colors simulated for protan, deutan and tritan vision (Machado, Oliveira & Fernandes 2009, severity 1.0), and WCAG contrast on the white card. Candidates were searched inside each hue family under hard rules: at least 3:1 on white, every one of the 24 at least the old 0.05 OKLab apart, `cat-11` fixed because Guardado wears it beside `--split-daily`. The search scored the set a user really sees: a new account fills each kind from the lowest free token, so Diário shows 15 categories painted `cat-1..cat-15`.
+
+Rules, locked by `web/src/app/category-palette.test.ts`:
+
+- every `cat-*` reaches 3:1 against `--card` and under its white glyph (WCAG 1.4.11);
+- any two of the 24 sit at least 0.05 apart in OKLab;
+- any two of `cat-1..cat-15` sit at least 3 apart under protan and deutan;
+- any two of `cat-1..cat-12` sit at least 5 apart under tritan.
+
+Limit: the validator's target of 8 (floor 6) between every pair is out of reach. 3:1 on white caps lightness at about OKLab 0.67, and a dichromat sees only lightness and one hue axis; fifteen colors in that band cannot all sit 6 apart. The best search reached about 6 on the twelve alone, and only by repainting all of them, `cat-11` included, out of their families (yellow turned olive, orange turned salmon), while cutting the fifteen-color set back toward 1. The shipped palette is the trade: worst pair 0.3 → 3.2 under protan and deutan across the fifteen, 2.7 → 5.3 under tritan across the twelve. Six pairs stay below 6: Mercado / Oliva, Comida fora / Luz, Extra / Framboesa, Luz / Salário, Comida fora / Oliva, Mercado / Extra. Salário / Verde-azulado stays at 2.6 under tritan, two tokens this card left alone. They can sit together: Ajustes › Categorias lists a whole kind, and the "Saídas do mês" donut mixes Diário and Saída. Every place a category color shows draws the category's own lucide icon and its name next to it (the donut through its legend rows, which also highlight their slice), so color is never the only signal and must not become one.
+
+Rejected:
+
+- a palette that reaches 6 on the twelve (it repaints all twelve out of their families and breaks the fifteen);
+- renaming or reordering tokens (needs a migration and breaks D15's stored names);
+- moving `cat-13..cat-24` too (the card is scoped to the failing defaults; their own collisions, such as Ardósia / Malva at 0.9 under deutan, need a card of their own);
+- patterns or textures in the circle (decoration on a 40 px icon that already carries a glyph).
