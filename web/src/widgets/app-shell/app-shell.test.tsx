@@ -130,7 +130,7 @@ describe("AppShell", () => {
     await userEvent.click(within(tabs).getByRole("button", { name: "Lançar" }));
     expect(await screen.findByRole("radio", { name: "Mercado" })).toHaveAttribute("aria-checked", "true");
     await userEvent.keyboard("12");
-    await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
+    await userEvent.click(screen.getByRole("button", { name: "Salvar Lançamento" }));
 
     await waitFor(() => expect(requests.some((request) => request.method === "POST")).toBe(true));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
@@ -144,7 +144,7 @@ describe("AppShell", () => {
     await userEvent.click(within(tabs).getByRole("button", { name: "Lançar" }));
     await userEvent.click(await screen.findByRole("radio", { name: "Conta" }));
     await userEvent.type(screen.getByLabelText(/^Valor d/), "12");
-    await userEvent.click(await screen.findByRole("button", { name: "Transformar em conta fixa" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Criar como Conta Fixa" }));
 
     expect(await screen.findByRole("dialog", { name: "Nova conta" })).toBeInTheDocument();
   });

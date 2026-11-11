@@ -100,7 +100,7 @@ export const CategoryChips = ({
   if (!categories.data || !entries)
     return (
       <div className="flex gap-2">
-        {["a", "b", "c", "d", "e"].map((slot) => (
+        {["a", "b", "c", "d", "e", "f", "g", "h"].map((slot) => (
           <Skeleton key={slot} className="size-12 rounded-full" />
         ))}
       </div>

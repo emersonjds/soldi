@@ -51,8 +51,8 @@ test("an entry repeated 3x shows in three months; edit and delete reach this one
   await launch.getByLabel("Valor").fill("100,00");
   await pickDate(launch, "Outra data", `${first}-01`);
   await launch.getByLabel("Observação").fill("Internet");
-  await launch.getByRole("switch", { name: "Repetir" }).click();
-  await launch.getByRole("radio", { name: "3x" }).click();
+  await launch.getByRole("switch", { name: "Repetir lançamento (Série)" }).click();
+  await launch.getByRole("radio", { name: "3×" }).click();
   await launch.getByRole("button", { name: "Salvar" }).click();
   await expect(page.getByText("3 lançamentos criados")).toBeVisible();
 
@@ -142,18 +142,18 @@ test("a 12x series shrinks to 6 from its first entry and grows back to 12 from i
   await launch.getByLabel("Valor").fill("100,00");
   await pickDate(launch, "Outra data", `${first}-01`);
   await launch.getByLabel("Observação").fill("Internet");
-  await launch.getByRole("switch", { name: "Repetir" }).click();
+  await launch.getByRole("switch", { name: "Repetir lançamento (Série)" }).click();
   await launch.getByRole("button", { name: "Salvar" }).click();
   await expect(page.getByText("12 lançamentos criados")).toBeVisible();
 
-  await resize(first, "6x");
+  await resize(first, "6×");
   await expect(page.getByText("Série ajustada para 6 meses")).toBeVisible();
   await visit(sixth);
   await expect(internet).toContainText("Saída · 6/66 de 6");
   await visit(seventh);
   await expect(ledger).toHaveCount(0);
 
-  await resize(sixth, "12x");
+  await resize(sixth, "12×");
   await expect(page.getByText("Série ajustada para 12 meses")).toBeVisible();
   await visit(twelfth);
   await expect(internet).toContainText("Saída · 12/1212 de 12");
@@ -196,7 +196,7 @@ test("a 12x series on the 5th moves to the 10th from its third entry on", async 
   await launch.getByLabel("Valor").fill("100,00");
   await pickDate(launch, "Outra data", `${first}-05`);
   await launch.getByLabel("Observação").fill("Internet");
-  await launch.getByRole("switch", { name: "Repetir" }).click();
+  await launch.getByRole("switch", { name: "Repetir lançamento (Série)" }).click();
   await launch.getByRole("button", { name: "Salvar" }).click();
   await expect(page.getByText("12 lançamentos criados")).toBeVisible();
 

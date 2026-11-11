@@ -39,48 +39,53 @@ const seed = async (page: Page) => {
   }
 };
 
-test("at 375 the tab bar never covers the last row of a long page, and a long Lançar still shows Salvar", async ({
-  page,
-  request,
-}) => {
-  await requireServer(request);
+test.describe("on a touch screen", () => {
+  test.use({ hasTouch: true });
 
-  await page.setViewportSize({ width: 375, height: 812 });
-  await page.goto("/criar-conta");
-  await page.getByLabel("E-mail").fill(`e2e-shell-${Date.now()}@example.com`);
-  await page.getByLabel("Senha").fill("uma-senha-bem-longa");
-  await page.getByRole("button", { name: "Criar conta" }).click();
+  test("at 375×812 the tab bar never covers the last row of a long page, and a long Lançar with the keypad still shows Salvar Lançamento", async ({
+    page,
+    request,
+  }) => {
+    await requireServer(request);
 
-  await page.getByRole("button", { name: "Continuar" }).click();
-  await page.getByLabel("Saldo de hoje").fill("1.000,00");
-  await page.getByRole("button", { name: "Continuar" }).click();
-  await page.getByRole("button", { name: "Pular por agora" }).click();
-  await page.getByRole("button", { name: "Ver meu mês" }).click();
-  await page.getByRole("button", { name: "Pular" }).click();
-  await page
-    .getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ })
-    .getByRole("button", { name: "Fechar" })
-    .click();
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.goto("/criar-conta");
+    await page.getByLabel("E-mail").fill(`e2e-shell-${Date.now()}@example.com`);
+    await page.getByLabel("Senha").fill("uma-senha-bem-longa");
+    await page.getByRole("button", { name: "Criar conta" }).click();
 
-  await seed(page);
-  for (const path of ["/mes", "/para-onde-vai", "/economia", "/ajustes"]) {
-    await page.goto(path);
-    await page.waitForLoadState("networkidle");
-    await expect
-      .poll(() => page.evaluate(() => document.documentElement.scrollHeight - window.innerHeight), {
-        message: `${path} scrolls past the tab bar's 92px`,
-      })
-      .toBeGreaterThan(92);
-    await expect.poll(() => overlap(page), { message: path }).toBeLessThanOrEqual(0);
-  }
+    await page.getByRole("button", { name: "Continuar" }).click();
+    await page.getByLabel("Saldo de hoje").fill("1.000,00");
+    await page.getByRole("button", { name: "Continuar" }).click();
+    await page.getByRole("button", { name: "Pular por agora" }).click();
+    await page.getByRole("button", { name: "Ver meu mês" }).click();
+    await page.getByRole("button", { name: "Pular" }).click();
+    await page
+      .getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ })
+      .getByRole("button", { name: "Fechar" })
+      .click();
 
-  await page.getByRole("navigation", { name: "Navegação principal" }).getByRole("button", { name: "Lançar" }).click();
-  const launch = page.getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ });
-  await launch.getByRole("switch", { name: "Repetir" }).click();
-  await launch.getByRole("radio", { name: "12x" }).click();
-  expect(await launch.evaluate((sheet) => sheet.scrollHeight > sheet.clientHeight)).toBe(true);
-  await launch.evaluate((sheet) => sheet.scrollTo(0, 0));
-  await expect(launch.getByRole("button", { name: "Salvar" })).toBeInViewport({ ratio: 1 });
+    await seed(page);
+    for (const path of ["/mes", "/para-onde-vai", "/economia", "/ajustes"]) {
+      await page.goto(path);
+      await page.waitForLoadState("networkidle");
+      await expect
+        .poll(() => page.evaluate(() => document.documentElement.scrollHeight - window.innerHeight), {
+          message: `${path} scrolls past the tab bar's 92px`,
+        })
+        .toBeGreaterThan(92);
+      await expect.poll(() => overlap(page), { message: path }).toBeLessThanOrEqual(0);
+    }
+
+    await page.getByRole("navigation", { name: "Navegação principal" }).getByRole("button", { name: "Lançar" }).click();
+    const launch = page.getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ });
+    await launch.getByRole("switch", { name: "Repetir lançamento (Série)" }).click();
+    await launch.getByRole("radio", { name: "12×" }).click();
+    await expect(launch.getByRole("button", { name: "Apagar" })).toBeVisible();
+    expect(await launch.evaluate((sheet) => sheet.scrollHeight > sheet.clientHeight)).toBe(true);
+    await launch.evaluate((sheet) => sheet.scrollTo(0, 0));
+    await expect(launch.getByRole("button", { name: "Salvar Lançamento" })).toBeInViewport({ ratio: 1 });
+  });
 });
 
 test("the shell follows Stitch from 375 to 1440: app bar and tab bar on mobile, switcher, today's tier and avatar on top", async ({

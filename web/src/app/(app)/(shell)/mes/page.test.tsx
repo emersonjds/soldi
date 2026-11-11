@@ -673,7 +673,7 @@ describe("Mês", () => {
     await userEvent.click(
       within(await screen.findByRole("dialog", { name: "Aluguel" })).getByRole("button", { name: "Editar" }),
     );
-    await userEvent.click(await screen.findByRole("button", { name: "Transformar em conta fixa" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Criar como Conta Fixa" }));
 
     const bill = await screen.findByRole("dialog", { name: "Nova conta" });
     expect(within(bill).getByLabelText("Nome")).toHaveValue("Aluguel");

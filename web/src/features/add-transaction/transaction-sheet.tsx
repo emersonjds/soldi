@@ -2,11 +2,24 @@
 
 import { type FormEvent, type ReactNode, useState } from "react";
 
-import { ArrowDown, CircleX, type LucideIcon, NotebookPen, ReceiptText, Repeat, ShoppingBag } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowRight,
+  Calculator,
+  CircleCheck,
+  CircleX,
+  Lightbulb,
+  type LucideIcon,
+  NotebookPen,
+  ReceiptText,
+  Repeat,
+  ShoppingBag,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Kbd } from "@/components/ui/kbd";
 import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { type BillPrefill, useCreateBill } from "@/entities/bill/bill-queries";
@@ -92,7 +105,7 @@ const TransactionForm = ({
   /** `moving`: Este e os próximos moves the series to a new day. */
   onSave: (fields: NewTransaction, scope?: Scope, moving?: boolean) => void;
   onDiscard: () => void;
-  /** Absent: no Transformar em conta fixa. */
+  /** Absent: no Criar como Conta Fixa. */
   onConvert?: (source: Source) => void;
 }) => {
   const [draft, setDraft] = useState(initial);
@@ -247,7 +260,6 @@ const TransactionForm = ({
         invalid={submitted && !amount}
         keypad={keypad}
       />
-      {keypad && <AmountKeypad value={draft.amount} onValueChange={(value) => set({ amount: value })} />}
 
       <CategoryChips
         kind={draft.kind}
@@ -273,6 +285,32 @@ const TransactionForm = ({
         {moving && !monthChanged && <p className="text-muted-foreground text-sm">{dayHelper}</p>}
       </div>
 
+      <div className="flex items-center gap-2.5 rounded-xl bg-muted pl-3 focus-within:ring-3 focus-within:ring-ring/50">
+        <NotebookPen aria-hidden className="size-5 shrink-0 text-muted-foreground" />
+        <input
+          aria-label="Observação"
+          value={draft.note}
+          onChange={(event) => set({ note: event.target.value })}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") event.preventDefault();
+          }}
+          placeholder="Adicionar nota ou observação..."
+          maxLength={200}
+          className="h-12 min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground"
+        />
+        {draft.note && (
+          <button
+            type="button"
+            aria-label="Limpar observação"
+            onClick={() => set({ note: "" })}
+            className="flex size-11 shrink-0 items-center justify-center rounded-full text-muted-foreground focus-visible:outline-2 focus-visible:outline-ring"
+          >
+            <CircleX aria-hidden className="size-5" />
+          </button>
+        )}
+      </div>
+      {keypad && <AmountKeypad value={draft.amount} onValueChange={(value) => set({ amount: value })} />}
+
       {transaction?.recurring_bill_id && (
         <p className="text-muted-foreground text-sm">Já é uma conta fixa recorrente.</p>
       )}
@@ -288,8 +326,9 @@ const TransactionForm = ({
               htmlFor="transaction-repeat-switch"
               className="flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-xl bg-muted px-4"
             >
-              <span id="transaction-repeat" className="font-medium text-base">
-                Repetir
+              <span id="transaction-repeat" className="flex items-center gap-2 font-medium text-base">
+                <Repeat aria-hidden className="size-5 shrink-0 text-muted-foreground" />
+                Repetir lançamento (Série)
               </span>
               <Switch
                 id="transaction-repeat-switch"
@@ -304,8 +343,9 @@ const TransactionForm = ({
               htmlFor="transaction-split-switch"
               className="flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-xl bg-muted px-4"
             >
-              <span id="transaction-split" className="font-medium text-base">
-                Parcelar
+              <span id="transaction-split" className="flex items-center gap-2 font-medium text-base">
+                <Calculator aria-hidden className="size-5 shrink-0 text-muted-foreground" />
+                Parcelar compra
               </span>
               <Switch
                 id="transaction-split-switch"
@@ -333,7 +373,7 @@ const TransactionForm = ({
                     disabled={preset !== "other" && Number(preset) < minMonths}
                     className={chip}
                   >
-                    {preset === "other" ? "Outro" : `${preset}x`}
+                    {preset === "other" ? "Outro" : `${preset}×`}
                   </ToggleGroupItem>
                 ))}
               </ToggleGroup>
@@ -358,18 +398,20 @@ const TransactionForm = ({
                 </div>
               )}
               {draft.repeat && monthsValid && (
-                <p className="text-muted-foreground text-sm">
-                  {amount && `${months}× ${formatMoney(amount, currency)} · `}até {lastMonth(draft.date, months)}
+                <p className="flex items-center gap-2 text-muted-foreground text-sm">
+                  <Lightbulb aria-hidden className="size-4 shrink-0" />
+                  {`${amount ? `${months}× de ${formatMoney(amount, currency)} · ` : ""}repete todo dia ${day} até ${lastMonth(draft.date, months)}`}
                 </p>
               )}
               {resizeNote && <p className="text-muted-foreground text-sm">{resizeNote}</p>}
-              {split && splitValid && (
-                <p className="text-muted-foreground text-sm">
-                  {split[0] === split[months - 1]
-                    ? `${months}× ${money(split[0])}`
-                    : `${months - 1}× ${money(split[0])} + ${money(split[months - 1])} na última`}{" "}
-                  · até {lastMonth(draft.date, months)}
-                </p>
+              {amount && split && splitValid && (
+                <div className="flex flex-col gap-1 text-muted-foreground text-sm">
+                  <p>{`Divide o valor total de ${formatMoney(amount, currency)} em ${months} parcelas automáticas`}</p>
+                  <p className="font-medium text-foreground">{`Projeção: ${months}× de ${money(split[0])}`}</p>
+                  {split[0] !== split[months - 1] && (
+                    <p>{`Última parcela será ajustada para ${money(split[months - 1])} devido a centavos residuais.`}</p>
+                  )}
+                </div>
               )}
               {submitted && !splitValid && (
                 <p role="alert" className="text-destructive text-sm">
@@ -383,40 +425,19 @@ const TransactionForm = ({
           )}
           {convertible && (
             <p className="text-muted-foreground text-sm">
-              Prefere uma conta fixa, sem data pra acabar?{" "}
+              Prefere transformar em conta fixa recorrente?{" "}
               <button
                 type="button"
                 onClick={convert}
-                className="inline-flex min-h-11 items-center font-semibold text-primary underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring"
+                className="inline-flex min-h-11 items-center gap-1 font-semibold text-primary underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring"
               >
-                Transformar em conta fixa
+                Criar como Conta Fixa
+                <ArrowRight aria-hidden className="size-4" />
               </button>
             </p>
           )}
         </div>
       )}
-
-      <div className="flex items-center gap-2.5 rounded-xl bg-muted pl-3 focus-within:ring-3 focus-within:ring-ring/50">
-        <NotebookPen aria-hidden className="size-5 shrink-0 text-muted-foreground" />
-        <input
-          aria-label="Observação"
-          value={draft.note}
-          onChange={(event) => set({ note: event.target.value })}
-          placeholder="Adicionar nota ou observação..."
-          maxLength={200}
-          className="h-12 min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground"
-        />
-        {draft.note && (
-          <button
-            type="button"
-            aria-label="Limpar observação"
-            onClick={() => set({ note: "" })}
-            className="flex size-11 shrink-0 items-center justify-center rounded-full text-muted-foreground focus-visible:outline-2 focus-visible:outline-ring"
-          >
-            <CircleX aria-hidden className="size-5" />
-          </button>
-        )}
-      </div>
 
       {series && transaction && (
         <ScopeRadio
@@ -441,7 +462,22 @@ const TransactionForm = ({
             </Button>
           </>
         ) : (
-          <BrandButton type="submit">Salvar</BrandButton>
+          <div className="flex items-center gap-3">
+            {isLg && (
+              <>
+                <span className="mr-auto text-muted-foreground text-sm">
+                  Pressione <Kbd>Enter ↵</Kbd> para salvar
+                </span>
+                <Button type="button" variant="ghost" className="h-12 text-base" onClick={onDiscard}>
+                  Cancelar
+                </Button>
+              </>
+            )}
+            <BrandButton type="submit" className="lg:w-auto lg:px-6">
+              <CircleCheck aria-hidden />
+              Salvar Lançamento
+            </BrandButton>
+          </div>
         )}
       </ResponsiveSheetFooter>
     </form>
@@ -463,7 +499,7 @@ type TransactionSheetProps = {
   initialDate?: string;
   /** A line above the form. */
   hint?: string;
-  /** The bill sheet that Transformar em conta fixa opens; absent, the link is not offered. */
+  /** The bill sheet that Criar como Conta Fixa opens; absent, the link is not offered. */
   billSheet?: (props: {
     prefill: BillPrefill;
     onOpenChange: (open: boolean) => void;

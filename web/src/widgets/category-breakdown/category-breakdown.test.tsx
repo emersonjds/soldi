@@ -304,7 +304,7 @@ describe("CategoryBreakdown by group", () => {
     );
     await userEvent.type(await screen.findByLabelText(/^Valor d/), "12");
 
-    await userEvent.click(await screen.findByRole("button", { name: "Transformar em conta fixa" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Criar como Conta Fixa" }));
 
     expect(await screen.findByRole("dialog", { name: "Nova conta" })).toBeInTheDocument();
   });

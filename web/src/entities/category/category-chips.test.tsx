@@ -269,11 +269,11 @@ describe("CategoryChips", () => {
     await waitFor(() => expect(racao).toHaveFocus());
   });
 
-  it("shows five round placeholders while the categories load", () => {
+  it("shows eight round placeholders while the categories load", () => {
     stubApi({});
     const { container } = renderWithQuery(<Picker />);
 
-    expect(container.querySelectorAll('[data-slot="skeleton"].rounded-full')).toHaveLength(5);
+    expect(container.querySelectorAll('[data-slot="skeleton"].rounded-full')).toHaveLength(8);
   });
 
   it("waits with the placeholders while the month's entries load, so the row never reorders", async () => {
@@ -284,7 +284,7 @@ describe("CategoryChips", () => {
 
     await waitFor(() => expect(client.getQueryData(["categories"])).toBeDefined());
     expect(screen.queryByRole("radiogroup", { name: "Categoria" })).not.toBeInTheDocument();
-    expect(container.querySelectorAll('[data-slot="skeleton"].rounded-full')).toHaveLength(5);
+    expect(container.querySelectorAll('[data-slot="skeleton"].rounded-full')).toHaveLength(8);
   });
 
   it("creates a category with the next free color, selects it and says so", async () => {
