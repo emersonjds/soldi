@@ -18,6 +18,7 @@ import {
   type Scope,
   type Transaction,
   useCreateTransaction,
+  useTransactions,
   useUpdateTransaction,
 } from "@/entities/transaction/transaction-queries";
 import { ApiError, type Schemas } from "@/shared/api/client";
@@ -95,6 +96,8 @@ const TransactionForm = ({
   const [submitted, setSubmitted] = useState(false);
   const currency = useCurrency();
   const categories = useCategoryChips(draft.kind);
+  // Lançar opens from any page: the row ranks by the month that is running, not the one on screen.
+  const thisMonth = useTransactions(todayISO().slice(0, 7));
   const settings = useSettings();
   const category = draft.category ?? categories.data?.[0];
   const amount = positiveAmount(draft.amount);
@@ -234,15 +237,19 @@ const TransactionForm = ({
         invalid={submitted && !amount}
       />
 
-      <fieldset className="flex flex-col gap-2">
-        <legend className="mb-2 font-semibold text-sm">Categoria</legend>
-        <CategoryChips kind={draft.kind} chosen={category} onChoose={(chosen) => set({ category: chosen })} />
+      <div className="flex flex-col gap-2">
+        <CategoryChips
+          kind={draft.kind}
+          chosen={category}
+          onChoose={(chosen) => set({ category: chosen })}
+          entries={thisMonth.data}
+        />
         {submitted && categories.data && !category && (
           <p role="alert" className="text-destructive text-sm">
             Escolha uma categoria
           </p>
         )}
-      </fieldset>
+      </div>
 
       <div className="flex flex-col gap-2">
         <DateChips

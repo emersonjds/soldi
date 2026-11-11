@@ -11,7 +11,9 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { type Bill, useCreateBill, useUpdateBill } from "@/entities/bill/bill-queries";
 import { CategoryChips, useCategoryChips } from "@/entities/category/category-chips";
+import { useTransactions } from "@/entities/transaction/transaction-queries";
 import type { Schemas } from "@/shared/api/client";
+import { todayISO } from "@/shared/lib/date";
 import { positiveAmount } from "@/shared/lib/money";
 import { AmountInput } from "@/shared/ui/amount-input";
 import { BrandButton } from "@/shared/ui/brand-button";
@@ -48,6 +50,7 @@ const BillForm = ({
   );
   const [submitted, setSubmitted] = useState(false);
   const categories = useCategoryChips("bill");
+  const thisMonth = useTransactions(todayISO().slice(0, 7));
   const category = categories.data?.find((each) => each.id === draft.categoryId) ?? categories.data?.[0];
 
   const name = draft.name.trim();
@@ -110,10 +113,12 @@ const BillForm = ({
           {errors.day && <FieldError>{errors.day}</FieldError>}
         </Field>
       </div>
-      <fieldset className="flex flex-col gap-2">
-        <legend className="mb-2 font-semibold text-sm">Categoria</legend>
-        <CategoryChips kind="bill" chosen={category} onChoose={(chosen) => set({ categoryId: chosen.id })} />
-      </fieldset>
+      <CategoryChips
+        kind="bill"
+        chosen={category}
+        onChoose={(chosen) => set({ categoryId: chosen.id })}
+        entries={thisMonth.data}
+      />
       {bill && (
         <label
           htmlFor="bill-active-switch"

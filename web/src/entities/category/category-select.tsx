@@ -3,7 +3,7 @@
 import { useState } from "react";
 
 import { Command as CommandPrimitive } from "cmdk";
-import { ChevronDown, Search } from "lucide-react";
+import { Search } from "lucide-react";
 
 import { Command, CommandEmpty, CommandItem, CommandList } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
@@ -15,7 +15,7 @@ import { categoryLabel } from "./categories-query";
 
 type Category = Schemas["Category"];
 
-/** The phone picker: a select-like field that opens a bottom sheet to search and tap a category. */
+/** `Ver todas`: a link that opens a sheet to search and tap any category. */
 export const CategorySelect = ({
   categories,
   chosen,
@@ -33,22 +33,12 @@ export const CategorySelect = ({
     <>
       <button
         type="button"
-        role="combobox"
-        aria-label="Categoria"
-        aria-haspopup="listbox"
+        aria-haspopup="dialog"
         aria-expanded={open}
         onClick={() => setOpen(true)}
-        className="flex h-12 min-w-0 flex-1 items-center gap-3 rounded-xl border border-input bg-transparent pr-3 pl-3 text-left text-base outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+        className="-mr-2 inline-flex min-h-11 items-center rounded-lg px-2 font-semibold text-primary text-sm underline-offset-4 outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50"
       >
-        {chosen ? (
-          <>
-            <CategoryIcon icon={chosen.icon} color={chosen.color} className="size-6 [&_svg]:size-3.5" />
-            <span className="min-w-0 flex-1 truncate font-medium">{labelOf(chosen)}</span>
-          </>
-        ) : (
-          <span className="flex-1 text-muted-foreground">Escolher categoria</span>
-        )}
-        <ChevronDown aria-hidden className="size-5 shrink-0 text-muted-foreground" />
+        Ver todas
       </button>
       <ResponsiveSheet
         open={open}
