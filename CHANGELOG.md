@@ -7,6 +7,24 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.21.0
+
+> Headline: a series can change its length
+
+### Added
+
+- `PATCH /api/transactions/{id}` with `repeat_months` on a series member resizes the series: new members continue after the last member's month on the first member's day, copying the edited member; shrinking removes the last members, never one ranked before the edited one. Installment series are not re-split (D19).
+- `TransactionSeries.last_date`, the date of the series' last member.
+
+### Fixed
+
+- No series write can date an entry past 2100: `repeat_months`, `installments` and a resize answer 422 on `date` instead (SOL-60).
+- Resizes and `Este e os próximos` deletes of one series run under a series lock, so concurrent edits cannot double or skip a month.
+
+### Web
+
+- Editing a series member shows `Meses na série` with `2x 3x 6x 12x Outro`, a helper that names the rows added or removed, and the toast `Série ajustada para N meses`.
+
 ## 0.20.0
 
 > Headline: no spreadsheet importer
