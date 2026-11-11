@@ -226,20 +226,25 @@ describe("AppShell", () => {
     expect(within(sidebar).getByRole("link", { name: "Ajustes" })).not.toHaveAttribute("aria-current");
   });
 
-  it.each(["/mes", "/para-onde-vai"])(
-    "shows the month switcher on %s in the top bar and in a card opening the main content on mobile",
-    (path) => {
-      setPathname(path);
-      renderWithQuery(<AppShell>conteúdo</AppShell>);
+  it("shows the month switcher on Para onde vai in the top bar and in a card opening the main content on mobile", () => {
+    setPathname("/para-onde-vai");
+    renderWithQuery(<AppShell>conteúdo</AppShell>);
 
-      const bar = screen.getByRole("banner");
-      expect(within(bar).getByRole("group", { name: "Mês" }).parentElement).toHaveClass("hidden", "lg:block");
-      const card = within(screen.getByRole("main")).getByRole("group", { name: "Mês" }).parentElement;
-      expect(card).toHaveClass("lg:hidden");
-      expect(screen.getByRole("main").firstElementChild).toBe(card);
-      expect(screen.getAllByRole("group", { name: "Mês" })).toHaveLength(2);
-    },
-  );
+    const bar = screen.getByRole("banner");
+    expect(within(bar).getByRole("group", { name: "Mês" }).parentElement).toHaveClass("hidden", "lg:block");
+    const card = within(screen.getByRole("main")).getByRole("group", { name: "Mês" }).parentElement;
+    expect(card).toHaveClass("lg:hidden");
+    expect(screen.getByRole("main").firstElementChild).toBe(card);
+    expect(screen.getAllByRole("group", { name: "Mês" })).toHaveLength(2);
+  });
+
+  it("leaves the mobile switcher of Mês to its hero, keeping the top bar's", () => {
+    setPathname("/mes");
+    renderWithQuery(<AppShell>conteúdo</AppShell>);
+
+    expect(within(screen.getByRole("banner")).getByRole("group", { name: "Mês" })).toBeInTheDocument();
+    expect(within(screen.getByRole("main")).queryByRole("group", { name: "Mês" })).not.toBeInTheDocument();
+  });
 
   it.each(["/economia", "/ajustes", "/ajustes/contas", "/ajustes/categorias", "/ajustes/conta"])(
     "hides the month switcher on %s, a page that does not read the month",

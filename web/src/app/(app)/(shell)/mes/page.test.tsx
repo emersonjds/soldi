@@ -10,6 +10,7 @@ import type { Schemas } from "@/shared/api/client";
 import { router, setSearch } from "@/test/next-navigation";
 import { renderWithQuery } from "@/test/render";
 import {
+  ANA,
   BILLS_OF_MONTH,
   CARRIED_ALUGUEL,
   CATEGORIES,
@@ -103,24 +104,71 @@ describe("Mês", () => {
     vi.useRealTimers();
   });
 
-  it("shows today's balance and tier, the month summary and the thermometer from the server", async () => {
-    open();
+  it("greets on the indigo hero below 1024 and, from 1024, shows today's balance, the projection box and the split of the outflow", async () => {
+    open({
+      "GET /api/months/2026-11": {
+        status: 200,
+        body: { ...MONTH, projected_balance: "-312.40", projected_tier: "light_red" },
+      },
+    });
 
     const hero = await screen.findByRole("region", { name: "Saldo hoje" });
-    expect(within(hero).getAllByText("R$ 957,79")).toHaveLength(2);
-    expect(within(hero).queryByRole("img")).not.toBeInTheDocument();
+    expect(await within(hero).findByText("Olá, Ana")).toBeInTheDocument();
+    expect(within(hero).getByRole("group", { name: "Mês" }).parentElement).toHaveClass("lg:hidden");
+    expect(within(hero).getByText("em conta", { exact: false })).toHaveClass("hidden", "lg:inline");
+    expect(within(hero).getByText("R$ 957,79").parentElement).toHaveClass("text-[34px]", "lg:text-[40px]");
+    expect(within(hero).getAllByText("Apertado")).toHaveLength(1);
 
-    const summary = screen.getByRole("region", { name: "Resumo do mês" });
+    const projected = within(hero).getByText("Projetado no fim do mês").parentElement?.parentElement as HTMLElement;
+    expect(projected).toHaveClass("hidden", "lg:flex");
+    expect(projected).toHaveTextContent(/^Projetado no fim do mês-R\$\s312,40Atenção$/);
+    expect(within(projected).getByText("-R$ 312,40")).toHaveClass("text-expense");
+
+    const split = within(hero).getByRole("heading", { name: "Para onde foi a entrada deste mês" }).parentElement
+      ?.parentElement as HTMLElement;
+    expect(split).toHaveClass("hidden", "lg:flex");
+    expect(split).toHaveTextContent(/Total:\sR\$\s1\.384,31/);
+    expect(
+      within(split).getByRole("img", { name: /^Saídas R\$\s1\.384,31: contas fixas 86,7%, gastos diários 13,3%$/ }),
+    ).toBeInTheDocument();
+
+    const summary = within(hero).getByRole("region", { name: "Resumo do mês" });
+    expect(summary).toHaveClass("lg:hidden");
     expect(within(summary).getByText("R$ 500,00")).toHaveClass("text-income-text");
     expect(within(summary).getByText("R$ 1.384,31")).toBeInTheDocument();
-    expect(within(summary).getByText("R$ 957,79")).toBeInTheDocument();
-    expect(within(summary).getByText("Apertado")).toBeInTheDocument();
+    expect(summary).toHaveTextContent(/Projetado-R\$\s312,40Atenção/);
 
     const thermometer = screen.getByRole("region", { name: "Termômetro do Mês" });
     expect(within(thermometer).getByRole("meter")).toHaveAttribute("aria-valuetext", "Apertado");
-    expect(thermometer).toHaveTextContent(
-      "Você comprometeu 277% da renda. Com as contas em aberto, seu mês termina em R$ 957,79.",
+  });
+
+  it("splits the entrada into Contas fixas, Guardado, Gastos diários and Livre restante, each with one decimal", async () => {
+    open(
+      withTotals({
+        income: "6361.60",
+        bills: "3484.13",
+        saved: "776.13",
+        daily: "1548.50",
+        outflow: "5032.63",
+        performance: "1328.97",
+      }),
     );
+
+    const hero = await screen.findByRole("region", { name: "Saldo hoje" });
+    expect(hero).toHaveTextContent(/Total:\sR\$\s6\.361,60/);
+    expect(
+      within(hero).getByRole("img", {
+        name: /^Entradas R\$\s6\.361,60: contas fixas 42,6%, guardado 12,2%, gastos diários 24,3%, livre restante 20,9%$/,
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it("greets with Olá alone when the account has no name", async () => {
+    open({ "GET /api/auth/me": { status: 200, body: { ...ANA, name: "" } } });
+
+    const hero = await screen.findByRole("region", { name: "Saldo hoje" });
+    await waitFor(() => expect(client.isFetching()).toBe(0));
+    expect(within(hero).getByText("Olá")).toBeInTheDocument();
   });
 
   it("lists the entries by day, newest first, with the day's balance and tier", async () => {
@@ -281,6 +329,8 @@ describe("Mês", () => {
     ).toEqual([]);
     expect(screen.queryByText("Nenhum lançamento ainda")).not.toBeInTheDocument();
     expect(screen.queryByText(/no vermelho/)).not.toBeInTheDocument();
+    expect(within(hero).queryByRole("img")).not.toBeInTheDocument();
+    expect(within(hero).queryByText("Para onde foi a entrada deste mês")).not.toBeInTheDocument();
   });
 
   it("opens Lançar on Entrada from the Entradas card", async () => {
@@ -439,18 +489,21 @@ describe("Mês", () => {
     expect(await screen.findByRole("region", { name: "Lançamentos" })).toBeInTheDocument();
   });
 
-  it("opens the month in the address and leaves the switcher to the shell", async () => {
+  it("opens the month in the address and moves it from the hero's switcher", async () => {
     setSearch("m=2026-12");
     const requests = open({
       "GET /api/months/2026-12": { status: 200, body: { ...MONTH, month: "2026-12" } },
       "GET /api/transactions": { status: 200, body: [] },
     });
 
-    await screen.findByRole("region", { name: "Saldo hoje" });
+    const hero = await screen.findByRole("region", { name: "Saldo hoje" });
     expect(requests.some((request) => request.url.endsWith("/api/transactions?month=2026-12"))).toBe(true);
     expect(requests.some((request) => request.url.endsWith("/api/reports/categories?month=2026-12"))).toBe(true);
     expect(await screen.findByRole("link", { name: "Ver tudo" })).toHaveAttribute("href", "/para-onde-vai?m=2026-12");
-    expect(screen.queryByRole("group", { name: "Mês" })).not.toBeInTheDocument();
+    const switcher = within(hero).getByRole("group", { name: "Mês" });
+    expect(switcher).toHaveTextContent("Dezembro 2026");
+    await userEvent.click(within(switcher).getByRole("button", { name: "Próximo mês" }));
+    expect(router.replace).toHaveBeenCalledWith("/mes?m=2027-01", { scroll: false });
   });
 
   it("ignores a malformed month in the address", async () => {

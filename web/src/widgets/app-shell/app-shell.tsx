@@ -80,14 +80,14 @@ const PAGE_NAMES = [
 /** The pages that read `?m=`; the switcher shows only there. */
 const MONTH_PAGES = ["/mes", "/para-onde-vai"];
 
-/** The month of `?m=`, moved in place. */
-const ShellMonthSwitcher = ({ pathname }: { pathname: string }) => {
+/** The month of `?m=`, moved in place; `hero` on Mês's indigo hero. */
+export const ShellMonthSwitcher = ({ pathname, tone = "surface" }: { pathname: string; tone?: "hero" | "surface" }) => {
   const router = useRouter();
   const month = monthParam(useSearchParams().get("m"));
   const settings = useSettings();
   return (
     <MonthSwitcher
-      tone="surface"
+      tone={tone}
       month={month}
       minMonth={settings.data?.opening_date.slice(0, 7)}
       onMonthChange={(next) => router.replace(`${pathname}?m=${next}`, { scroll: false })}
@@ -248,7 +248,7 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
             </Link>
           </header>
           <main className="mx-auto w-full max-w-6xl flex-1 px-4 pt-4 pb-(--tabbar-space) lg:px-6 lg:pt-6 lg:pb-10">
-            {readsMonth && (
+            {readsMonth && !isAt("/mes") && (
               <Suspense>
                 <div className="mb-4 rounded-2xl bg-card p-2 shadow-sm lg:hidden">
                   <ShellMonthSwitcher pathname={pathname} />

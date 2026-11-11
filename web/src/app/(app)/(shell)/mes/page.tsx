@@ -13,6 +13,7 @@ import { TransactionSheet } from "@/features/add-transaction/transaction-sheet";
 import { EditBillSheet } from "@/features/edit-bill/edit-bill-sheet";
 import { monthParam } from "@/shared/lib/date";
 import { PageError } from "@/shared/ui/page-state";
+import { ShellMonthSwitcher } from "@/widgets/app-shell/app-shell";
 import { BillsOfMonth } from "@/widgets/bills-of-month/bills-of-month";
 import { CofrinhosGlance } from "@/widgets/cofrinhos-glance/cofrinhos-glance";
 import { Ledger, type LedgerFilter } from "@/widgets/ledger/ledger";
@@ -93,7 +94,11 @@ const MonthScreen = () => {
           {!monthFailed && !view.data && <HeroSkeleton />}
           {view.data && (
             <>
-              <MonthHero view={view.data} onLaunch={launch}>
+              <MonthHero
+                view={view.data}
+                onLaunch={launch}
+                switcher={<ShellMonthSwitcher pathname="/mes" tone="hero" />}
+              >
                 {alert && <RedDayAlert alert={alert} onJump={jump} />}
               </MonthHero>
               <BillsOfMonth view={view.data} className="max-lg:order-1" />
