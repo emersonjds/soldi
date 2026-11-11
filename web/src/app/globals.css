@@ -57,6 +57,7 @@
   --color-income-text: var(--income-text);
   --color-expense: var(--expense);
   --color-expense-soft: var(--expense-soft);
+  --color-split-daily: var(--split-daily);
   --color-tier-red: var(--tier-red);
   --color-tier-red-soft: var(--tier-red-soft);
   --color-tier-red-foreground: var(--tier-red-foreground);
