@@ -15,7 +15,7 @@ import { monthParam } from "@/shared/lib/date";
 import { PageError } from "@/shared/ui/page-state";
 import { BillsOfMonth } from "@/widgets/bills-of-month/bills-of-month";
 import { CofrinhosGlance } from "@/widgets/cofrinhos-glance/cofrinhos-glance";
-import { Ledger } from "@/widgets/ledger/ledger";
+import { Ledger, type LedgerFilter } from "@/widgets/ledger/ledger";
 import {
   HeroSkeleton,
   MonthHero,
@@ -39,6 +39,7 @@ const MonthScreen = () => {
   const [simulating, setSimulating] = useState(false);
   const [highlight, setHighlight] = useState<{ date: string } | null>(null);
   const [expandedMonth, setExpandedMonth] = useState<string | null>(null);
+  const [filtered, setFiltered] = useState<{ month: string; filter: LedgerFilter } | null>(null);
   const launch = (kind: "income" | "bill" | "daily", simulate = false) => {
     setSimulating(simulate);
     setLaunching(kind);
@@ -67,7 +68,10 @@ const MonthScreen = () => {
   const monthFailed = view.isError && !view.data;
   const entriesFailed = transactions.isError && !entries;
   const jump = (date: string) => {
-    flushSync(() => setExpandedMonth(month));
+    flushSync(() => {
+      setExpandedMonth(month);
+      setFiltered(null);
+    });
     const group = document.getElementById(`dia-${date}`);
     group?.scrollIntoView({ block: "start" });
     group?.focus({ preventScroll: true });
@@ -117,6 +121,8 @@ const MonthScreen = () => {
           causes={causes}
           expanded={expandedMonth === month}
           onExpandedChange={(expanded) => setExpandedMonth(expanded ? month : null)}
+          filter={filtered?.month === month ? filtered.filter : "all"}
+          onFilterChange={(filter) => setFiltered({ month, filter })}
           className={ledgerPlace}
         />
       )}
