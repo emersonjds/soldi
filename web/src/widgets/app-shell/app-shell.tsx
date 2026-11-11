@@ -173,7 +173,7 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="flex flex-col gap-3 px-4 pt-4 lg:sticky lg:top-0 lg:z-30 lg:h-16 lg:flex-row lg:items-center lg:gap-4 lg:border-b lg:bg-background/90 lg:px-6 lg:pt-0 lg:backdrop-blur">
+          <header className="flex flex-col gap-2 px-4 pt-4 lg:sticky lg:top-0 lg:z-30 lg:h-16 lg:flex-row lg:items-center lg:gap-4 lg:border-b lg:bg-background/90 lg:px-6 lg:pt-0 lg:backdrop-blur">
             <div className="flex items-center justify-between gap-3 rounded-2xl bg-card py-2 pr-2 pl-4 shadow-sm lg:hidden">
               <p className="truncate font-semibold text-lg">{firstName ? `Olá, ${firstName}` : "Olá"}</p>
               <Link
@@ -186,7 +186,7 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
                 </Avatar>
               </Link>
             </div>
-            <p className="hidden font-bold text-xl lg:block">{current?.label}</p>
+            <p className="hidden font-bold text-[22px] leading-7 lg:block">{current?.label}</p>
             {MONTH_PAGES.some(isAt) && (
               <Suspense>
                 <div className="max-lg:rounded-2xl max-lg:bg-card max-lg:p-2 max-lg:shadow-sm">

@@ -17,7 +17,7 @@ const monthLabel = (month: string) => {
 /** `hero` on the indigo gradient, `surface` on a card or the top bar. */
 const TONE = {
   hero: { pill: "bg-white/10", button: "hover:bg-white/10 focus-visible:outline-white" },
-  surface: { pill: "bg-muted", button: "hover:bg-accent focus-visible:outline-ring" },
+  surface: { pill: "bg-muted ring-1 ring-border", button: "hover:bg-accent focus-visible:outline-ring" },
 };
 
 type Tone = keyof typeof TONE;
