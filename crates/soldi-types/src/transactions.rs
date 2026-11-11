@@ -42,7 +42,7 @@ pub enum Scope {
     /// Only this entry; it stays in its series.
     #[default]
     This,
-    /// This entry and the series' entries dated on or after it.
+    /// This entry and the series' entries dated on or after it; a new day of the month moves them all.
     Following,
 }
 

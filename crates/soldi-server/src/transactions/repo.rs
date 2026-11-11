@@ -281,7 +281,7 @@ pub async fn delete_following(
     Ok(())
 }
 
-/// Serializes resizes and `following` deletions of one series until the transaction ends.
+/// Serializes every write to one series until the transaction ends; taken before any row lock.
 pub async fn lock_series(conn: &mut PgConnection, series_id: Uuid) -> Result<(), sqlx::Error> {
     sqlx::query!(
         "SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))",
@@ -292,22 +292,59 @@ pub async fn lock_series(conn: &mut PgConnection, series_id: Uuid) -> Result<(),
     Ok(())
 }
 
-/// L1: the dates of the series' first and last members; growth takes the first's day and
-/// continues after the last's month.
-pub async fn series_span(
+/// M3: the dates of the series' last member and the one before it, last first.
+pub async fn series_end(
     conn: &mut PgConnection,
     user_id: Uuid,
     series_id: Uuid,
-) -> Result<Option<(NaiveDate, NaiveDate)>, sqlx::Error> {
-    let span = sqlx::query!(
-        "SELECT min(date) AS first, max(date) AS last FROM transactions
-         WHERE user_id = $1 AND series_id = $2",
+) -> Result<Vec<NaiveDate>, sqlx::Error> {
+    sqlx::query_scalar!(
+        "SELECT date FROM transactions WHERE user_id = $1 AND series_id = $2
+         ORDER BY date DESC, id DESC LIMIT 2",
         user_id,
         series_id
     )
-    .fetch_one(&mut *conn)
+    .fetch_all(&mut *conn)
+    .await
+}
+
+/// M1: the series' members dated `from` on, by `(date, id)`.
+pub async fn members_from(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    series_id: Uuid,
+    from: NaiveDate,
+) -> Result<Vec<(Uuid, NaiveDate)>, sqlx::Error> {
+    let rows = sqlx::query!(
+        "SELECT id, date FROM transactions WHERE user_id = $1 AND series_id = $2 AND date >= $3
+         ORDER BY date, id",
+        user_id,
+        series_id,
+        from
+    )
+    .fetch_all(&mut *conn)
     .await?;
-    Ok(span.first.zip(span.last))
+    Ok(rows.into_iter().map(|row| (row.id, row.date)).collect())
+}
+
+/// M1, M6: `dates[i]` onto entry `ids[i]`; nothing else changes.
+pub async fn set_dates(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    ids: &[Uuid],
+    dates: &[NaiveDate],
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        "UPDATE transactions t SET date = m.date, updated_at = now()
+         FROM UNNEST($2::uuid[], $3::date[]) AS m(id, date)
+         WHERE t.user_id = $1 AND t.id = m.id",
+        user_id,
+        ids,
+        dates
+    )
+    .execute(&mut *conn)
+    .await?;
+    Ok(())
 }
 
 /// L3: deletes the series' members ranked after the first `keep` by `(date, id)`.
