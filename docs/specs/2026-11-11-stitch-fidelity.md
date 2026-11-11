@@ -1049,3 +1049,8 @@ Each item adds stored data, or reverses a domain rule. None is built until the o
 - Every run calls `expectNoClipped(page)` from `web/e2e/clipped.ts`.
 - **Side-by-side.** For each Stitch frame the card touches, a composite saved as `<frame>-vs-stitch.png`. On the left the Stitch PNG; on the right the real screen at the frame's width (1440 for desktop frames, 390 for mobile frames), with the same data shape seeded.
 - The reviewer walks the frame's `FIDELITY.md` rows and marks each B row done, or names the deviation. Any unlisted deviation is a finding.
+
+
+## §12 decisions (orchestrator, 2026-11-11)
+
+The owner asked the agents to decide. Build: P1 and P2 (with a confirmation for `Toda a série` from a middle member, since it rewrites past months), P4, P5, P6, P9, P10 (browser storage only, D16 holds), P11. Out: P3 (it would create entries without the user, D8), P7 (no input in Stitch), P8 (the screen it opens is not drawn), P12 (no data source). Cards SOL-93..96.
