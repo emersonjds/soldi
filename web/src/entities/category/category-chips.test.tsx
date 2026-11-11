@@ -148,6 +148,18 @@ describe("CategoryChips", () => {
     expect(chips()).toEqual(["Comida fora", "Carro", "Pets", "Mercado", "Lazer"]);
   });
 
+  it("counts a child's entries for its parent, which leads the row while the child stays off it", async () => {
+    setup({}, SIX_DAILY, [
+      entry(COMIDA, "2026-11-04", "e1"),
+      entry(RACAO, "2026-11-02", "e2"),
+      entry(RACAO, "2026-11-03", "e3"),
+    ]);
+
+    await screen.findByRole("radiogroup", { name: "Categoria" });
+    expect(chips()).toEqual(["Pets", "Comida fora", "Mercado", "Carro", "Lazer"]);
+    expect(screen.queryByRole("radio", { name: "Pets › Ração" })).not.toBeInTheDocument();
+  });
+
   it("shows fewer chips when the kind has fewer categories", async () => {
     setup();
 

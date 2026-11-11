@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { Toaster } from "sonner";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { Schemas } from "@/shared/api/client";
 import { KEYPAD_QUERY } from "@/shared/ui/amount-keypad";
 import { pickDate } from "@/test/pick-date";
 import { renderWithQuery } from "@/test/render";
@@ -29,6 +30,30 @@ import { TransactionSheet } from "./transaction-sheet";
 const MERCADO_ROW = TRANSACTIONS[0];
 const ALUGUEL_ROW = TRANSACTIONS[1];
 const MEMBER = { ...ALUGUEL_ROW, series: { id: "s1", position: 3, total: 12, last_date: "2027-09-04" } };
+
+const PETS: Schemas["Category"] = {
+  id: "c1000000-0000-4000-8000-000000000010",
+  name: "Pets",
+  kind: "daily",
+  icon: "paw-print",
+  color: "cat-5",
+  is_savings: false,
+};
+const RACAO: Schemas["Category"] = {
+  ...PETS,
+  id: "c1000000-0000-4000-8000-000000000011",
+  name: "Ração",
+  parent_id: PETS.id,
+};
+
+const coarse = () => {
+  const base = window.matchMedia("");
+  vi.spyOn(window, "matchMedia").mockImplementation((query: string) => ({
+    ...base,
+    media: query,
+    matches: query === KEYPAD_QUERY,
+  }));
+};
 
 const FOOTER = '[data-slot="responsive-sheet-footer"]';
 const DESCRIPTION = "Cadastre uma movimentação pontual ou recorrente";
@@ -116,7 +141,30 @@ describe("TransactionSheet", () => {
     expect(amount).toHaveAttribute("inputmode", "none");
     await userEvent.click(screen.getByRole("button", { name: "4" }));
     await userEvent.click(screen.getByRole("button", { name: "2" }));
-    expect(amount).toHaveValue("0,42");
+    expect(amount).toHaveValue("42,00");
+  });
+
+  it("types 12.345,67 on the keypad like a calculator and Apagar drops the last cent typed", async () => {
+    coarse();
+    setup();
+
+    const amount = await screen.findByLabelText(/^Valor d/);
+    for (const key of ["1", "2", "3", "4", "5", ",", "6", "7"])
+      await userEvent.click(screen.getByRole("button", { name: key }));
+    expect(amount).toHaveValue("12.345,67");
+    await userEvent.click(screen.getByRole("button", { name: "Apagar" }));
+    expect(amount).toHaveValue("12.345,60");
+  });
+
+  it("saves a subcategory picked from the parent's Sub: pills", async () => {
+    const { sent } = setup({}, { "GET /api/categories": { status: 200, body: [...CATEGORIES, PETS, RACAO] } });
+
+    await userEvent.click(await screen.findByRole("radio", { name: "Pets" }));
+    await userEvent.click(screen.getByRole("radio", { name: "Pets › Ração" }));
+    await userEvent.type(screen.getByLabelText(/^Valor d/), "4590");
+    await userEvent.click(screen.getByRole("button", { name: "Salvar Lançamento" }));
+
+    expect(await sent("POST")).toMatchObject({ amount: "45.90", category_id: RACAO.id });
   });
 
   it("keeps the numeric system keyboard and no keypad elsewhere", async () => {
@@ -883,6 +931,14 @@ describe("TransactionSheet", () => {
     const footer = screen.getByRole("button", { name: "Salvar Lançamento" }).closest(FOOTER) as HTMLElement;
     expect(footer).toHaveTextContent(/^Pressione Enter ↵ para salvarCancelarSalvar Lançamento$/);
     expect(within(footer).getByText("Enter ↵").tagName).toBe("KBD");
+  });
+
+  it("keeps the description for screen readers only in Editar from 1024px", async () => {
+    window.innerWidth = 1440;
+    setup({ transaction: MERCADO_ROW });
+
+    const dialog = await screen.findByRole("dialog", { name: "Editar lançamento" });
+    expect(within(dialog).getByText(DESCRIPTION)).toHaveClass("sr-only");
   });
 
   it("closes on Cancelar from 1024px without writing", async () => {

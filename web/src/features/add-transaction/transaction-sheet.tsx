@@ -609,7 +609,7 @@ export const TransactionSheet = ({
       onOpenChange={onOpenChange}
       title={title}
       description="Cadastre uma movimentação pontual ou recorrente"
-      showDescription
+      showDescription={!transaction}
     >
       {hint && <p className="rounded-xl bg-secondary px-4 py-3 font-medium text-primary text-sm">{hint}</p>}
       <TransactionForm
