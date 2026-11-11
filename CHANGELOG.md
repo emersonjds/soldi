@@ -7,6 +7,14 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.28.0
+
+> Headline: category colors readable with color blindness
+
+### Changed
+
+- Ten of the twelve main category colors are re-stepped in the same hue families so every circle reaches 3:1 on white and the pairs that looked identical under protan, deutan or tritan vision now differ (SOL-9, D22). Category names stay the same; nothing moves in the database.
+
 ## 0.27.1
 
 > Headline: fixes
