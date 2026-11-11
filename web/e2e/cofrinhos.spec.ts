@@ -21,7 +21,7 @@ test("a cofrinho fills from a Saída in Economia and empties with a resgate", as
   await page.getByRole("dialog", { name: "Lançar" }).getByRole("button", { name: "Fechar" }).click();
 
   const nav = page.getByRole("navigation", { name: "Navegação principal" });
-  await nav.getByRole("link", { name: "Cofrinhos" }).click();
+  await nav.getByRole("link", { name: "Economia" }).click();
   await expect(page.getByText("Nenhum cofrinho ainda. Comece pela reserva de emergência.")).toBeVisible();
   await page.getByRole("button", { name: "Novo cofrinho" }).click();
   const create = page.getByRole("dialog", { name: "Novo cofrinho" });
@@ -137,7 +137,7 @@ test("Economia do ano lists each month's saving and opens it on Mês, unclipped 
     );
     return `${long.charAt(0).toUpperCase()}${long.slice(1)} de ${yearMonth.slice(0, 4)}`;
   };
-  await page.getByRole("navigation", { name: "Navegação principal" }).getByRole("link", { name: "Cofrinhos" }).click();
+  await page.getByRole("navigation", { name: "Navegação principal" }).getByRole("link", { name: "Economia" }).click();
   const card = page.getByRole("region", { name: "Economia do ano" });
   const current = card.getByRole("link", {
     name: `${name(today.slice(0, 7))}: guardou R$ 12.345,67, 19,1% das entradas`,
