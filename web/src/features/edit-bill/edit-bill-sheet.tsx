@@ -11,7 +11,9 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { type Bill, useCreateBill, useUpdateBill } from "@/entities/bill/bill-queries";
 import { CategoryChips, useCategoryChips } from "@/entities/category/category-chips";
+import { useTransactions } from "@/entities/transaction/transaction-queries";
 import type { Schemas } from "@/shared/api/client";
+import { todayISO } from "@/shared/lib/date";
 import { positiveAmount } from "@/shared/lib/money";
 import { AmountInput } from "@/shared/ui/amount-input";
 import { BrandButton } from "@/shared/ui/brand-button";
@@ -48,7 +50,11 @@ const BillForm = ({
   );
   const [submitted, setSubmitted] = useState(false);
   const categories = useCategoryChips("bill");
-  const category = categories.data?.find((each) => each.id === draft.categoryId) ?? categories.data?.[0];
+  const thisMonth = useTransactions(todayISO().slice(0, 7));
+  const found = categories.data?.find((each) => each.id === draft.categoryId);
+  const archived = Boolean(draft.categoryId && categories.data && !found);
+  const category = draft.categoryId ? found : categories.data?.[0];
+  const categoryId = draft.categoryId ?? category?.id;
 
   const name = draft.name.trim();
   const amount = positiveAmount(draft.amount);
@@ -65,8 +71,8 @@ const BillForm = ({
   const submit = (event: FormEvent) => {
     event.preventDefault();
     setSubmitted(true);
-    if (!name || !amount || !dayValid || !category) return;
-    onSave({ name, amount, due_day: day, category_id: category.id, active: draft.active });
+    if (!name || !amount || !dayValid || !categoryId) return;
+    onSave({ name, amount, due_day: day, category_id: categoryId, active: draft.active });
   };
 
   return (
@@ -110,10 +116,17 @@ const BillForm = ({
           {errors.day && <FieldError>{errors.day}</FieldError>}
         </Field>
       </div>
-      <fieldset className="flex flex-col gap-2">
-        <legend className="mb-2 font-semibold text-sm">Categoria</legend>
-        <CategoryChips kind="bill" chosen={category} onChoose={(chosen) => set({ categoryId: chosen.id })} />
-      </fieldset>
+      <CategoryChips
+        kind="bill"
+        chosen={category}
+        onChoose={(chosen) => set({ categoryId: chosen.id })}
+        entries={thisMonth.isError ? [] : thisMonth.data}
+      />
+      {archived && (
+        <p className="-mt-3 text-muted-foreground text-sm">
+          Categoria arquivada. Fica a mesma se você não escolher outra.
+        </p>
+      )}
       {bill && (
         <label
           htmlFor="bill-active-switch"

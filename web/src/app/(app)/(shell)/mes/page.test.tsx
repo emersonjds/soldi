@@ -1,4 +1,6 @@
-import type { QueryClient } from "@tanstack/react-query";
+import type { ReactNode } from "react";
+
+import { type QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Toaster } from "sonner";
@@ -33,6 +35,14 @@ vi.mock("next/navigation", () => import("@/test/next-navigation"));
 type Reply = { status: number; body?: unknown };
 
 let client: QueryClient;
+let rerender: (ui: ReactNode) => void;
+
+const page = () => (
+  <>
+    <MesPage />
+    <Toaster />
+  </>
+);
 
 const open = (replies: Record<string, Reply> = {}) => {
   const requests = signedIn({
@@ -43,14 +53,23 @@ const open = (replies: Record<string, Reply> = {}) => {
     "GET /api/cofrinhos": { status: 200, body: COFRINHOS },
     ...replies,
   });
-  ({ client } = renderWithQuery(
-    <>
-      <MesPage />
-      <Toaster />
-    </>,
-  ));
+  ({ client, rerender } = renderWithQuery(page()));
   return requests;
 };
+
+const filter = () => within(ledger()).getByRole("radiogroup", { name: "Filtrar lançamentos" });
+
+const dayHeadings = () =>
+  within(ledger())
+    .getAllByRole("heading", { level: 3 })
+    .map((day) => day.textContent?.replace(/\s/g, " "));
+
+const bill = (date: string): Schemas["Transaction"] => ({
+  ...TRANSACTIONS[1],
+  id: `b-${date}`,
+  date,
+  note: `Conta ${date}`,
+});
 
 const ledger = () => screen.getByRole("region", { name: "Lançamentos" });
 
@@ -695,6 +714,158 @@ describe("Mês", () => {
     expect(within(ledger()).queryByRole("button", { name: /Gasto 2026-10-02/ })).not.toBeInTheDocument();
     expect(within(ledger()).getByRole("button", { name: /Gasto 2026-10-05/ })).toBeInTheDocument();
     expect(within(ledger()).getByRole("button", { name: /Gasto 2026-10-30/ })).toBeInTheDocument();
+  });
+
+  it("filters Lançamentos by Diário or Contas on the loaded month, keeping each day's own balance", async () => {
+    const requests = open({
+      "GET /api/months/2026-11": {
+        status: 200,
+        body: { ...MONTH, bills_of_month: [{ ...BILLS_OF_MONTH[1], lands_on: "2026-11-10" }] },
+      },
+    });
+
+    await within(await screen.findByRole("region", { name: "Lançamentos" })).findByRole("button", {
+      name: /Compras da semana/,
+    });
+    const asked = requests.length;
+    expect(within(filter()).getByRole("radio", { name: "Todos" })).toHaveAttribute("aria-checked", "true");
+    expect(dayHeadings()).toHaveLength(4);
+
+    await userEvent.click(within(filter()).getByRole("radio", { name: "Diário" }));
+    expect(dayHeadings()).toEqual(["Hoje, 5 novR$ 957,79Apertado"]);
+    expect(within(ledger()).getByRole("button", { name: /Compras da semana/ })).toBeInTheDocument();
+    expect(within(ledger()).queryByRole("button", { name: /Aluguel/ })).not.toBeInTheDocument();
+
+    await userEvent.click(within(filter()).getByRole("radio", { name: "Contas" }));
+    expect(dayHeadings()).toEqual([
+      "Agendado · 10 novR$ 957,79Previsto · Apertado",
+      "Ontem, 4 novR$ 1.142,10Confortável",
+    ]);
+    expect(within(ledger()).getByRole("listitem", { name: "Aluguel Residencial" })).toBeInTheDocument();
+    expect(within(ledger()).getByRole("button", { name: /Aluguel/ })).toBeInTheDocument();
+    expect(within(ledger()).queryByText("+ R$ 500,00")).not.toBeInTheDocument();
+
+    await userEvent.click(within(filter()).getByRole("radio", { name: "Todos" }));
+    expect(dayHeadings()).toHaveLength(4);
+    expect(requests).toHaveLength(asked);
+  });
+
+  it("says when a filter finds nothing in the month", async () => {
+    open({ "GET /api/transactions": { status: 200, body: [TRANSACTIONS[2]] } });
+
+    await userEvent.click(
+      within(await screen.findByRole("radiogroup", { name: "Filtrar lançamentos" })).getByRole("radio", {
+        name: "Diário",
+      }),
+    );
+    expect(within(ledger()).getByText("Nenhum gasto diário neste mês.")).toBeInTheDocument();
+    expect(within(ledger()).queryAllByRole("heading", { level: 3 })).toHaveLength(0);
+    await userEvent.click(within(filter()).getByRole("radio", { name: "Contas" }));
+    expect(within(ledger()).getByText("Nenhuma conta neste mês.")).toBeInTheDocument();
+    expect(within(ledger()).queryByText("Nenhum lançamento ainda")).not.toBeInTheDocument();
+  });
+
+  it("counts the filtered days in Ver o mês inteiro", async () => {
+    open({
+      "GET /api/transactions": {
+        status: 200,
+        body: [
+          ...["10", "09", "08", "07", "06", "04", "03", "02", "01"].map((day) => spent(`2026-11-${day}`)),
+          ...["12", "15"].map((day) => bill(`2026-11-${day}`)),
+        ],
+      },
+    });
+
+    await within(await screen.findByRole("region", { name: "Lançamentos" })).findByRole("button", {
+      name: "Ver o mês inteiro (11 dias)",
+    });
+    await userEvent.click(within(filter()).getByRole("radio", { name: "Diário" }));
+    expect(within(ledger()).getByRole("button", { name: "Ver o mês inteiro (9 dias)" })).toBeInTheDocument();
+    await userEvent.click(within(filter()).getByRole("radio", { name: "Contas" }));
+    expect(within(ledger()).queryByRole("button", { name: /Ver o mês inteiro/ })).not.toBeInTheDocument();
+  });
+
+  it("goes back to Todos before jumping to a red day the filter hides", async () => {
+    open({
+      "GET /api/months/2026-11": { status: 200, body: FORECAST_MONTH },
+      "GET /api/transactions": { status: 200, body: FORECAST_TRANSACTIONS },
+    });
+
+    const hero = await screen.findByRole("region", { name: "Saldo hoje" });
+    const first = await within(hero).findByRole("button", { name: /^Dia 23 fica no vermelho/ });
+    await within(ledger()).findByRole("button", { name: /Feira/ });
+    await userEvent.click(within(filter()).getByRole("radio", { name: "Diário" }));
+    expect(document.getElementById("dia-2026-11-23")).toBeNull();
+
+    fireEvent.click(first);
+    expect(document.getElementById("dia-2026-11-23")).toHaveFocus();
+    expect(within(filter()).getByRole("radio", { name: "Todos" })).toHaveAttribute("aria-checked", "true");
+  });
+
+  it("goes back to Todos when the month changes, and again on returning to the month left filtered", async () => {
+    open({
+      "GET /api/months/2026-12": { status: 200, body: { ...MONTH, month: "2026-12" } },
+    });
+
+    await within(await screen.findByRole("region", { name: "Lançamentos" })).findByRole("button", {
+      name: /Compras da semana/,
+    });
+    await userEvent.click(within(filter()).getByRole("radio", { name: "Contas" }));
+    setSearch("m=2026-12");
+    rerender(<QueryClientProvider client={client}>{page()}</QueryClientProvider>);
+
+    await waitFor(() =>
+      expect(within(filter()).getByRole("radio", { name: "Todos" })).toHaveAttribute("aria-checked", "true"),
+    );
+    setSearch("");
+    rerender(<QueryClientProvider client={client}>{page()}</QueryClientProvider>);
+
+    await waitFor(() => expect(dayHeadings()).toHaveLength(3));
+    expect(within(filter()).getByRole("radio", { name: "Todos" })).toHaveAttribute("aria-checked", "true");
+  });
+
+  it("keeps an unpaid conta fixa under Contas and out of Diário", async () => {
+    open({
+      "GET /api/months/2026-11": {
+        status: 200,
+        body: { ...MONTH, bills_of_month: [{ ...BILLS_OF_MONTH[1], lands_on: "2026-11-10" }] },
+      },
+      "GET /api/transactions": { status: 200, body: [TRANSACTIONS[0]] },
+    });
+
+    await within(await screen.findByRole("region", { name: "Lançamentos" })).findByRole("button", {
+      name: /Compras da semana/,
+    });
+    await userEvent.click(within(filter()).getByRole("radio", { name: "Contas" }));
+    expect(within(ledger()).getByRole("listitem", { name: "Aluguel Residencial" })).toBeInTheDocument();
+    await userEvent.click(within(filter()).getByRole("radio", { name: "Diário" }));
+    expect(within(ledger()).queryByRole("listitem", { name: "Aluguel Residencial" })).not.toBeInTheDocument();
+  });
+
+  it("leaves money put in a cofrinho out of Contas and in Todos", async () => {
+    open({
+      "GET /api/categories": { status: 200, body: WITH_COFRINHOS },
+      "GET /api/transactions": { status: 200, body: [TRANSACTIONS[1], MOVEMENTS[1]] },
+    });
+
+    await within(await screen.findByRole("region", { name: "Lançamentos" })).findByText("Guardado");
+    await userEvent.click(within(filter()).getByRole("radio", { name: "Contas" }));
+    expect(within(ledger()).getByRole("button", { name: /Aluguel/ })).toBeInTheDocument();
+    expect(within(ledger()).queryByText("Guardado")).not.toBeInTheDocument();
+    await userEvent.click(within(filter()).getByRole("radio", { name: "Todos" }));
+    expect(within(ledger()).getByText("Guardado")).toBeInTheDocument();
+  });
+
+  it("keeps the filter when its own option is tapped again", async () => {
+    open();
+
+    await within(await screen.findByRole("region", { name: "Lançamentos" })).findByRole("button", {
+      name: /Compras da semana/,
+    });
+    await userEvent.click(within(filter()).getByRole("radio", { name: "Diário" }));
+    await userEvent.click(within(filter()).getByRole("radio", { name: "Diário" }));
+    expect(within(filter()).getByRole("radio", { name: "Diário" })).toHaveAttribute("aria-checked", "true");
+    expect(dayHeadings()).toEqual(["Hoje, 5 novR$ 957,79Apertado"]);
   });
 
   it("has no expand button when the month fits the cap", async () => {

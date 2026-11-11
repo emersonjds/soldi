@@ -7,6 +7,20 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.30.0
+
+> Headline: faster category picking and a Lançamentos filter
+
+### Web
+
+- Lançar and the bill sheet pick the category from a row of this month's five most used ones, with "Ver todas" for the full list and "Nova" to create one (SOL-74).
+- Lançamentos on Mês filters by Todos, Diário or Contas; Contas leaves out money put in a cofrinho, and the filter resets on every month change.
+- Editing a series explains what each scope reaches, and a shrink says where the series ends.
+
+### Fixed
+
+- Editing a conta fixa whose category was archived keeps that category instead of swapping in another one; the server only checks the category when it changes.
+
 ## 0.29.0
 
 > Headline: the months ahead in reais, and Posso comprar isso? one tap away

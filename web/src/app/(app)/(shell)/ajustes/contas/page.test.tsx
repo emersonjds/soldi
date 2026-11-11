@@ -89,8 +89,8 @@ describe("Ajustes › Contas fixas", () => {
     await userEvent.type(within(sheet).getByLabelText("Nome"), " Luz (Enel) ");
     await userEvent.type(within(sheet).getByLabelText("Valor"), "284,10");
     await userEvent.type(within(sheet).getByLabelText("Vence dia"), "32");
-    expect(within(sheet).getByRole("combobox", { name: "Categoria" })).toHaveTextContent("Aluguel");
-    await userEvent.click(within(sheet).getByRole("combobox", { name: "Categoria" }));
+    expect(within(sheet).getByRole("radio", { name: "Aluguel" })).toHaveAttribute("aria-checked", "true");
+    await userEvent.click(within(sheet).getByRole("button", { name: "Ver todas" }));
     await userEvent.click(await screen.findByRole("option", { name: "Luz" }));
     await userEvent.click(within(sheet).getByRole("button", { name: "Salvar" }));
     expect(within(sheet).getByText("Escolha um dia de 1 a 31.")).toBeInTheDocument();
@@ -114,7 +114,7 @@ describe("Ajustes › Contas fixas", () => {
     await userEvent.click(await screen.findByRole("button", { name: /^Aluguel Residencial/ }));
     const sheet = await screen.findByRole("dialog", { name: "Editar conta" });
     expect(within(sheet).getByLabelText("Valor")).toHaveValue("2.259,56");
-    expect(within(sheet).getByRole("combobox", { name: "Categoria" })).toHaveTextContent("Aluguel");
+    expect(within(sheet).getByRole("radio", { name: "Aluguel" })).toHaveAttribute("aria-checked", "true");
     const pinned = within(sheet)
       .getByRole("button", { name: "Salvar" })
       .closest('[data-slot="responsive-sheet-footer"]');
@@ -133,6 +133,25 @@ describe("Ajustes › Contas fixas", () => {
       category_id: ALUGUEL.id,
       active: false,
     });
+  });
+
+  it("keeps a bill's archived category when it is saved without picking another", async () => {
+    const requests = open({
+      "GET /api/categories": { status: 200, body: CATEGORIES.filter((each) => each.id !== LUZ.id) },
+      [`PATCH /api/bills/${BILL_LUZ.id}`]: { status: 200, body: BILL_LUZ },
+    });
+
+    await userEvent.click(await screen.findByRole("button", { name: /^Luz \(Enel\)/ }));
+    const sheet = await screen.findByRole("dialog", { name: "Editar conta" });
+    const row = await within(sheet).findByRole("radiogroup", { name: "Categoria" });
+    expect(within(row).queryByRole("radio", { checked: true })).not.toBeInTheDocument();
+    expect(
+      within(sheet).getByText("Categoria arquivada. Fica a mesma se você não escolher outra."),
+    ).toBeInTheDocument();
+    await userEvent.click(within(sheet).getByRole("button", { name: "Salvar" }));
+
+    await waitFor(() => expect(sent(requests, "PATCH")).toHaveLength(1));
+    expect(await sent(requests, "PATCH")[0].json()).toMatchObject({ category_id: LUZ.id });
   });
 
   it("says so when saving fails", async () => {

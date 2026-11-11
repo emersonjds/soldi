@@ -8,6 +8,7 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { categoriesQuery, categoryLabel } from "@/entities/category/categories-query";
 import { billKey } from "@/entities/month/forecast-alert";
 import { visibleDays } from "@/entities/month/schedule";
@@ -40,6 +41,11 @@ const dayLabel = ({ date, is_future }: Schemas["Day"]) => {
 
 type Entry = { label: string; caption: string };
 
+/** Money put in a cofrinho: a bill under Economia or one of its children. */
+const isSaved = ({ kind, category }: Transaction, categories: Schemas["Category"][] = []) =>
+  kind === "bill" &&
+  (category.is_savings || categories.some((each) => each.id === category.parent_id && each.is_savings));
+
 /** `Economia › Reserva` with `Guardado` for money put away, `Resgate › Reserva` with `Resgatado` for money taken back. */
 const entryOf = (transaction: Transaction, categories: Schemas["Category"][] = []): Entry => {
   const { category } = transaction;
@@ -49,7 +55,7 @@ const entryOf = (transaction: Transaction, categories: Schemas["Category"][] = [
     return { label: from ? `${category.name} › ${from}` : category.name, caption: "Resgatado" };
   }
   const label = categoryLabel(category, categories);
-  if (category.is_savings || byId(category.parent_id)?.is_savings) return { label, caption: "Guardado" };
+  if (isSaved(transaction, categories)) return { label, caption: "Guardado" };
   return { label, caption: KIND_LABEL[transaction.kind] };
 };
 
@@ -131,6 +137,14 @@ const Row = ({ transaction, entry, cause, onOpen }: RowProps) => (
   </li>
 );
 
+export type LedgerFilter = "all" | "daily" | "bill";
+
+const FILTERS: { value: LedgerFilter; label: string; empty?: string }[] = [
+  { value: "all", label: "Todos" },
+  { value: "daily", label: "Diário", empty: "Nenhum gasto diário neste mês." },
+  { value: "bill", label: "Contas", empty: "Nenhuma conta neste mês." },
+];
+
 type LedgerProps = {
   view: Schemas["MonthView"];
   transactions: Transaction[];
@@ -142,6 +156,9 @@ type LedgerProps = {
   /** The whole month instead of the spec §3.3 cap; the page owns it so a jump can expand before it scrolls. */
   expanded: boolean;
   onExpandedChange: (expanded: boolean) => void;
+  /** Contas holds bills and the unpaid contas fixas, not money put in a cofrinho; the page owns it so a jump can reset it before it scrolls. */
+  filter: LedgerFilter;
+  onFilterChange: (filter: LedgerFilter) => void;
   className?: string;
 };
 
@@ -157,6 +174,8 @@ export const Ledger = ({
   causes = new Set<string>(),
   expanded,
   onExpandedChange,
+  filter,
+  onFilterChange,
   className,
 }: LedgerProps) => {
   const categories = useQuery(categoriesQuery).data;
@@ -168,7 +187,14 @@ export const Ledger = ({
   const [scope, setScope] = useState<Scope>("this");
   const create = useCreateTransaction();
   const remove = useDeleteTransaction();
-  const all = groupByDay(view.days, transactions, view.bills_of_month);
+  const any = groupByDay(view.days, transactions, view.bills_of_month).length > 0;
+  const all = groupByDay(
+    view.days,
+    filter === "all"
+      ? transactions
+      : transactions.filter((transaction) => transaction.kind === filter && !isSaved(transaction, categories)),
+    filter === "daily" ? [] : view.bills_of_month,
+  );
   const groups = visibleDays(all, todayISO(), expanded);
   const capped = visibleDays(all, todayISO(), false).length < all.length;
 
@@ -221,7 +247,32 @@ export const Ledger = ({
       <h2 id="ledger-title" className="font-semibold text-lg leading-6">
         Lançamentos
       </h2>
-      {all.length === 0 ? (
+      {any && (
+        <ToggleGroup
+          type="single"
+          spacing={0}
+          value={filter}
+          onValueChange={(value: LedgerFilter | "") => value && onFilterChange(value)}
+          aria-label="Filtrar lançamentos"
+          className="mb-2 rounded-xl bg-muted p-1"
+        >
+          {FILTERS.map((option) => (
+            <ToggleGroupItem
+              key={option.value}
+              value={option.value}
+              className="h-11 rounded-lg! px-4 font-medium text-base text-muted-foreground data-[state=on]:bg-card data-[state=on]:text-primary data-[state=on]:shadow-sm"
+            >
+              {option.label}
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
+      )}
+      {any && all.length === 0 && (
+        <p className="px-2 py-8 text-center text-muted-foreground">
+          {FILTERS.find((option) => option.value === filter)?.empty}
+        </p>
+      )}
+      {!any ? (
         <div className="flex flex-col items-center gap-3 px-2 py-8 text-center">
           <span className="flex size-12 items-center justify-center rounded-full bg-secondary text-primary">
             <ReceiptText className="size-6" aria-hidden />
@@ -284,7 +335,13 @@ export const Ledger = ({
           </SheetDescription>
           {confirming && selected?.series ? (
             <>
-              <ScopeRadio legend="Excluir quais?" series={selected.series} value={scope} onChange={setScope} />
+              <ScopeRadio
+                legend="Excluir quais?"
+                series={selected.series}
+                date={selected.date}
+                value={scope}
+                onChange={setScope}
+              />
               <Button variant="destructive" className="mt-2 min-h-12 text-base" onClick={() => destroy(selected)}>
                 Excluir
               </Button>

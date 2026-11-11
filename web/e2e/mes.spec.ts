@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 
+import { expectNoClipped } from "./clipped";
 import { requireServer } from "./server";
 
 test("a new user logs a Diário in three taps and sees it with the day balance", async ({ page, request }) => {
@@ -22,7 +23,7 @@ test("a new user logs a Diário in three taps and sees it with the day balance",
   await expect(page.getByRole("region", { name: "Saldo hoje" })).toContainText("R$ 1.000,00");
 
   await page.getByRole("navigation", { name: "Navegação principal" }).getByRole("button", { name: "Lançar" }).click();
-  await expect(page.getByRole("combobox", { name: "Categoria" })).toHaveText(/Mercado/);
+  await expect(page.getByRole("radio", { name: "Mercado" })).toHaveAttribute("aria-checked", "true");
   await page.keyboard.type("12,50");
   await page.getByRole("button", { name: "Salvar" }).click();
 
@@ -110,7 +111,7 @@ test("Lançar fills the cents from the right and a category created from the pic
 
   const tabs = page.getByRole("navigation", { name: "Navegação principal" });
   await tabs.getByRole("button", { name: "Lançar" }).click();
-  await expect(page.getByRole("combobox", { name: "Categoria" })).toHaveText(/Mercado/);
+  await expect(page.getByRole("radio", { name: "Mercado" })).toHaveAttribute("aria-checked", "true");
   await page.keyboard.type("12345");
   await expect(page.getByLabel("Valor")).toHaveValue("123,45");
   await page.getByRole("button", { name: "Salvar" }).click();
@@ -131,7 +132,7 @@ test("Lançar fills the cents from the right and a category created from the pic
 
   await expect(page.getByText("Categoria criada")).toBeVisible();
   await expect(create).toBeHidden();
-  await expect(page.getByRole("combobox", { name: "Categoria" })).toHaveText(/Feira/);
+  await expect(page.getByRole("radio", { name: "Feira" })).toHaveAttribute("aria-checked", "true");
 });
 
 test("the hero shows the balance and the summary, and the glance cards open their screens", async ({
@@ -162,7 +163,7 @@ test("the hero shows the balance and the summary, and the glance cards open thei
   await page.getByRole("button", { name: "Salvar" }).click();
 
   await page.getByRole("navigation", { name: "Navegação principal" }).getByRole("button", { name: "Lançar" }).click();
-  await expect(page.getByRole("combobox", { name: "Categoria" })).toHaveText(/Mercado/);
+  await expect(page.getByRole("radio", { name: "Mercado" })).toHaveAttribute("aria-checked", "true");
   await page.keyboard.type("1250");
   await page.getByRole("button", { name: "Salvar" }).click();
 
@@ -180,4 +181,63 @@ test("the hero shows the balance and the summary, and the glance cards open thei
   await expect(cofrinhos).toContainText("Nenhum cofrinho ainda. Comece pela reserva de emergência.");
   await cofrinhos.getByRole("link", { name: "Ver cofrinhos" }).click();
   await expect(page).toHaveURL(/\/economia$/);
+});
+
+test("Lançamentos shows only bills under Contas, and Lançar picks from a row of categories", async ({
+  page,
+  request,
+}) => {
+  await requireServer(request);
+
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto("/criar-conta");
+  await page.getByLabel("E-mail").fill(`e2e-filter-${Date.now()}@example.com`);
+  await page.getByLabel("Senha").fill("uma-senha-bem-longa");
+  await page.getByRole("button", { name: "Criar conta" }).click();
+
+  await page.getByRole("button", { name: "Continuar" }).click();
+  await page.getByLabel("Saldo de hoje").fill("50.000,00");
+  await page.getByRole("button", { name: "Continuar" }).click();
+  await page.getByRole("button", { name: "Pular por agora" }).click();
+  await page.getByRole("button", { name: "Ver meu mês" }).click();
+  await page.getByRole("button", { name: "Pular" }).click();
+  await page.getByRole("dialog", { name: "Lançar" }).getByRole("button", { name: "Fechar" }).click();
+
+  const tabs = page.getByRole("navigation", { name: "Navegação principal" });
+  await tabs.getByRole("button", { name: "Lançar" }).click();
+  const launch = page.getByRole("dialog", { name: "Lançar" });
+  const row = launch.getByRole("radiogroup", { name: "Categoria" });
+  await expect(row.getByRole("radio")).toHaveText(["Mercado", "Beleza", "Casa", "Combustível", "Comida fora"]);
+  await row.getByRole("radio", { name: "Comida fora" }).click();
+  await launch.getByLabel("Valor").fill("12.345,67");
+  await expectNoClipped(page);
+  await expect(launch.getByRole("button", { name: "Salvar" })).toBeInViewport();
+  await launch.getByRole("button", { name: "Salvar" }).click();
+
+  await tabs.getByRole("button", { name: "Lançar" }).click();
+  await expect(row.getByRole("radio").first()).toHaveText("Comida fora");
+  await launch.getByRole("radio", { name: "Saída" }).click();
+  await expect(row.getByRole("radio", { name: "Aluguel" })).toHaveAttribute("aria-checked", "true");
+  await launch.getByLabel("Valor").fill("23.456,78");
+  await launch.getByRole("button", { name: "Salvar" }).click();
+
+  const ledger = page.getByRole("region", { name: "Lançamentos" });
+  await expect(ledger.getByRole("button", { name: /Aluguel/ })).toContainText("R$ 23.456,78");
+  await ledger.getByRole("radio", { name: "Contas" }).click();
+  await expect(ledger.getByRole("button", { name: /Comida fora/ })).toBeHidden();
+  await expect(ledger.getByRole("button", { name: /Aluguel/ })).toBeVisible();
+  for (const width of [375, 1024, 1280, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expectNoClipped(page);
+  }
+  await ledger.getByRole("radio", { name: "Diário" }).click();
+  await expect(ledger.getByRole("button", { name: /Comida fora/ })).toContainText("R$ 12.345,67");
+  await expect(ledger.getByRole("button", { name: /Aluguel/ })).toBeHidden();
+
+  await page.getByRole("button", { name: "Lançar", exact: true }).first().click();
+  await expect(launch.getByRole("radiogroup", { name: "Categoria" })).toBeVisible();
+  for (const width of [1440, 1280, 1024]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expectNoClipped(page);
+  }
 });

@@ -204,7 +204,7 @@ describe("Cofrinhos", () => {
     await userEvent.click(within(await detail("Reserva")).getByRole("button", { name: "Guardar" }));
 
     await screen.findByRole("dialog", { name: "Lançar" });
-    expect(await screen.findByRole("combobox", { name: "Categoria" })).toHaveTextContent("Reserva");
+    expect(await screen.findByRole("radio", { name: "Economia › Reserva" })).toHaveAttribute("aria-checked", "true");
     expect(screen.getByRole("radio", { name: "Saída" })).toBeChecked();
   });
 
