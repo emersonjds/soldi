@@ -135,3 +135,30 @@ Rejected:
 - renaming or reordering tokens (needs a migration and breaks D15's stored names);
 - moving `cat-13..cat-24` too (the card is scoped to the failing defaults; their own collisions, such as Ardósia / Malva at 0.9 under deutan, need a card of their own);
 - patterns or textures in the circle (decoration on a 40 px icon that already carries a glyph).
+
+## D23 — Stitch v3 lands only where it keeps the rules; the Economia year view is built from entries (2026-11-11, SOL-72, architect)
+
+The owner's Stitch v3 round (14 screens) is built as six cards (`docs/specs/plans/SOL-72.md`). Every gap was verified against the code first (`docs/design/stitch-v3/README.md`). Anything that breaks a standing rule stays out, whatever Stitch draws:
+
+- the Mês hero (SOL-69): no split bar, and the red-day alert stays in the hero;
+- light only (D21), no bell (D21);
+- no Soldi Pro (D2), no CDI yield, no AI callouts;
+- no credit cards or fatura, no payment methods;
+- no weekly or yearly series (D14), no recurring income (D16), no auto-posted entries (D8);
+- no averages, paces, targets or forecast savings (D16);
+- no third series scope (D20).
+
+Outcomes:
+
+- **Economia do ano is built.** This reverses D21's "the Economia year table stays unbuilt". `GET /api/reports/savings?year=` computes, per month from the opening month to today's, the month view's own `totals.income` and `savings.saved` / `rate_pct`, in one `GROUP BY` month query scoped by `user_id`. Nothing is stored. It renders on `/economia` under the cofrinhos, and the tab keeps the label `Cofrinhos`.
+- **Posso comprar isso? gets entry points, not a page.** A sidebar button in `MENU` and a `Posso comprar?` button on Próximos meses open Lançar with Simular on. The verdict names the balance, and month chips show the lowest balance in whole units with the value before the draft.
+- **Month chips show the lowest projected balance**, floored to whole units, never the month-end. The chip's color is the lowest day's tier.
+
+Rejected:
+
+- a separate simulator page (a second form with the same rules as Lançar);
+- a yearly savings target and a "meta sugerida" (a stored goal plus a guess);
+- month-end amounts on the chips (they contradict a red chip);
+- per-category month totals on Ajustes › Categorias (Para onde vai already has them).
+
+Detail: `docs/specs/2026-11-11-stitch-v3.md`.
