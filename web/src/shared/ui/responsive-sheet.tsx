@@ -63,7 +63,7 @@ export const ResponsiveSheet = ({ open, onOpenChange, title, description, childr
         <DialogContent
           showCloseButton={false}
           onEscapeKeyDown={escapeBack}
-          className="flex max-h-[90dvh] flex-col gap-6 overflow-y-auto rounded-3xl px-8 pt-8 pb-(--sheet-pb) [--sheet-pb:--spacing(8)] [scrollbar-width:none] has-data-[slot=responsive-sheet-footer]:pb-0 sm:max-w-lg [&::-webkit-scrollbar]:hidden"
+          className="flex max-h-[90dvh] flex-col gap-6 overflow-y-auto rounded-3xl px-8 pt-8 pb-(--sheet-pb) [--sheet-pb:--spacing(8)] [scrollbar-width:none] has-data-[slot=responsive-sheet-footer]:scroll-pb-[calc(var(--sheet-pb)+7.5rem)] has-data-[slot=responsive-sheet-footer]:pb-0 sm:max-w-lg [&::-webkit-scrollbar]:hidden"
         >
           <DialogTitle className={heading}>{title}</DialogTitle>
           <DialogDescription className="sr-only">{description}</DialogDescription>
@@ -80,7 +80,7 @@ export const ResponsiveSheet = ({ open, onOpenChange, title, description, childr
         side="bottom"
         showCloseButton={false}
         onEscapeKeyDown={escapeBack}
-        className="mx-auto max-h-[92dvh] max-w-lg gap-6 overflow-y-auto rounded-t-3xl px-4 pt-6 pb-(--sheet-pb) [--sheet-pb:calc(1.5rem+env(safe-area-inset-bottom))] [scrollbar-width:none] has-data-[slot=responsive-sheet-footer]:pb-0 [&::-webkit-scrollbar]:hidden"
+        className="mx-auto max-h-[92dvh] max-w-lg gap-6 overflow-y-auto rounded-t-3xl px-4 pt-6 pb-(--sheet-pb) [--sheet-pb:calc(1.5rem+env(safe-area-inset-bottom))] [scrollbar-width:none] has-data-[slot=responsive-sheet-footer]:scroll-pb-[calc(var(--sheet-pb)+7.5rem)] has-data-[slot=responsive-sheet-footer]:pb-0 [&::-webkit-scrollbar]:hidden"
       >
         <SheetTitle className={heading}>{title}</SheetTitle>
         <SheetDescription className="sr-only">{description}</SheetDescription>

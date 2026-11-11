@@ -46,6 +46,10 @@ describe("ResponsiveSheet", () => {
 
     const footer = screen.getByRole("button", { name: "Salvar" }).closest('[data-slot="responsive-sheet-footer"]');
     expect(footer).toHaveClass("sticky", "bottom-0");
+    // WCAG 2.4.11: a field scrolled into view by focus clears the tallest footer, Lançar de verdade over Descartar.
+    expect(screen.getByRole("dialog", { name: "Lançar" })).toHaveClass(
+      "has-data-[slot=responsive-sheet-footer]:scroll-pb-[calc(var(--sheet-pb)+7.5rem)]",
+    );
     await userEvent.type(screen.getByLabelText("Observação"), "Feira{Enter}");
 
     expect(onSubmit).toHaveBeenCalledOnce();
