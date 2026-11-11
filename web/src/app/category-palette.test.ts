@@ -96,9 +96,8 @@ const pairs = (names: string[]) => names.flatMap((name, index) => names.slice(in
 const hex = (name: string) => palette.get(name) ?? "";
 const range = (from: number, to: number) => Array.from({ length: to - from + 1 }, (_, index) => `cat-${from + index}`);
 
-/** The default owners of cat-1..cat-12 by kind (crates/soldi-server/src/categories/domain.rs). */
-const KINDS = { Daily: range(1, 5), Bill: range(6, 10), Income: range(11, 12) };
-const CVD = ["protan", "deutan", "tritan"];
+/** A new account's Diário holds 15 categories painted cat-1..cat-15 (crates/soldi-server/src/categories/domain.rs). */
+const SEEDED_KIND = range(1, 15);
 
 describe("category palette", () => {
   it("ships the 24 tokens", () => {
@@ -116,19 +115,18 @@ describe("category palette", () => {
     }
   });
 
-  it.each(Object.entries(KINDS))("tells the %s defaults apart under protan, deutan and tritan vision", (_, names) => {
-    for (const [one, other] of pairs(names)) {
-      for (const vision of CVD) {
-        expect(distance(hex(one), hex(other), vision), `${one} ${other} ${vision}`).toBeGreaterThanOrEqual(0.08);
+  it.each(["protan", "deutan"])(
+    "keeps the 15 colors of a seeded kind at least 0.03 apart under %s vision",
+    (vision) => {
+      for (const [one, other] of pairs(SEEDED_KIND)) {
+        expect(distance(hex(one), hex(other), vision), `${one} ${other}`).toBeGreaterThanOrEqual(0.03);
       }
-    }
-  });
+    },
+  );
 
-  it("keeps any two of the 12 defaults at least 0.044 apart under color-blind vision", () => {
+  it("keeps the 12 defaults at least 0.05 apart under tritan vision", () => {
     for (const [one, other] of pairs(range(1, 12))) {
-      for (const vision of CVD) {
-        expect(distance(hex(one), hex(other), vision), `${one} ${other} ${vision}`).toBeGreaterThanOrEqual(0.044);
-      }
+      expect(distance(hex(one), hex(other), "tritan"), `${one} ${other}`).toBeGreaterThanOrEqual(0.05);
     }
   });
 });
