@@ -260,7 +260,7 @@ describe("CategoryBreakdown by group", () => {
     expect(within(sheet).getByRole("radio", { name: "Entrada" })).toBeChecked();
   });
 
-  it("opens Lançar on Saída with no category for the savings group, so the cofrinho is picked", async () => {
+  it("opens Lançar on Saída with Economia itself for the savings group, a deposit without a goal", async () => {
     show();
     await userEvent.click(await screen.findByRole("button", { name: /^Economia/ }));
 
@@ -270,8 +270,7 @@ describe("CategoryBreakdown by group", () => {
 
     const sheet = await screen.findByRole("dialog", { name: "Lançar" });
     expect(within(sheet).getByRole("radio", { name: "Saída" })).toBeChecked();
-    expect(await within(sheet).findByRole("radio", { name: "Aluguel" })).toHaveAttribute("aria-checked", "true");
-    expect(within(sheet).getByRole("radio", { name: "Economia" })).toHaveAttribute("aria-checked", "false");
+    expect(await within(sheet).findByRole("radio", { name: "Economia" })).toHaveAttribute("aria-checked", "true");
   });
 
   it("dates the entry on the first day of a month other than the current one", async () => {

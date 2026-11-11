@@ -300,7 +300,7 @@ const CategoryEntries = ({ month, chosen, onClear, className }: EntriesProps) =>
         open={adding}
         onOpenChange={setAdding}
         initialKind={chosen.kind}
-        initialCategory={category?.is_savings && !category.parent_id ? undefined : category}
+        initialCategory={category}
         initialDate={month === todayISO().slice(0, 7) ? undefined : `${month}-01`}
         billSheet={(props) => <EditBillSheet open {...props} />}
       />
