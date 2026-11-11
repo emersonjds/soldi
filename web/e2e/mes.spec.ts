@@ -18,7 +18,10 @@ test("a new user logs a Diário in three taps and sees it with the day balance",
   await page.getByRole("button", { name: "Pular por agora" }).click();
   await page.getByRole("button", { name: "Ver meu mês" }).click();
   await page.getByRole("button", { name: "Pular" }).click();
-  await page.getByRole("dialog", { name: "Lançar" }).getByRole("button", { name: "Fechar" }).click();
+  await page
+    .getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ })
+    .getByRole("button", { name: "Fechar" })
+    .click();
 
   await expect(page.getByRole("region", { name: "Saldo hoje" })).toContainText("R$ 1.000,00");
 
@@ -39,7 +42,7 @@ test("a bill from onboarding shows under Contas a pagar, pays from the round che
 }) => {
   await requireServer(request);
 
-  await page.setViewportSize({ width: 375, height: 812 });
+  await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/criar-conta");
   await page.getByLabel("E-mail").fill(`e2e-bill-${Date.now()}@example.com`);
   await page.getByLabel("Senha").fill("uma-senha-bem-longa");
@@ -55,15 +58,17 @@ test("a bill from onboarding shows under Contas a pagar, pays from the round che
   await page.getByRole("button", { name: "Continuar" }).click();
   await page.getByRole("button", { name: "Ver meu mês" }).click();
   await page.getByRole("button", { name: "Pular" }).click();
-  await page.getByRole("dialog", { name: "Lançar" }).getByRole("button", { name: "Fechar" }).click();
+  await page
+    .getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ })
+    .getByRole("button", { name: "Fechar" })
+    .click();
 
   const hero = page.getByRole("region", { name: "Saldo hoje" });
-  const summary = page.getByRole("region", { name: "Resumo do mês" });
   const bills = page.getByRole("region", { name: "Contas a pagar" });
   const bill = bills.getByRole("listitem", { name: "Aluguel" });
   await expect(bill).toContainText("R$ 300,00");
   await expect(bills).toContainText("0 de 1 pagas");
-  await expect(summary).toContainText(/Projetado\s*R\$\s700,00/);
+  await expect(hero).toContainText(/Projetado no fim do mês\s*R\$\s700,00/);
 
   const chip = bills.getByRole("radio", { name: "dia 28, 1 conta a pagar" });
   await chip.click();
@@ -86,7 +91,7 @@ test("a bill from onboarding shows under Contas a pagar, pays from the round che
   await sheet.getByRole("button", { name: "Confirmar" }).click();
 
   await expect(bill.getByRole("button", { name: "Desmarcar Aluguel" })).toHaveAttribute("aria-pressed", "true");
-  await expect(summary).toContainText(/Projetado\s*R\$\s650,00/);
+  await expect(hero).toContainText(/Projetado no fim do mês\s*R\$\s650,00/);
 });
 
 test("Lançar fills the cents from the right and a category created from the picker comes selected", async ({
@@ -107,7 +112,10 @@ test("Lançar fills the cents from the right and a category created from the pic
   await page.getByRole("button", { name: "Pular por agora" }).click();
   await page.getByRole("button", { name: "Ver meu mês" }).click();
   await page.getByRole("button", { name: "Pular" }).click();
-  await page.getByRole("dialog", { name: "Lançar" }).getByRole("button", { name: "Fechar" }).click();
+  await page
+    .getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ })
+    .getByRole("button", { name: "Fechar" })
+    .click();
 
   const tabs = page.getByRole("navigation", { name: "Navegação principal" });
   await tabs.getByRole("button", { name: "Lançar" }).click();
@@ -120,7 +128,8 @@ test("Lançar fills the cents from the right and a category created from the pic
   await expect(ledger.getByRole("button", { name: /Mercado/ })).toContainText("R$ 123,45");
 
   await tabs.getByRole("button", { name: "Lançar" }).click();
-  await page.getByRole("button", { name: "Nova categoria" }).click();
+  await page.getByRole("button", { name: "Ver todas" }).click();
+  await page.getByRole("dialog", { name: "Categoria" }).getByRole("button", { name: "Nova categoria" }).click();
   await page
     .getByRole("dialog", { name: "Nova" })
     .getByRole("button", { name: /^Categoria/ })
@@ -153,7 +162,10 @@ test("the hero shows the balance and the summary, and the spending glance opens 
   await page.getByRole("button", { name: "Pular por agora" }).click();
   await page.getByRole("button", { name: "Ver meu mês" }).click();
   await page.getByRole("button", { name: "Pular" }).click();
-  await page.getByRole("dialog", { name: "Lançar" }).getByRole("button", { name: "Fechar" }).click();
+  await page
+    .getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ })
+    .getByRole("button", { name: "Fechar" })
+    .click();
 
   const hero = page.getByRole("region", { name: "Saldo hoje" });
   const monthSummary = page.getByRole("region", { name: "Resumo do mês" });
@@ -171,13 +183,13 @@ test("the hero shows the balance and the summary, and the spending glance opens 
   await expect(monthSummary).toContainText(/Saídas\s*R\$\s12,50/);
   await expect(hero).toContainText(/Saldo hoje em conta\s*R\$\s2\.987,50/);
 
-  const spending = page.getByRole("region", { name: "Para onde vai" });
-  await expect(spending.getByRole("listitem")).toHaveText([/Mercado\s*R\$\s12,50\s*100%/]);
-  await spending.getByRole("link", { name: "Ver tudo" }).click();
+  const spending = page.getByRole("region", { name: "Para Onde Vai" });
+  await expect(spending.getByRole("listitem")).toHaveText([/Mercado\s*R\$\s12,50\s*100,0%/]);
+  await spending.getByRole("link", { name: "Ver análise" }).click();
   await expect(page).toHaveURL(/\/para-onde-vai\?m=\d{4}-\d{2}$/);
 
   await page.goBack();
-  await expect(page.getByRole("region", { name: "Para onde vai" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Para Onde Vai" })).toBeVisible();
   await expect(page.getByRole("region", { name: "Cofrinhos" })).toHaveCount(0);
 });
 
@@ -199,13 +211,25 @@ test("Lançamentos shows only bills under Contas, and Lançar picks from a row o
   await page.getByRole("button", { name: "Pular por agora" }).click();
   await page.getByRole("button", { name: "Ver meu mês" }).click();
   await page.getByRole("button", { name: "Pular" }).click();
-  await page.getByRole("dialog", { name: "Lançar" }).getByRole("button", { name: "Fechar" }).click();
+  await page
+    .getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ })
+    .getByRole("button", { name: "Fechar" })
+    .click();
 
   const tabs = page.getByRole("navigation", { name: "Navegação principal" });
   await tabs.getByRole("button", { name: "Lançar" }).click();
-  const launch = page.getByRole("dialog", { name: "Lançar" });
+  const launch = page.getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ });
   const row = launch.getByRole("radiogroup", { name: "Categoria" });
-  await expect(row.getByRole("radio")).toHaveText(["Mercado", "Beleza", "Casa", "Combustível", "Comida fora"]);
+  await expect(row.getByRole("radio")).toHaveText([
+    "Mercado",
+    "Beleza",
+    "Casa",
+    "Combustível",
+    "Comida fora",
+    "Educação",
+    "Farmácia",
+    "Lazer",
+  ]);
   await row.getByRole("radio", { name: "Comida fora" }).click();
   await launch.getByLabel("Valor").fill("12.345,67");
   await expectNoClipped(page);
@@ -214,7 +238,7 @@ test("Lançamentos shows only bills under Contas, and Lançar picks from a row o
 
   await tabs.getByRole("button", { name: "Lançar" }).click();
   await expect(row.getByRole("radio").first()).toHaveText("Comida fora");
-  await launch.getByRole("radio", { name: "Saída" }).click();
+  await launch.getByRole("radio", { name: "Conta" }).click();
   await expect(row.getByRole("radio", { name: "Aluguel" })).toHaveAttribute("aria-checked", "true");
   await launch.getByLabel("Valor").fill("23.456,78");
   await launch.getByRole("button", { name: "Salvar" }).click();
@@ -260,7 +284,10 @@ const signUp = async (page: Page, prefix: string, bill?: { name: string; amount:
   }
   await page.getByRole("button", { name: "Ver meu mês" }).click();
   await page.getByRole("button", { name: "Pular" }).click();
-  await page.getByRole("dialog", { name: "Lançar" }).getByRole("button", { name: "Fechar" }).click();
+  await page
+    .getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ })
+    .getByRole("button", { name: "Fechar" })
+    .click();
 };
 
 const box = async (page: Page, name: string) => {
@@ -306,10 +333,10 @@ test("Mês follows the mobile frame's order at 375, a stack and a 2-column rail 
   await expect(banner).toContainText(
     /(Dia 28 fica|Hoje está) no vermelho: -R\$\s612,50\. Conta de Aluguel prevista excede o saldo em caixa projetado\./,
   );
-  await expect(page.getByRole("region", { name: "Para onde vai" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Para Onde Vai" })).toBeVisible();
   await expect(page.getByRole("region", { name: "Próximos meses" })).toBeVisible();
 
-  const order = ["Saldo hoje", "Contas a pagar", "Termômetro do Mês", "Lançamentos", "Próximos meses", "Para onde vai"];
+  const order = ["Saldo hoje", "Contas a pagar", "Termômetro do Mês", "Lançamentos", "Próximos meses", "Para Onde Vai"];
   const tops = await Promise.all(order.map(async (name) => (await box(page, name)).y));
   expect(tops).toEqual([...tops].sort((a, b) => a - b));
   expect((await box(page, "Alerta do mês")).y).toBeLessThan(tops[0]);
@@ -317,7 +344,7 @@ test("Mês follows the mobile frame's order at 375, a stack and a 2-column rail 
 
   await page.setViewportSize({ width: 1024, height: 900 });
   const [ledger, thermometer, months, spending] = await Promise.all(
-    ["Lançamentos", "Termômetro do Mês", "Próximos meses", "Para onde vai"].map((name) => box(page, name)),
+    ["Lançamentos", "Termômetro do Mês", "Próximos meses", "Para Onde Vai"].map((name) => box(page, name)),
   );
   expect(thermometer.y).toBeGreaterThan(ledger.y);
   expect(months.y).toBe(thermometer.y);
@@ -327,7 +354,7 @@ test("Mês follows the mobile frame's order at 375, a stack and a 2-column rail 
   for (const width of [1280, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     const [hero, rail, glance] = await Promise.all(
-      ["Saldo hoje", "Termômetro do Mês", "Para onde vai"].map((name) => box(page, name)),
+      ["Saldo hoje", "Termômetro do Mês", "Para Onde Vai"].map((name) => box(page, name)),
     );
     expect(rail.x).toBeGreaterThan(hero.x + hero.width);
     expect(Math.abs(glance.width - rail.width)).toBeLessThan(2);

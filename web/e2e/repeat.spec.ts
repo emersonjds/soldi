@@ -29,7 +29,10 @@ test("an entry repeated 3x shows in three months; edit and delete reach this one
   await page.getByRole("button", { name: "Pular por agora" }).click();
   await page.getByRole("button", { name: "Ver meu mês" }).click();
   await page.getByRole("button", { name: "Pular" }).click();
-  await page.getByRole("dialog", { name: "Lançar" }).getByRole("button", { name: "Fechar" }).click();
+  await page
+    .getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ })
+    .getByRole("button", { name: "Fechar" })
+    .click();
 
   const [first, second, third] = [monthFrom(-2), monthFrom(-1), monthFrom(0)];
   expect((await page.request.patch("/api/settings", { data: { opening_date: `${first}-01` } })).ok()).toBe(true);
@@ -43,13 +46,13 @@ test("an entry repeated 3x shows in three months; edit and delete reach this one
   };
 
   await page.getByRole("navigation", { name: "Navegação principal" }).getByRole("button", { name: "Lançar" }).click();
-  const launch = page.getByRole("dialog", { name: "Lançar" });
-  await launch.getByRole("radio", { name: "Saída" }).click();
+  const launch = page.getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ });
+  await launch.getByRole("radio", { name: "Conta" }).click();
   await launch.getByLabel("Valor").fill("100,00");
   await pickDate(launch, "Outra data", `${first}-01`);
   await launch.getByLabel("Observação").fill("Internet");
-  await launch.getByRole("switch", { name: "Repetir" }).click();
-  await launch.getByRole("radio", { name: "3x" }).click();
+  await launch.getByRole("switch", { name: "Repetir lançamento (Série)" }).click();
+  await launch.getByRole("radio", { name: "3×" }).click();
   await launch.getByRole("button", { name: "Salvar" }).click();
   await expect(page.getByText("3 lançamentos criados")).toBeVisible();
 
@@ -60,7 +63,7 @@ test("an entry repeated 3x shows in three months; edit and delete reach this one
     [third, "3/33 de 3"],
   ]) {
     await visit(month);
-    await expect(internet).toContainText(`Saída · ${place}R$ 100,00`);
+    await expect(internet).toContainText(`Saída · ${place}- R$ 100,00`);
   }
 
   await visit(second);
@@ -75,9 +78,9 @@ test("an entry repeated 3x shows in three months; edit and delete reach this one
   await expect(internet).toContainText("R$ 120,00");
 
   await visit(third);
-  await expect(internet).toContainText("Saída · 3/33 de 3R$ 120,00");
+  await expect(internet).toContainText("Saída · 3/33 de 3- R$ 120,00");
   await visit(first);
-  await expect(internet).toContainText("Saída · 1/31 de 3R$ 100,00");
+  await expect(internet).toContainText("Saída · 1/31 de 3- R$ 100,00");
 
   await visit(second);
   await internet.click();
@@ -91,7 +94,7 @@ test("an entry repeated 3x shows in three months; edit and delete reach this one
   await visit(third);
   await expect(ledger).toHaveCount(0);
   await visit(first);
-  await expect(internet).toContainText("Saída · 1/11 de 1R$ 100,00");
+  await expect(internet).toContainText("Saída · 1/11 de 1- R$ 100,00");
 });
 
 test("a 12x series shrinks to 6 from its first entry and grows back to 12 from its last", async ({ page, request }) => {
@@ -109,7 +112,10 @@ test("a 12x series shrinks to 6 from its first entry and grows back to 12 from i
   await page.getByRole("button", { name: "Pular por agora" }).click();
   await page.getByRole("button", { name: "Ver meu mês" }).click();
   await page.getByRole("button", { name: "Pular" }).click();
-  await page.getByRole("dialog", { name: "Lançar" }).getByRole("button", { name: "Fechar" }).click();
+  await page
+    .getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ })
+    .getByRole("button", { name: "Fechar" })
+    .click();
 
   const [first, sixth, seventh, twelfth] = [monthFrom(0), monthFrom(5), monthFrom(6), monthFrom(11)];
   expect((await page.request.patch("/api/settings", { data: { opening_date: `${first}-01` } })).ok()).toBe(true);
@@ -131,23 +137,23 @@ test("a 12x series shrinks to 6 from its first entry and grows back to 12 from i
   };
 
   await page.getByRole("navigation", { name: "Navegação principal" }).getByRole("button", { name: "Lançar" }).click();
-  const launch = page.getByRole("dialog", { name: "Lançar" });
-  await launch.getByRole("radio", { name: "Saída" }).click();
+  const launch = page.getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ });
+  await launch.getByRole("radio", { name: "Conta" }).click();
   await launch.getByLabel("Valor").fill("100,00");
   await pickDate(launch, "Outra data", `${first}-01`);
   await launch.getByLabel("Observação").fill("Internet");
-  await launch.getByRole("switch", { name: "Repetir" }).click();
+  await launch.getByRole("switch", { name: "Repetir lançamento (Série)" }).click();
   await launch.getByRole("button", { name: "Salvar" }).click();
   await expect(page.getByText("12 lançamentos criados")).toBeVisible();
 
-  await resize(first, "6x");
+  await resize(first, "6×");
   await expect(page.getByText("Série ajustada para 6 meses")).toBeVisible();
   await visit(sixth);
   await expect(internet).toContainText("Saída · 6/66 de 6");
   await visit(seventh);
   await expect(ledger).toHaveCount(0);
 
-  await resize(sixth, "12x");
+  await resize(sixth, "12×");
   await expect(page.getByText("Série ajustada para 12 meses")).toBeVisible();
   await visit(twelfth);
   await expect(internet).toContainText("Saída · 12/1212 de 12");
@@ -168,7 +174,10 @@ test("a 12x series on the 5th moves to the 10th from its third entry on", async 
   await page.getByRole("button", { name: "Pular por agora" }).click();
   await page.getByRole("button", { name: "Ver meu mês" }).click();
   await page.getByRole("button", { name: "Pular" }).click();
-  await page.getByRole("dialog", { name: "Lançar" }).getByRole("button", { name: "Fechar" }).click();
+  await page
+    .getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ })
+    .getByRole("button", { name: "Fechar" })
+    .click();
 
   const [first, second, third, twelfth] = [monthFrom(0), monthFrom(1), monthFrom(2), monthFrom(11)];
   expect((await page.request.patch("/api/settings", { data: { opening_date: `${first}-01` } })).ok()).toBe(true);
@@ -182,12 +191,12 @@ test("a 12x series on the 5th moves to the 10th from its third entry on", async 
   const onDay = (date: string) => page.locator(`#dia-${date}`).getByRole("button", { name: /^Internet/ });
 
   await page.getByRole("navigation", { name: "Navegação principal" }).getByRole("button", { name: "Lançar" }).click();
-  const launch = page.getByRole("dialog", { name: "Lançar" });
-  await launch.getByRole("radio", { name: "Saída" }).click();
+  const launch = page.getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ });
+  await launch.getByRole("radio", { name: "Conta" }).click();
   await launch.getByLabel("Valor").fill("100,00");
   await pickDate(launch, "Outra data", `${first}-05`);
   await launch.getByLabel("Observação").fill("Internet");
-  await launch.getByRole("switch", { name: "Repetir" }).click();
+  await launch.getByRole("switch", { name: "Repetir lançamento (Série)" }).click();
   await launch.getByRole("button", { name: "Salvar" }).click();
   await expect(page.getByText("12 lançamentos criados")).toBeVisible();
 

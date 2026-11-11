@@ -49,10 +49,12 @@ describe("Simulation", () => {
     await verdict("Com essa compra, dia 23/12 fica no vermelho: -R$ 557,90.");
     expect(screen.getByRole("heading", { name: "Meses com essa compra" })).toBeInTheDocument();
     const january = screen.getByRole("listitem", {
-      name: "jan 2027: Crítico, menor saldo -R$\u00a02.957,90, 31 dias no vermelho, antes R$\u00a01.842,10",
+      name: "janeiro de 2027: menor saldo -R$\u00a02.957,90, Crítico, antes R$\u00a01.842,10",
     });
     expect(january).toHaveTextContent("-2.958antes 1.842Crítico");
-    const november = screen.getByRole("listitem", { name: "nov 2026: Confortável, menor saldo R$\u00a01.842,10" });
+    const november = screen.getByRole("listitem", {
+      name: "novembro de 2026: menor saldo R$\u00a01.842,10, Confortável",
+    });
     expect(november).not.toHaveTextContent("antes");
   });
 

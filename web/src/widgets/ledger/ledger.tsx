@@ -3,7 +3,7 @@
 import { useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
-import { Pencil, Repeat, Trash2 } from "lucide-react";
+import { ArrowRight, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -24,6 +24,7 @@ import { EditBillSheet } from "@/features/edit-bill/edit-bill-sheet";
 import { cn } from "@/lib/utils";
 import type { Schemas } from "@/shared/api/client";
 import { dayMonth, monthName, shortDay, todayISO, yesterdayISO } from "@/shared/lib/date";
+import { TIER_STYLE } from "@/shared/lib/tier";
 import { CategoryIcon } from "@/shared/ui/category-icon";
 import { Money } from "@/shared/ui/money";
 import { TierPill } from "@/shared/ui/tier-pill";
@@ -32,7 +33,7 @@ const KIND_LABEL: Record<Schemas["CategoryKind"], string> = { income: "Entrada",
 
 const dayLabel = ({ date, is_future }: Schemas["Day"]) => {
   const short = shortDay(date);
-  if (is_future) return `Agendado · ${short}`;
+  if (is_future) return `Previsto · ${short}`;
   if (date === todayISO()) return `Hoje, ${short}`;
   if (date === yesterdayISO()) return `Ontem, ${short}`;
   return short;
@@ -59,6 +60,9 @@ const entryOf = (transaction: Transaction, categories: Schemas["Category"][] = [
 };
 
 const titleOf = (transaction: Transaction, entry: Entry) => transaction.note || entry.label;
+
+/** Same rule as the day balance: only income adds; a deposit into a cofrinho takes from it. */
+const addsToBalance = (transaction: Transaction) => transaction.kind === "income";
 
 type Day = Schemas["Day"];
 type Due = Schemas["BillOfMonth"];
@@ -99,7 +103,7 @@ const DueRow = ({ bill, month, cause }: { bill: Due; month: string; cause: boole
       </span>
     </span>
     <span className="flex flex-col items-end gap-0.5">
-      <Money amount={bill.amount} className="font-bold text-base" />
+      <Money amount={bill.amount} outflow className="font-bold text-base" />
       {cause && <Cause />}
     </span>
   </li>
@@ -118,18 +122,24 @@ const Row = ({ transaction, entry, cause, onOpen }: RowProps) => (
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="truncate font-medium text-base">{titleOf(transaction, entry)}</span>
         <span className="flex items-center gap-1 text-muted-foreground text-xs">
-          {transaction.series && <Repeat className="size-4" aria-hidden />}
           {entry.caption}
           {transaction.series && (
             <>
-              <span aria-hidden>{` · ${transaction.series.position}/${transaction.series.total}`}</span>
+              <span aria-hidden className="rounded-full bg-muted px-2 font-medium text-foreground">
+                {`↻ ${KIND_LABEL[transaction.kind]} · ${transaction.series.position}/${transaction.series.total}`}
+              </span>
               <span className="sr-only">{`${transaction.series.position} de ${transaction.series.total}`}</span>
             </>
           )}
         </span>
       </span>
       <span className="flex flex-col items-end gap-0.5">
-        <Money amount={transaction.amount} income={transaction.kind === "income"} className="font-bold text-base" />
+        <Money
+          amount={transaction.amount}
+          income={addsToBalance(transaction)}
+          outflow={!addsToBalance(transaction)}
+          className="font-bold text-base"
+        />
         {cause && <Cause />}
       </span>
     </button>
@@ -241,7 +251,10 @@ export const Ledger = ({
   return (
     <section
       aria-labelledby="ledger-title"
-      className={cn("flex flex-col gap-2 rounded-2xl bg-card p-4 shadow-sm lg:p-6", className)}
+      className={cn(
+        "flex flex-col gap-2 rounded-2xl bg-card p-4 shadow-sm lg:grid lg:grid-cols-[auto_1fr_auto] lg:items-center lg:gap-x-4 lg:p-6",
+        className,
+      )}
     >
       <h2 id="ledger-title" className="font-semibold text-lg leading-6">
         Lançamentos
@@ -252,7 +265,7 @@ export const Ledger = ({
         value={filter}
         onValueChange={(value: LedgerFilter | "") => value && onFilterChange(value)}
         aria-label="Filtrar lançamentos"
-        className="mb-2 rounded-xl bg-muted p-1"
+        className="mb-2 rounded-xl bg-muted p-1 lg:mb-0 lg:justify-self-start"
       >
         {FILTERS.map((option) => (
           <ToggleGroupItem
@@ -264,46 +277,62 @@ export const Ledger = ({
           </ToggleGroupItem>
         ))}
       </ToggleGroup>
-      {all.length === 0 && (
-        <p className="px-2 py-8 text-center text-muted-foreground">
-          {FILTERS.find((option) => option.value === filter)?.empty}
-        </p>
-      )}
-      {groups.map(({ day, entries, due }) => (
-        <div
-          key={day.date}
-          id={`dia-${day.date}`}
-          tabIndex={-1}
-          className={cn("scroll-mt-28 rounded-xl", highlight === day.date && "ring-2 ring-expense")}
-        >
-          <h3 className="sticky top-14 z-10 -mx-2 flex items-center justify-between gap-2 bg-card/95 px-2 py-2 font-semibold text-muted-foreground text-sm backdrop-blur lg:top-0">
-            {dayLabel(day)}
-            <TierPill tier={day.projected_tier} amount={day.projected_balance} forecast={isForecast(day)} size="sm" />
-          </h3>
-          <ul className="flex flex-col">
-            {entries.map((transaction) => (
-              <Row
-                key={transaction.id}
-                entry={describe(transaction)}
-                transaction={transaction}
-                cause={causes.has(transaction.id)}
-                onOpen={() => open(transaction)}
-              />
-            ))}
-            {due.map((bill) => (
-              <DueRow key={billKey(bill)} bill={bill} month={view.month} cause={causes.has(billKey(bill))} />
-            ))}
-          </ul>
-        </div>
-      ))}
+      <div className="flex flex-col gap-2 lg:col-span-3 lg:row-start-2">
+        {all.length === 0 && (
+          <p className="px-2 py-8 text-center text-muted-foreground">
+            {FILTERS.find((option) => option.value === filter)?.empty}
+          </p>
+        )}
+        {groups.map(({ day, entries, due }) => (
+          <div
+            key={day.date}
+            id={`dia-${day.date}`}
+            tabIndex={-1}
+            className={cn("scroll-mt-28 rounded-xl", highlight === day.date && "ring-2 ring-expense")}
+          >
+            <h3 className="sticky top-14 z-10 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 rounded-lg bg-muted px-3 py-2 font-semibold text-muted-foreground text-sm lg:top-0">
+              {dayLabel(day)}
+              <span className="flex items-center gap-1.5">
+                <span className="font-medium">{day.is_future ? "Projeção:" : "Saldo ao final:"}</span>
+                <Money
+                  amount={day.projected_balance}
+                  className={cn("font-bold", TIER_STYLE[day.projected_tier].label)}
+                />
+                <TierPill tier={day.projected_tier} forecast={!day.is_future && isForecast(day)} size="sm" />
+              </span>
+            </h3>
+            <ul className={cn("flex flex-col", day.is_future && "opacity-60")}>
+              {entries.map((transaction) => (
+                <Row
+                  key={transaction.id}
+                  entry={describe(transaction)}
+                  transaction={transaction}
+                  cause={causes.has(transaction.id)}
+                  onOpen={() => open(transaction)}
+                />
+              ))}
+              {due.map((bill) => (
+                <DueRow key={billKey(bill)} bill={bill} month={view.month} cause={causes.has(billKey(bill))} />
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
       {capped && (
         <Button
           variant="ghost"
           aria-expanded={expanded}
           onClick={() => onExpandedChange(!expanded)}
-          className="min-h-11 self-center px-4 font-semibold text-primary text-sm"
+          className="min-h-11 self-center px-4 font-semibold text-primary text-sm lg:col-start-3 lg:row-start-1"
         >
-          {expanded ? "Mostrar menos" : `Ver o mês inteiro (${all.length} dias)`}
+          {expanded ? (
+            "Mostrar menos"
+          ) : (
+            <>
+              Ver o mês inteiro
+              <ArrowRight aria-hidden />
+            </>
+          )}
         </Button>
       )}
 

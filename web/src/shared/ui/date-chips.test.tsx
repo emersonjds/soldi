@@ -19,6 +19,7 @@ afterEach(() => {
 
 describe("DateChips", () => {
   beforeEach(() => {
+    window.innerWidth = 375;
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date(2026, 10, 8, 12));
   });
@@ -36,19 +37,27 @@ describe("DateChips", () => {
     await pickDate("Outra data", "2026-10-28");
 
     expect(onChange).toHaveBeenCalledWith("2026-10-28");
-    await waitFor(() => expect(screen.getByRole("button", { name: "Outra data, 08/11/2026" })).toHaveFocus());
+    await waitFor(() => expect(screen.getByRole("button", { name: "Outra data" })).toHaveFocus());
+  });
+
+  it("reads the picked day on Outra data and today's date on Hoje from 1024px", () => {
+    window.innerWidth = 1440;
+    render(<DateChips legend="Quando" value="2026-10-28" onChange={vi.fn()} />);
+
+    expect(screen.getByRole("button", { name: "Hoje (8 nov)" })).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("button", { name: "Outra data, 28/10/2026" })).toHaveTextContent("28/10/2026");
   });
 
   it("hands back the chosen day again, never an empty value, when it is picked twice", async () => {
     const onChange = vi.fn();
-    render(<DateChips legend="Quando" value="2026-11-08" onChange={onChange} />);
+    render(<DateChips legend="Quando" value="2026-10-28" onChange={onChange} />);
 
-    await userEvent.click(screen.getByRole("button", { name: "Outra data, 08/11/2026" }));
+    await userEvent.click(screen.getByRole("button", { name: "Outra data, 28/10/2026" }));
     await userEvent.click(
-      await screen.findByRole("button", { name: "Hoje, domingo, 8 de novembro de 2026, selecionado" }),
+      await screen.findByRole("button", { name: "quarta-feira, 28 de outubro de 2026, selecionado" }),
     );
 
-    expect(onChange).toHaveBeenCalledExactlyOnceWith("2026-11-08");
+    expect(onChange).toHaveBeenCalledExactlyOnceWith("2026-10-28");
   });
 
   it("leaves out a chip outside min and max and bounds the calendar to them", async () => {

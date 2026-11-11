@@ -1,8 +1,8 @@
 "use client";
 
-import { type RefObject, useId, useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 
-import { Check, Plus } from "lucide-react";
+import { Check } from "lucide-react";
 
 import { Skeleton } from "@/components/ui/skeleton";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -18,7 +18,7 @@ type Kind = Schemas["CategoryKind"];
 type Category = Schemas["Category"];
 type Entry = Schemas["Transaction"];
 
-const ROW = 5;
+const CIRCLES = 8;
 
 /** The category that comes first and preselected; the API sorts by name. */
 const FIRST: Record<Kind, string> = { income: "Salário", bill: "Aluguel", daily: "Mercado" };
@@ -39,25 +39,26 @@ export const useCategoryChips = (kind: Kind) => {
   return { ...categories, data: categories.data && grouped(pickable(categories.data), FIRST[kind]) };
 };
 
-/** The ones used in `entries` first, by count, a tie by the latest date; then `list` in its order. */
-const ranked = (list: Category[], entries: Entry[]) => {
+/** A child stands for its parent; a child of an unknown parent stands alone. */
+const topOf = (category: Category, list: Category[]) => list.find((each) => each.id === category.parent_id) ?? category;
+
+/** The parents used in `entries` first (a child's use counts for its parent), by count, a tie by the latest date; then `tops` in its order. */
+const ranked = (tops: Category[], entries: Entry[], list: Category[]) => {
   const usage = new Map<string, { count: number; latest: string }>();
   for (const { category, date } of entries) {
-    const seen = usage.get(category.id);
-    usage.set(category.id, { count: (seen?.count ?? 0) + 1, latest: seen && seen.latest > date ? seen.latest : date });
+    const id = topOf(category, list).id;
+    const seen = usage.get(id);
+    usage.set(id, { count: (seen?.count ?? 0) + 1, latest: seen && seen.latest > date ? seen.latest : date });
   }
   const score = (category: Category) => usage.get(category.id) ?? { count: 0, latest: "" };
-  return [...list].sort((a, b) => score(b).count - score(a).count || score(b).latest.localeCompare(score(a).latest));
+  return [...tops].sort((a, b) => score(b).count - score(a).count || score(b).latest.localeCompare(score(a).latest));
 };
-
-/** Six even columns: the five chips and `+`. */
-const cell = "w-[calc((100cqw-1.25rem)/6)] shrink-0";
 
 const name = "line-clamp-2 hyphens-auto text-center text-xs leading-4 wrap-break-word";
 
 /**
- * One kind's categories as a row of up to five chips, the most used this month first; `Ver todas` searches every
- * one and `+` creates one. A choice outside the five takes the last slot.
+ * One kind's parents as a scrolling row of up to eight circles, the most used this month first, and the picked
+ * parent's children as `Sub:` pills; `Ver todas` searches and creates. A choice outside the eight takes the last slot.
  */
 export const CategoryChips = ({
   kind,
@@ -80,18 +81,18 @@ export const CategoryChips = ({
   const errorId = useId();
   const chipRow = useRef<HTMLDivElement>(null);
   const more = useRef<HTMLButtonElement>(null);
-  const nova = useRef<HTMLButtonElement>(null);
   const picked = useRef(false);
 
   const pick = (category: Category) => {
     picked.current = true;
     onChoose(category);
   };
-  const refocus = (opener: RefObject<HTMLButtonElement | null>) => (event: Event) => {
+  const refocus = (event: Event) => {
     event.preventDefault();
-    const chip = picked.current && chipRow.current?.querySelector<HTMLElement>('[aria-checked="true"]');
+    const checked = [...(chipRow.current?.querySelectorAll<HTMLElement>('[aria-checked="true"]') ?? [])];
+    const chip = picked.current && checked.at(-1);
     picked.current = false;
-    (chip || opener.current)?.focus();
+    (chip || more.current)?.focus();
   };
 
   if (categories.isError)
@@ -99,43 +100,57 @@ export const CategoryChips = ({
   if (!categories.data || !entries)
     return (
       <div className="flex gap-2">
-        {["a", "b", "c", "d", "e"].map((slot) => (
+        {["a", "b", "c", "d", "e", "f", "g", "h"].map((slot) => (
           <Skeleton key={slot} className="size-12 rounded-full" />
         ))}
       </div>
     );
 
   const list = categories.data;
-  const top = ranked(list, entries).slice(0, ROW);
-  const row = !chosen || top.some((each) => each.id === chosen.id) ? top : [...top.slice(0, ROW - 1), chosen];
+  const parent = chosen && topOf(chosen, list);
+  const top = ranked(
+    list.filter((category) => topOf(category, list) === category),
+    entries,
+    list,
+  ).slice(0, CIRCLES);
+  const row = !parent || top.some((each) => each.id === parent.id) ? top : [...top.slice(0, CIRCLES - 1), parent];
+  const children = parent ? list.filter((category) => category.parent_id === parent.id) : [];
 
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center justify-between gap-2">
-        <span id={labelId} className="font-semibold text-sm">
+        <span id={labelId} className="flex items-center gap-2 font-semibold text-sm">
+          <span aria-hidden className="size-1.5 rounded-full bg-primary" />
           Categoria
         </span>
-        <CategorySelect ref={more} categories={list} chosen={chosen} onChoose={pick} onCloseAutoFocus={refocus(more)} />
+        <CategorySelect
+          ref={more}
+          categories={list}
+          chosen={chosen}
+          onChoose={pick}
+          onCreate={() => setCreating(true)}
+          onCloseAutoFocus={refocus}
+        />
       </div>
-      <div ref={chipRow} className="@container flex gap-1">
+      <div ref={chipRow} className="flex flex-col gap-2">
         <ToggleGroup
           type="single"
-          value={chosen?.id ?? ""}
+          value={parent?.id ?? ""}
           onValueChange={(id: string) => {
-            const picked = row.find((each) => each.id === id);
-            if (picked) onChoose(picked);
+            const next = row.find((each) => each.id === id) ?? parent;
+            if (next) onChoose(next);
           }}
           aria-labelledby={labelId}
           aria-describedby={error ? errorId : undefined}
           aria-invalid={error ? true : undefined}
-          className="flex w-auto items-start gap-1"
+          className="flex w-full snap-x snap-mandatory items-start gap-2 overflow-x-auto p-1"
         >
           {row.map((category) => (
             <ToggleGroupItem
               key={category.id}
               value={category.id}
               aria-label={categoryLabel(category, list)}
-              className={`${cell} group/chip h-auto min-h-11 flex-col justify-start gap-1 whitespace-normal rounded-xl px-0 py-1 font-medium text-foreground data-[state=on]:bg-transparent data-[state=on]:font-semibold data-[state=on]:text-primary`}
+              className="group/chip h-auto min-h-11 w-16 shrink-0 snap-start flex-col justify-start gap-1 whitespace-normal rounded-xl px-0 py-1 font-medium text-foreground data-[state=on]:bg-transparent data-[state=on]:font-semibold data-[state=on]:text-primary"
             >
               <span className="relative">
                 <CategoryIcon
@@ -154,31 +169,39 @@ export const CategoryChips = ({
             </ToggleGroupItem>
           ))}
         </ToggleGroup>
-        <button
-          ref={nova}
-          type="button"
-          aria-label="Nova categoria"
-          onClick={() => setCreating(true)}
-          className={`${cell} flex min-h-11 flex-col items-center gap-1 rounded-xl py-1 font-medium text-muted-foreground outline-none transition-colors hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50`}
-        >
-          <span className="flex size-12 items-center justify-center rounded-full border-2 border-muted-foreground/40 border-dashed">
-            <Plus className="size-5" aria-hidden />
-          </span>
-          <span className={name}>Nova</span>
-        </button>
+        {parent && children.length > 0 && (
+          <div className="flex items-start gap-2">
+            <span aria-hidden className="flex min-h-11 items-center font-semibold text-muted-foreground text-sm">
+              Sub:
+            </span>
+            <ToggleGroup
+              type="single"
+              value={chosen?.id === parent.id ? "" : (chosen?.id ?? "")}
+              onValueChange={(id: string) => onChoose(children.find((child) => child.id === id) ?? parent)}
+              aria-label="Subcategoria"
+              className="flex w-auto flex-wrap gap-2"
+            >
+              {children.map((child) => (
+                <ToggleGroupItem
+                  key={child.id}
+                  value={child.id}
+                  aria-label={categoryLabel(child, list)}
+                  className="group/pill h-11 gap-1 rounded-full! border border-border px-4 font-medium text-foreground text-sm data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
+                >
+                  <Check aria-hidden className="hidden group-data-[state=on]/pill:block" />
+                  {child.name}
+                </ToggleGroupItem>
+              ))}
+            </ToggleGroup>
+          </div>
+        )}
       </div>
       {error && (
         <p id={errorId} role="alert" className="text-destructive text-sm">
           {error}
         </p>
       )}
-      <CategorySheet
-        kind={kind}
-        open={creating}
-        onOpenChange={setCreating}
-        onSaved={pick}
-        onCloseAutoFocus={refocus(nova)}
-      />
+      <CategorySheet kind={kind} open={creating} onOpenChange={setCreating} onSaved={pick} onCloseAutoFocus={refocus} />
     </div>
   );
 };

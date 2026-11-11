@@ -33,12 +33,15 @@ test("next month opens with this month's unpaid conta fixa and the red banner na
   await page.getByRole("button", { name: "Continuar" }).click();
   await page.getByRole("button", { name: "Ver meu mês" }).click();
   await page.getByRole("button", { name: "Pular" }).click();
-  await page.getByRole("dialog", { name: "Lançar" }).getByRole("button", { name: "Fechar" }).click();
+  await page
+    .getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ })
+    .getByRole("button", { name: "Fechar" })
+    .click();
 
   await page.getByRole("button", { name: "Próximo mês" }).click();
   const ledger = page.getByRole("region", { name: "Lançamentos" });
   await expect(ledger.getByRole("heading", { level: 3 }).first()).toContainText(
-    /Agendado · 28 .*-R\$\s2\.200,00.*Previsto · Crítico/,
+    /Previsto · 28 .*Projeção:-R\$\s2\.200,00.*Crítico/,
   );
   await expect(ledger.getByRole("listitem", { name: "Aluguel" })).toContainText("Conta fixa · a pagar");
   await expect(ledger.getByRole("listitem", { name: "Aluguel" })).toContainText("Motivo da queda");

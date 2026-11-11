@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { MonthChips } from "./month-chips";
 import type { MonthAhead } from "./months-ahead";
 
-const R = "R$ ";
+const R = "R$\u00a0";
 
 const MONTHS: MonthAhead[] = [
   { month: "2026-11", lowest: "red", low: "-12345.67", redDays: 7 },
@@ -14,17 +14,20 @@ const MONTHS: MonthAhead[] = [
 ];
 
 describe("MonthChips", () => {
-  it("names each month with its tier, its lowest balance and red days, never color alone", async () => {
+  it("draws a 4-column grid, the short month named with its year, its low and its tier word, never color alone", async () => {
     const onOpen = vi.fn();
     render(<MonthChips months={MONTHS} current="2026-12" onOpen={onOpen} />);
 
-    const november = screen.getByRole("button", {
-      name: `nov 2026: Crítico, menor saldo -${R}12.345,67, 7 dias no vermelho`,
-    });
-    expect(november).toHaveTextContent("nov 2026-12.346Crítico7");
-    const december = screen.getByRole("button", { name: `dez 2026: Folga, menor saldo ${R}2.500,99` });
+    expect(screen.getByRole("list")).toHaveClass("grid-cols-4");
+    const november = screen.getByRole("button", { name: `novembro de 2026: menor saldo -${R}12.345,67, Crítico` });
+    expect(november).toHaveTextContent(/^Nov-12.346Crítico$/);
+    expect(november).toHaveClass("bg-expense-soft", "text-expense-text");
+    expect(screen.getByText("Crítico")).toHaveClass("text-[11px]");
+    const december = screen.getByRole("button", { name: `dezembro de 2026: menor saldo ${R}2.500,99, Folga` });
     expect(december).toHaveAttribute("aria-current", "date");
-    expect(december).toHaveTextContent("dez 20262.500Folga");
+    expect(december).toHaveClass("ring-2");
+    expect(december).not.toHaveClass("bg-expense-soft");
+    expect(december).toHaveTextContent(/^Dez2.500Folga$/);
     await userEvent.click(november);
     expect(onOpen).toHaveBeenCalledWith("2026-11");
   });
@@ -33,9 +36,9 @@ describe("MonthChips", () => {
     const onOpen = vi.fn();
     render(<MonthChips months={MONTHS} onOpen={onOpen} />);
 
-    const january = screen.getByRole("button", { name: "jan 2027: antes do início" });
+    const january = screen.getByRole("button", { name: "janeiro de 2027: antes do início" });
     expect(january).toHaveAttribute("aria-disabled", "true");
-    expect(january).toHaveTextContent(/^jan 2027Antes do início$/);
+    expect(january).toHaveTextContent(/^JanAntes do início$/);
     await userEvent.click(january);
     expect(onOpen).not.toHaveBeenCalled();
   });
@@ -44,30 +47,36 @@ describe("MonthChips", () => {
     render(<MonthChips months={MONTHS} neutral />);
 
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
-    const november = screen.getByRole("listitem", { name: "nov 2026" });
+    const november = screen.getByRole("listitem", { name: "novembro de 2026" });
     expect(november).not.toHaveTextContent("Crítico");
     expect(november).not.toHaveTextContent("12.346");
   });
 
-  it("steps a low of 7 digits or more down a size and lets it break, so the chip never spills", () => {
+  it("sizes a low on one line from its cell's width and its character count, the minus sign and dots counted, so the chip never spills", () => {
     render(
       <MonthChips
         months={[
-          { month: "2026-11", lowest: "red", low: "-1234567.89", redDays: 30 },
-          { month: "2026-12", lowest: "red", low: "-123456.00", redDays: 31 },
+          { month: "2026-11", lowest: "red", low: "-12345.00", redDays: 30 },
+          { month: "2026-12", lowest: "red", low: "-1234.00", redDays: 31 },
+          { month: "2027-01", lowest: "red", low: "-123456.00", redDays: 31 },
+          { month: "2027-02", lowest: "green", low: "9999.00", redDays: 0 },
+          { month: "2027-03", lowest: "green", low: "12345.00", redDays: 0 },
         ]}
         onOpen={vi.fn()}
       />,
     );
-    expect(screen.getByText("-1.234.568")).toHaveClass("text-xs", "break-all");
-    expect(screen.getByText("-123.456")).toHaveClass("text-sm", "break-all");
-  });
-
-  it("says one red day in the singular", () => {
-    render(<MonthChips months={[{ month: "2026-11", lowest: "red", low: "-600.00", redDays: 1 }]} onOpen={vi.fn()} />);
-    expect(
-      screen.getByRole("button", { name: `nov 2026: Crítico, menor saldo -${R}600,00, 1 dia no vermelho` }),
-    ).toBeInTheDocument();
+    for (const [low, glyphs] of [
+      ["9.999", "5"],
+      ["-1.234", "6"],
+      ["12.345", "6"],
+      ["-12.345", "7"],
+      ["-123.456", "8"],
+    ]) {
+      const amount = screen.getByText(low);
+      expect(amount).toHaveClass("whitespace-nowrap", "text-(length:--low-fit)");
+      expect(amount.style.getPropertyValue("--glyphs")).toBe(glyphs);
+      expect(amount.closest("li, button")).toHaveClass("@container");
+    }
   });
 
   it("shows the low before the draft only where it moved, matched by month", () => {
@@ -79,10 +88,10 @@ describe("MonthChips", () => {
     render(<MonthChips months={MONTHS} before={before} />);
 
     const november = screen.getByRole("listitem", {
-      name: `nov 2026: Crítico, menor saldo -${R}12.345,67, 7 dias no vermelho, antes ${R}1.210,00`,
+      name: `novembro de 2026: menor saldo -${R}12.345,67, Crítico, antes ${R}1.210,00`,
     });
     expect(november).toHaveTextContent("antes 1.210");
-    const december = screen.getByRole("listitem", { name: `dez 2026: Folga, menor saldo ${R}2.500,99` });
+    const december = screen.getByRole("listitem", { name: `dezembro de 2026: menor saldo ${R}2.500,99, Folga` });
     expect(december).not.toHaveTextContent("antes");
   });
 });

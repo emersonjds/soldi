@@ -15,13 +15,17 @@ type ResponsiveSheetProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
-  /** Read by screen readers only. */
+  /** Read by screen readers only, unless `showDescription`. */
   description: string;
+  /** From 1024px the description shows under the title. */
+  showDescription?: boolean;
   children: ReactNode;
   /** Given: a `Voltar` button top-left, and Esc calls it instead of closing. */
   onBack?: () => void;
   /** Radix's: `preventDefault()` and focus another element than the one focused before opening. */
   onCloseAutoFocus?: (event: Event) => void;
+  /** From 1024px the dialog is 560px, Stitch's Lançar modal, instead of 512px. */
+  wide?: boolean;
 };
 
 /** Bottom sheet below 1024px, centered dialog from there. */
@@ -30,9 +34,11 @@ export const ResponsiveSheet = ({
   onOpenChange,
   title,
   description,
+  showDescription = false,
   children,
   onBack,
   onCloseAutoFocus,
+  wide = false,
 }: ResponsiveSheetProps) => {
   // A toast would sit over the sheet's rows; an undo toast is dismissed, which commits it.
   useEffect(() => {
@@ -74,10 +80,15 @@ export const ResponsiveSheet = ({
           showCloseButton={false}
           onEscapeKeyDown={escapeBack}
           onCloseAutoFocus={onCloseAutoFocus}
-          className="flex max-h-[90dvh] flex-col gap-6 overflow-y-auto rounded-3xl px-8 pt-8 pb-(--sheet-pb) [--sheet-pb:--spacing(8)] [scrollbar-width:none] has-data-[slot=responsive-sheet-footer]:scroll-pb-[calc(var(--sheet-pb)+7.5rem)] has-data-[slot=responsive-sheet-footer]:pb-0 sm:max-w-lg [&::-webkit-scrollbar]:hidden"
+          className={cn(
+            "flex max-h-[90dvh] flex-col gap-6 overflow-y-auto rounded-3xl px-8 pt-8 pb-(--sheet-pb) [--sheet-pb:--spacing(8)] [scrollbar-width:none] has-data-[slot=responsive-sheet-footer]:scroll-pb-[calc(var(--sheet-pb)+7.5rem)] has-data-[slot=responsive-sheet-footer]:pb-0 sm:max-w-lg [&::-webkit-scrollbar]:hidden",
+            wide && "sm:max-w-[560px]",
+          )}
         >
           <DialogTitle className={heading}>{title}</DialogTitle>
-          <DialogDescription className="sr-only">{description}</DialogDescription>
+          <DialogDescription className={showDescription ? "-mt-4 text-muted-foreground text-sm" : "sr-only"}>
+            {description}
+          </DialogDescription>
           {back}
           {close}
           {children}

@@ -1,46 +1,79 @@
+import { cn } from "@/lib/utils";
 import { useCurrency } from "@/shared/lib/currency";
-import { currencySymbol } from "@/shared/lib/money";
+import { currencySymbol, toInput } from "@/shared/lib/money";
 
 import { amountMask } from "./amount-input";
+
+/** Steps down from 1.000.000,00 and again from 100.000.000,00, so the widest amount fits w-48 at 375. */
+const sizeOf = (shown: string) => {
+  if (shown.length > 13) return "text-xl";
+  return shown.length > 10 ? "text-[26px]" : "text-[34px]";
+};
 
 /** The big `R$ 0,00` field (in the user's currency) of Lançar and Pagar, bank-style; `value` is the API decimal. */
 export const HeroAmount = ({
   id,
+  label = "Valor",
   value,
   onChange,
   invalid,
+  keypad = false,
 }: {
   id: string;
+  label?: string;
   value: string;
   onChange: (value: string) => void;
   invalid: boolean;
-}) => (
-  <div className="flex flex-col items-center gap-1">
-    <label
-      htmlFor={id}
-      className="font-semibold text-[11px] text-muted-foreground uppercase leading-4 tracking-[0.12em]"
-    >
-      Valor
-    </label>
-    <div className="flex items-baseline justify-center gap-2">
-      <span aria-hidden className="font-bold text-2xl text-muted-foreground">
-        {currencySymbol(useCurrency())}
-      </span>
-      <input
-        id={id}
-        // biome-ignore lint/a11y/noAutofocus: the sheet opens to type the amount; three taps in total.
-        autoFocus
-        placeholder="0,00"
-        {...amountMask({ value, onValueChange: onChange })}
-        aria-invalid={invalid}
-        aria-describedby={invalid ? `${id}-error` : undefined}
-        className="w-48 border-transparent border-b-2 bg-transparent text-center font-bold text-[34px] text-foreground tabular-nums leading-10 tracking-[-0.02em] outline-none placeholder:text-muted-foreground/50 focus:border-ring aria-invalid:border-destructive"
-      />
+  /** The on-screen keypad writes the amount, so the system keyboard stays closed; paste and hardware keys still work. */
+  keypad?: boolean;
+}) => {
+  const shown = toInput(value);
+  const comma = shown.lastIndexOf(",");
+  const cents = comma < 0 ? "" : shown.slice(comma);
+  return (
+    <div className="flex flex-col items-center gap-1">
+      <label
+        htmlFor={id}
+        className="font-semibold text-[11px] text-muted-foreground uppercase leading-4 tracking-[0.12em]"
+      >
+        {label}
+      </label>
+      <div className="flex items-baseline justify-center gap-2">
+        <span aria-hidden className="font-bold text-2xl text-muted-foreground">
+          {currencySymbol(useCurrency())}
+        </span>
+        <div
+          className={cn(
+            "grid w-48 overflow-hidden font-bold tabular-nums leading-10 tracking-[-0.02em] *:[grid-area:1/1]",
+            sizeOf(shown),
+          )}
+        >
+          <span aria-hidden className="text-center text-foreground">
+            {shown ? (
+              shown.slice(0, shown.length - cents.length)
+            ) : (
+              <span className="text-muted-foreground/50">0,00</span>
+            )}
+            <span className="text-muted-foreground">{cents}</span>
+          </span>
+          <input
+            id={id}
+            // biome-ignore lint/a11y/noAutofocus: the sheet opens to type the amount; three taps in total.
+            autoFocus
+            placeholder="0,00"
+            {...amountMask({ value, onValueChange: onChange })}
+            inputMode={keypad ? "none" : "numeric"}
+            aria-invalid={invalid}
+            aria-describedby={invalid ? `${id}-error` : undefined}
+            className="w-full border-transparent border-b-2 bg-transparent text-center text-transparent caret-foreground outline-none placeholder:text-transparent focus:border-ring aria-invalid:border-destructive"
+          />
+        </div>
+      </div>
+      {invalid && (
+        <p id={`${id}-error`} role="alert" className="text-destructive text-sm">
+          Informe um valor
+        </p>
+      )}
     </div>
-    {invalid && (
-      <p id={`${id}-error`} role="alert" className="text-destructive text-sm">
-        Informe um valor
-      </p>
-    )}
-  </div>
-);
+  );
+};

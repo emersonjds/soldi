@@ -35,18 +35,19 @@ test("Próximos meses paints the first two months the rent is owed Crítico and 
   await page.getByRole("button", { name: "Continuar" }).click();
   await page.getByRole("button", { name: "Ver meu mês" }).click();
   await page.getByRole("button", { name: "Pular" }).click();
-  await page.getByRole("dialog", { name: "Lançar" }).getByRole("button", { name: "Fechar" }).click();
+  await page
+    .getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ })
+    .getByRole("button", { name: "Fechar" })
+    .click();
 
   // A new user's bill is owed from today (D17): after the 28th, this month's rent is not.
   const first = today()[2] > 28 ? 1 : 0;
   const strip = page.getByRole("region", { name: "Próximos meses" });
   const chips = strip.getByRole("button", { name: /\d{4}/ });
-  await expect(chips).toHaveCount(6);
-  const red = /: Crítico, menor saldo -R\$\s[\d.]+,\d\d, \d+ dias? no vermelho$/;
+  await expect(chips).toHaveCount(12);
+  const red = /: menor saldo -R\$\s[\d.]+,\d\d, Crítico$/;
   await expect(chips.nth(first)).toHaveAccessibleName(red);
   await expect(chips.nth(first + 1)).toHaveAccessibleName(red);
-  await strip.getByRole("radio", { name: "12 meses" }).click();
-  await expect(chips).toHaveCount(12);
   // Rent with nothing coming in: the last months fall below -R$ 10.000.
   await expect(chips.nth(11)).toContainText(/-\d{2}\.\d{3}/);
   await expectNoClipped(page);

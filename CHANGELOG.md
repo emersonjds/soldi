@@ -7,6 +7,55 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.39.1
+
+> Headline: the end-to-end suite is green again
+
+### Web
+
+- A month's lowest balance in Próximos meses sizes itself from its cell's width, so a negative low such as -2.213 no longer spills out of the chip at 375 px or in the 1280 px rail (SOL-97).
+- The Next.js dev indicator is hidden in development, where it covered the Mês tab at 375 px.
+- The end-to-end flows expect the signed ledger amounts (`- R$`) and run the round-check bill flow at 1440 px, where the day chips live.
+
+### Server
+
+- The committed OpenAPI snapshot carries the release version again; the release step now refreshes it.
+
+## 0.39.0
+
+> Headline: Lançar as in the Stitch design
+
+### Web
+
+- Lançar has the Stitch header (Novo Registro on mobile, Novo Lançamento on desktop), the Entrada / Conta / Diário segment with icons, and the amount labelled "Valor do gasto" or "Valor da entrada" with lighter cents. A long amount steps its size down instead of scrolling sideways (SOL-84).
+- On a touch screen under 1024 px, an amount keypad is docked above Salvar Lançamento. It enters amounts like a calculator: digits are reais, the comma starts the cents.
+- The category row holds up to eight circles and scrolls with snap. A parent with subcategories shows "Sub:" pills, and the entry saves the child. "Nova categoria" moved into "Ver todas".
+- The date reads "Hoje (11 nov)" on desktop, then Ontem and Outra data. The note row has a clear button.
+- Repetir and Parcelar use the Stitch wording, and Parcelar says when the last installment absorbs the residual cents. "Criar como Conta Fixa" turns the entry into a fixed bill.
+- The desktop dialog is 560 px wide, with Cancelar and Salvar Lançamento in the footer. Enter saves from any field except the note.
+
+## 0.38.0
+
+> Headline: Lançamentos, Próximos meses and the glances as in the Stitch design
+
+### Web
+
+- Lançamentos has the Stitch title row, with Todos / Diário / Contas and "Ver o mês inteiro". Each day gets a muted band with "Saldo ao final" (or "Projeção" on future days) and its tier. Amounts are signed (+ in, - out), and each series shows a pill such as "↻ Saída · 3/12" (SOL-83).
+- Próximos meses is always a 4-column grid of twelve months. Each month shows its lowest balance and its tier word, so color is never the only signal. The horizon toggle is gone.
+- The Cofrinhos glance shows the total saved and the two largest goals, each with its share, bar and target. Para Onde Vai shows each group's share with one decimal, taken from the report.
+- Red words on the soft red fill use a darker text color to reach 4.5:1.
+
+## 0.37.0
+
+> Headline: Contas a pagar as in the Stitch design
+
+### Web
+
+- Contas a pagar has a Pagar pill on every open bill that pays at once, the same as the round check, with the same undo (SOL-82).
+- A paid bill shows a Pago badge, its name struck through and whether it was paid on time or late. An overdue bill shows a red ! in the check slot, "Atrasada desde {day}" and a Vencido badge.
+- The header shows "{n} de {total} pagas" and "Próxima: dia {dd} · {amount}", with the day chips on the right. The Todas / Pendentes / Pagas filter and the open total are gone.
+- On mobile the card is Contas do Mês with "{n} obrigações cadastradas". Each row has a status pill: Pagar pays, ✓ Pago undoes, Vencido pays.
+
 ## 0.36.0
 
 > Headline: Mês as in the Stitch design
