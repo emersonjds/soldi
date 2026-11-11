@@ -21,7 +21,7 @@ describe("MonthChips", () => {
     expect(screen.getByRole("list")).toHaveClass("grid-cols-4");
     const november = screen.getByRole("button", { name: `novembro de 2026: menor saldo -${R}12.345,67, Crítico` });
     expect(november).toHaveTextContent(/^Nov-12.346Crítico$/);
-    expect(november).toHaveClass("bg-expense-soft", "text-expense");
+    expect(november).toHaveClass("bg-expense-soft", "text-expense-text");
     expect(screen.getByText("Crítico")).toHaveClass("text-[11px]");
     const december = screen.getByRole("button", { name: `dezembro de 2026: menor saldo ${R}2.500,99, Folga` });
     expect(december).toHaveAttribute("aria-current", "date");

@@ -46,7 +46,7 @@ export const MonthChips = ({ months, neutral = false, current, onOpen, before }:
         const prior = shown ? priorLow(before, month, low) : null;
         const style = cn(
           chip,
-          shown && lowest === "red" ? "bg-expense-soft text-expense" : "bg-muted text-foreground",
+          shown && lowest === "red" ? "bg-expense-soft text-expense-text" : "bg-muted text-foreground",
           month === current && "ring-2 ring-primary",
         );
         const body = (

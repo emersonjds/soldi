@@ -49,6 +49,7 @@ value: soldi
   --income-text: #15803d;
   --expense: #dc2626;
   --expense-soft: #fee2e2;
+  --expense-text: #b91c1c;
   /* Split bar Diário: 3:1 on white, CVD-apart from primary and cat-11 (spec 2026-11-10 §4.1). */
   --split-daily: #0891b2;
 

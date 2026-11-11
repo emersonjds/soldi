@@ -83,7 +83,7 @@ export const BillStatus = ({
           label={`Pagar ${label}, vencida`}
           onClick={onPay}
           busy={busy}
-          tone="bg-expense-soft font-bold text-expense"
+          tone="bg-expense-soft font-bold text-expense-text"
           className="lg:hidden"
         >
           Vencido
