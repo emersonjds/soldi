@@ -315,6 +315,20 @@ export const REPORT: Schemas["CategoryReport"] = {
   ],
 };
 
+/** Ana's 2026 from her opening in August: a resgate month, a month with no income, and the bounds of each dot. */
+export const SAVINGS_YEAR: Schemas["SavingsYear"] = {
+  year: 2026,
+  income_total: "64482.80",
+  saved_total: "5416.53",
+  rate_pct: "8.4",
+  months: [
+    { month: "2026-11", income: "6500.00", saved: "776.13", rate_pct: "11.9" },
+    { month: "2026-10", income: "4000.00", saved: "-200.00", rate_pct: "-5.0" },
+    { month: "2026-09", income: "0.00", saved: "0.00", rate_pct: null },
+    { month: "2026-08", income: "53982.80", saved: "4840.40", rate_pct: "15.1" },
+  ],
+};
+
 const cofrinho = (
   { id, name, icon, color, target, deadline }: Schemas["Category"],
   rest: Partial<Schemas["Cofrinho"]> = {},

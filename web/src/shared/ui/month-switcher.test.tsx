@@ -2,7 +2,30 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import { MonthSwitcher } from "./month-switcher";
+import { MonthSwitcher, Switcher } from "./month-switcher";
+
+describe("Switcher", () => {
+  it("never goes past the end, by click or by key", () => {
+    const onShift = vi.fn();
+    render(
+      <Switcher
+        legend="Ano"
+        label="2026"
+        previousLabel="Ano anterior"
+        nextLabel="Próximo ano"
+        atStart={false}
+        atEnd
+        onShift={onShift}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Próximo ano" })).toBeDisabled();
+    fireEvent.keyDown(screen.getByRole("group", { name: "Ano" }), { key: "ArrowRight" });
+    expect(onShift).not.toHaveBeenCalled();
+    fireEvent.keyDown(screen.getByRole("group", { name: "Ano" }), { key: "ArrowLeft" });
+    expect(onShift).toHaveBeenLastCalledWith(-1);
+  });
+});
 
 describe("MonthSwitcher", () => {
   it("names the month and steps across years", async () => {

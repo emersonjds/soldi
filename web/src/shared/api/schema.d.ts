@@ -372,6 +372,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/reports/savings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["savings_year"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/settings": {
         parameters: {
             query?: never;
@@ -775,6 +791,35 @@ export interface components {
         };
         RequestPasswordReset: {
             email: string;
+        };
+        /**
+         * @description A month of the savings year: `income` without resgates and `saved` (Economia and its
+         *     cofrinhos minus resgates), as the month view's `totals.income` and `savings.saved`.
+         *     `rate_pct` is `saved` over `income` with one decimal, null when `income` is 0.
+         */
+        SavingsMonth: {
+            income: string;
+            /** @example 2026-11 */
+            month: string;
+            /** @example 11.9 */
+            rate_pct?: string | null;
+            saved: string;
+        };
+        /**
+         * @description A year's savings month by month, newest first, from the opening month (or January) to today's
+         *     month (or December); totals and `rate_pct` are over the listed months.
+         */
+        SavingsYear: {
+            income_total: string;
+            months: components["schemas"]["SavingsMonth"][];
+            /** @example 8.4 */
+            rate_pct?: string | null;
+            saved_total: string;
+            /**
+             * Format: int32
+             * @example 2026
+             */
+            year: number;
         };
         /**
          * @description Which entries of a series a change or a deletion reaches; `this` when absent.
@@ -2229,6 +2274,58 @@ export interface operations {
                 };
             };
             /** @description `month` is not `YYYY-MM` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    savings_year: {
+        parameters: {
+            query: {
+                /**
+                 * @description The year, `YYYY` from 2000 to 2100
+                 * @example 2026
+                 */
+                year: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Each month's income and savings, as the month view, from the opening month to today's month, newest first; empty outside them */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavingsYear"];
+                };
+            };
+            /** @description No `year` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description `year` is not a year from 2000 to 2100 */
             422: {
                 headers: {
                     [name: string]: unknown;

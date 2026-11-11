@@ -12,3 +12,12 @@ export const categoryReportQuery = (month: string) =>
   });
 
 export const useCategoryReport = (month: string) => useQuery(categoryReportQuery(month));
+
+export const savingsYearQuery = (year: number) =>
+  queryOptions({
+    queryKey: ["report", "savings", year],
+    queryFn: async () =>
+      dataOrThrow(await api.GET("/api/reports/savings", { params: { query: { year: String(year) } } })),
+  });
+
+export const useSavingsYear = (year: number) => useQuery(savingsYearQuery(year));
