@@ -96,7 +96,7 @@ export const ResponsiveSheet = ({ open, onOpenChange, title, description, childr
 export const ResponsiveSheetFooter = ({ children }: { children: ReactNode }) => (
   <div
     data-slot="responsive-sheet-footer"
-    className="sticky bottom-0 z-10 flex flex-col gap-2 bg-popover pt-3 pb-(--sheet-pb)"
+    className="sticky bottom-0 z-10 flex flex-col gap-2 border-border/60 border-t bg-popover pt-3 pb-(--sheet-pb)"
   >
     {children}
   </div>
