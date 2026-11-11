@@ -33,7 +33,10 @@ test("next month opens with this month's unpaid conta fixa and the red banner na
   await page.getByRole("button", { name: "Continuar" }).click();
   await page.getByRole("button", { name: "Ver meu mês" }).click();
   await page.getByRole("button", { name: "Pular" }).click();
-  await page.getByRole("dialog", { name: "Lançar" }).getByRole("button", { name: "Fechar" }).click();
+  await page
+    .getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ })
+    .getByRole("button", { name: "Fechar" })
+    .click();
 
   await page.getByRole("button", { name: "Próximo mês" }).click();
   const ledger = page.getByRole("region", { name: "Lançamentos" });

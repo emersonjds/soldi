@@ -2,7 +2,7 @@
 
 import { type FormEvent, type ReactNode, useState } from "react";
 
-import { Repeat } from "lucide-react";
+import { ArrowDown, CircleX, type LucideIcon, NotebookPen, ReceiptText, Repeat, ShoppingBag } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,8 @@ import {
   useTransactions,
   useUpdateTransaction,
 } from "@/entities/transaction/transaction-queries";
+import { useIsLg } from "@/hooks/use-lg";
+import { cn } from "@/lib/utils";
 import { ApiError, type Schemas } from "@/shared/api/client";
 import { useCurrency } from "@/shared/lib/currency";
 import { addMonths, monthYear, todayISO } from "@/shared/lib/date";
@@ -38,10 +40,10 @@ import { Simulation } from "./simulation";
 
 type Kind = Schemas["CategoryKind"];
 
-const KINDS: { value: Kind; label: string }[] = [
-  { value: "income", label: "Entrada" },
-  { value: "bill", label: "Saída" },
-  { value: "daily", label: "Diário" },
+const KINDS: { value: Kind; label: string; icon: LucideIcon }[] = [
+  { value: "income", label: "Entrada", icon: ArrowDown },
+  { value: "bill", label: "Conta", icon: ReceiptText },
+  { value: "daily", label: "Diário", icon: ShoppingBag },
 ];
 
 const PRESETS = ["2", "3", "6", "12", "other"];
@@ -98,6 +100,7 @@ const TransactionForm = ({
   const currency = useCurrency();
   const categories = useCategoryChips(draft.kind);
   const keypad = useKeypad();
+  const isLg = useIsLg();
   const thisMonth = useTransactions(todayISO().slice(0, 7));
   const settings = useSettings();
   const category = draft.category ?? categories.data?.[0];
@@ -224,15 +227,21 @@ const TransactionForm = ({
         aria-label="Tipo"
         className="grid w-full grid-cols-3 rounded-2xl bg-muted p-1"
       >
-        {KINDS.map((kind) => (
-          <ToggleGroupItem key={kind.value} value={kind.value} className={chip}>
-            {kind.label}
+        {KINDS.map(({ value, label, icon: Icon }) => (
+          <ToggleGroupItem
+            key={value}
+            value={value}
+            className={cn(chip, "gap-1.5", value === "income" && "text-income-text")}
+          >
+            <Icon aria-hidden className="size-4" />
+            {label}
           </ToggleGroupItem>
         ))}
       </ToggleGroup>
 
       <HeroAmount
         id="transaction-amount"
+        label={draft.kind === "income" ? "Valor da entrada" : "Valor do gasto"}
         value={draft.amount}
         onChange={(value) => set({ amount: value })}
         invalid={submitted && !amount}
@@ -251,6 +260,7 @@ const TransactionForm = ({
       <div className="flex flex-col gap-2">
         <DateChips
           legend="Quando foi?"
+          legendClassName={isLg ? "sr-only" : undefined}
           value={draft.date}
           min={settings.data?.opening_date}
           onChange={(date) => set({ date })}
@@ -386,18 +396,26 @@ const TransactionForm = ({
         </div>
       )}
 
-      <div className="flex flex-col gap-2">
-        <label htmlFor="transaction-note" className="font-semibold text-sm">
-          Observação
-        </label>
-        <Input
-          id="transaction-note"
+      <div className="flex items-center gap-2.5 rounded-xl bg-muted pl-3 focus-within:ring-3 focus-within:ring-ring/50">
+        <NotebookPen aria-hidden className="size-5 shrink-0 text-muted-foreground" />
+        <input
+          aria-label="Observação"
           value={draft.note}
           onChange={(event) => set({ note: event.target.value })}
-          placeholder="Opcional"
+          placeholder="Adicionar nota ou observação..."
           maxLength={200}
-          className="h-12 rounded-xl bg-muted text-base md:text-base"
+          className="h-12 min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground"
         />
+        {draft.note && (
+          <button
+            type="button"
+            aria-label="Limpar observação"
+            onClick={() => set({ note: "" })}
+            className="flex size-11 shrink-0 items-center justify-center rounded-full text-muted-foreground focus-visible:outline-2 focus-visible:outline-ring"
+          >
+            <CircleX aria-hidden className="size-5" />
+          </button>
+        )}
       </div>
 
       {series && transaction && (
@@ -469,7 +487,10 @@ export const TransactionSheet = ({
   const update = useUpdateTransaction();
   const createBill = useCreateBill();
   const [converting, setConverting] = useState<Source>();
+  const isLg = useIsLg();
   const failed = () => toast.error("Não foi possível salvar o lançamento.");
+  let title = isLg ? "Novo Lançamento" : "Novo Registro";
+  if (transaction) title = "Editar lançamento";
 
   const save = (fields: NewTransaction, scope?: Scope, moving = false) => {
     onOpenChange(false);
@@ -550,8 +571,9 @@ export const TransactionSheet = ({
     <ResponsiveSheet
       open={open}
       onOpenChange={onOpenChange}
-      title={transaction ? "Editar lançamento" : "Lançar"}
-      description="Entrada, conta ou gasto do dia."
+      title={title}
+      description="Cadastre uma movimentação pontual ou recorrente"
+      showDescription
     >
       {hint && <p className="rounded-xl bg-secondary px-4 py-3 font-medium text-primary text-sm">{hint}</p>}
       <TransactionForm

@@ -116,7 +116,7 @@ describe("AppShell", () => {
     const tabs = screen.getByRole("navigation", { name: "Navegação principal" });
     await userEvent.click(within(tabs).getByRole("button", { name: "Lançar" }));
 
-    expect(await screen.findByRole("dialog", { name: "Lançar" })).toBeInTheDocument();
+    expect(await screen.findByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ })).toBeInTheDocument();
   });
 
   it("saves a Diário in three taps from the floating button: Lançar, amount, Salvar", async () => {
@@ -142,8 +142,8 @@ describe("AppShell", () => {
 
     const tabs = screen.getByRole("navigation", { name: "Navegação principal" });
     await userEvent.click(within(tabs).getByRole("button", { name: "Lançar" }));
-    await userEvent.click(await screen.findByRole("radio", { name: "Saída" }));
-    await userEvent.type(screen.getByLabelText("Valor"), "12");
+    await userEvent.click(await screen.findByRole("radio", { name: "Conta" }));
+    await userEvent.type(screen.getByLabelText(/^Valor d/), "12");
     await userEvent.click(await screen.findByRole("button", { name: "Transformar em conta fixa" }));
 
     expect(await screen.findByRole("dialog", { name: "Nova conta" })).toBeInTheDocument();
@@ -155,7 +155,7 @@ describe("AppShell", () => {
     const sidebar = screen.getByRole("complementary", { name: "Barra lateral" });
     expect(within(sidebar).queryByRole("button", { name: "Lançar" })).not.toBeInTheDocument();
     await userEvent.click(within(screen.getByRole("banner")).getByRole("button", { name: "Lançar" }));
-    expect(await screen.findByRole("dialog", { name: "Lançar" })).toBeInTheDocument();
+    expect(await screen.findByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ })).toBeInTheDocument();
 
     await userEvent.keyboard("{Escape}");
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
@@ -193,7 +193,7 @@ describe("AppShell", () => {
         .map((item) => item.textContent),
     ).toEqual(["Mês", "Para onde vai", "Cofrinhos", "Posso comprar isso?"]);
     await userEvent.click(simulate);
-    const sheet = await screen.findByRole("dialog", { name: "Lançar" });
+    const sheet = await screen.findByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ });
     expect(within(sheet).getByRole("switch", { name: "Simular" })).toBeChecked();
     expect(within(sheet).getByRole("radio", { name: "Diário" })).toBeChecked();
 
@@ -201,19 +201,23 @@ describe("AppShell", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     await userEvent.click(within(screen.getByRole("banner")).getByRole("button", { name: "Lançar" }));
     expect(
-      within(await screen.findByRole("dialog", { name: "Lançar" })).getByRole("switch", { name: "Simular" }),
+      within(await screen.findByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ })).getByRole("switch", {
+        name: "Simular",
+      }),
     ).not.toBeChecked();
 
     await userEvent.keyboard("{Escape}");
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     await userEvent.click(simulate);
-    await screen.findByRole("dialog", { name: "Lançar" });
+    await screen.findByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ });
     await userEvent.keyboard("{Escape}");
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     const tabs = screen.getByRole("navigation", { name: "Navegação principal" });
     await userEvent.click(within(tabs).getByRole("button", { name: "Lançar" }));
     expect(
-      within(await screen.findByRole("dialog", { name: "Lançar" })).getByRole("switch", { name: "Simular" }),
+      within(await screen.findByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ })).getByRole("switch", {
+        name: "Simular",
+      }),
     ).not.toBeChecked();
   });
 

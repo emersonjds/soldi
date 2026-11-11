@@ -19,6 +19,7 @@ const toDate = (date: string) => {
 export const DateField = ({
   id,
   label,
+  placeholder = "Escolher data",
   value,
   onChange,
   min = "2000-01-01",
@@ -27,6 +28,8 @@ export const DateField = ({
 }: {
   id?: string;
   label: string;
+  /** Read while `value` is empty. */
+  placeholder?: string;
   value: string;
   onChange: (date: string) => void;
   min?: string;
@@ -48,7 +51,7 @@ export const DateField = ({
         )}
       >
         <CalendarDays className="size-5 shrink-0 text-muted-foreground" aria-hidden />
-        {shown ?? <span className="text-muted-foreground">Escolher data</span>}
+        {shown ?? <span className="text-muted-foreground">{placeholder}</span>}
       </PopoverTrigger>
       <PopoverContent
         align="start"

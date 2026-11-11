@@ -29,7 +29,10 @@ test("an entry repeated 3x shows in three months; edit and delete reach this one
   await page.getByRole("button", { name: "Pular por agora" }).click();
   await page.getByRole("button", { name: "Ver meu mês" }).click();
   await page.getByRole("button", { name: "Pular" }).click();
-  await page.getByRole("dialog", { name: "Lançar" }).getByRole("button", { name: "Fechar" }).click();
+  await page
+    .getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ })
+    .getByRole("button", { name: "Fechar" })
+    .click();
 
   const [first, second, third] = [monthFrom(-2), monthFrom(-1), monthFrom(0)];
   expect((await page.request.patch("/api/settings", { data: { opening_date: `${first}-01` } })).ok()).toBe(true);
@@ -43,8 +46,8 @@ test("an entry repeated 3x shows in three months; edit and delete reach this one
   };
 
   await page.getByRole("navigation", { name: "Navegação principal" }).getByRole("button", { name: "Lançar" }).click();
-  const launch = page.getByRole("dialog", { name: "Lançar" });
-  await launch.getByRole("radio", { name: "Saída" }).click();
+  const launch = page.getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ });
+  await launch.getByRole("radio", { name: "Conta" }).click();
   await launch.getByLabel("Valor").fill("100,00");
   await pickDate(launch, "Outra data", `${first}-01`);
   await launch.getByLabel("Observação").fill("Internet");
@@ -109,7 +112,10 @@ test("a 12x series shrinks to 6 from its first entry and grows back to 12 from i
   await page.getByRole("button", { name: "Pular por agora" }).click();
   await page.getByRole("button", { name: "Ver meu mês" }).click();
   await page.getByRole("button", { name: "Pular" }).click();
-  await page.getByRole("dialog", { name: "Lançar" }).getByRole("button", { name: "Fechar" }).click();
+  await page
+    .getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ })
+    .getByRole("button", { name: "Fechar" })
+    .click();
 
   const [first, sixth, seventh, twelfth] = [monthFrom(0), monthFrom(5), monthFrom(6), monthFrom(11)];
   expect((await page.request.patch("/api/settings", { data: { opening_date: `${first}-01` } })).ok()).toBe(true);
@@ -131,8 +137,8 @@ test("a 12x series shrinks to 6 from its first entry and grows back to 12 from i
   };
 
   await page.getByRole("navigation", { name: "Navegação principal" }).getByRole("button", { name: "Lançar" }).click();
-  const launch = page.getByRole("dialog", { name: "Lançar" });
-  await launch.getByRole("radio", { name: "Saída" }).click();
+  const launch = page.getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ });
+  await launch.getByRole("radio", { name: "Conta" }).click();
   await launch.getByLabel("Valor").fill("100,00");
   await pickDate(launch, "Outra data", `${first}-01`);
   await launch.getByLabel("Observação").fill("Internet");
@@ -168,7 +174,10 @@ test("a 12x series on the 5th moves to the 10th from its third entry on", async 
   await page.getByRole("button", { name: "Pular por agora" }).click();
   await page.getByRole("button", { name: "Ver meu mês" }).click();
   await page.getByRole("button", { name: "Pular" }).click();
-  await page.getByRole("dialog", { name: "Lançar" }).getByRole("button", { name: "Fechar" }).click();
+  await page
+    .getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ })
+    .getByRole("button", { name: "Fechar" })
+    .click();
 
   const [first, second, third, twelfth] = [monthFrom(0), monthFrom(1), monthFrom(2), monthFrom(11)];
   expect((await page.request.patch("/api/settings", { data: { opening_date: `${first}-01` } })).ok()).toBe(true);
@@ -182,8 +191,8 @@ test("a 12x series on the 5th moves to the 10th from its third entry on", async 
   const onDay = (date: string) => page.locator(`#dia-${date}`).getByRole("button", { name: /^Internet/ });
 
   await page.getByRole("navigation", { name: "Navegação principal" }).getByRole("button", { name: "Lançar" }).click();
-  const launch = page.getByRole("dialog", { name: "Lançar" });
-  await launch.getByRole("radio", { name: "Saída" }).click();
+  const launch = page.getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ });
+  await launch.getByRole("radio", { name: "Conta" }).click();
   await launch.getByLabel("Valor").fill("100,00");
   await pickDate(launch, "Outra data", `${first}-05`);
   await launch.getByLabel("Observação").fill("Internet");

@@ -224,12 +224,12 @@ describe("CategoryBreakdown by group", () => {
       }),
     );
 
-    const sheet = await screen.findByRole("dialog", { name: "Lançar" });
+    const sheet = await screen.findByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ });
     expect(await within(sheet).findByRole("radio", { name: "Economia › Reserva" })).toHaveAttribute(
       "aria-checked",
       "true",
     );
-    expect(within(sheet).getByRole("radio", { name: "Saída" })).toBeChecked();
+    expect(within(sheet).getByRole("radio", { name: "Conta" })).toBeChecked();
   });
 
   it("opens Lançar as Diário for a daily group", async () => {
@@ -240,10 +240,10 @@ describe("CategoryBreakdown by group", () => {
       await within(panel("Mercado")).findByRole("button", { name: "Adicionar lançamento em Mercado" }),
     );
 
-    const sheet = await screen.findByRole("dialog", { name: "Lançar" });
+    const sheet = await screen.findByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ });
     expect(await within(sheet).findByRole("radio", { name: "Mercado" })).toHaveAttribute("aria-checked", "true");
     expect(within(sheet).getByRole("radio", { name: "Diário" })).toBeChecked();
-    expect(within(sheet).getByRole("button", { name: "Hoje" })).toHaveAttribute("aria-pressed", "true");
+    expect(within(sheet).getByRole("button", { name: /^Hoje/ })).toHaveAttribute("aria-pressed", "true");
   });
 
   it("opens Lançar as Entrada on Salário from the Entradas tab", async () => {
@@ -255,7 +255,7 @@ describe("CategoryBreakdown by group", () => {
       await within(panel("Salário")).findByRole("button", { name: "Adicionar lançamento em Salário" }),
     );
 
-    const sheet = await screen.findByRole("dialog", { name: "Lançar" });
+    const sheet = await screen.findByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ });
     expect(await within(sheet).findByRole("radio", { name: "Salário" })).toHaveAttribute("aria-checked", "true");
     expect(within(sheet).getByRole("radio", { name: "Entrada" })).toBeChecked();
   });
@@ -268,8 +268,8 @@ describe("CategoryBreakdown by group", () => {
       await within(panel("Economia")).findByRole("button", { name: "Adicionar lançamento em Economia" }),
     );
 
-    const sheet = await screen.findByRole("dialog", { name: "Lançar" });
-    expect(within(sheet).getByRole("radio", { name: "Saída" })).toBeChecked();
+    const sheet = await screen.findByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ });
+    expect(within(sheet).getByRole("radio", { name: "Conta" })).toBeChecked();
     expect(await within(sheet).findByRole("radio", { name: "Economia" })).toHaveAttribute("aria-checked", "true");
   });
 
@@ -281,9 +281,9 @@ describe("CategoryBreakdown by group", () => {
       await within(panel("Mercado")).findByRole("button", { name: "Adicionar lançamento em Mercado" }),
     );
 
-    const sheet = await screen.findByRole("dialog", { name: "Lançar" });
+    const sheet = await screen.findByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ });
     expect(within(sheet).getByRole("button", { name: "Outra data, 01/10/2026" })).toBeInTheDocument();
-    expect(within(sheet).getByRole("button", { name: "Hoje" })).toHaveAttribute("aria-pressed", "false");
+    expect(within(sheet).getByRole("button", { name: /^Hoje/ })).toHaveAttribute("aria-pressed", "false");
   });
 
   it("offers no Adicionar for a category that was archived", async () => {
@@ -302,7 +302,7 @@ describe("CategoryBreakdown by group", () => {
     await userEvent.click(
       await within(panel("Aluguel")).findByRole("button", { name: "Adicionar lançamento em Aluguel" }),
     );
-    await userEvent.type(await screen.findByLabelText("Valor"), "12");
+    await userEvent.type(await screen.findByLabelText(/^Valor d/), "12");
 
     await userEvent.click(await screen.findByRole("button", { name: "Transformar em conta fixa" }));
 

@@ -178,9 +178,9 @@ describe("Cofrinhos", () => {
 
       await userEvent.click(within(await region("Reserva")).getByRole("button", { name: "Guardar em Reserva" }));
 
-      await screen.findByRole("dialog", { name: "Lançar" });
+      await screen.findByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ });
       expect(await screen.findByRole("radio", { name: "Economia › Reserva" })).toHaveAttribute("aria-checked", "true");
-      expect(screen.getByRole("radio", { name: "Saída" })).toBeChecked();
+      expect(screen.getByRole("radio", { name: "Conta" })).toBeChecked();
     });
 
     it("Resgatar opens the sheet on the form, which refuses more than the balance, and closing resets it", async () => {
@@ -214,7 +214,7 @@ describe("Cofrinhos", () => {
       expect(within(viagem).queryByRole("button", { name: "Guardar em Viagem" })).not.toBeInTheDocument();
       await userEvent.click(within(viagem).getByRole("button", { name: "Guardar primeiro valor em Viagem" }));
 
-      await screen.findByRole("dialog", { name: "Lançar" });
+      await screen.findByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ });
       expect(await screen.findByRole("radio", { name: "Economia › Viagem" })).toHaveAttribute("aria-checked", "true");
     });
 
@@ -254,7 +254,7 @@ describe("Cofrinhos", () => {
       await userEvent.click(within(reserva).getByRole("button", { name: "Guardar em Reserva" }));
 
       expect(await screen.findByText("Não foi possível carregar as categorias.")).toBeInTheDocument();
-      expect(screen.queryByRole("dialog", { name: "Lançar" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ })).not.toBeInTheDocument();
       await waitFor(() => expect(fetched().length).toBeGreaterThan(before));
     });
   });
@@ -360,7 +360,9 @@ describe("Cofrinhos", () => {
 
     await userEvent.click(within(await detail("Reserva")).getByRole("button", { name: "Guardar" }));
     await userEvent.click(
-      within(await screen.findByRole("dialog", { name: "Lançar" })).getByRole("button", { name: "Fechar" }),
+      within(await screen.findByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ })).getByRole("button", {
+        name: "Fechar",
+      }),
     );
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   });
@@ -370,9 +372,9 @@ describe("Cofrinhos", () => {
 
     await userEvent.click(within(await detail("Reserva")).getByRole("button", { name: "Guardar" }));
 
-    await screen.findByRole("dialog", { name: "Lançar" });
+    await screen.findByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ });
     expect(await screen.findByRole("radio", { name: "Economia › Reserva" })).toHaveAttribute("aria-checked", "true");
-    expect(screen.getByRole("radio", { name: "Saída" })).toBeChecked();
+    expect(screen.getByRole("radio", { name: "Conta" })).toBeChecked();
   });
 
   it("Resgatar takes an amount, a day and a note", async () => {

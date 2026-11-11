@@ -27,7 +27,7 @@ test("a new user walks the four-card tour after onboarding and lands on Lançar 
   }
   await page.getByRole("button", { name: "Começar" }).click();
 
-  const sheet = page.getByRole("dialog", { name: "Lançar" });
+  const sheet = page.getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ });
   await expect(sheet).toBeVisible();
   await expect(sheet.getByText("Comece pela sua primeira entrada do mês")).toBeVisible();
   await expect(sheet.getByRole("radio", { name: "Entrada" })).toBeChecked();
@@ -36,5 +36,5 @@ test("a new user walks the four-card tour after onboarding and lands on Lançar 
   await page.reload();
   await expect(page.getByRole("region", { name: "Saldo hoje" })).toBeVisible();
   await expect(page).toHaveURL(/\/mes$/);
-  await expect(page.getByRole("dialog", { name: "Lançar" })).toHaveCount(0);
+  await expect(page.getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ })).toHaveCount(0);
 });

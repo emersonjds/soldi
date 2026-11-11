@@ -18,7 +18,10 @@ test("a cofrinho fills from a Saída in Economia and empties with a resgate", as
   await page.getByRole("button", { name: "Pular por agora" }).click();
   await page.getByRole("button", { name: "Ver meu mês" }).click();
   await page.getByRole("button", { name: "Pular" }).click();
-  await page.getByRole("dialog", { name: "Lançar" }).getByRole("button", { name: "Fechar" }).click();
+  await page
+    .getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ })
+    .getByRole("button", { name: "Fechar" })
+    .click();
 
   const nav = page.getByRole("navigation", { name: "Navegação principal" });
   await nav.getByRole("link", { name: "Economia" }).click();
@@ -34,8 +37,8 @@ test("a cofrinho fills from a Saída in Economia and empties with a resgate", as
   const reservaCard = page.getByRole("region", { name: "Reserva" });
   await expect(reservaCard.getByRole("button", { name: "Resgatar" })).toHaveCount(0);
   await reservaCard.getByRole("button", { name: "Guardar primeiro valor" }).click();
-  const lancar = page.getByRole("dialog", { name: "Lançar" });
-  await expect(lancar.getByRole("radio", { name: "Saída" })).toBeChecked();
+  const lancar = page.getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ });
+  await expect(lancar.getByRole("radio", { name: "Conta" })).toBeChecked();
   await expect(lancar.getByRole("radio", { name: "Economia › Reserva" })).toHaveAttribute("aria-checked", "true");
   await lancar.getByLabel("Valor").fill("200,00");
   await lancar.getByRole("button", { name: "Salvar" }).click();
@@ -106,7 +109,10 @@ test("Economia do ano lists each month's saving and opens it on Mês, unclipped 
   await page.getByRole("button", { name: "Pular por agora" }).click();
   await page.getByRole("button", { name: "Ver meu mês" }).click();
   await page.getByRole("button", { name: "Pular" }).click();
-  await page.getByRole("dialog", { name: "Lançar" }).getByRole("button", { name: "Fechar" }).click();
+  await page
+    .getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ })
+    .getByRole("button", { name: "Fechar" })
+    .click();
 
   // The server's São Paulo calendar, not the runner's clock.
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());

@@ -31,6 +31,7 @@ const ALUGUEL_ROW = TRANSACTIONS[1];
 const MEMBER = { ...ALUGUEL_ROW, series: { id: "s1", position: 3, total: 12, last_date: "2027-09-04" } };
 
 const FOOTER = '[data-slot="responsive-sheet-footer"]';
+const DESCRIPTION = "Cadastre uma movimentação pontual ou recorrente";
 
 type SheetProps = Parameters<typeof TransactionSheet>[0];
 
@@ -76,12 +77,19 @@ describe("TransactionSheet", () => {
   it("saves a Diário with the defaults: type the amount, tap Salvar", async () => {
     const { onOpenChange, sent } = setup();
 
-    const dialog = await screen.findByRole("dialog", { name: "Lançar" });
+    const dialog = await screen.findByRole("dialog", { name: "Novo Registro" });
     expect(dialog).toHaveAttribute("data-slot", "sheet-content");
+    expect(dialog).toHaveAccessibleDescription(DESCRIPTION);
+    expect(within(dialog).getByText(DESCRIPTION)).toHaveClass("sr-only");
     expect(within(dialog).getByRole("button", { name: "Salvar" }).closest(FOOTER)).not.toBeNull();
     expect(await screen.findByRole("radio", { name: "Mercado" })).toHaveAttribute("aria-checked", "true");
     expect(screen.getByRole("radio", { name: "Diário" })).toBeChecked();
     await userEvent.keyboard("35,90");
+    expect(screen.getByLabelText("Valor do gasto")).toHaveValue("35,90");
+    expect(screen.getByText(",90")).toHaveClass("text-muted-foreground");
+    expect(screen.getByText("Quando foi?")).not.toHaveClass("sr-only");
+    expect(screen.getByRole("button", { name: "Hoje" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "Outra data" })).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
 
     expect(await sent("POST")).toEqual({
@@ -104,7 +112,7 @@ describe("TransactionSheet", () => {
     }));
     setup();
 
-    const amount = await screen.findByLabelText("Valor");
+    const amount = await screen.findByLabelText(/^Valor d/);
     expect(amount).toHaveAttribute("inputmode", "none");
     await userEvent.click(screen.getByRole("button", { name: "4" }));
     await userEvent.click(screen.getByRole("button", { name: "2" }));
@@ -114,7 +122,7 @@ describe("TransactionSheet", () => {
   it("keeps the numeric system keyboard and no keypad elsewhere", async () => {
     setup();
 
-    expect(await screen.findByLabelText("Valor")).toHaveAttribute("inputmode", "numeric");
+    expect(await screen.findByLabelText(/^Valor d/)).toHaveAttribute("inputmode", "numeric");
     expect(screen.queryByRole("button", { name: "Apagar" })).not.toBeInTheDocument();
   });
 
@@ -140,9 +148,16 @@ describe("TransactionSheet", () => {
     expect(await screen.findByRole("radio", { name: "Salário" })).toHaveAttribute("aria-checked", "true");
     await userEvent.click(screen.getByRole("button", { name: "Ver todas" }));
     await userEvent.click(await screen.findByRole("option", { name: "Extra" }));
-    await userEvent.type(screen.getByLabelText("Valor"), "abc1.250,00");
+    await userEvent.type(screen.getByLabelText("Valor da entrada"), "abc1.250,00");
     await userEvent.click(screen.getByRole("button", { name: "Ontem" }));
-    await userEvent.type(screen.getByLabelText("Observação"), "Freela");
+    const note = screen.getByRole("textbox", { name: "Observação" });
+    expect(note).toHaveAttribute("placeholder", "Adicionar nota ou observação...");
+    expect(screen.queryByRole("button", { name: "Limpar observação" })).not.toBeInTheDocument();
+    await userEvent.type(note, "Rascunho");
+    await userEvent.click(screen.getByRole("button", { name: "Limpar observação" }));
+    expect(note).toHaveValue("");
+    expect(screen.queryByRole("button", { name: "Limpar observação" })).not.toBeInTheDocument();
+    await userEvent.type(note, "Freela");
     await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
 
     expect(await sent("POST")).toEqual({
@@ -161,7 +176,7 @@ describe("TransactionSheet", () => {
     );
 
     expect(await screen.findByRole("radio", { name: "Economia › Reserva" })).toHaveAttribute("aria-checked", "true");
-    expect(screen.getByRole("radio", { name: "Saída" })).toBeChecked();
+    expect(screen.getByRole("radio", { name: "Conta" })).toBeChecked();
     await userEvent.keyboard("200,00");
     await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
 
@@ -171,7 +186,7 @@ describe("TransactionSheet", () => {
   it("takes any date from the date input", async () => {
     const { sent } = setup();
 
-    await userEvent.type(await screen.findByLabelText("Valor"), "10");
+    await userEvent.type(await screen.findByLabelText(/^Valor d/), "10");
     await pickDate("Outra data", "2026-10-28");
     await waitFor(() => expect(screen.getByRole("button", { name: "Outra data, 28/10/2026" })).toHaveFocus());
     expect(screen.getByRole("button", { name: "Hoje" })).toHaveAttribute("aria-pressed", "false");
@@ -183,10 +198,10 @@ describe("TransactionSheet", () => {
   it("offers no day before the opening date: Ontem leaves and the calendar disables it", async () => {
     setup({}, { "GET /api/settings": { status: 200, body: { ...SETTINGS, opening_date: "2026-11-05" } } });
 
-    const dialog = await screen.findByRole("dialog", { name: "Lançar" });
+    const dialog = await screen.findByRole("dialog", { name: "Novo Registro" });
     await waitFor(() => expect(within(dialog).queryByRole("button", { name: "Ontem" })).not.toBeInTheDocument());
     expect(within(dialog).getByRole("button", { name: "Hoje" })).toBeInTheDocument();
-    await userEvent.click(within(dialog).getByRole("button", { name: "Outra data, 05/11/2026" }));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Outra data" }));
 
     expect(await screen.findByRole("button", { name: "quarta-feira, 4 de novembro de 2026" })).toBeDisabled();
   });
@@ -200,7 +215,7 @@ describe("TransactionSheet", () => {
     expect(row).toHaveAttribute("aria-invalid", "true");
     expect(row).toHaveAccessibleDescription("Escolha uma categoria");
 
-    await userEvent.type(screen.getByLabelText("Valor"), "0");
+    await userEvent.type(screen.getByLabelText(/^Valor d/), "0");
     await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
     expect(screen.getByText("Informe um valor")).toBeInTheDocument();
     expect(requests.filter((request) => request.method === "POST")).toHaveLength(0);
@@ -210,11 +225,11 @@ describe("TransactionSheet", () => {
     const { onOpenChange, sent } = setup({ transaction: MERCADO_ROW });
 
     expect(await screen.findByRole("dialog", { name: "Editar lançamento" })).toBeInTheDocument();
-    const amount = screen.getByLabelText("Valor");
+    const amount = screen.getByLabelText(/^Valor d/);
     expect(amount).toHaveValue("184,31");
     expect(screen.getByLabelText("Observação")).toHaveValue("Compras da semana");
     expect(await screen.findByRole("radio", { name: "Mercado" })).toHaveAttribute("aria-checked", "true");
-    expect(screen.getByRole("button", { name: "Outra data, 05/11/2026" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Hoje" })).toHaveAttribute("aria-pressed", "true");
     await userEvent.clear(amount);
     await userEvent.type(amount, "20000");
     await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
@@ -233,7 +248,7 @@ describe("TransactionSheet", () => {
   it("tells when the server refuses", async () => {
     setup({}, { "POST /api/transactions": { status: 422, body: problem(422, "amount") } });
 
-    await userEvent.type(await screen.findByLabelText("Valor"), "5");
+    await userEvent.type(await screen.findByLabelText(/^Valor d/), "5");
     await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
 
     expect(await screen.findByText("Não foi possível salvar o lançamento.")).toBeInTheDocument();
@@ -258,7 +273,7 @@ describe("TransactionSheet", () => {
     await userEvent.type(within(create).getByLabelText("Nome"), "Carro{Enter}");
 
     expect(await screen.findByRole("radio", { name: "Carro" })).toHaveAttribute("aria-checked", "true");
-    expect(screen.getByRole("dialog", { name: "Lançar" })).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Novo Registro" })).toBeInTheDocument();
     expect(requests.filter((request) => request.url.endsWith("/api/transactions"))).toHaveLength(0);
   });
 
@@ -268,7 +283,7 @@ describe("TransactionSheet", () => {
     const repeat = await screen.findByRole("switch", { name: "Repetir" });
     expect(repeat).not.toBeChecked();
     expect(screen.queryByRole("radio", { name: "12x" })).not.toBeInTheDocument();
-    await userEvent.type(screen.getByLabelText("Valor"), "15000");
+    await userEvent.type(screen.getByLabelText(/^Valor d/), "15000");
     await userEvent.click(repeat);
 
     expect(screen.getByRole("radio", { name: "12x" })).toBeChecked();
@@ -294,7 +309,7 @@ describe("TransactionSheet", () => {
   it("takes Outro from 2 to 60 months, inline error otherwise, and warns about short months from day 29", async () => {
     const { requests, sent } = setup();
 
-    await userEvent.type(await screen.findByLabelText("Valor"), "1000");
+    await userEvent.type(await screen.findByLabelText(/^Valor d/), "1000");
     await pickDate("Outra data", "2026-10-31");
     await userEvent.click(screen.getByRole("switch", { name: "Repetir" }));
     expect(screen.getByText("Em meses mais curtos, cai no último dia.")).toBeInTheDocument();
@@ -385,7 +400,7 @@ describe("TransactionSheet", () => {
     await userEvent.clear(custom);
     await userEvent.type(custom, "15");
     expect(screen.getByText("+3× R$ 1.200,00 · até dez 2027")).toBeInTheDocument();
-    const amount = screen.getByLabelText("Valor");
+    const amount = screen.getByLabelText(/^Valor d/);
     await userEvent.clear(amount);
     expect(screen.getByText("+3× · até dez 2027")).toBeInTheDocument();
     await userEvent.type(amount, "9990");
@@ -434,7 +449,7 @@ describe("TransactionSheet", () => {
   it("saves an edit to the only member left in a series without a count", async () => {
     const { sent } = setup({ transaction: { ...MEMBER, series: { ...MEMBER.series, position: 1, total: 1 } } }, resize);
 
-    const amount = await screen.findByLabelText("Valor");
+    const amount = await screen.findByLabelText(/^Valor d/);
     await userEvent.clear(amount);
     await userEvent.type(amount, "9990");
     await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
@@ -575,7 +590,7 @@ describe("TransactionSheet", () => {
     const link = "Transformar em conta fixa";
     expect(await screen.findByRole("switch", { name: "Repetir" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: link })).not.toBeInTheDocument();
-    await userEvent.click(screen.getByRole("radio", { name: "Saída" }));
+    await userEvent.click(screen.getByRole("radio", { name: "Conta" }));
     expect(screen.getByText(/Prefere uma conta fixa, sem data pra acabar\?/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole("switch", { name: "Repetir" }));
     expect(screen.queryByRole("button", { name: link })).not.toBeInTheDocument();
@@ -597,9 +612,9 @@ describe("TransactionSheet", () => {
       },
     );
 
-    await userEvent.click(await screen.findByRole("radio", { name: "Saída" }));
+    await userEvent.click(await screen.findByRole("radio", { name: "Conta" }));
     expect(await screen.findByRole("radio", { name: "Aluguel" })).toHaveAttribute("aria-checked", "true");
-    await userEvent.type(screen.getByLabelText("Valor"), "120000");
+    await userEvent.type(screen.getByLabelText(/^Valor d/), "120000");
     await userEvent.click(screen.getByRole("button", { name: "Transformar em conta fixa" }));
     expect(requests.some((request) => request.method === "POST")).toBe(false);
     await userEvent.click(screen.getByRole("button", { name: "Criar conta" }));
@@ -622,7 +637,7 @@ describe("TransactionSheet", () => {
       },
     );
 
-    await userEvent.type(await screen.findByLabelText("Valor"), "100");
+    await userEvent.type(await screen.findByLabelText(/^Valor d/), "100");
     await userEvent.type(screen.getByLabelText("Observação"), "Internet");
     await userEvent.click(screen.getByRole("button", { name: "Transformar em conta fixa" }));
     await userEvent.click(screen.getByRole("button", { name: "Criar conta" }));
@@ -638,7 +653,7 @@ describe("TransactionSheet", () => {
       { "POST /api/transactions": { status: 422, body: problem(422, "amount") } },
     );
 
-    await userEvent.type(await screen.findByLabelText("Valor"), "100");
+    await userEvent.type(await screen.findByLabelText(/^Valor d/), "100");
     await userEvent.click(screen.getByRole("button", { name: "Transformar em conta fixa" }));
     await userEvent.click(screen.getByRole("button", { name: "Criar conta" }));
 
@@ -666,7 +681,7 @@ describe("TransactionSheet", () => {
   it("offers no Transformar em conta fixa in Editar when the stored entry is not a Saída", async () => {
     setup({ transaction: MERCADO_ROW, billSheet });
 
-    await userEvent.click(await screen.findByRole("radio", { name: "Saída" }));
+    await userEvent.click(await screen.findByRole("radio", { name: "Conta" }));
     expect(screen.queryByRole("button", { name: "Transformar em conta fixa" })).not.toBeInTheDocument();
   });
 
@@ -680,8 +695,8 @@ describe("TransactionSheet", () => {
 
     await userEvent.click(await screen.findByRole("switch", { name: "Simular" }));
     expect(screen.getByText("Digite um valor para simular.")).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("radio", { name: "Saída" }));
-    await userEvent.click(screen.getByLabelText("Valor"));
+    await userEvent.click(screen.getByRole("radio", { name: "Conta" }));
+    await userEvent.click(screen.getByLabelText(/^Valor d/));
     await userEvent.keyboard("6700,00");
 
     const simulation = await screen.findByRole("region", { name: "Simulação" });
@@ -707,8 +722,8 @@ describe("TransactionSheet", () => {
     const { requests, sent } = setup({ billSheet }, simulated());
 
     await userEvent.click(await screen.findByRole("switch", { name: "Simular" }));
-    await userEvent.click(screen.getByRole("radio", { name: "Saída" }));
-    await userEvent.click(screen.getByLabelText("Valor"));
+    await userEvent.click(screen.getByRole("radio", { name: "Conta" }));
+    await userEvent.click(screen.getByLabelText(/^Valor d/));
     await userEvent.keyboard("50,00{Enter}");
     fireEvent.submit(screen.getByRole("dialog").querySelector("form") as HTMLFormElement);
 
@@ -737,7 +752,7 @@ describe("TransactionSheet", () => {
   it("says when red days were already there", async () => {
     setup({}, simulated());
     await userEvent.click(await screen.findByRole("switch", { name: "Simular" }));
-    await userEvent.click(screen.getByLabelText("Valor"));
+    await userEvent.click(screen.getByLabelText(/^Valor d/));
     await userEvent.keyboard("100,00");
     await pickDate("Outra data", "2026-11-24");
     expect(await screen.findByRole("status")).toHaveTextContent("Essa compra não cria dia vermelho novo.");
@@ -746,7 +761,7 @@ describe("TransactionSheet", () => {
   it("is clear on a flat forecast", async () => {
     setup({}, simulated(FORECAST_FLAT));
     await userEvent.click(await screen.findByRole("switch", { name: "Simular" }));
-    await userEvent.click(screen.getByLabelText("Valor"));
+    await userEvent.click(screen.getByLabelText(/^Valor d/));
     await userEvent.keyboard("50,00");
     expect(await screen.findByRole("status")).toHaveTextContent("Nenhum dia vermelho com essa compra.");
   });
@@ -754,7 +769,7 @@ describe("TransactionSheet", () => {
   it("parcela 1.000,01 em 10x: summary, the months strip, and Lançar de verdade posts the total once", async () => {
     const { sent } = setup({}, simulated());
     await userEvent.click(await screen.findByRole("switch", { name: "Simular" }));
-    await userEvent.click(screen.getByLabelText("Valor"));
+    await userEvent.click(screen.getByLabelText(/^Valor d/));
     await userEvent.keyboard("1000,01");
     await userEvent.click(screen.getByRole("switch", { name: "Repetir" }));
     await userEvent.click(screen.getByRole("switch", { name: "Parcelar" }));
@@ -778,7 +793,7 @@ describe("TransactionSheet", () => {
 
   it("sums an even split in one line, and Repetir turns Parcelar off", async () => {
     setup();
-    await userEvent.click(screen.getByLabelText("Valor"));
+    await userEvent.click(screen.getByLabelText(/^Valor d/));
     await userEvent.keyboard("300,00");
     await userEvent.click(await screen.findByRole("switch", { name: "Parcelar" }));
     await userEvent.click(screen.getByRole("radio", { name: "3x" }));
@@ -790,7 +805,7 @@ describe("TransactionSheet", () => {
 
   it("asks for 2 to 60 parcelas in Outro", async () => {
     const { requests } = setup();
-    await userEvent.click(screen.getByLabelText("Valor"));
+    await userEvent.click(screen.getByLabelText(/^Valor d/));
     await userEvent.keyboard("300,00");
     await userEvent.click(await screen.findByRole("switch", { name: "Parcelar" }));
     await userEvent.click(screen.getByRole("radio", { name: "Outro" }));
@@ -803,7 +818,7 @@ describe("TransactionSheet", () => {
 
   it("refuses a parcela at zero and offers Parcelar only on Saída and Diário", async () => {
     const { requests } = setup();
-    await userEvent.click(screen.getByLabelText("Valor"));
+    await userEvent.click(screen.getByLabelText(/^Valor d/));
     await userEvent.keyboard("0,05");
     await userEvent.click(await screen.findByRole("switch", { name: "Parcelar" }));
     await userEvent.click(screen.getByRole("radio", { name: "Outro" }));
@@ -826,7 +841,7 @@ describe("TransactionSheet", () => {
   it("asks for 2 to 60 parcelas to simulate when the count is missing", async () => {
     setup({}, simulated());
     await userEvent.click(await screen.findByRole("switch", { name: "Simular" }));
-    await userEvent.click(screen.getByLabelText("Valor"));
+    await userEvent.click(screen.getByLabelText(/^Valor d/));
     await userEvent.keyboard("300,00");
     await userEvent.click(screen.getByRole("switch", { name: "Parcelar" }));
     await userEvent.click(screen.getByRole("radio", { name: "Outro" }));
@@ -839,7 +854,7 @@ describe("TransactionSheet", () => {
     setup();
     await userEvent.click(await screen.findByRole("switch", { name: "Parcelar" }));
     await userEvent.click(screen.getByRole("radio", { name: "Entrada" }));
-    await userEvent.click(screen.getByRole("radio", { name: "Saída" }));
+    await userEvent.click(screen.getByRole("radio", { name: "Conta" }));
     expect(screen.getByRole("switch", { name: "Parcelar" })).not.toBeChecked();
   });
 
@@ -850,10 +865,14 @@ describe("TransactionSheet", () => {
     expect(screen.queryByRole("switch", { name: "Parcelar" })).not.toBeInTheDocument();
   });
 
-  it("is a centered dialog from 1024px", async () => {
+  it("is a centered dialog from 1024px: Novo Lançamento, its description shown, Hoje with the day, no Quando foi?", async () => {
     window.innerWidth = 1440;
     setup();
 
-    expect(await screen.findByRole("dialog", { name: "Lançar" })).toHaveAttribute("data-slot", "dialog-content");
+    const dialog = await screen.findByRole("dialog", { name: "Novo Lançamento" });
+    expect(dialog).toHaveAttribute("data-slot", "dialog-content");
+    expect(within(dialog).getByText(DESCRIPTION)).not.toHaveClass("sr-only");
+    expect(screen.getByRole("button", { name: "Hoje (5 nov)" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByText("Quando foi?")).toHaveClass("sr-only");
   });
 });
