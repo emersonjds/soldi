@@ -1,3 +1,5 @@
+import type { CSSProperties } from "react";
+
 import { cn } from "@/lib/utils";
 import { type Currency, useCurrency } from "@/shared/lib/currency";
 import { monthLong, monthShort } from "@/shared/lib/date";
@@ -21,7 +23,8 @@ const priorLow = (before: MonthAhead[] | undefined, month: string, low: string) 
   return prior !== null && cents(prior) !== cents(low) ? prior : null;
 };
 
-const chip = "flex min-h-16 w-full min-w-0 flex-col items-start justify-center gap-0.5 rounded-xl px-2 py-2 text-left";
+const chip =
+  "@container flex min-h-16 w-full min-w-0 flex-col items-start justify-center gap-0.5 rounded-xl px-2 py-2 text-left";
 
 type MonthChipsProps = {
   months: MonthAhead[];
@@ -36,12 +39,9 @@ type MonthChipsProps = {
 };
 
 /** A 4-column month grid: each month's lowest balance in whole units, its tier dot and its tier word (D22), a red month on `expense-soft`. */
-/** Lows of five characters shrink and six shrink again so they fit a 4-column cell at 375 and in the 1440 rail; the minus sign is as wide as a digit. */
-const digitSize = (amount: string) => {
-  const digits = amount.replace(/[^\d-]/g, "").length;
-  if (digits >= 6) return "text-[10px]";
-  return digits === 5 ? "text-[11px]" : "text-sm";
-};
+/** A low fills the cell left of its tier dot (0.75rem with the gap) at 0.6em per glyph, capped at `text-sm`. */
+const lowFit = "[--low-fit:min(var(--text-sm),calc((100cqi_-_0.75rem)/(var(--glyphs)*0.6)))] text-(length:--low-fit)";
+const glyphs = (amount: string): CSSProperties & { "--glyphs": number } => ({ "--glyphs": amount.length });
 
 export const MonthChips = ({ months, neutral = false, current, onOpen, before }: MonthChipsProps) => {
   const currency = useCurrency();
@@ -65,10 +65,8 @@ export const MonthChips = ({ months, neutral = false, current, onOpen, before }:
                 <span className="flex w-full min-w-0 items-center gap-1">
                   <span aria-hidden className={cn("size-2 shrink-0 rounded-full", TIER_STYLE[lowest].dot)} />
                   <span
-                    className={cn(
-                      "min-w-0 whitespace-nowrap font-bold tabular-nums tracking-tight",
-                      digitSize(formatWhole(low)),
-                    )}
+                    style={glyphs(formatWhole(low))}
+                    className={cn("min-w-0 whitespace-nowrap font-bold tabular-nums tracking-tight", lowFit)}
                   >
                     {formatWhole(low)}
                   </span>
