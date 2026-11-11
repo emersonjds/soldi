@@ -2,9 +2,7 @@
 
 import { useState } from "react";
 
-import Link from "next/link";
-
-import { Check, Clock, ReceiptText } from "lucide-react";
+import { Check, Clock } from "lucide-react";
 import { toast } from "sonner";
 
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -147,8 +145,6 @@ const Row = ({
   );
 };
 
-const link = "inline-flex min-h-11 items-center font-semibold text-primary text-sm hover:underline";
-
 /**
  * C3 `Contas a pagar` (spec 2026-11-10 §3.4): the open total, one chip per due day that filters the list
  * (a second tap clears it), and a round check that pays or undoes; the amount opens Pagar to adjust.
@@ -190,101 +186,87 @@ export const BillsOfMonth = ({ view, className }: { view: Schemas["MonthView"]; 
     setSheetOpen(true);
   };
 
+  if (bills.length === 0) return null;
+
   return (
-    <DashCard
-      title="Contas a pagar"
-      action={bills.length > 0 ? { href: "/ajustes/contas", label: "Ver todas" } : undefined}
-      className={className}
-    >
-      {bills.length === 0 ? (
-        <div className="flex flex-col items-center gap-2 px-2 py-6 text-center">
-          <span className="flex size-12 items-center justify-center rounded-full bg-secondary text-primary">
-            <ReceiptText className="size-6" aria-hidden />
-          </span>
-          <p className="text-muted-foreground">Nenhuma conta fixa</p>
-          <Link href="/ajustes/contas" className={link}>
-            Cadastrar conta fixa
-          </Link>
-        </div>
-      ) : (
-        <div className="flex flex-col gap-4">
-          {subtitle && <p className="-mt-2 text-muted-foreground text-sm">{subtitle}</p>}
-          <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
-            <p className="flex flex-col">
-              <span className="sr-only">Em aberto: </span>
-              <Money amount={open} size="figure" />
-              <span className="text-muted-foreground text-sm">
-                {bills.filter((bill) => bill.paid).length} de {bills.length} pagas
-              </span>
-            </p>
-            <ToggleGroup
-              type="single"
-              spacing={0}
-              value={filter}
-              onValueChange={(value: Filter | "") => value && setFilter(value)}
-              aria-label="Filtrar contas"
-              className="hidden rounded-xl bg-muted p-1 lg:flex"
-            >
-              {FILTERS.map((option) => (
-                <ToggleGroupItem
-                  key={option.value}
-                  value={option.value}
-                  className="h-11 rounded-lg! px-4 font-medium text-base text-muted-foreground data-[state=on]:bg-card data-[state=on]:text-primary data-[state=on]:shadow-sm"
-                >
-                  {option.label}
-                </ToggleGroupItem>
-              ))}
-            </ToggleGroup>
-          </div>
+    <DashCard title="Contas a pagar" action={{ href: "/ajustes/contas", label: "Ver todas" }} className={className}>
+      <div className="flex flex-col gap-4">
+        {subtitle && <p className="-mt-2 text-muted-foreground text-sm">{subtitle}</p>}
+        <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
+          <p className="flex flex-col">
+            <span className="sr-only">Em aberto: </span>
+            <Money amount={open} size="figure" />
+            <span className="text-muted-foreground text-sm">
+              {bills.filter((bill) => bill.paid).length} de {bills.length} pagas
+            </span>
+          </p>
           <ToggleGroup
             type="single"
-            value={day ?? ""}
-            onValueChange={(date: string) => setChosen(date ? { month: view.month, date } : null)}
-            aria-label="Filtrar por dia"
-            className="-mx-4 w-auto max-w-none justify-start overflow-x-auto px-4 py-0.5 lg:-mx-6 lg:px-6"
+            spacing={0}
+            value={filter}
+            onValueChange={(value: Filter | "") => value && setFilter(value)}
+            aria-label="Filtrar contas"
+            className="hidden rounded-xl bg-muted p-1 lg:flex"
           >
-            {dueDays(bills).map(({ date, unpaid }) => (
+            {FILTERS.map((option) => (
               <ToggleGroupItem
-                key={date}
-                value={date}
-                aria-label={`dia ${chipDay(date, view.month)}, ${unpaidLabel(unpaid)}`}
-                className="h-11 gap-1.5 rounded-full! border border-border px-4 font-medium text-base data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
+                key={option.value}
+                value={option.value}
+                className="h-11 rounded-lg! px-4 font-medium text-base text-muted-foreground data-[state=on]:bg-card data-[state=on]:text-primary data-[state=on]:shadow-sm"
               >
-                dia {chipDay(date, view.month)}
-                {unpaid > 0 && (
-                  <span aria-hidden className="flex gap-0.5">
-                    {Array.from({ length: unpaid }, (_, index) => (
-                      <span
-                        // biome-ignore lint/suspicious/noArrayIndexKey: identical dots, never reordered.
-                        key={index}
-                        data-testid="unpaid-dot"
-                        className="size-1.5 rounded-full bg-current"
-                      />
-                    ))}
-                  </span>
-                )}
+                {option.label}
               </ToggleGroupItem>
             ))}
           </ToggleGroup>
-          {shown.length === 0 ? (
-            <p className="px-2 py-6 text-center text-muted-foreground">Nenhuma conta aqui.</p>
-          ) : (
-            <ul className="flex flex-col gap-1">
-              {shown.map((bill) => (
-                <Row
-                  key={billKey(bill)}
-                  bill={bill}
-                  month={view.month}
-                  onPay={() => payNow(bill)}
-                  onUnpay={() => undo(bill)}
-                  onAdjust={() => adjust(bill)}
-                  busy={pay.isPending || unpay.isPending}
-                />
-              ))}
-            </ul>
-          )}
         </div>
-      )}
+        <ToggleGroup
+          type="single"
+          value={day ?? ""}
+          onValueChange={(date: string) => setChosen(date ? { month: view.month, date } : null)}
+          aria-label="Filtrar por dia"
+          className="-mx-4 w-auto max-w-none justify-start overflow-x-auto px-4 py-0.5 lg:-mx-6 lg:px-6"
+        >
+          {dueDays(bills).map(({ date, unpaid }) => (
+            <ToggleGroupItem
+              key={date}
+              value={date}
+              aria-label={`dia ${chipDay(date, view.month)}, ${unpaidLabel(unpaid)}`}
+              className="h-11 gap-1.5 rounded-full! border border-border px-4 font-medium text-base data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
+            >
+              dia {chipDay(date, view.month)}
+              {unpaid > 0 && (
+                <span aria-hidden className="flex gap-0.5">
+                  {Array.from({ length: unpaid }, (_, index) => (
+                    <span
+                      // biome-ignore lint/suspicious/noArrayIndexKey: identical dots, never reordered.
+                      key={index}
+                      data-testid="unpaid-dot"
+                      className="size-1.5 rounded-full bg-current"
+                    />
+                  ))}
+                </span>
+              )}
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
+        {shown.length === 0 ? (
+          <p className="px-2 py-6 text-center text-muted-foreground">Nenhuma conta aqui.</p>
+        ) : (
+          <ul className="flex flex-col gap-1">
+            {shown.map((bill) => (
+              <Row
+                key={billKey(bill)}
+                bill={bill}
+                month={view.month}
+                onPay={() => payNow(bill)}
+                onUnpay={() => undo(bill)}
+                onAdjust={() => adjust(bill)}
+                busy={pay.isPending || unpay.isPending}
+              />
+            ))}
+          </ul>
+        )}
+      </div>
 
       <PayBillSheet
         month={adjusting?.due_date.slice(0, 7) ?? view.month}

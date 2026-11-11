@@ -442,16 +442,9 @@ describe("Contas a pagar", () => {
     expect(card()).toHaveTextContent("Próxima: Aluguel Residencial · dia 06 · amanhã");
   });
 
-  it("invites the first bill when there is none", async () => {
-    show([]);
-    await loaded();
-
-    expect(card()).toHaveTextContent("Nenhuma conta fixa");
-    expect(within(card()).getByRole("link", { name: "Cadastrar conta fixa" })).toHaveAttribute(
-      "href",
-      "/ajustes/contas",
-    );
-    expect(within(card()).queryByRole("link", { name: "Ver todas" })).not.toBeInTheDocument();
-    expect(within(card()).queryByRole("radiogroup", { name: "Filtrar por dia" })).not.toBeInTheDocument();
+  it("renders nothing without a bill (D25)", () => {
+    signedIn();
+    renderWithQuery(<BillsOfMonth view={{ ...MONTH, bills_of_month: [] }} />);
+    expect(screen.queryByRole("region")).not.toBeInTheDocument();
   });
 });

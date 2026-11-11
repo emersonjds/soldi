@@ -13,6 +13,7 @@ import {
   BILLS_OF_MONTH,
   CARRIED_ALUGUEL,
   CATEGORIES,
+  COFRINHO_SEM_OBJETIVO,
   COFRINHOS,
   ECONOMIA,
   FORECAST,
@@ -49,7 +50,7 @@ const open = (replies: Record<string, Reply> = {}) => {
     "GET /api/months/2026-11": { status: 200, body: MONTH },
     "GET /api/transactions": { status: 200, body: TRANSACTIONS },
     "GET /api/categories": { status: 200, body: CATEGORIES },
-    "GET /api/reports/categories": { status: 200, body: { ...REPORT, groups: [] } },
+    "GET /api/reports/categories": { status: 200, body: REPORT },
     "GET /api/cofrinhos": { status: 200, body: COFRINHOS },
     ...replies,
   });
@@ -106,8 +107,7 @@ describe("Mês", () => {
     open();
 
     const hero = await screen.findByRole("region", { name: "Saldo hoje" });
-    expect(within(hero).getByText("R$ 957,79")).toBeInTheDocument();
-    expect(within(hero).getByText("Apertado")).toBeInTheDocument();
+    expect(within(hero).getAllByText("R$ 957,79")).toHaveLength(2);
     expect(within(hero).queryByRole("img")).not.toBeInTheDocument();
 
     const summary = screen.getByRole("region", { name: "Resumo do mês" });
@@ -257,18 +257,30 @@ describe("Mês", () => {
     );
   });
 
-  it("invites the first entry when the month is empty and has no income yet", async () => {
+  it("shows only the hero on a fresh account: no banner, no split and no other card (D25)", async () => {
     open({
       "GET /api/months/2026-11": { status: 200, body: EMPTY },
       "GET /api/transactions": { status: 200, body: [] },
+      "GET /api/reports/categories": {
+        status: 200,
+        body: { ...REPORT, outflow_total: "0.00", income_total: "0.00", groups: [] },
+      },
+      "GET /api/cofrinhos": {
+        status: 200,
+        body: { total_saved: "0.00", saved_this_month: "0.00", items: [COFRINHO_SEM_OBJETIVO] },
+      },
     });
 
-    expect(await screen.findByText("Nenhum lançamento ainda")).toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "Termômetro do Mês" })).toHaveTextContent(
-      "Nenhuma entrada ainda este mês. Com as contas em aberto",
-    );
-    await userEvent.click(screen.getByRole("button", { name: "Lançar agora" }));
-    expect(await screen.findByRole("dialog", { name: "Lançar" })).toBeInTheDocument();
+    const hero = await screen.findByRole("region", { name: "Saldo hoje" });
+    await waitFor(() => expect(client.isFetching()).toBe(0));
+    const page = screen.getByRole("heading", { level: 1, name: "Mês" }).parentElement as HTMLElement;
+    expect(
+      within(page)
+        .getAllByRole("region")
+        .filter((region) => !hero.contains(region)),
+    ).toEqual([]);
+    expect(screen.queryByText("Nenhum lançamento ainda")).not.toBeInTheDocument();
+    expect(screen.queryByText(/no vermelho/)).not.toBeInTheDocument();
   });
 
   it("opens Lançar on Entrada from the Entradas card", async () => {
@@ -294,36 +306,43 @@ describe("Mês", () => {
     expect(screen.queryByText("Comece pela sua primeira entrada do mês")).not.toBeInTheDocument();
   });
 
-  it("orders the cards for one column, and shows a negative projection in red in the summary", async () => {
+  it("flows the hero, Contas a pagar and Lançamentos in one stack and the rail in another, with no pinned rows", async () => {
     open({
       "GET /api/months/2026-11": {
         status: 200,
         body: { ...MONTH, projected_balance: "-312.40", projected_tier: "light_red", bills_of_month: BILLS_OF_MONTH },
       },
+      "GET /api/forecast": { status: 200, body: FORECAST },
     });
 
     const bills = await screen.findByRole("region", { name: "Contas a pagar" });
-    await screen.findByRole("region", { name: "Lançamentos" });
+    for (const name of ["Lançamentos", "Próximos meses", "Cofrinhos", "Para onde vai"]) {
+      await screen.findByRole("region", { name });
+    }
     const order = [
       "Saldo hoje",
       "Contas a pagar",
       "Lançamentos",
       "Termômetro do Mês",
       "Próximos meses",
-      "Para onde vai",
       "Cofrinhos",
+      "Para onde vai",
     ].map((name) => screen.getByRole("region", { name }));
     order.slice(1).forEach((card, index) => {
       expect(order[index].compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     });
+    const [main, rail] = [order[0].parentElement, order[3].parentElement];
+    expect(order.slice(0, 3).map((card) => card.parentElement)).toEqual([main, main, main]);
+    expect(order.slice(3).map((card) => card.parentElement)).toEqual([rail, rail, rail, rail]);
+    expect(main).not.toBe(rail);
+    expect(document.querySelector('[class*="xl:row-start"], [class*="xl:col-start"]')).toBeNull();
     expect(within(bills).getByRole("listitem", { name: "Luz (Enel)" })).toHaveTextContent("Venceu dia 02/11");
     const summary = screen.getByRole("region", { name: "Resumo do mês" });
     expect(summary).toHaveTextContent(/Projetado-R\$\s312,40Atenção/);
     expect(within(summary).getByText("-R$ 312,40")).toHaveClass("text-expense");
-    expect(within(order[3]).getByText("-R$ 312,40")).toHaveClass("text-expense");
   });
 
-  it("asks the month, its entries, the forecast, the spending and the cofrinhos together, each card with a skeleton", async () => {
+  it("asks the month, its entries, the forecast, the spending and the cofrinhos together, with a skeleton for the hero alone", async () => {
     const requests = open();
 
     expect(requests.map((request) => new URL(request.url).pathname + new URL(request.url).search)).toEqual(
@@ -337,9 +356,9 @@ describe("Mês", () => {
     );
     expect(screen.getByTestId("hero-figure-skeleton")).toBeInTheDocument();
     expect(screen.getByTestId("hero-bar-skeleton")).toBeInTheDocument();
-    expect(screen.getByTestId("strip-skeleton")).toBeInTheDocument();
-    expect(screen.getAllByTestId("row-skeleton")).toHaveLength(3 + 5 + 2);
-    expect(document.querySelectorAll('[aria-busy="true"]')).toHaveLength(7);
+    expect(screen.queryByTestId("strip-skeleton")).not.toBeInTheDocument();
+    expect(screen.queryAllByTestId("row-skeleton")).toHaveLength(0);
+    expect(document.querySelectorAll('[aria-busy="true"]')).toHaveLength(1);
     expect(screen.getByRole("status")).toHaveTextContent("Carregando");
 
     await screen.findByRole("region", { name: "Lançamentos" });
@@ -351,10 +370,10 @@ describe("Mês", () => {
     expect(
       await within(await screen.findByRole("region", { name: "Lançamentos" })).findByText("Compras da semana"),
     ).toBeInTheDocument();
-    const cofrinhos = screen.getByRole("region", { name: "Cofrinhos" });
+    const cofrinhos = await screen.findByRole("region", { name: "Cofrinhos" });
     expect(await within(cofrinhos).findByText("Viagem")).toBeVisible();
-    const spending = screen.getByRole("region", { name: "Para onde vai" });
-    expect(await within(spending).findByText("Nenhum gasto neste mês ainda.")).toBeInTheDocument();
+    const spending = await screen.findByRole("region", { name: "Para onde vai" });
+    expect(await within(spending).findByText("Mercado")).toBeInTheDocument();
     const failed = { status: 500, body: problem(500, "Falhou.") };
     const requests = signedIn({
       "GET /api/months/2026-11": failed,
@@ -377,16 +396,19 @@ describe("Mês", () => {
     expect(screen.getByRole("region", { name: "Saldo hoje" })).toHaveTextContent("R$ 957,79");
     expect(within(ledger()).getByText("Compras da semana")).toBeInTheDocument();
     expect(within(cofrinhos).getByText("Viagem")).toBeVisible();
-    expect(within(spending).getByText("Nenhum gasto neste mês ainda.")).toBeInTheDocument();
+    expect(within(spending).getByText("Mercado")).toBeInTheDocument();
   });
 
   it("shows the month's error in the hero and keeps the other cards", async () => {
-    const requests = open({ "GET /api/months/2026-11": { status: 500, body: problem(500, "Falhou.") } });
+    const requests = open({
+      "GET /api/months/2026-11": { status: 500, body: problem(500, "Falhou.") },
+      "GET /api/forecast": { status: 200, body: FORECAST },
+    });
 
     const hero = await screen.findByRole("region", { name: "Saldo hoje" });
     expect(await within(hero).findByText("Não foi possível carregar o mês.")).toBeInTheDocument();
     expect(await within(screen.getByRole("region", { name: "Cofrinhos" })).findByText("Viagem")).toBeVisible();
-    expect(screen.getByRole("region", { name: "Próximos meses" })).toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: "Próximos meses" })).toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Contas a pagar" })).not.toBeInTheDocument();
     await userEvent.click(within(hero).getByRole("button", { name: "Tentar de novo" }));
 
@@ -427,7 +449,7 @@ describe("Mês", () => {
     await screen.findByRole("region", { name: "Saldo hoje" });
     expect(requests.some((request) => request.url.endsWith("/api/transactions?month=2026-12"))).toBe(true);
     expect(requests.some((request) => request.url.endsWith("/api/reports/categories?month=2026-12"))).toBe(true);
-    expect(screen.getByRole("link", { name: "Ver tudo" })).toHaveAttribute("href", "/para-onde-vai?m=2026-12");
+    expect(await screen.findByRole("link", { name: "Ver tudo" })).toHaveAttribute("href", "/para-onde-vai?m=2026-12");
     expect(screen.queryByRole("group", { name: "Mês" })).not.toBeInTheDocument();
   });
 
@@ -895,7 +917,10 @@ describe("Mês", () => {
   });
 
   it("opens Lançar in Simular on Diário from Posso comprar?, and the next Lançar starts without it", async () => {
-    open({ "GET /api/months/2026-11": { status: 200, body: EMPTY } });
+    open({
+      "GET /api/months/2026-11": { status: 200, body: EMPTY },
+      "GET /api/forecast": { status: 200, body: FORECAST },
+    });
 
     const strip = await screen.findByRole("region", { name: "Próximos meses" });
     await userEvent.click(within(strip).getByRole("button", { name: "Posso comprar?" }));

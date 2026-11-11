@@ -4,7 +4,6 @@ import { useState } from "react";
 
 import { ArrowRight, CalendarRange } from "lucide-react";
 
-import { Skeleton } from "@/components/ui/skeleton";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useForecast } from "@/entities/forecast/forecast-query";
 import { MonthChips } from "@/entities/forecast/month-chips";
@@ -16,44 +15,10 @@ const HORIZONS = [
   { value: "12", label: "12 meses" },
 ];
 
-const SLOTS = Array.from({ length: 12 }, (_, index) => `slot-${index}`);
-
 const toggle =
   "h-11 rounded-xl! font-semibold text-base text-muted-foreground data-[state=on]:bg-brand data-[state=on]:text-brand-foreground data-[state=on]:shadow-sm";
 
 type Props = { viewing: string; onOpen: (month: string) => void };
-
-const Body = ({ count, viewing, onOpen }: Props & { count: number }) => {
-  const forecast = useForecast();
-  if (forecast.isError && !forecast.data)
-    return (
-      <p className="flex flex-wrap items-center gap-x-2 text-muted-foreground text-sm">
-        Não foi possível carregar.
-        <button
-          type="button"
-          onClick={() => forecast.refetch()}
-          className="inline-flex min-h-11 items-center font-semibold text-primary hover:underline focus-visible:outline-2 focus-visible:outline-ring"
-        >
-          Tentar de novo
-        </button>
-      </p>
-    );
-  if (!forecast.data)
-    return (
-      <div aria-busy="true" className="grid grid-cols-3 gap-2">
-        {SLOTS.slice(0, count).map((slot) => (
-          <Skeleton key={slot} data-testid="chip-skeleton" className="h-16 rounded-xl" />
-        ))}
-      </div>
-    );
-  const flat = isFlat(forecast.data);
-  return (
-    <>
-      <MonthChips months={monthsAhead(forecast.data, count)} neutral={flat} current={viewing} onOpen={onOpen} />
-      {flat && <p className="text-muted-foreground text-sm">Lance seus próximos meses para ver a cor deles aqui.</p>}
-    </>
-  );
-};
 
 type MonthsAheadProps = Props & {
   /** `Posso comprar?`: Lançar with Simular on. */
@@ -61,9 +26,15 @@ type MonthsAheadProps = Props & {
   className?: string;
 };
 
-/** `Próximos meses`: today's month and the next 5 or 11, each by its lowest balance and tier (D16); the toggle asks nothing new. */
+/**
+ * `Próximos meses`: today's month and the next 5 or 11, each by its lowest balance and tier (D16); the toggle asks
+ * nothing new. Nothing renders while loading or when nothing lands ahead (D25).
+ */
 export const MonthsAhead = ({ viewing, onOpen, onSimulate, className }: MonthsAheadProps) => {
   const [count, setCount] = useState("6");
+  const forecast = useForecast();
+  const failed = forecast.isError && !forecast.data;
+  if (!failed && (!forecast.data || isFlat(forecast.data))) return null;
   return (
     <section
       aria-labelledby="months-ahead-title"
@@ -99,7 +70,20 @@ export const MonthsAhead = ({ viewing, onOpen, onSimulate, className }: MonthsAh
           </ToggleGroupItem>
         ))}
       </ToggleGroup>
-      <Body count={Number(count)} viewing={viewing} onOpen={onOpen} />
+      {forecast.data ? (
+        <MonthChips months={monthsAhead(forecast.data, Number(count))} current={viewing} onOpen={onOpen} />
+      ) : (
+        <p className="flex flex-wrap items-center gap-x-2 text-muted-foreground text-sm">
+          Não foi possível carregar.
+          <button
+            type="button"
+            onClick={() => forecast.refetch()}
+            className="inline-flex min-h-11 items-center font-semibold text-primary hover:underline focus-visible:outline-2 focus-visible:outline-ring"
+          >
+            Tentar de novo
+          </button>
+        </p>
+      )}
     </section>
   );
 };

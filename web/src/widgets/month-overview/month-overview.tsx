@@ -10,7 +10,6 @@ import { formatMoney, positiveAmount } from "@/shared/lib/money";
 import { wholeShare } from "@/shared/lib/percent";
 import { cents } from "@/shared/lib/tier";
 import { Money } from "@/shared/ui/money";
-import { SkeletonRows } from "@/shared/ui/page-state";
 import { ThermometerStrip } from "@/shared/ui/thermometer-strip";
 import { TierPill } from "@/shared/ui/tier-pill";
 
@@ -123,11 +122,8 @@ export const MonthHero = ({
 }) => {
   const currency = useCurrency();
   return (
-    <div className={cn("flex flex-col", className)}>
-      <section
-        aria-label="Saldo hoje"
-        className="rounded-3xl bg-linear-to-br from-hero-from to-hero-to px-4 pt-6 pb-14 text-hero-foreground lg:px-8 lg:pt-8"
-      >
+    <section aria-label="Saldo hoje" className={cn("flex flex-col", className)}>
+      <div className="rounded-3xl bg-linear-to-br from-hero-from to-hero-to px-4 pt-6 pb-14 text-hero-foreground lg:px-8 lg:pt-8">
         <div className="flex flex-col items-center gap-3 lg:flex-row lg:items-end lg:gap-4">
           <div className="flex flex-col items-center gap-1 lg:items-start">
             <p className="font-semibold text-[11px] text-white/80 uppercase leading-4 tracking-[0.12em]">Saldo hoje</p>
@@ -138,9 +134,9 @@ export const MonthHero = ({
           <TierPill tier={view.balance_today_tier} className="lg:mb-1.5" />
         </div>
         {children}
-      </section>
+      </div>
       <MonthSummary view={view} onLaunch={onLaunch} />
-    </div>
+    </section>
   );
 };
 
@@ -168,45 +164,30 @@ const Insight = ({ totals, projected }: { totals: MonthView["totals"]; projected
   );
 };
 
-export const ThermometerCard = ({ view, className }: { view: MonthView; className?: string }) => (
-  <section
-    aria-labelledby="thermometer-title"
-    className={cn("flex flex-col gap-5 rounded-2xl bg-card p-4 shadow-sm lg:p-6", className)}
-  >
-    <h2 id="thermometer-title" className="flex items-center gap-3 font-semibold text-lg leading-6">
-      <span className="flex size-10 items-center justify-center rounded-full bg-secondary text-primary">
-        <Thermometer className="size-5" aria-hidden />
-      </span>
-      Termômetro do Mês
-    </h2>
-    <ThermometerStrip tier={view.balance_today_tier} />
-    <p className="rounded-xl bg-muted p-4 text-muted-foreground text-sm leading-6">
-      <Insight totals={view.totals} projected={view.projected_balance} />
-    </p>
-  </section>
-);
-
-const card = "rounded-2xl bg-card p-4 shadow-sm lg:p-6";
+/** C2: absent on a month with no entrada and no saída (D25). */
+export const ThermometerCard = ({ view, className }: { view: MonthView; className?: string }) =>
+  cents(view.totals.income) === 0 && cents(view.totals.outflow) === 0 ? null : (
+    <section
+      aria-labelledby="thermometer-title"
+      className={cn("flex flex-col gap-5 rounded-2xl bg-card p-4 shadow-sm lg:p-6", className)}
+    >
+      <h2 id="thermometer-title" className="flex items-center gap-3 font-semibold text-lg leading-6">
+        <span className="flex size-10 items-center justify-center rounded-full bg-secondary text-primary">
+          <Thermometer className="size-5" aria-hidden />
+        </span>
+        Termômetro do Mês
+      </h2>
+      <ThermometerStrip tier={view.balance_today_tier} />
+      <p className="rounded-xl bg-muted p-4 text-muted-foreground text-sm leading-6">
+        <Insight totals={view.totals} projected={view.projected_balance} />
+      </p>
+    </section>
+  );
 
 /** C1 while the month loads: the hero and the summary. */
 export const HeroSkeleton = ({ className }: { className?: string }) => (
   <div aria-busy="true" className={cn("flex flex-col gap-4", className)}>
     <Skeleton data-testid="hero-figure-skeleton" className="h-40 w-full rounded-3xl" />
     <Skeleton data-testid="hero-bar-skeleton" className="h-20 w-full rounded-2xl" />
-  </div>
-);
-
-/** C2 while the month loads: the strip. */
-export const StripSkeleton = ({ className }: { className?: string }) => (
-  <div aria-busy="true" className={cn(card, "flex flex-col gap-5", className)}>
-    <Skeleton className="h-6 w-1/2" />
-    <Skeleton data-testid="strip-skeleton" className="h-3 w-full" />
-  </div>
-);
-
-/** C3 and C4 while they load: `rows` list rows. */
-export const RowsSkeleton = ({ rows, className }: { rows: number; className?: string }) => (
-  <div className={cn(card, className)}>
-    <SkeletonRows count={rows} />
   </div>
 );

@@ -23,7 +23,7 @@ describe("Próximos meses", () => {
   it("shows six months, twelve on the toggle without asking again, and opens one", async () => {
     const { requests, onOpen } = show({ status: 200, body: FORECAST });
 
-    const november = await within(card()).findByRole("button", {
+    const november = await within(await screen.findByRole("region")).findByRole("button", {
       name: "nov 2026: Crítico, menor saldo -R$\u00a02.916,00, 7 dias no vermelho",
     });
     expect(november).toHaveAttribute("aria-current", "date");
@@ -38,28 +38,30 @@ describe("Próximos meses", () => {
     expect(onOpen).toHaveBeenCalledWith("2026-12");
   });
 
-  it("asks Posso comprar? from the title row, even while loading", async () => {
+  it("asks Posso comprar? from the title row", async () => {
     const { onSimulate } = show({ status: 200, body: FORECAST });
-    await userEvent.click(within(card()).getByRole("button", { name: "Posso comprar?" }));
+    await userEvent.click(
+      await within(await screen.findByRole("region")).findByRole("button", { name: "Posso comprar?" }),
+    );
     expect(onSimulate).toHaveBeenCalledOnce();
   });
 
-  it("shows skeleton chips while loading", () => {
+  it("renders nothing while loading, so it never flashes (D25)", async () => {
     show({ status: 200, body: FORECAST });
-    expect(within(card()).getAllByTestId("chip-skeleton")).toHaveLength(6);
+    expect(screen.queryByRole("region")).not.toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: "Próximos meses" })).toBeInTheDocument();
   });
 
-  it("teaches when nothing is typed ahead", async () => {
-    show({ status: 200, body: FORECAST_FLAT });
-    expect(await within(card()).findByText("Lance seus próximos meses para ver a cor deles aqui.")).toBeInTheDocument();
-    expect(card()).not.toHaveTextContent("Confortável");
-    expect(card()).not.toHaveTextContent("1.842");
+  it("renders nothing when nothing lands ahead (D25)", async () => {
+    const { client } = show({ status: 200, body: FORECAST_FLAT });
+    await waitFor(() => expect(client.getQueryState(["month", "forecast"])?.status).toBe("success"));
+    expect(screen.queryByRole("region")).not.toBeInTheDocument();
   });
 
   it("paints a flat red balance red, without the lesson", async () => {
     show({ status: 200, body: forecastFixture("2026-11-10", "2026-11-10", "2027-10-31", [["2026-11-10", "-800.00"]]) });
     expect(
-      await within(card()).findByRole("button", {
+      await within(await screen.findByRole("region")).findByRole("button", {
         name: "nov 2026: Crítico, menor saldo -R$\u00a0800,00, 21 dias no vermelho",
       }),
     ).toBeInTheDocument();
@@ -68,14 +70,16 @@ describe("Próximos meses", () => {
 
   it("marks every month before the opening, without the lesson, when the opening is past the horizon", async () => {
     show({ status: 200, body: { today: "2026-11-10", days: [] } });
-    expect(await within(card()).findByRole("button", { name: "nov 2026: antes do início" })).toBeInTheDocument();
+    expect(
+      await within(await screen.findByRole("region")).findByRole("button", { name: "nov 2026: antes do início" }),
+    ).toBeInTheDocument();
     expect(chips().every((chip) => chip.getAttribute("aria-label")?.endsWith(": antes do início"))).toBe(true);
     expect(card()).not.toHaveTextContent("Lance seus próximos meses");
   });
 
   it("keeps the chips when a refetch fails", async () => {
     const { client } = show({ status: 200, body: FORECAST });
-    await within(card()).findByRole("button", { name: /^nov 2026: Crítico/ });
+    await within(await screen.findByRole("region")).findByRole("button", { name: /^nov 2026: Crítico/ });
     stubApi({ "GET /api/forecast": { status: 500, body: problem(500, "Erro") } });
     await client.refetchQueries({ queryKey: ["month", "forecast"] });
     await waitFor(() => expect(client.getQueryState(["month", "forecast"])?.status).toBe("error"));
@@ -85,16 +89,17 @@ describe("Próximos meses", () => {
 
   it("disables the months before the opening date", async () => {
     show({ status: 200, body: FORECAST_LATE_OPENING });
-    expect(await within(card()).findByRole("button", { name: "nov 2026: antes do início" })).toHaveAttribute(
-      "aria-disabled",
-      "true",
-    );
+    expect(
+      await within(await screen.findByRole("region")).findByRole("button", { name: "nov 2026: antes do início" }),
+    ).toHaveAttribute("aria-disabled", "true");
     expect(within(card()).getByRole("button", { name: /^jan 2027: Confortável/ })).not.toHaveAttribute("aria-disabled");
   });
 
   it("says so when it fails and tries again", async () => {
     const { requests } = show({ status: 500, body: problem(500, "Erro") });
-    await userEvent.click(await within(card()).findByRole("button", { name: "Tentar de novo" }));
+    await userEvent.click(
+      await within(await screen.findByRole("region")).findByRole("button", { name: "Tentar de novo" }),
+    );
     expect(card()).toHaveTextContent("Não foi possível carregar.");
     expect(forecastCalls(requests).length).toBeGreaterThan(1);
   });

@@ -16,13 +16,7 @@ import { PageError } from "@/shared/ui/page-state";
 import { BillsOfMonth } from "@/widgets/bills-of-month/bills-of-month";
 import { CofrinhosGlance } from "@/widgets/cofrinhos-glance/cofrinhos-glance";
 import { Ledger, type LedgerFilter } from "@/widgets/ledger/ledger";
-import {
-  HeroSkeleton,
-  MonthHero,
-  RowsSkeleton,
-  StripSkeleton,
-  ThermometerCard,
-} from "@/widgets/month-overview/month-overview";
+import { HeroSkeleton, MonthHero, ThermometerCard } from "@/widgets/month-overview/month-overview";
 import { MonthsAhead } from "@/widgets/months-ahead/months-ahead";
 import { RedDayAlert } from "@/widgets/red-day-alert/red-day-alert";
 import { SpendingGlance } from "@/widgets/spending-glance/spending-glance";
@@ -83,68 +77,61 @@ const MonthScreen = () => {
     setHighlight({ date });
   };
 
-  const wide = "md:col-span-2 xl:col-start-1";
-  const ledgerPlace = `${wide} xl:row-start-3`;
-
   return (
-    <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2 xl:grid-cols-3 xl:gap-6">
+    <div className="flex flex-col gap-4 xl:gap-6">
       <h1 className="sr-only">Mês</h1>
       <p role="status" className="sr-only">
         {((!view.data && !monthFailed) || (!entries && !entriesFailed)) && "Carregando"}
       </p>
-      {monthFailed && (
-        <section aria-label="Saldo hoje" className={`rounded-3xl bg-card shadow-sm ${wide} xl:row-start-1`}>
-          <PageError message="Não foi possível carregar o mês." onRetry={() => view.refetch()} />
-        </section>
-      )}
-      {!monthFailed && !view.data && (
-        <>
-          <HeroSkeleton className={`${wide} xl:row-start-1`} />
-          <RowsSkeleton rows={3} className={`${wide} xl:row-start-2`} />
-        </>
-      )}
-      {view.data && (
-        <>
-          <MonthHero view={view.data} onLaunch={launch} className={`${wide} xl:row-start-1`}>
-            {alert && <RedDayAlert alert={alert} onJump={jump} />}
-          </MonthHero>
-          <BillsOfMonth view={view.data} className={`${wide} xl:row-start-2`} />
-        </>
-      )}
-      {entriesFailed && !monthFailed && (
-        <section aria-label="Lançamentos" className={`rounded-2xl bg-card shadow-sm ${ledgerPlace}`}>
-          <PageError message="Não foi possível carregar os lançamentos." onRetry={() => transactions.refetch()} />
-        </section>
-      )}
-      {!entriesFailed && !monthFailed && (!view.data || !entries) && <RowsSkeleton rows={5} className={ledgerPlace} />}
-      {view.data && entries && (
-        <Ledger
-          view={view.data}
-          transactions={entries}
-          onLaunch={() => launch("daily")}
-          highlight={highlight?.date ?? null}
-          causes={causes}
-          expanded={expandedMonth === month}
-          onExpandedChange={(expanded) => setExpandedMonth(expanded ? month : null)}
-          filter={filter}
-          onFilterChange={setFilter}
-          className={ledgerPlace}
-        />
-      )}
-      {view.data && <ThermometerCard view={view.data} className="xl:col-start-3 xl:row-start-1" />}
-      {!monthFailed && !view.data && <StripSkeleton className="xl:col-start-3 xl:row-start-1" />}
-      <MonthsAhead
-        viewing={month}
-        onSimulate={() => launch("daily", true)}
-        onOpen={(next) => {
-          router.replace(`/mes?m=${next}`, { scroll: false });
-          window.scrollTo({ top: 0 });
-        }}
-        className="xl:col-start-3 xl:row-start-2"
-      />
-      <div className="contents xl:col-start-3 xl:row-start-3 xl:flex xl:flex-col xl:gap-6">
-        <SpendingGlance month={month} />
-        <CofrinhosGlance />
+      <div className="flex flex-col gap-4 lg:grid lg:gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] xl:items-start">
+        <div className="contents lg:flex lg:flex-col lg:gap-6">
+          {monthFailed && (
+            <section aria-label="Saldo hoje" className="rounded-3xl bg-card shadow-sm">
+              <PageError message="Não foi possível carregar o mês." onRetry={() => view.refetch()} />
+            </section>
+          )}
+          {!monthFailed && !view.data && <HeroSkeleton />}
+          {view.data && (
+            <>
+              <MonthHero view={view.data} onLaunch={launch}>
+                {alert && <RedDayAlert alert={alert} onJump={jump} />}
+              </MonthHero>
+              <BillsOfMonth view={view.data} className="max-lg:order-1" />
+            </>
+          )}
+          {entriesFailed && !monthFailed && (
+            <section aria-label="Lançamentos" className="rounded-2xl bg-card shadow-sm max-lg:order-3">
+              <PageError message="Não foi possível carregar os lançamentos." onRetry={() => transactions.refetch()} />
+            </section>
+          )}
+          {view.data && entries && (
+            <Ledger
+              view={view.data}
+              transactions={entries}
+              highlight={highlight?.date ?? null}
+              causes={causes}
+              expanded={expandedMonth === month}
+              onExpandedChange={(expanded) => setExpandedMonth(expanded ? month : null)}
+              filter={filter}
+              onFilterChange={setFilter}
+              className="max-lg:order-3"
+            />
+          )}
+        </div>
+        <div className="contents lg:grid lg:grid-cols-2 lg:items-start lg:gap-6 xl:flex xl:flex-col lg:[&>:last-child:nth-child(odd)]:col-span-2">
+          {view.data && <ThermometerCard view={view.data} className="max-lg:order-2" />}
+          <MonthsAhead
+            viewing={month}
+            onSimulate={() => launch("daily", true)}
+            onOpen={(next) => {
+              router.replace(`/mes?m=${next}`, { scroll: false });
+              window.scrollTo({ top: 0 });
+            }}
+            className="max-lg:order-4"
+          />
+          <CofrinhosGlance className="max-lg:order-4" />
+          <SpendingGlance month={month} className="max-lg:order-4" />
+        </div>
       </div>
       <TransactionSheet
         open={launching !== null}
