@@ -6,9 +6,16 @@ import { splitOf } from "./split";
 
 type Totals = Schemas["MonthView"]["totals"];
 
-const totals = (income: string, bills: string, daily: string, saved: string, performance: string): Totals => ({
+const totals = (
+  income: string,
+  bills: string,
+  daily: string,
+  saved: string,
+  performance: string,
+  withdrawn = "0.00",
+): Totals => ({
   income,
-  withdrawn: "0.00",
+  withdrawn,
   bills,
   daily,
   outflow: "0.00",
@@ -58,8 +65,30 @@ describe("splitOf", () => {
     });
   });
 
-  it("keeps the whole bills in Contas when the saving is not above zero", () => {
-    expect(splitOf(totals("2000.00", "1000.00", "500.00", "-50.00", "500.00"))?.segments).toEqual([
+  it("counts a resgate back into Guardado, so Guardado is what went into the cofrinhos", () => {
+    expect(splitOf(totals("5000.00", "2500.00", "500.00", "700.00", "2000.00", "300.00"))).toEqual({
+      base: "income",
+      segments: [
+        { label: "Contas", amount: "1500.00", tone: "bills" },
+        { label: "Guardado", amount: "1000.00", tone: "saved" },
+        { label: "Diário", amount: "500.00", tone: "daily" },
+        { label: "Livre", amount: "2000.00", tone: "free" },
+      ],
+      line: { kind: "free", pct: 40 },
+    });
+  });
+
+  it("keeps the deposit in Guardado and Contas whole when the month withdrew more than it saved", () => {
+    expect(splitOf(totals("3000.00", "1100.00", "400.00", "-400.00", "1500.00", "500.00"))?.segments).toEqual([
+      { label: "Contas", amount: "1000.00", tone: "bills" },
+      { label: "Guardado", amount: "100.00", tone: "saved" },
+      { label: "Diário", amount: "400.00", tone: "daily" },
+      { label: "Livre", amount: "1500.00", tone: "free" },
+    ]);
+  });
+
+  it("hides Guardado when a resgate is the month's only cofrinho movement", () => {
+    expect(splitOf(totals("2000.00", "1000.00", "500.00", "-300.00", "500.00", "300.00"))?.segments).toEqual([
       { label: "Contas", amount: "1000.00", tone: "bills" },
       { label: "Diário", amount: "500.00", tone: "daily" },
       { label: "Livre", amount: "500.00", tone: "free" },

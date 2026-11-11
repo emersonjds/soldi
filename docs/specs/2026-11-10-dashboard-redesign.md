@@ -55,12 +55,12 @@ Out, with the reason:
 
 ### 2.1 Split bar rules (finance, product arbitrated)
 
-All math is in integer cents (`cents` in `shared/lib/tier.ts`), never floats (D7). `totals.saved` is already inside `totals.bills` (`crates/soldi-types/src/months.rs`), and `performance = income − bills − daily`.
+All math is in integer cents (`cents` in `shared/lib/tier.ts`), never floats (D7). `totals.saved` is the Economia deposits minus the resgates (`totals.withdrawn`), the deposits are already inside `totals.bills`, `totals.income` leaves the resgates out (`crates/soldi-types/src/months.rs`), and `performance = income − bills − daily`.
 
 | Segment | Value |
 |---------|-------|
-| Contas | `bills − saved` when `saved > 0`, else `bills` |
-| Guardado | `saved` when `> 0`, else hidden |
+| Contas | `bills − (saved + withdrawn)`, always between 0 and `bills` |
+| Guardado | the gross deposits `saved + withdrawn` when `> 0`, else hidden |
 | Diário | `daily` |
 | Livre | `performance` when `> 0`, else hidden |
 
@@ -72,6 +72,7 @@ All math is in integer cents (`cents` in `shared/lib/tier.ts`), never floats (D7
   - `performance < 0` → `Saídas passaram as entradas em R$ 312,40` (expense text and icon);
   - `performance = 0` → `Entradas e saídas empatadas`.
 - `income = 0` and no outflow: the bar is replaced by the empty state (§3.5).
+- Worked example: salary 5000 and a resgate of 300 (`income` 5000, `withdrawn` 300), Aluguel 1500, a deposit of 1000 (`bills` 2500, `saved` 700), daily 500 (`performance` 2000) → Contas 1500, Guardado 1000, Diário 500, Livre 2000; the segments sum to the 5000 base. The resgate sits outside `income`, so it is not a share of the bar.
 
 ## 3. Navigation and layout (ux)
 
