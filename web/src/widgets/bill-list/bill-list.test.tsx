@@ -1,4 +1,5 @@
 import { screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { Toaster } from "sonner";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -6,6 +7,7 @@ import type { Schemas } from "@/shared/api/client";
 import { renderWithQuery } from "@/test/render";
 import {
   BILL_ALUGUEL,
+  BILL_LUZ,
   BILL_PAUSED,
   BILLS,
   BILLS_OF_MONTH,
@@ -68,6 +70,8 @@ const open = ({
 
 const total = () => screen.findByRole("region", { name: "Total das contas fixas" });
 const nextDue = () => screen.findByRole("region", { name: "Próximo vencimento" });
+const list = (name: string) => screen.getByRole("list", { name });
+const patches = (requests: Request[]) => requests.filter((request) => request.method === "PATCH");
 
 describe("Contas fixas", () => {
   beforeEach(() => {
@@ -177,6 +181,65 @@ describe("Contas fixas", () => {
       withRows([luz, { ...aluguel, paid: true }]);
 
       expect(within(await nextDue()).getByText("Nada a vencer este mês")).toBeInTheDocument();
+    });
+  });
+
+  describe("Ativa switch", () => {
+    const PAUSED_RENT = { ...BILL_ALUGUEL, active: false };
+
+    it("pauses a bill from its row, moves it to Pausadas out of the total, and Desfazer brings it back", async () => {
+      const user = userEvent.setup();
+      const { requests, serverHas } = open({
+        replies: { [`PATCH /api/bills/${BILL_ALUGUEL.id}`]: { status: 200, body: PAUSED_RENT } },
+      });
+
+      const rent = await screen.findByRole("switch", { name: "Ativa: Aluguel Residencial" });
+      expect(rent).toBeChecked();
+      serverHas([PAUSED_RENT, BILL_LUZ, BILL_PAUSED]);
+      await user.click(rent);
+
+      expect(await screen.findByText("Conta pausada")).toBeInTheDocument();
+      expect(await patches(requests)[0].json()).toEqual({ active: false });
+      const moved = within(list("Pausadas")).getByRole("switch", { name: "Ativa: Aluguel Residencial" });
+      expect(moved).not.toBeChecked();
+      expect(within(await total()).getByText("1 conta ativa")).toBeInTheDocument();
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+      serverHas(BILLS);
+      await user.click(screen.getByRole("button", { name: "Desfazer" }));
+      expect(await screen.findByText("Conta reativada")).toBeInTheDocument();
+      expect(await patches(requests)[1].json()).toEqual({ active: true });
+      expect(within(list("Contas ativas")).getByRole("switch", { name: "Ativa: Aluguel Residencial" })).toBeChecked();
+    });
+
+    it("reactivates a paused bill", async () => {
+      const user = userEvent.setup();
+      const { requests, serverHas } = open({
+        replies: { [`PATCH /api/bills/${BILL_PAUSED.id}`]: { status: 200, body: { ...BILL_PAUSED, active: true } } },
+      });
+
+      const gym = await screen.findByRole("switch", { name: "Ativa: Academia" });
+      serverHas([BILL_ALUGUEL, BILL_LUZ, { ...BILL_PAUSED, active: true }]);
+      await user.click(gym);
+
+      expect(await screen.findByText("Conta reativada")).toBeInTheDocument();
+      expect(await patches(requests)[0].json()).toEqual({ active: true });
+      expect(within(list("Contas ativas")).getByRole("switch", { name: "Ativa: Academia" })).toBeChecked();
+      expect(screen.queryByRole("list", { name: "Pausadas" })).not.toBeInTheDocument();
+    });
+
+    it("turns the switch back and says so when saving fails, and the row itself still opens the sheet", async () => {
+      const user = userEvent.setup();
+      open({ replies: { [`PATCH /api/bills/${BILL_ALUGUEL.id}`]: { status: 500, body: problem(500, "Falhou.") } } });
+
+      await user.click(await screen.findByRole("switch", { name: "Ativa: Aluguel Residencial" }));
+
+      expect(await screen.findByText("Não foi possível salvar.")).toBeInTheDocument();
+      expect(within(list("Contas ativas")).getByRole("switch", { name: "Ativa: Aluguel Residencial" })).toBeChecked();
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole("button", { name: /^Aluguel Residencial/ }));
+      expect(await screen.findByRole("dialog", { name: "Editar conta" })).toBeInTheDocument();
     });
   });
 });
