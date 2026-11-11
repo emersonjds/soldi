@@ -22,9 +22,11 @@ describe("Próximos meses", () => {
   it("shows six months, twelve on the toggle without asking again, and opens one", async () => {
     const { requests, onOpen } = show({ status: 200, body: FORECAST });
 
-    expect(
-      await within(card()).findByRole("button", { name: "nov 2026: Crítico, 7 dias no vermelho" }),
-    ).toHaveAttribute("aria-current", "date");
+    const november = await within(card()).findByRole("button", {
+      name: "nov 2026: Crítico, menor saldo -R$\u00a02.916,00, 7 dias no vermelho",
+    });
+    expect(november).toHaveAttribute("aria-current", "date");
+    expect(november).toHaveTextContent("-2.916");
     expect(chips()).toHaveLength(6);
     await userEvent.click(within(card()).getByRole("radio", { name: "12 meses" }));
     expect(chips()).toHaveLength(12);
@@ -44,12 +46,15 @@ describe("Próximos meses", () => {
     show({ status: 200, body: FORECAST_FLAT });
     expect(await within(card()).findByText("Lance seus próximos meses para ver a cor deles aqui.")).toBeInTheDocument();
     expect(card()).not.toHaveTextContent("Confortável");
+    expect(card()).not.toHaveTextContent("1.842");
   });
 
   it("paints a flat red balance red, without the lesson", async () => {
     show({ status: 200, body: forecastFixture("2026-11-10", "2026-11-10", "2027-10-31", [["2026-11-10", "-800.00"]]) });
     expect(
-      await within(card()).findByRole("button", { name: "nov 2026: Crítico, 21 dias no vermelho" }),
+      await within(card()).findByRole("button", {
+        name: "nov 2026: Crítico, menor saldo -R$\u00a0800,00, 21 dias no vermelho",
+      }),
     ).toBeInTheDocument();
     expect(card()).not.toHaveTextContent("Lance seus próximos meses");
   });

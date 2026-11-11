@@ -48,7 +48,11 @@ describe("Simulation", () => {
     ]);
     await verdict("Com essa compra, dia 23/12 vira Crítico");
     expect(screen.getByRole("heading", { name: "Meses com essa compra" })).toBeInTheDocument();
-    expect(screen.getByRole("listitem", { name: "jan 2027: Crítico, 31 dias no vermelho" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("listitem", {
+        name: "jan 2027: Crítico, menor saldo -R$\u00a02.957,90, 31 dias no vermelho",
+      }),
+    ).toBeInTheDocument();
   });
 
   it("hides the week for a date after the horizon", async () => {
