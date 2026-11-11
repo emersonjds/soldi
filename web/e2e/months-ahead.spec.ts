@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+import { expectNoClipped } from "./clipped";
+
 const API = process.env.E2E_API_URL ?? "http://localhost:8080";
 
 /** `[year, month, day]` of today in the server's São Paulo calendar. */
@@ -42,11 +44,14 @@ test("Próximos meses paints the first two months the rent is owed Crítico and 
   const strip = page.getByRole("region", { name: "Próximos meses" });
   const chips = strip.getByRole("button", { name: /\d{4}/ });
   await expect(chips).toHaveCount(6);
-  await expect(chips.nth(first)).toHaveAccessibleName(/: Crítico, \d+ dias? no vermelho$/);
-  await expect(chips.nth(first + 1)).toHaveAccessibleName(/: Crítico, \d+ dias? no vermelho$/);
+  const red = /: Crítico, menor saldo -R\$\s[\d.]+,\d\d, \d+ dias? no vermelho$/;
+  await expect(chips.nth(first)).toHaveAccessibleName(red);
+  await expect(chips.nth(first + 1)).toHaveAccessibleName(red);
   await strip.getByRole("radio", { name: "12 meses" }).click();
   await expect(chips).toHaveCount(12);
-  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
+  // Rent with nothing coming in: the last months fall below -R$ 10.000.
+  await expect(chips.nth(11)).toContainText(/-\d{2}\.\d{3}/);
+  await expectNoClipped(page);
 
   await chips.nth(first + 1).click();
   await expect(page).toHaveURL(new RegExp(`m=${monthFromNow(first + 1)}`));
