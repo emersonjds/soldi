@@ -102,6 +102,19 @@ async fn bills_under_economia_are_the_months_savings_and_still_leave_the_balance
 }
 
 #[sqlx::test]
+async fn saving_before_a_moved_opening_is_not_the_months_saving(pool: PgPool) {
+    let user = TestApp::signed_in(pool, "ana@example.com").await;
+    open_at(&user, "0", "2026-11-01").await;
+    log(&user, "2026-11-05", "bill", "500", "Economia").await;
+    open_at(&user, "0", "2026-11-15").await;
+
+    let (_, view) = user.get("/api/months/2026-11").await;
+
+    assert_eq!(view["totals"]["bills"], "0.00");
+    assert_eq!(view["totals"]["saved"], "0.00");
+}
+
+#[sqlx::test]
 async fn a_new_entry_moves_todays_balance_and_tier(pool: PgPool) {
     let user = TestApp::signed_in(pool, "ana@example.com").await;
     let today = soldi_server::today_sao_paulo();

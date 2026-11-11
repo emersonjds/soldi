@@ -59,10 +59,9 @@ test("a bill from onboarding shows under Contas do Mês, pays in one tap and mov
   await page.getByRole("dialog", { name: "Lançar" }).getByRole("button", { name: "Fechar" }).click();
 
   const hero = page.getByRole("region", { name: "Saldo hoje" });
-  const summary = page.getByRole("region", { name: "Resumo do mês" });
   const bill = page.getByRole("region", { name: "Contas do Mês" }).getByRole("listitem", { name: "Aluguel" });
   await expect(bill).toContainText("R$ 300,00");
-  await expect(summary).toContainText("R$ 700,00");
+  await expect(hero).toContainText(/Projetado fim do mês\s*R\$\s700,00/);
 
   await bill.getByRole("button", { name: /^Pagar Aluguel/ }).click();
   await expect(bill.getByRole("button", { name: "Pago: desfazer Aluguel" })).toBeVisible();
@@ -78,7 +77,7 @@ test("a bill from onboarding shows under Contas do Mês, pays in one tap and mov
   await sheet.getByRole("button", { name: "Confirmar" }).click();
 
   await expect(bill.getByRole("button", { name: "Pago: desfazer Aluguel" })).toBeVisible();
-  await expect(summary).toContainText("R$ 650,00");
+  await expect(hero).toContainText(/Projetado fim do mês\s*R\$\s650,00/);
 });
 
 test("Lançar fills the cents from the right and a category created from the picker comes selected", async ({
@@ -126,4 +125,51 @@ test("Lançar fills the cents from the right and a category created from the pic
   await expect(page.getByText("Categoria criada")).toBeVisible();
   await expect(create).toBeHidden();
   await expect(page.getByRole("combobox", { name: "Categoria" })).toHaveText(/Feira/);
+});
+
+test("the hero splits the income, and the glance cards open their screens", async ({ page, request }) => {
+  const health = await request.get(`${API}/api/health`).catch(() => null);
+  test.skip(!health?.ok(), `Soldi server unreachable at ${API}/api/health; start it to run this flow.`);
+
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto("/criar-conta");
+  await page.getByLabel("E-mail").fill(`e2e-grid-${Date.now()}@example.com`);
+  await page.getByLabel("Senha").fill("uma-senha-bem-longa");
+  await page.getByRole("button", { name: "Criar conta" }).click();
+
+  await page.getByRole("button", { name: "Continuar" }).click();
+  await page.getByLabel("Saldo de hoje").fill("1.000,00");
+  await page.getByRole("button", { name: "Continuar" }).click();
+  await page.getByRole("button", { name: "Pular por agora" }).click();
+  await page.getByRole("button", { name: "Ver meu mês" }).click();
+  await page.getByRole("button", { name: "Pular" }).click();
+  await page.getByRole("dialog", { name: "Lançar" }).getByRole("button", { name: "Fechar" }).click();
+
+  const hero = page.getByRole("region", { name: "Saldo hoje" });
+  await expect(hero).toContainText("Nenhuma entrada neste mês");
+  await hero.getByRole("button", { name: "Lançar entrada" }).click();
+  await expect(page.getByRole("radio", { name: "Entrada" })).toBeChecked();
+  await page.keyboard.type("200000");
+  await page.getByRole("button", { name: "Salvar" }).click();
+
+  await page.getByRole("navigation", { name: "Navegação principal" }).getByRole("button", { name: "Lançar" }).click();
+  await expect(page.getByRole("combobox", { name: "Categoria" })).toHaveText(/Mercado/);
+  await page.keyboard.type("1250");
+  await page.getByRole("button", { name: "Salvar" }).click();
+
+  await expect(hero.getByRole("img", { name: /^Entradas R\$\s2\.000,00: diário 1%, livre 99%$/ })).toBeVisible();
+  await expect(hero.getByRole("listitem")).toHaveText([/^Diário\s*R\$\s12,50 · 1%$/, /^Livre\s*R\$\s1\.987,50 · 99%$/]);
+  await expect(hero).toContainText("Sobram 99% das entradas");
+  await expect(hero).toContainText(/Saldo hoje\s*R\$\s2\.987,50/);
+
+  const spending = page.getByRole("region", { name: "Para onde vai" });
+  await expect(spending.getByRole("listitem")).toHaveText([/Mercado\s*R\$\s12,50\s*100%/]);
+  await spending.getByRole("link", { name: "Ver tudo" }).click();
+  await expect(page).toHaveURL(/\/para-onde-vai\?m=\d{4}-\d{2}$/);
+
+  await page.goBack();
+  const cofrinhos = page.getByRole("region", { name: "Cofrinhos" });
+  await expect(cofrinhos).toContainText("Nenhum cofrinho ainda. Comece pela reserva de emergência.");
+  await cofrinhos.getByRole("link", { name: "Ver cofrinhos" }).click();
+  await expect(page).toHaveURL(/\/economia$/);
 });

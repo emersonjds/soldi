@@ -40,7 +40,7 @@ const Body = ({ count, viewing, onOpen }: Props & { count: number }) => {
     );
   if (!forecast.data)
     return (
-      <div className="grid grid-cols-3 gap-2">
+      <div aria-busy="true" className="grid grid-cols-3 gap-2">
         {SLOTS.slice(0, count).map((slot) => (
           <Skeleton key={slot} data-testid="chip-skeleton" className="h-16 rounded-xl" />
         ))}

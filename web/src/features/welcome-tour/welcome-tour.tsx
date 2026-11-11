@@ -9,8 +9,12 @@ import { Spinner } from "@/components/ui/spinner";
 import { useTourSeen } from "@/entities/user/session";
 import { cn } from "@/lib/utils";
 import { BrandButton } from "@/shared/ui/brand-button";
-
-import { CofrinhoIllustration, IncomeIllustration, LedgerIllustration, ProjectionIllustration } from "./illustrations";
+import {
+  CofrinhoIllustration,
+  IncomeIllustration,
+  LedgerIllustration,
+  ProjectionIllustration,
+} from "@/shared/ui/illustrations";
 
 const STEPS: { title: string; text: string; illustration: ReactNode }[] = [
   {

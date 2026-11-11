@@ -11,7 +11,9 @@ describe("DashCard", () => {
       </DashCard>,
     );
 
-    expect(screen.getByRole("heading", { level: 2, name: "Para onde vai" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Para onde vai" })).toContainElement(
+      screen.getByRole("heading", { level: 2, name: "Para onde vai" }),
+    );
     const link = screen.getByRole("link", { name: "Ver tudo" });
     expect(link).toHaveAttribute("href", "/para-onde-vai");
     expect(link).toHaveClass("min-h-11");
