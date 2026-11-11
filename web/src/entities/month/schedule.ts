@@ -18,9 +18,11 @@ export const whenDue = (date: string, today: string) => {
   return days === 1 ? "amanhã" : `em ${days} dias`;
 };
 
+export const ALL_BILLS_PAID = "Todas as contas do mês pagas";
+
 /** Spec 2026-11-10 §3.4: the next bill due, or that every bill is paid. */
 export const subtitleOf = (bills: Bill[], today: string) => {
-  if (bills.every((bill) => bill.paid)) return "Todas as contas do mês pagas";
+  if (bills.every((bill) => bill.paid)) return ALL_BILLS_PAID;
   const next = nextDue(bills, today);
   if (!next) return null;
   if (next.due_date === today) return `Vence hoje: ${next.name}`;

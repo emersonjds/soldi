@@ -1,4 +1,5 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Toaster } from "sonner";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -27,17 +28,20 @@ const NOVEMBER: Schemas["MonthView"] = {
   bills_of_month: BILLS_OF_MONTH,
 };
 
-/** Bills on a server a test can change, as a PATCH would; `month: null` never answers. */
+/** Bills on a server a test can change, as a PATCH would; `month: null` never answers; `hold` keeps every PATCH pending until `answer`. */
 const open = ({
   bills = BILLS,
   month = NOVEMBER,
   replies = {},
+  hold = false,
 }: {
   bills?: Schemas["Bill"][];
   month?: Schemas["MonthView"] | null;
   replies?: Record<string, Reply>;
+  hold?: boolean;
 } = {}) => {
   let server = bills;
+  const pending: ((response: Response) => void)[] = [];
   const requests = signedIn({
     "GET /api/categories": { status: 200, body: CATEGORIES },
     ...(month && { "GET /api/months/2026-11": { status: 200, body: month } }),
@@ -46,6 +50,10 @@ const open = ({
   const stubbed = globalThis.fetch;
   vi.stubGlobal("fetch", async (request: Request) => {
     const path = new URL(request.url).pathname;
+    if (hold && request.method === "PATCH") {
+      requests.push(request);
+      return new Promise<Response>((resolve) => pending.push(resolve));
+    }
     if (request.method !== "GET") return stubbed(request);
     if (path === "/api/bills") {
       requests.push(request);
@@ -54,7 +62,7 @@ const open = ({
     if (path === "/api/months/2026-11" && month === null) return new Promise<Response>(() => undefined);
     return stubbed(request);
   });
-  renderWithQuery(
+  const { client, rerender } = renderWithQuery(
     <>
       <BillList />
       <Toaster />
@@ -62,6 +70,14 @@ const open = ({
   );
   return {
     requests,
+    answer: (status: number, body: unknown) => pending.shift()?.(Response.json(body, { status })),
+    leave: () =>
+      rerender(
+        <QueryClientProvider client={client}>
+          {null}
+          <Toaster />
+        </QueryClientProvider>,
+      ),
     serverHas: (next: Schemas["Bill"][]) => {
       server = next;
     },
@@ -186,60 +202,184 @@ describe("Contas fixas", () => {
 
   describe("Ativa switch", () => {
     const PAUSED_RENT = { ...BILL_ALUGUEL, active: false };
+    const PAUSED_LUZ = { ...BILL_LUZ, active: false };
+    const RENT = "Ativa: Aluguel Residencial";
 
-    it("pauses a bill from its row, moves it to Pausadas out of the total, and Desfazer brings it back", async () => {
-      const user = userEvent.setup();
+    beforeEach(() => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      vi.setSystemTime(new Date(2026, 10, 5, 12));
+    });
+
+    const user = () => userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    const expire = () => act(() => vi.advanceTimersByTime(6000));
+
+    it("pauses a bill from its row into Pausadas and out of the total, and Desfazer sends nothing", async () => {
+      const { requests } = open();
+      const clicks = user();
+
+      const rent = await screen.findByRole("switch", { name: RENT });
+      expect(rent).toBeChecked();
+      await clicks.click(rent);
+
+      expect(await screen.findByText("Conta pausada")).toBeInTheDocument();
+      expect(within(list("Pausadas")).getByRole("switch", { name: RENT })).not.toBeChecked();
+      expect(within(await total()).getByText("1 conta ativa")).toBeInTheDocument();
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(patches(requests)).toHaveLength(0);
+
+      await clicks.click(screen.getByRole("button", { name: "Desfazer" }));
+      expect(within(list("Contas ativas")).getByRole("switch", { name: RENT })).toBeChecked();
+      expire();
+      expect(patches(requests)).toHaveLength(0);
+      expect(within(await total()).getByText("2 contas ativas")).toBeInTheDocument();
+    });
+
+    it("sends the pause once the toast is gone", async () => {
       const { requests, serverHas } = open({
         replies: { [`PATCH /api/bills/${BILL_ALUGUEL.id}`]: { status: 200, body: PAUSED_RENT } },
       });
 
-      const rent = await screen.findByRole("switch", { name: "Ativa: Aluguel Residencial" });
-      expect(rent).toBeChecked();
+      await user().click(await screen.findByRole("switch", { name: RENT }));
+      await screen.findByText("Conta pausada");
       serverHas([PAUSED_RENT, BILL_LUZ, BILL_PAUSED]);
-      await user.click(rent);
+      expire();
 
-      expect(await screen.findByText("Conta pausada")).toBeInTheDocument();
+      await waitFor(() => expect(patches(requests)).toHaveLength(1));
       expect(await patches(requests)[0].json()).toEqual({ active: false });
-      const moved = within(list("Pausadas")).getByRole("switch", { name: "Ativa: Aluguel Residencial" });
-      expect(moved).not.toBeChecked();
-      expect(within(await total()).getByText("1 conta ativa")).toBeInTheDocument();
-      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-
-      serverHas(BILLS);
-      await user.click(screen.getByRole("button", { name: "Desfazer" }));
-      expect(await screen.findByText("Conta reativada")).toBeInTheDocument();
-      expect(await patches(requests)[1].json()).toEqual({ active: true });
-      expect(within(list("Contas ativas")).getByRole("switch", { name: "Ativa: Aluguel Residencial" })).toBeChecked();
+      await waitFor(() => expect(within(list("Pausadas")).getByRole("switch", { name: RENT })).toBeEnabled());
+      expect(patches(requests)).toHaveLength(1);
     });
 
-    it("reactivates a paused bill", async () => {
-      const user = userEvent.setup();
+    it("still sends the pause when the page is left with the toast up", async () => {
+      const { requests, leave } = open({
+        replies: { [`PATCH /api/bills/${BILL_ALUGUEL.id}`]: { status: 200, body: PAUSED_RENT } },
+      });
+
+      await user().click(await screen.findByRole("switch", { name: RENT }));
+      await screen.findByText("Conta pausada");
+      leave();
+      expire();
+
+      await waitFor(() => expect(patches(requests)).toHaveLength(1));
+      expect(await patches(requests)[0].json()).toEqual({ active: false });
+    });
+
+    it("reactivates a paused bill at once, and its Desfazer pauses it again without a request", async () => {
       const { requests, serverHas } = open({
         replies: { [`PATCH /api/bills/${BILL_PAUSED.id}`]: { status: 200, body: { ...BILL_PAUSED, active: true } } },
       });
+      const clicks = user();
 
       const gym = await screen.findByRole("switch", { name: "Ativa: Academia" });
       serverHas([BILL_ALUGUEL, BILL_LUZ, { ...BILL_PAUSED, active: true }]);
-      await user.click(gym);
+      await clicks.click(gym);
 
       expect(await screen.findByText("Conta reativada")).toBeInTheDocument();
       expect(await patches(requests)[0].json()).toEqual({ active: true });
       expect(within(list("Contas ativas")).getByRole("switch", { name: "Ativa: Academia" })).toBeChecked();
       expect(screen.queryByRole("list", { name: "Pausadas" })).not.toBeInTheDocument();
+
+      await clicks.click(screen.getByRole("button", { name: "Desfazer" }));
+      expect(await screen.findByText("Conta pausada")).toBeInTheDocument();
+      expect(within(list("Pausadas")).getByRole("switch", { name: "Ativa: Academia" })).not.toBeChecked();
+      expect(patches(requests)).toHaveLength(1);
     });
 
-    it("turns the switch back and says so when saving fails, and the row itself still opens the sheet", async () => {
-      const user = userEvent.setup();
-      open({ replies: { [`PATCH /api/bills/${BILL_ALUGUEL.id}`]: { status: 500, body: problem(500, "Falhou.") } } });
+    it("holds the switch while its request is out, so a second click sends nothing", async () => {
+      const { requests, answer } = open({ hold: true });
+      const clicks = user();
 
-      await user.click(await screen.findByRole("switch", { name: "Ativa: Aluguel Residencial" }));
+      const gym = await screen.findByRole("switch", { name: "Ativa: Academia" });
+      await clicks.click(gym);
+      const pending = await screen.findByRole("switch", { name: "Ativa: Academia" });
+      expect(pending).toBeChecked();
+      expect(pending).toBeDisabled();
+      await clicks.click(pending);
+      expect(patches(requests)).toHaveLength(1);
 
+      answer(200, { ...BILL_PAUSED, active: true });
+      expect(await screen.findByText("Conta reativada")).toBeInTheDocument();
+      expect(screen.getByRole("switch", { name: "Ativa: Academia" })).toBeEnabled();
+    });
+
+    it("shows the pause while it is saving, turns the switch back when it fails, and the row still opens the sheet", async () => {
+      const { requests, answer } = open({ hold: true });
+      const clicks = user();
+
+      await clicks.click(await screen.findByRole("switch", { name: RENT }));
+      await screen.findByText("Conta pausada");
+      expire();
+      await waitFor(() => expect(patches(requests)).toHaveLength(1));
+      expect(within(list("Pausadas")).getByRole("switch", { name: RENT })).not.toBeChecked();
+
+      answer(500, problem(500, "Falhou."));
       expect(await screen.findByText("Não foi possível salvar.")).toBeInTheDocument();
-      expect(within(list("Contas ativas")).getByRole("switch", { name: "Ativa: Aluguel Residencial" })).toBeChecked();
+      expect(within(list("Contas ativas")).getByRole("switch", { name: RENT })).toBeChecked();
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 
-      await user.click(screen.getByRole("button", { name: /^Aluguel Residencial/ }));
+      await clicks.click(screen.getByRole("button", { name: /^Aluguel Residencial/ }));
       expect(await screen.findByRole("dialog", { name: "Editar conta" })).toBeInTheDocument();
+    });
+
+    it("keeps a bill paused when it is edited right after the pause, which opening the sheet commits", async () => {
+      const { requests } = open({
+        replies: { [`PATCH /api/bills/${BILL_ALUGUEL.id}`]: { status: 200, body: PAUSED_RENT } },
+      });
+      const clicks = user();
+
+      await clicks.click(await screen.findByRole("switch", { name: RENT }));
+      await screen.findByText("Conta pausada");
+      await clicks.click(screen.getByRole("button", { name: /^Aluguel Residencial/ }));
+      const sheet = await screen.findByRole("dialog", { name: "Editar conta" });
+      await waitFor(() => expect(patches(requests)).toHaveLength(1));
+      expect(await patches(requests)[0].json()).toEqual({ active: false });
+      expect(within(sheet).getByRole("switch", { name: "Ativa" })).not.toBeChecked();
+      await clicks.clear(within(sheet).getByLabelText("Valor"));
+      await clicks.type(within(sheet).getByLabelText("Valor"), "2300,00");
+      await clicks.click(within(sheet).getByRole("button", { name: "Salvar" }));
+
+      await waitFor(() => expect(patches(requests)).toHaveLength(2));
+      expect(await patches(requests)[1].json()).toEqual({
+        name: "Aluguel Residencial",
+        amount: "2300.00",
+        due_day: 10,
+        category_id: BILL_ALUGUEL.category_id,
+      });
+    });
+
+    it("pauses two rows back to back, each with its own toast and request", async () => {
+      const { requests, serverHas } = open({
+        replies: {
+          [`PATCH /api/bills/${BILL_ALUGUEL.id}`]: { status: 200, body: PAUSED_RENT },
+          [`PATCH /api/bills/${BILL_LUZ.id}`]: { status: 200, body: PAUSED_LUZ },
+        },
+      });
+      const clicks = user();
+
+      await clicks.click(await screen.findByRole("switch", { name: RENT }));
+      await clicks.click(screen.getByRole("switch", { name: "Ativa: Luz (Enel)" }));
+
+      expect(await screen.findAllByText("Conta pausada")).toHaveLength(2);
+      expect(screen.queryByRole("list", { name: "Contas ativas" })).not.toBeInTheDocument();
+      expect(within(await total()).getByText("0 contas ativas")).toBeInTheDocument();
+      serverHas([PAUSED_RENT, PAUSED_LUZ, BILL_PAUSED]);
+      expire();
+
+      await waitFor(() => expect(patches(requests)).toHaveLength(2));
+      const sent = await Promise.all(
+        patches(requests).map(async (request) => [new URL(request.url).pathname, await request.json()]),
+      );
+      expect(sent).toEqual(
+        expect.arrayContaining([
+          [`/api/bills/${BILL_ALUGUEL.id}`, { active: false }],
+          [`/api/bills/${BILL_LUZ.id}`, { active: false }],
+        ]),
+      );
+      await waitFor(() => expect(within(list("Pausadas")).getByRole("switch", { name: RENT })).toBeEnabled());
+      const paused = within(list("Pausadas"));
+      expect(paused.getByRole("switch", { name: "Ativa: Luz (Enel)" })).not.toBeChecked();
+      expect(paused.getByRole("switch", { name: "Ativa: Academia" })).not.toBeChecked();
+      expect(screen.queryByRole("list", { name: "Contas ativas" })).not.toBeInTheDocument();
     });
   });
 });

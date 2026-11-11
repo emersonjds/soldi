@@ -187,7 +187,7 @@ export const EditBillSheet = ({ open, onOpenChange, bill, onArchive, prefill, on
       onSuccess: () => toast.success("Conta salva"),
       onError: () => toast.error("Não foi possível salvar a conta."),
     };
-    if (bill) return update.mutate({ id: bill.id, ...fields, active }, feedback);
+    if (bill) return update.mutate({ id: bill.id, ...fields, ...(active !== bill.active && { active }) }, feedback);
     if (onCreate) return onCreate(fields);
     create.mutate(fields, feedback);
   };

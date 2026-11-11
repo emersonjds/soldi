@@ -10,7 +10,7 @@ import { Switch } from "@/components/ui/switch";
 import { type Bill, useArchiveBill, useBills, useUpdateBill } from "@/entities/bill/bill-queries";
 import { categoriesQuery, categoryLabel } from "@/entities/category/categories-query";
 import { useMonth } from "@/entities/month/month-query";
-import { nextDue, whenDue } from "@/entities/month/schedule";
+import { ALL_BILLS_PAID, nextDue, whenDue } from "@/entities/month/schedule";
 import { EditBillSheet } from "@/features/edit-bill/edit-bill-sheet";
 import type { Schemas } from "@/shared/api/client";
 import { monthName, todayISO } from "@/shared/lib/date";
@@ -27,12 +27,14 @@ const Rows = ({
   bills,
   onOpen,
   isActive,
+  isSaving,
   onToggle,
 }: {
   label: string;
   bills: Bill[];
   onOpen: (bill: Bill) => void;
   isActive: (bill: Bill) => boolean;
+  isSaving: (bill: Bill) => boolean;
   onToggle: (bill: Bill, active: boolean) => void;
 }) => {
   const categories = useQuery(categoriesQuery);
@@ -62,6 +64,7 @@ const Rows = ({
             <Switch
               aria-label={`Ativa: ${bill.name}`}
               checked={isActive(bill)}
+              disabled={isSaving(bill)}
               onCheckedChange={(active) => onToggle(bill, active)}
               className="mx-3 shrink-0 after:-inset-y-3.5"
             />
@@ -88,7 +91,7 @@ const NextDue = ({ rows, today }: { rows: Schemas["BillOfMonth"][]; today: strin
         </p>
       ) : (
         <p className="text-muted-foreground">
-          {rows.length > 0 && rows.every((row) => row.paid) ? "Todas as contas do mês pagas" : "Nada a vencer este mês"}
+          {rows.length > 0 && rows.every((row) => row.paid) ? ALL_BILLS_PAID : "Nada a vencer este mês"}
         </p>
       )}
     </DashCard>
@@ -137,7 +140,7 @@ export const BillList = () => {
   const [archiving, setArchiving] = useState<string[]>([]);
 
   const edit = (bill?: Bill) => {
-    setSelected(bill);
+    setSelected(bill && { ...bill, active: isActive(bill) });
     setEditing(true);
   };
 
@@ -170,30 +173,57 @@ export const BillList = () => {
     });
   };
 
+  const settle = (id: string) => setToggled((current) => ({ ...current, [id]: undefined }));
+
   // mutateAsync: mutate's own callbacks fire only for the latest call, and two rows can be toggled at once.
-  const toggle = (bill: Bill, active: boolean) => {
-    setToggled((current) => ({ ...current, [bill.id]: active }));
+  const send = (bill: Bill, active: boolean, onSaved?: () => void) =>
     update
       .mutateAsync({ id: bill.id, active })
-      .then(
-        () =>
-          toast(active ? "Conta reativada" : "Conta pausada", {
-            duration: 5000,
-            action: { label: "Desfazer", onClick: () => toggle(bill, !active) },
-          }),
-        () => toast.error("Não foi possível salvar."),
-      )
-      .finally(() => setToggled((current) => ({ ...current, [bill.id]: undefined })));
+      .then(onSaved, () => toast.error("Não foi possível salvar."))
+      .finally(() => settle(bill.id));
+
+  // D17: resuming sets active_since to today and drops the bill's overdue occurrences, so the pause waits for the toast like archiveLater and Desfazer sends nothing.
+  const pauseLater = (bill: Bill) => {
+    let done = false;
+    const commit = () => {
+      if (done) return;
+      done = true;
+      send(bill, false);
+    };
+    toast("Conta pausada", {
+      duration: 5000,
+      action: {
+        label: "Desfazer",
+        onClick: () => {
+          done = true;
+          settle(bill.id);
+        },
+      },
+      onAutoClose: commit,
+      onDismiss: commit,
+    });
+  };
+
+  const toggle = (bill: Bill, active: boolean) => {
+    setToggled((current) => ({ ...current, [bill.id]: active }));
+    if (!active) return pauseLater(bill);
+    send(bill, true, () =>
+      toast("Conta reativada", {
+        duration: 5000,
+        action: { label: "Desfazer", onClick: () => toggle(bill, false) },
+      }),
+    );
   };
   const isActive = (bill: Bill) => toggled[bill.id] ?? bill.active;
+  const isSaving = (bill: Bill) => toggled[bill.id] !== undefined;
 
   if (bills.isError)
     return <PageError message="Não foi possível carregar as contas." onRetry={() => bills.refetch()} />;
   if (!bills.data) return <PageLoading />;
 
   const visible = bills.data.filter((bill) => !archiving.includes(bill.id));
-  const active = visible.filter((bill) => bill.active);
-  const paused = visible.filter((bill) => !bill.active);
+  const active = visible.filter(isActive);
+  const paused = visible.filter((bill) => !isActive(bill));
 
   return (
     <div className="flex flex-col gap-6">
@@ -207,7 +237,14 @@ export const BillList = () => {
         </div>
       ) : (
         active.length > 0 && (
-          <Rows label="Contas ativas" bills={active} onOpen={edit} isActive={isActive} onToggle={toggle} />
+          <Rows
+            label="Contas ativas"
+            bills={active}
+            onOpen={edit}
+            isActive={isActive}
+            isSaving={isSaving}
+            onToggle={toggle}
+          />
         )
       )}
       {paused.length > 0 && (
@@ -215,7 +252,14 @@ export const BillList = () => {
           <h2 className="px-1 font-semibold text-[11px] text-muted-foreground uppercase leading-4 tracking-[0.12em]">
             Pausadas
           </h2>
-          <Rows label="Pausadas" bills={paused} onOpen={edit} isActive={isActive} onToggle={toggle} />
+          <Rows
+            label="Pausadas"
+            bills={paused}
+            onOpen={edit}
+            isActive={isActive}
+            isSaving={isSaving}
+            onToggle={toggle}
+          />
         </section>
       )}
       <BrandButton className="lg:w-auto lg:self-start lg:px-6" onClick={() => edit()}>
