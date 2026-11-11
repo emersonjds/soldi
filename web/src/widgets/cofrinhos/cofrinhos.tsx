@@ -1,15 +1,15 @@
 "use client";
 
-import { type CSSProperties, useState } from "react";
+import { useState } from "react";
 
 import { ArrowDownToLine, ArrowUpFromLine, Check, ChevronRight, Pencil, PiggyBank, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useArchiveCategory, useCategories } from "@/entities/category/categories-query";
 import { CategorySheet } from "@/entities/category/category-sheet";
+import { CofrinhoBar } from "@/entities/cofrinho/cofrinho-bar";
 import { type Cofrinho, useCofrinhos, useMovements } from "@/entities/cofrinho/cofrinho-queries";
 import { TransactionSheet } from "@/features/add-transaction/transaction-sheet";
 import { EditBillSheet } from "@/features/edit-bill/edit-bill-sheet";
@@ -20,8 +20,9 @@ import { useCurrency } from "@/shared/lib/currency";
 import { monthYear, shortDay } from "@/shared/lib/date";
 import { formatMoney, minusMoney, positiveAmount } from "@/shared/lib/money";
 import { formatPct } from "@/shared/lib/percent";
+import { cents } from "@/shared/lib/tier";
 import { BrandButton } from "@/shared/ui/brand-button";
-import { CategoryIcon, categoryFill } from "@/shared/ui/category-icon";
+import { CategoryIcon } from "@/shared/ui/category-icon";
 import { DashCard } from "@/shared/ui/dash-card";
 import { CofrinhoIllustration } from "@/shared/ui/illustrations";
 import { Money } from "@/shared/ui/money";
@@ -43,21 +44,6 @@ const useGoalCaption = () => {
   };
 };
 
-/** The template's Progress in the cofrinho's color; it keeps `value` off the root, so the meter reads aria-valuenow. */
-const Bar = ({ cofrinho }: { cofrinho: Cofrinho }) => {
-  const pct = Number(cofrinho.progress_pct ?? 0);
-  const color: CSSProperties & { "--bar": string } = { "--bar": categoryFill(cofrinho.color) };
-  return (
-    <Progress
-      value={pct}
-      aria-label={`Progresso de ${cofrinho.name}`}
-      aria-valuenow={pct}
-      style={color}
-      className="h-2 *:data-[slot=progress-indicator]:bg-(--bar)"
-    />
-  );
-};
-
 /** The balance, `de {meta}`, the bar and the caption: the card and the sheet show the same. */
 const Balance = ({ cofrinho, large = false }: { cofrinho: Cofrinho; large?: boolean }) => {
   const goal = useGoalCaption()(cofrinho);
@@ -74,7 +60,7 @@ const Balance = ({ cofrinho, large = false }: { cofrinho: Cofrinho; large?: bool
           </span>
         )}
       </p>
-      {cofrinho.target && <Bar cofrinho={cofrinho} />}
+      {cofrinho.target && <CofrinhoBar cofrinho={cofrinho} />}
       {goal && <p className="text-muted-foreground text-sm">{goal}</p>}
     </div>
   );
@@ -92,8 +78,50 @@ const Status = ({ cofrinho }: { cofrinho: Cofrinho }) => {
   return <span className="text-muted-foreground text-sm tabular-nums">{formatPct(cofrinho.progress_pct, 0)}</span>;
 };
 
+type CardProps = {
+  cofrinho: Cofrinho;
+  disabled: boolean;
+  onOpen: () => void;
+  onSave: () => void;
+  onWithdraw: () => void;
+};
+
+/** Guardar and Resgatar sit above the open button's overlay, which still takes taps beside them; an empty cofrinho only takes its first deposit. */
+const CardActions = ({ cofrinho, disabled, onSave, onWithdraw }: Omit<CardProps, "onOpen">) => {
+  if (cents(cofrinho.balance) === 0)
+    return (
+      <div className="relative z-10 mt-4">
+        <Button variant="secondary" className="min-h-11 w-full text-base" disabled={disabled} onClick={onSave}>
+          <Plus className="size-5" />
+          Guardar primeiro valor <span className="sr-only">em {cofrinho.name}</span>
+        </Button>
+      </div>
+    );
+  return (
+    <div className="pointer-events-none relative z-10 mt-4 flex gap-2">
+      <Button
+        variant="secondary"
+        className="pointer-events-auto min-h-11 px-4 text-base"
+        disabled={disabled}
+        onClick={onSave}
+      >
+        <Plus className="size-5" />
+        Guardar <span className="sr-only">em {cofrinho.name}</span>
+      </Button>
+      <Button
+        variant="ghost"
+        className="pointer-events-auto min-h-11 px-4 text-base"
+        disabled={disabled}
+        onClick={onWithdraw}
+      >
+        Resgatar <span className="sr-only">de {cofrinho.name}</span>
+      </Button>
+    </div>
+  );
+};
+
 /** The button stretches over the whole DashCard, so a tap anywhere on the card opens the cofrinho. */
-const CofrinhoCard = ({ cofrinho, onOpen }: { cofrinho: Cofrinho; onOpen: () => void }) => (
+const CofrinhoCard = ({ cofrinho, disabled, onOpen, onSave, onWithdraw }: CardProps) => (
   <li className="min-w-0">
     <DashCard
       title={cofrinho.name}
@@ -114,6 +142,7 @@ const CofrinhoCard = ({ cofrinho, onOpen }: { cofrinho: Cofrinho; onOpen: () => 
         </span>
         <Balance cofrinho={cofrinho} />
       </button>
+      <CardActions cofrinho={cofrinho} disabled={disabled} onSave={onSave} onWithdraw={onWithdraw} />
     </DashCard>
   </li>
 );
@@ -164,6 +193,9 @@ const Movements = ({ categoryId }: { categoryId: string }) => {
 
 type DetailProps = {
   cofrinho?: Cofrinho;
+  saveDisabled: boolean;
+  withdrawing: boolean;
+  onWithdrawingChange: (withdrawing: boolean) => void;
   onOpenChange: (open: boolean) => void;
   onSave: (cofrinho: Cofrinho) => void;
   onEdit: (cofrinho: Cofrinho) => void;
@@ -173,69 +205,71 @@ type DetailProps = {
 const action = "min-h-12 justify-start gap-3 text-base";
 
 /** The cofrinho's sheet: Guardar, Resgatar, its movements, Editar and Excluir; `Sem objetivo` is only Economia. */
-const CofrinhoDetail = ({ cofrinho, onOpenChange, onSave, onEdit, onArchive }: DetailProps) => {
-  const [withdrawing, setWithdrawing] = useState(false);
-
-  return (
-    <ResponsiveSheet
-      open={Boolean(cofrinho)}
-      onOpenChange={(open) => {
-        setWithdrawing(false);
-        onOpenChange(open);
-      }}
-      title={cofrinho?.name ?? ""}
-      description="Guardar, resgatar e ver os movimentos do cofrinho."
-    >
-      {cofrinho && (
-        <>
-          <Balance cofrinho={cofrinho} large />
-          {withdrawing ? (
-            <WithdrawForm
-              cofrinho={cofrinho}
-              onDone={() => setWithdrawing(false)}
-              onCancel={() => setWithdrawing(false)}
-            />
-          ) : (
-            <>
-              <div className="grid grid-cols-2 gap-2">
-                <BrandButton onClick={() => onSave(cofrinho)}>
-                  <ArrowDownToLine className="size-5" />
-                  Guardar
-                </BrandButton>
-                <Button variant="outline" className="min-h-12 text-base" onClick={() => setWithdrawing(true)}>
-                  <ArrowUpFromLine className="size-5" />
-                  Resgatar
+const CofrinhoDetail = ({
+  cofrinho,
+  saveDisabled,
+  withdrawing,
+  onWithdrawingChange: setWithdrawing,
+  onOpenChange,
+  onSave,
+  onEdit,
+  onArchive,
+}: DetailProps) => (
+  <ResponsiveSheet
+    open={Boolean(cofrinho)}
+    onOpenChange={onOpenChange}
+    title={cofrinho?.name ?? ""}
+    description="Guardar, resgatar e ver os movimentos do cofrinho."
+  >
+    {cofrinho && (
+      <>
+        <Balance cofrinho={cofrinho} large />
+        {withdrawing ? (
+          <WithdrawForm
+            cofrinho={cofrinho}
+            onDone={() => setWithdrawing(false)}
+            onCancel={() => setWithdrawing(false)}
+          />
+        ) : (
+          <>
+            <div className="grid grid-cols-2 gap-2">
+              <BrandButton disabled={saveDisabled} onClick={() => onSave(cofrinho)}>
+                <ArrowDownToLine className="size-5" />
+                Guardar
+              </BrandButton>
+              <Button variant="outline" className="min-h-12 text-base" onClick={() => setWithdrawing(true)}>
+                <ArrowUpFromLine className="size-5" />
+                Resgatar
+              </Button>
+            </div>
+            <section aria-labelledby="movements-title" className="flex flex-col gap-1">
+              <h3 id="movements-title" className={caption}>
+                Movimentos
+              </h3>
+              <Movements categoryId={cofrinho.category_id} />
+            </section>
+            {!cofrinho.parent && (
+              <div className="flex flex-col border-t pt-2">
+                <Button variant="ghost" className={action} onClick={() => onEdit(cofrinho)}>
+                  <Pencil className="size-5" />
+                  Editar
+                </Button>
+                <Button
+                  variant="ghost"
+                  className={cn(action, "text-destructive hover:text-destructive")}
+                  onClick={() => onArchive(cofrinho)}
+                >
+                  <Trash2 className="size-5" />
+                  Excluir
                 </Button>
               </div>
-              <section aria-labelledby="movements-title" className="flex flex-col gap-1">
-                <h3 id="movements-title" className={caption}>
-                  Movimentos
-                </h3>
-                <Movements categoryId={cofrinho.category_id} />
-              </section>
-              {!cofrinho.parent && (
-                <div className="flex flex-col border-t pt-2">
-                  <Button variant="ghost" className={action} onClick={() => onEdit(cofrinho)}>
-                    <Pencil className="size-5" />
-                    Editar
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    className={cn(action, "text-destructive hover:text-destructive")}
-                    onClick={() => onArchive(cofrinho)}
-                  >
-                    <Trash2 className="size-5" />
-                    Excluir
-                  </Button>
-                </div>
-              )}
-            </>
-          )}
-        </>
-      )}
-    </ResponsiveSheet>
-  );
-};
+            )}
+          </>
+        )}
+      </>
+    )}
+  </ResponsiveSheet>
+);
 
 const Total = ({ data }: { data: Schemas["Cofrinhos"] }) => {
   const currency = useCurrency();
@@ -291,6 +325,7 @@ export const CofrinhosView = () => {
   const categories = useCategories("bill");
   const archive = useArchiveCategory();
   const [selectedId, setSelectedId] = useState<string>();
+  const [withdrawing, setWithdrawing] = useState(false);
   const [saving, setSaving] = useState<Schemas["Category"]>();
   const [editing, setEditing] = useState<Editing>({ open: false });
   const [archiving, setArchiving] = useState<string[]>([]);
@@ -298,8 +333,21 @@ export const CofrinhosView = () => {
   const categoryOf = (id: string) => categories.data?.find((category) => category.id === id);
   const items = (cofrinhos.data?.items ?? []).filter((item) => !archiving.includes(item.category_id));
   const selected = items.find((item) => item.category_id === selectedId);
+  const active = items.filter((item) => !item.parent).length;
 
   const create = () => setEditing({ open: true });
+  const openCofrinho = (id: string, withdraw: boolean) => {
+    setWithdrawing(withdraw);
+    setSelectedId(id);
+  };
+  const save = (id: string) => {
+    if (categories.isError) {
+      categories.refetch();
+      return toast.error("Não foi possível carregar as categorias.");
+    }
+    setSelectedId(undefined);
+    setSaving(categoryOf(id));
+  };
 
   // ponytail: no unarchive endpoint, so the DELETE waits for the toast, as in Ajustes › Categorias.
   const archiveLater = (id: string, balance: string) => {
@@ -346,7 +394,31 @@ export const CofrinhosView = () => {
     return (
       <>
         <Total data={cofrinhos.data} />
-        {items.length === 0 ? (
+        {items.length > 0 && (
+          <section aria-labelledby="cofrinhos-grid-title" className="flex flex-col gap-3">
+            <h2 className="flex items-baseline gap-2 font-semibold text-lg leading-6">
+              <span id="cofrinhos-grid-title">Seus cofrinhos</span>{" "}
+              {active > 0 && (
+                <span className="font-normal text-muted-foreground text-sm">
+                  {active} {active === 1 ? "ativo" : "ativos"}
+                </span>
+              )}
+            </h2>
+            <ul aria-label="Cofrinhos" className="grid gap-4 lg:grid-cols-2">
+              {items.map((item) => (
+                <CofrinhoCard
+                  key={item.category_id}
+                  cofrinho={item}
+                  disabled={categories.isPending}
+                  onOpen={() => openCofrinho(item.category_id, false)}
+                  onSave={() => save(item.category_id)}
+                  onWithdraw={() => openCofrinho(item.category_id, true)}
+                />
+              ))}
+            </ul>
+          </section>
+        )}
+        {active === 0 && (
           <div className={cn(card, "items-center gap-3 px-6 py-10")}>
             <div
               aria-hidden
@@ -361,12 +433,6 @@ export const CofrinhosView = () => {
               Criar cofrinho
             </BrandButton>
           </div>
-        ) : (
-          <ul aria-label="Cofrinhos" className="grid gap-4 lg:grid-cols-2">
-            {items.map((item) => (
-              <CofrinhoCard key={item.category_id} cofrinho={item} onOpen={() => setSelectedId(item.category_id)} />
-            ))}
-          </ul>
         )}
       </>
     );
@@ -384,11 +450,11 @@ export const CofrinhosView = () => {
       {body()}
       <CofrinhoDetail
         cofrinho={selected}
+        saveDisabled={categories.isPending}
+        withdrawing={withdrawing}
+        onWithdrawingChange={setWithdrawing}
         onOpenChange={(open) => !open && setSelectedId(undefined)}
-        onSave={(cofrinho) => {
-          setSelectedId(undefined);
-          setSaving(categoryOf(cofrinho.category_id));
-        }}
+        onSave={(cofrinho) => save(cofrinho.category_id)}
         onEdit={(cofrinho) => {
           setSelectedId(undefined);
           setEditing({ open: true, category: categoryOf(cofrinho.category_id) });

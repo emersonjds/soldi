@@ -39,7 +39,7 @@ const EMPTY_VIAGEM = { ...COFRINHO_VIAGEM, balance: "0.00" };
 const MOVES = `GET /api/cofrinhos/${RESERVA.id}/movements`;
 const WITHDRAW = `POST /api/cofrinhos/${RESERVA.id}/withdraw`;
 
-const open = (replies: Record<string, Reply> = {}) => {
+const open = (replies: Record<string, Reply> = {}, hanging?: string) => {
   const requests = signedIn({
     "GET /api/cofrinhos": {
       status: 200,
@@ -49,6 +49,12 @@ const open = (replies: Record<string, Reply> = {}) => {
     [MOVES]: { status: 200, body: MOVEMENTS },
     ...replies,
   });
+  if (hanging) {
+    const answer = globalThis.fetch;
+    vi.stubGlobal("fetch", (request: Request) =>
+      new URL(request.url).pathname === hanging ? new Promise<Response>(() => undefined) : answer(request),
+    );
+  }
   renderWithQuery(
     <>
       <EconomiaPage />
@@ -102,6 +108,153 @@ describe("Cofrinhos", () => {
     expect(carro).toHaveTextContent("Meta batida");
     expect(carro).not.toHaveTextContent("Faltam");
     expect(await card("Sem objetivo")).toHaveTextContent("R$ 120,00");
+  });
+
+  describe("a card's actions", () => {
+    const region = async (name: string) => {
+      await card(name);
+      return screen.getByRole("region", { name });
+    };
+
+    it("counts the cofrinhos over the grid, leaving Sem objetivo out", async () => {
+      open();
+
+      const grid = await screen.findByRole("region", { name: "Seus cofrinhos" });
+      expect(grid).toHaveTextContent("Seus cofrinhos 3 ativos");
+      expect(within(grid).getByRole("list", { name: "Cofrinhos" })).toBeInTheDocument();
+    });
+
+    it("says 1 ativo for a single cofrinho", async () => {
+      open({
+        "GET /api/cofrinhos": { status: 200, body: { ...COFRINHOS, items: [COFRINHO_RESERVA, LOOSE] } },
+      });
+
+      expect(await screen.findByRole("region", { name: "Seus cofrinhos" })).toHaveTextContent("Seus cofrinhos 1 ativo");
+    });
+
+    it("drops the count and keeps Criar cofrinho under a lone Sem objetivo", async () => {
+      open({ "GET /api/cofrinhos": { status: 200, body: { ...COFRINHOS, items: [LOOSE] } } });
+
+      const grid = await screen.findByRole("region", { name: "Seus cofrinhos" });
+      expect(within(grid).getByRole("heading", { name: /^Seus cofrinhos/ })).toHaveTextContent(/^Seus cofrinhos$/);
+      expect(within(grid).getByRole("region", { name: "Sem objetivo" })).toBeInTheDocument();
+      expect(screen.getByText("Nenhum cofrinho ainda. Comece pela reserva de emergência.")).toBeInTheDocument();
+      await userEvent.click(screen.getByRole("button", { name: "Criar cofrinho" }));
+      expect(await screen.findByRole("dialog", { name: "Novo cofrinho" })).toBeInTheDocument();
+    });
+
+    it("keeps Guardar and Resgatar beside the card's open button, never inside it", async () => {
+      open();
+
+      const reserva = await region("Reserva");
+      const opener = within(reserva).getByRole("button", { name: /^Reserva/ });
+      const guardar = within(reserva).getByRole("button", { name: "Guardar em Reserva" });
+      const resgatar = within(reserva).getByRole("button", { name: "Resgatar de Reserva" });
+      expect(opener).not.toContainElement(guardar);
+      expect(opener).not.toContainElement(resgatar);
+      expect(guardar.parentElement).toHaveClass("relative", "z-10", "pointer-events-none");
+      expect(guardar).toHaveClass("pointer-events-auto");
+      expect(resgatar).toHaveClass("pointer-events-auto");
+
+      await userEvent.click(opener);
+      const sheet = await screen.findByRole("dialog", { name: "Reserva" });
+      expect(within(sheet).queryByRole("button", { name: "Confirmar resgate" })).not.toBeInTheDocument();
+    });
+
+    it("shows both actions on a met goal and on Sem objetivo", async () => {
+      open();
+
+      for (const name of ["Carro", "Sem objetivo"]) {
+        const each = await region(name);
+        expect(within(each).getByRole("button", { name: `Guardar em ${name}` })).toBeInTheDocument();
+        expect(within(each).getByRole("button", { name: `Resgatar de ${name}` })).toBeInTheDocument();
+      }
+    });
+
+    it("Guardar opens Lançar as a Saída in the cofrinho", async () => {
+      open();
+
+      await userEvent.click(within(await region("Reserva")).getByRole("button", { name: "Guardar em Reserva" }));
+
+      await screen.findByRole("dialog", { name: "Lançar" });
+      expect(await screen.findByRole("radio", { name: "Economia › Reserva" })).toHaveAttribute("aria-checked", "true");
+      expect(screen.getByRole("radio", { name: "Saída" })).toBeChecked();
+    });
+
+    it("Resgatar opens the sheet on the form, which refuses more than the balance, and closing resets it", async () => {
+      open({
+        [WITHDRAW]: {
+          status: 422,
+          body: { ...problem(422, "No."), type: "urn:soldi:error:insufficient-cofrinho" },
+        },
+      });
+
+      await userEvent.click(within(await region("Reserva")).getByRole("button", { name: "Resgatar de Reserva" }));
+      const sheet = await screen.findByRole("dialog", { name: "Reserva" });
+      await userEvent.type(within(sheet).getByLabelText("Valor"), "99900");
+      await userEvent.click(within(sheet).getByRole("button", { name: "Confirmar resgate" }));
+      expect(await within(sheet).findByText("Você só tem R$ 300,00 guardado aqui")).toBeInTheDocument();
+
+      await userEvent.click(within(sheet).getByRole("button", { name: "Fechar" }));
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+      const again = await detail("Reserva");
+      expect(within(again).queryByRole("button", { name: "Confirmar resgate" })).not.toBeInTheDocument();
+      expect(within(again).getByRole("button", { name: "Resgatar" })).toBeInTheDocument();
+    });
+
+    it("offers only Guardar primeiro valor on an empty cofrinho", async () => {
+      open({
+        "GET /api/cofrinhos": { status: 200, body: { ...COFRINHOS, items: [COFRINHO_RESERVA, EMPTY_VIAGEM] } },
+      });
+
+      const viagem = await region("Viagem");
+      expect(within(viagem).queryByRole("button", { name: /^Resgatar/ })).not.toBeInTheDocument();
+      expect(within(viagem).queryByRole("button", { name: "Guardar em Viagem" })).not.toBeInTheDocument();
+      await userEvent.click(within(viagem).getByRole("button", { name: "Guardar primeiro valor em Viagem" }));
+
+      await screen.findByRole("dialog", { name: "Lançar" });
+      expect(await screen.findByRole("radio", { name: "Economia › Viagem" })).toHaveAttribute("aria-checked", "true");
+    });
+
+    it("keeps Guardar and Resgatar on a negative balance, with the bar at zero", async () => {
+      open({
+        "GET /api/cofrinhos": {
+          status: 200,
+          body: { ...COFRINHOS, items: [{ ...COFRINHO_RESERVA, balance: "-10.00", progress_pct: "-0.1" }] },
+        },
+      });
+
+      const reserva = await region("Reserva");
+      expect(within(reserva).getByRole("button", { name: "Guardar em Reserva" })).toBeInTheDocument();
+      expect(within(reserva).getByRole("button", { name: "Resgatar de Reserva" })).toBeInTheDocument();
+      expect(within(reserva).queryByRole("button", { name: /primeiro valor/ })).not.toBeInTheDocument();
+      expect(within(reserva).getByRole("progressbar")).toHaveAttribute("aria-valuenow", "0");
+    });
+
+    it("holds the actions while the categories load", async () => {
+      open({}, "/api/categories");
+
+      const reserva = await region("Reserva");
+      expect(within(reserva).getByRole("button", { name: "Guardar em Reserva" })).toBeDisabled();
+      expect(within(reserva).getByRole("button", { name: "Resgatar de Reserva" })).toBeDisabled();
+      await userEvent.click(within(reserva).getByRole("button", { name: /^Reserva/ }));
+      const sheet = await screen.findByRole("dialog", { name: "Reserva" });
+      expect(within(sheet).getByRole("button", { name: "Guardar" })).toBeDisabled();
+    });
+
+    it("says the categories failed when Guardar cannot open Lançar, and loads them again", async () => {
+      const requests = open({ "GET /api/categories": { status: 500, body: problem(500, "Falhou.") } });
+      const fetched = () => requests.filter((request) => new URL(request.url).pathname === "/api/categories");
+
+      const reserva = await region("Reserva");
+      await waitFor(() => expect(within(reserva).getByRole("button", { name: "Guardar em Reserva" })).toBeEnabled());
+      const before = fetched().length;
+      await userEvent.click(within(reserva).getByRole("button", { name: "Guardar em Reserva" }));
+
+      expect(await screen.findByText("Não foi possível carregar as categorias.")).toBeInTheDocument();
+      expect(screen.queryByRole("dialog", { name: "Lançar" })).not.toBeInTheDocument();
+      await waitFor(() => expect(fetched().length).toBeGreaterThan(before));
+    });
   });
 
   it("says Sem prazo for a goal without a deadline and a minus this month", async () => {
