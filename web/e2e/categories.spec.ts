@@ -31,8 +31,7 @@ test("a subcategory is created under Pets from the header +, renamed, and delete
   await expect(page.getByRole("heading", { level: 1, name: "Categorias" })).toBeVisible();
   await expect(page.getByRole("radio", { name: "Diário" })).toBeChecked();
 
-  await page.getByRole("button", { name: "Ver todas" }).click();
-  await page.getByRole("dialog", { name: "Categoria" }).getByRole("button", { name: "Nova categoria" }).click();
+  await page.getByRole("button", { name: "Nova categoria" }).click();
   await page
     .getByRole("dialog", { name: "Nova" })
     .getByRole("button", { name: /^Subcategoria/ })

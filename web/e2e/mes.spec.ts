@@ -221,7 +221,16 @@ test("Lançamentos shows only bills under Contas, and Lançar picks from a row o
   await tabs.getByRole("button", { name: "Lançar" }).click();
   const launch = page.getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ });
   const row = launch.getByRole("radiogroup", { name: "Categoria" });
-  await expect(row.getByRole("radio")).toHaveText(["Mercado", "Beleza", "Casa", "Combustível", "Comida fora"]);
+  await expect(row.getByRole("radio")).toHaveText([
+    "Mercado",
+    "Beleza",
+    "Casa",
+    "Combustível",
+    "Comida fora",
+    "Educação",
+    "Farmácia",
+    "Lazer",
+  ]);
   await row.getByRole("radio", { name: "Comida fora" }).click();
   await launch.getByLabel("Valor").fill("12.345,67");
   await expectNoClipped(page);
