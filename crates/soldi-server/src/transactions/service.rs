@@ -226,6 +226,7 @@ async fn resize(
 }
 
 /// `following` on a series member also deletes the members dated after it.
+/// A member locks its series first, whatever the scope.
 pub async fn delete(
     pool: &PgPool,
     user: &CurrentUser,
@@ -233,16 +234,18 @@ pub async fn delete(
     scope: Scope,
 ) -> Result<(), AppError> {
     let mut tx = pool.begin().await?;
-    let current = repo::find(&mut tx, user.id, id)
+    let mut current = repo::find(&mut tx, user.id, id)
         .await?
         .ok_or(AppError::NotFound)?;
+    if let Some(series) = &current.series {
+        repo::lock_series(&mut tx, series.id).await?;
+        current = repo::find(&mut tx, user.id, id)
+            .await?
+            .ok_or(AppError::NotFound)?;
+    }
     match (scope, current.series) {
         (Scope::Following, Some(series)) => {
-            repo::lock_series(&mut tx, series.id).await?;
-            let locked = repo::find(&mut tx, user.id, id)
-                .await?
-                .ok_or(AppError::NotFound)?;
-            repo::delete_following(&mut tx, user.id, series.id, locked.date).await?;
+            repo::delete_following(&mut tx, user.id, series.id, current.date).await?;
         }
         _ => {
             repo::delete(&mut tx, user.id, id).await?;

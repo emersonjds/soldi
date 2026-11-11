@@ -1730,38 +1730,158 @@ async fn moving_another_users_series_is_not_found(pool: PgPool) {
 }
 
 #[sqlx::test]
-async fn a_move_waits_for_a_following_delete_of_the_same_series(pool: PgPool) {
-    let user = opened(pool.clone(), "ana@example.com").await;
-    let first = repeat(&user, "2026-11-05", "10", 12).await;
-    let tenth = only(&user, "2027-08").await;
-    let last = only(&user, "2027-10").await;
+async fn m6_the_whole_series_before_the_opening_date_is_refused_and_nothing_moves(pool: PgPool) {
+    let user = TestApp::signed_in(pool, "ana@example.com").await;
+    user.open_at("0", "2026-11-10").await;
+    let first = repeat(&user, "2026-11-15", "10", 3).await;
+
+    let (status, problem) = user
+        .patch(&following(&first), json!({ "date": "2026-11-05" }))
+        .await;
+
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+    assert_eq!(problem["type"], "urn:soldi:error:before-opening-date");
+    let entries = run(&user, "2026-11", 3).await;
+    assert_eq!(field_of(&entries, "date"), days_from("2026-11", 3, "15"));
+}
+
+#[sqlx::test]
+async fn m1_m3_a_following_move_and_a_resize_in_one_patch_grow_on_the_new_day(pool: PgPool) {
+    let user = opened(pool, "ana@example.com").await;
+    repeat(&user, "2026-11-05", "10", 12).await;
+    let fifth = only(&user, "2027-03").await;
+
+    let (status, moved) = user
+        .patch(
+            &following(&fifth),
+            json!({ "date": "2027-03-10", "repeat_months": 15 }),
+        )
+        .await;
+
+    assert_eq!(status, StatusCode::OK, "{moved}");
+    assert_eq!(place(&moved), (5, 15));
+    let entries = run(&user, "2026-11", 15).await;
+    let mut dates = days_from("2026-11", 4, "05");
+    dates.extend(days_from("2027-03", 11, "10"));
+    assert_eq!(field_of(&entries, "date"), dates);
+    assert_ranked(&entries, 15);
+    assert_empty(&user, "2028-02", 1).await;
+}
+
+/// A transaction holding `entry`'s row lock until it commits.
+async fn hold(pool: &PgPool, entry: &Value) -> sqlx::Transaction<'static, sqlx::Postgres> {
     let mut lock = pool.begin().await.unwrap();
     sqlx::query("SELECT 1 FROM transactions WHERE id = $1::uuid FOR UPDATE")
-        .bind(last["id"].as_str().unwrap())
+        .bind(entry["id"].as_str().unwrap())
         .execute(&mut *lock)
         .await
         .unwrap();
+    lock
+}
 
-    let (move_all, delete_tail) = (following(&first), following(&tenth));
-    let (deleted, moved, ()) = tokio::join!(
-        user.delete(&delete_tail),
-        async {
-            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-            user.patch(
-                &move_all,
-                json!({ "date": "2026-11-10", "repeat_months": 12 }),
-            )
-            .await
-        },
-        async {
-            tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+/// Returns once `count` sessions of this test's database wait on a lock.
+async fn waiting(pool: &PgPool, count: i64) {
+    loop {
+        let waiters: i64 = sqlx::query_scalar(
+            "SELECT count(*) FROM pg_stat_activity \
+             WHERE datname = current_database() AND wait_event_type = 'Lock'",
+        )
+        .fetch_one(pool)
+        .await
+        .unwrap();
+        if waiters >= count {
+            return;
+        }
+        tokio::task::yield_now().await;
+    }
+}
+
+/// Runs `request` until it ends or `count` sessions wait on a lock, then commits `lock`.
+async fn behind(
+    pool: &PgPool,
+    lock: sqlx::Transaction<'static, sqlx::Postgres>,
+    count: i64,
+    request: impl Future<Output = (StatusCode, Value)>,
+) -> (StatusCode, Value) {
+    tokio::pin!(request);
+    tokio::select! {
+        done = &mut request => {
             lock.commit().await.unwrap();
+            done
+        }
+        () = waiting(pool, count) => {
+            lock.commit().await.unwrap();
+            request.await
+        }
+    }
+}
+
+#[sqlx::test]
+async fn a_following_delete_queues_behind_a_resize_blocked_on_a_member(pool: PgPool) {
+    let user = opened(pool.clone(), "ana@example.com").await;
+    repeat(&user, "2026-11-05", "10", 12).await;
+    let fifth = only(&user, "2027-03").await;
+    let tenth = only(&user, "2027-08").await;
+    let lock = hold(&pool, &only(&user, "2027-10").await).await;
+
+    let (grow, delete_tail) = (following(&tenth), following(&fifth));
+    let (grown, deleted) = tokio::join!(user.patch(&grow, json!({ "repeat_months": 15 })), async {
+        waiting(&pool, 1).await;
+        behind(&pool, lock, 2, user.delete(&delete_tail)).await
+    },);
+
+    assert_eq!(grown.0, StatusCode::OK, "{}", grown.1);
+    assert_eq!(deleted.0, StatusCode::NO_CONTENT, "{}", deleted.1);
+    let entries = run(&user, "2026-11", 4).await;
+    assert_ranked(&entries, 4);
+    assert_empty(&user, "2027-03", 11).await;
+}
+
+#[sqlx::test]
+async fn a_following_edit_queued_behind_a_move_rereads_the_new_day(pool: PgPool) {
+    let user = opened(pool.clone(), "ana@example.com").await;
+    let first = repeat(&user, "2026-11-05", "10", 12).await;
+    let fifth = only(&user, "2027-03").await;
+    let lock = hold(&pool, &only(&user, "2027-10").await).await;
+
+    let (move_all, note_tail) = (following(&first), following(&fifth));
+    let (moved, noted) = tokio::join!(
+        user.patch(&move_all, json!({ "date": "2026-11-10" })),
+        async {
+            waiting(&pool, 1).await;
+            let note = user.patch(&note_tail, json!({ "note": "fibra" }));
+            behind(&pool, lock, 2, note).await
         },
     );
 
-    assert_eq!(deleted.0, StatusCode::NO_CONTENT, "{}", deleted.1);
     assert_eq!(moved.0, StatusCode::OK, "{}", moved.1);
+    assert_eq!(noted.0, StatusCode::OK, "{}", noted.1);
+    assert_eq!(noted.1["date"], "2027-03-10");
     let entries = run(&user, "2026-11", 12).await;
     assert_eq!(field_of(&entries, "date"), days_from("2026-11", 12, "10"));
+    let notes: Vec<&Value> = entries.iter().map(|entry| &entry["note"]).collect();
+    assert_eq!(notes[..4], [&Value::Null; 4]);
+    assert_eq!(notes[4..], [&json!("fibra"); 8]);
     assert_ranked(&entries, 12);
+}
+
+#[sqlx::test]
+async fn a_resize_waits_for_a_this_delete_of_a_member(pool: PgPool) {
+    let user = opened(pool.clone(), "ana@example.com").await;
+    let first = repeat(&user, "2026-11-05", "10", 12).await;
+    let last = only(&user, "2027-10").await;
+    let lock = hold(&pool, &last).await;
+
+    let (delete_last, grow_first) = (uri(&last), uri(&first));
+    let (deleted, grown) = tokio::join!(user.delete(&delete_last), async {
+        waiting(&pool, 1).await;
+        let grow = user.patch(&grow_first, json!({ "repeat_months": 15 }));
+        behind(&pool, lock, 2, grow).await
+    },);
+
+    assert_eq!(deleted.0, StatusCode::NO_CONTENT, "{}", deleted.1);
+    assert_eq!(grown.0, StatusCode::OK, "{}", grown.1);
+    let entries = run(&user, "2026-11", 15).await;
+    assert_ranked(&entries, 15);
+    assert_empty(&user, "2028-02", 1).await;
 }
