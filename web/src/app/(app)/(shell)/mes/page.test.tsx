@@ -609,7 +609,7 @@ describe("Mês", () => {
     await userEvent.click(within(actions).getByRole("button", { name: "Excluir" }));
     expect(within(actions).getByRole("radiogroup", { name: "Excluir quais?" })).toBeInTheDocument();
     expect(within(actions).getByText("Excluir quais?")).toBeVisible();
-    expect(within(actions).getByRole("radio", { name: "Só este" })).toBeChecked();
+    expect(within(actions).getByRole("radio", { name: "Só este lançamento" })).toBeChecked();
     await userEvent.click(within(actions).getByRole("button", { name: "Cancelar" }));
     expect(requests.some((request) => request.method === "DELETE")).toBe(false);
 
@@ -639,11 +639,37 @@ describe("Mês", () => {
     );
     const actions = await screen.findByRole("dialog", { name: "Aluguel" });
     await userEvent.click(within(actions).getByRole("button", { name: "Excluir" }));
-    expect(within(actions).getByRole("radio", { name: "Toda a série" })).not.toBeChecked();
+    expect(within(actions).getByRole("radio", { name: "Toda a série (2 lançamentos)" })).not.toBeChecked();
     await userEvent.click(within(actions).getByRole("button", { name: "Excluir" }));
 
     expect(await screen.findByText("Lançamento excluído")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Desfazer" })).not.toBeInTheDocument();
+  });
+
+  it("opens the delete scope from Excluir da Série... in the series sheet", async () => {
+    const member = { ...TRANSACTIONS[1], series: { id: "s1", position: 3, total: 12, last_date: "2027-08-04" } };
+    open({ "GET /api/transactions": { status: 200, body: [member] } });
+
+    await userEvent.click(
+      await within(await screen.findByRole("region", { name: "Lançamentos" })).findByRole("button", {
+        name: /Aluguel/,
+      }),
+    );
+    await userEvent.click(
+      within(await screen.findByRole("dialog", { name: "Aluguel" })).getByRole("button", { name: "Editar" }),
+    );
+    await userEvent.click(
+      within(await screen.findByRole("dialog", { name: "Editar Lançamento Recorrente" })).getByRole("button", {
+        name: "Excluir da Série...",
+      }),
+    );
+
+    const actions = await screen.findByRole("dialog", { name: "Aluguel" });
+    expect(within(actions).getByRole("radiogroup", { name: "Excluir quais?" })).toBeInTheDocument();
+    expect(within(actions).getByRole("radio", { name: "Só este lançamento" })).toHaveAccessibleDescription(
+      "Apenas a parcela de Novembro/2026 será excluída.",
+    );
+    expect(screen.queryByRole("dialog", { name: "Editar Lançamento Recorrente" })).not.toBeInTheDocument();
   });
 
   it("opens the entry in the Lançar sheet to edit it", async () => {
