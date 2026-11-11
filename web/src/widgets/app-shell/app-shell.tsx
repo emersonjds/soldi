@@ -5,7 +5,7 @@ import { type ReactNode, Suspense, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
-import { Calendar, CalendarDays, ChartPie, PieChart, PiggyBank, Plus, ReceiptText, Settings } from "lucide-react";
+import { Calendar, PieChart, PiggyBank, Plus, ReceiptText, Settings } from "lucide-react";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -33,8 +33,8 @@ import { MonthSwitcher } from "@/shared/ui/month-switcher";
 import { Wordmark } from "@/shared/ui/wordmark";
 
 const NAV = [
-  { href: "/mes", label: "Mês", icon: CalendarDays },
-  { href: "/para-onde-vai", label: "Para onde vai", icon: ChartPie },
+  { href: "/mes", label: "Mês", icon: Calendar },
+  { href: "/para-onde-vai", label: "Para onde vai", icon: PieChart },
   { href: "/economia", label: "Cofrinhos", icon: PiggyBank },
   { href: "/ajustes", label: "Ajustes", icon: Settings },
 ] as const;
@@ -81,11 +81,11 @@ const TabLink = ({ item, active }: { item: NavItem; active: boolean }) => (
     href={item.href}
     aria-current={active ? "page" : undefined}
     className={cn(
-      "flex min-h-16 flex-col items-center justify-center gap-1 px-1 text-center font-medium text-[11px] leading-tight",
-      active ? "text-primary" : "text-muted-foreground",
+      "flex min-h-14 flex-col items-center justify-center gap-0.5 text-balance rounded-full px-1 py-1 text-center font-medium text-[11px] leading-tight transition-colors duration-200 focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2 motion-reduce:transition-none",
+      active ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground",
     )}
   >
-    <item.icon className="size-6" aria-hidden />
+    <item.icon className="size-5" aria-hidden />
     {item.label}
   </Link>
 );
@@ -108,7 +108,6 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
   const name = me.data?.name ?? "";
   const email = me.data?.email ?? "";
   const [firstName] = name.split(" ");
-  const [mes, paraOndeVai, economia, ajustes] = NAV;
   const current = SIDEBAR.flatMap((group) => group.items)
     .filter((item) => isAt(item.href))
     .sort((a, b) => b.href.length - a.href.length)[0];
@@ -202,31 +201,28 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
               Lançar
             </Button>
           </header>
-          <main className="mx-auto w-full max-w-6xl flex-1 px-4 pt-4 pb-[calc(6rem+env(safe-area-inset-bottom))] lg:px-6 lg:pt-6 lg:pb-10">
+          <main className="mx-auto w-full max-w-6xl flex-1 px-4 pt-4 pb-(--tabbar-space) lg:px-6 lg:pt-6 lg:pb-10">
             {children}
           </main>
         </div>
 
         <nav
           aria-label="Navegação principal"
-          className="fixed inset-x-0 bottom-0 z-40 border-t bg-card pb-[env(safe-area-inset-bottom)] lg:hidden"
+          className="fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-40 mx-auto flex max-w-lg items-center gap-2 lg:hidden"
         >
-          <div className="mx-auto grid max-w-lg grid-cols-5 items-end">
-            <TabLink item={mes} active={isAt(mes.href)} />
-            <TabLink item={paraOndeVai} active={isAt(paraOndeVai.href)} />
-            <div className="flex justify-center">
-              <button
-                type="button"
-                aria-label="Lançar"
-                onClick={() => setLaunching(true)}
-                className="-mt-7 mb-2 flex size-14 items-center justify-center rounded-full bg-brand text-brand-foreground shadow-lg ring-4 ring-card transition-colors hover:bg-brand-hover focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2"
-              >
-                <Plus className="size-7" aria-hidden />
-              </button>
-            </div>
-            <TabLink item={economia} active={isAt(economia.href)} />
-            <TabLink item={ajustes} active={isAt(ajustes.href)} />
+          <div className="grid flex-1 grid-cols-4 gap-1 rounded-full bg-card p-1 shadow-md">
+            {NAV.map((item) => (
+              <TabLink key={item.href} item={item} active={isAt(item.href)} />
+            ))}
           </div>
+          <button
+            type="button"
+            aria-label="Lançar"
+            onClick={() => setLaunching(true)}
+            className="flex size-14 shrink-0 items-center justify-center rounded-full bg-brand text-brand-foreground shadow-lg transition-colors hover:bg-brand-hover focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2"
+          >
+            <Plus className="size-7" aria-hidden />
+          </button>
         </nav>
 
         <TransactionSheet

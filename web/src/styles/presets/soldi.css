@@ -95,6 +95,9 @@ value: soldi
   --cat-23: #3730a3;
   --cat-24: #9d4e8c;
 
+  /* Mobile tab bar: 64px pill + 12px gap below it + safe area + 16px air (spec 2026-11-10 §3.1). */
+  --tabbar-space: calc(5.75rem + env(safe-area-inset-bottom));
+
   --shadow-2xs: 0 1px 2px rgb(30 27 75 / 0.04);
   --shadow-xs: 0 1px 2px rgb(30 27 75 / 0.06);
   --shadow-sm: 0 4px 16px rgb(30 27 75 / 0.08);

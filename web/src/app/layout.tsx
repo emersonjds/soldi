@@ -21,8 +21,7 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
       <body className={`${fontVars} min-h-screen antialiased`}>
         <TooltipProvider>
           <QueryProvider>{children}</QueryProvider>
-          {/* Above the mobile tab bar and its Lançar button. */}
-          <Toaster mobileOffset={{ bottom: "calc(5.5rem + env(safe-area-inset-bottom))" }} />
+          <Toaster mobileOffset={{ bottom: "var(--tabbar-space)" }} />
         </TooltipProvider>
       </body>
     </html>
