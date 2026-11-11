@@ -63,7 +63,7 @@ test("an entry repeated 3x shows in three months; edit and delete reach this one
     [third, "3/33 de 3"],
   ]) {
     await visit(month);
-    await expect(internet).toContainText(`Saída · ${place}R$ 100,00`);
+    await expect(internet).toContainText(`Saída · ${place}- R$ 100,00`);
   }
 
   await visit(second);
@@ -78,9 +78,9 @@ test("an entry repeated 3x shows in three months; edit and delete reach this one
   await expect(internet).toContainText("R$ 120,00");
 
   await visit(third);
-  await expect(internet).toContainText("Saída · 3/33 de 3R$ 120,00");
+  await expect(internet).toContainText("Saída · 3/33 de 3- R$ 120,00");
   await visit(first);
-  await expect(internet).toContainText("Saída · 1/31 de 3R$ 100,00");
+  await expect(internet).toContainText("Saída · 1/31 de 3- R$ 100,00");
 
   await visit(second);
   await internet.click();
@@ -94,7 +94,7 @@ test("an entry repeated 3x shows in three months; edit and delete reach this one
   await visit(third);
   await expect(ledger).toHaveCount(0);
   await visit(first);
-  await expect(internet).toContainText("Saída · 1/11 de 1R$ 100,00");
+  await expect(internet).toContainText("Saída · 1/11 de 1- R$ 100,00");
 });
 
 test("a 12x series shrinks to 6 from its first entry and grows back to 12 from its last", async ({ page, request }) => {

@@ -42,7 +42,7 @@ test("a bill from onboarding shows under Contas a pagar, pays from the round che
 }) => {
   await requireServer(request);
 
-  await page.setViewportSize({ width: 375, height: 812 });
+  await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/criar-conta");
   await page.getByLabel("E-mail").fill(`e2e-bill-${Date.now()}@example.com`);
   await page.getByLabel("Senha").fill("uma-senha-bem-longa");
@@ -64,12 +64,11 @@ test("a bill from onboarding shows under Contas a pagar, pays from the round che
     .click();
 
   const hero = page.getByRole("region", { name: "Saldo hoje" });
-  const summary = page.getByRole("region", { name: "Resumo do mês" });
   const bills = page.getByRole("region", { name: "Contas a pagar" });
   const bill = bills.getByRole("listitem", { name: "Aluguel" });
   await expect(bill).toContainText("R$ 300,00");
   await expect(bills).toContainText("0 de 1 pagas");
-  await expect(summary).toContainText(/Projetado\s*R\$\s700,00/);
+  await expect(hero).toContainText(/Projetado no fim do mês\s*R\$\s700,00/);
 
   const chip = bills.getByRole("radio", { name: "dia 28, 1 conta a pagar" });
   await chip.click();
@@ -92,7 +91,7 @@ test("a bill from onboarding shows under Contas a pagar, pays from the round che
   await sheet.getByRole("button", { name: "Confirmar" }).click();
 
   await expect(bill.getByRole("button", { name: "Desmarcar Aluguel" })).toHaveAttribute("aria-pressed", "true");
-  await expect(summary).toContainText(/Projetado\s*R\$\s650,00/);
+  await expect(hero).toContainText(/Projetado no fim do mês\s*R\$\s650,00/);
 });
 
 test("Lançar fills the cents from the right and a category created from the picker comes selected", async ({
