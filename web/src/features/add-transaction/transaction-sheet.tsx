@@ -539,12 +539,12 @@ const TransactionForm = ({
             </Button>
           </>
         ) : (
-          <div className="flex flex-wrap items-center gap-3">
+          <div className={cn("flex flex-wrap items-center gap-3", series && "lg:gap-1")}>
             {series && onDelete && (
               <Button
                 type="button"
                 variant="ghost"
-                className="mr-auto h-12 text-base text-destructive hover:text-destructive"
+                className="mr-auto h-12 text-base text-destructive hover:text-destructive lg:h-10 lg:gap-1.5 lg:px-2 lg:text-sm"
                 onClick={onDelete}
               >
                 <Trash2 aria-hidden />
@@ -552,11 +552,19 @@ const TransactionForm = ({
               </Button>
             )}
             {isLg && (
-              <Button type="button" variant="ghost" className="ml-auto h-12 text-base" onClick={onDiscard}>
+              <Button
+                type="button"
+                variant="ghost"
+                className={cn("ml-auto h-12 text-base", series && "lg:h-10 lg:px-3 lg:text-sm")}
+                onClick={onDiscard}
+              >
                 Cancelar
               </Button>
             )}
-            <BrandButton type="submit" className="lg:w-auto lg:px-6">
+            <BrandButton
+              type="submit"
+              className={cn("lg:w-auto lg:px-6", series && "lg:min-h-10 lg:gap-1.5 lg:px-4 lg:text-sm")}
+            >
               {series ? <Save aria-hidden /> : <CircleCheck aria-hidden />}
               {series ? "Salvar Alterações na Série" : "Salvar Lançamento"}
             </BrandButton>
