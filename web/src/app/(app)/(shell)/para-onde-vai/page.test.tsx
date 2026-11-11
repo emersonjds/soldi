@@ -37,7 +37,7 @@ describe("Para onde vai", () => {
   it("shows the month's outflow in the center and each category with its share and change", async () => {
     open();
 
-    expect(screen.getByRole("heading", { level: 1, name: "Para onde vai" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Para onde vai" })).not.toHaveClass("lg:sr-only");
     expect(await screen.findByText("Saídas do mês")).toBeInTheDocument();
     expect(screen.getByText("R$ 1.384,31").parentElement).toHaveClass("text-[28px]");
     expect(screen.getByRole("radio", { name: "Saídas" })).toBeChecked();

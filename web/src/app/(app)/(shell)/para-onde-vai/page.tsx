@@ -13,7 +13,7 @@ const ParaOndeVaiScreen = () => {
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHero title="Para onde vai" className="lg:sr-only" />
+      <PageHero title="Para onde vai" />
       <CategoryBreakdown key={month} month={month} />
     </div>
   );
