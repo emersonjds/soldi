@@ -32,7 +32,7 @@ test("a cofrinho fills from a Saída in Economia and empties with a resgate", as
   await nav.getByRole("button", { name: "Lançar" }).click();
   await page.getByRole("radio", { name: "Saída" }).click();
   await page.getByLabel("Valor").fill("200,00");
-  await page.getByRole("combobox", { name: "Categoria" }).click();
+  await page.getByRole("button", { name: "Ver todas" }).click();
   await page.getByPlaceholder("Buscar categoria").fill("Reserva");
   await page.getByRole("option", { name: "Economia › Reserva" }).click();
   await page.getByRole("button", { name: "Salvar" }).click();
