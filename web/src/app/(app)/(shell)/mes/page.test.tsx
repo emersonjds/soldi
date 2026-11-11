@@ -307,11 +307,11 @@ describe("Mês", () => {
       },
     });
 
-    const bills = await screen.findByRole("region", { name: "Contas do Mês" });
+    const bills = await screen.findByRole("region", { name: "Contas a pagar" });
     await screen.findByRole("region", { name: "Lançamentos" });
     const order = [
       "Saldo hoje",
-      "Contas do Mês",
+      "Contas a pagar",
       "Lançamentos",
       "Termômetro do Mês",
       "Próximos meses",
@@ -321,7 +321,7 @@ describe("Mês", () => {
     order.slice(1).forEach((card, index) => {
       expect(order[index].compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     });
-    expect(within(bills).getByRole("listitem", { name: "Luz (Enel)" })).toHaveTextContent("Vencido");
+    expect(within(bills).getByRole("listitem", { name: "Luz (Enel)" })).toHaveTextContent("Venceu dia 02/11");
     expect(order[0]).toHaveTextContent(/Projetado fim do mês-R\$\s312,40.*Atenção/);
     expect(within(order[3]).getByText("-R$ 312,40")).toHaveClass("text-expense");
   });
@@ -390,7 +390,7 @@ describe("Mês", () => {
     expect(await within(hero).findByText("Não foi possível carregar o mês.")).toBeInTheDocument();
     expect(await within(screen.getByRole("region", { name: "Cofrinhos" })).findByText("Viagem")).toBeVisible();
     expect(screen.getByRole("region", { name: "Próximos meses" })).toBeInTheDocument();
-    expect(screen.queryByRole("region", { name: "Contas do Mês" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Contas a pagar" })).not.toBeInTheDocument();
     await userEvent.click(within(hero).getByRole("button", { name: "Tentar de novo" }));
 
     await waitFor(() =>
