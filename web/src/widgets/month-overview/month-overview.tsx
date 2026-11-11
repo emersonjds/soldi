@@ -16,8 +16,7 @@ import { TierPill } from "@/shared/ui/tier-pill";
 
 type MonthView = Schemas["MonthView"];
 
-const figure =
-  "flex min-w-0 flex-col items-center gap-1 text-center lg:flex-row-reverse lg:items-center lg:justify-between lg:gap-4 lg:rounded-2xl lg:bg-card lg:p-6 lg:text-left lg:shadow-sm";
+const figure = "flex min-w-0 flex-col items-center gap-1 text-center";
 
 /** With `onClick` the figure is a button that opens Lançar on its kind (`Lançar entrada`, `Lançar saída`). */
 const Figure = ({
@@ -36,7 +35,7 @@ const Figure = ({
   const body = (
     <>
       {icon}
-      <div className="flex min-w-0 flex-col items-center gap-1 lg:items-start">
+      <div className="flex min-w-0 flex-col items-center gap-1">
         <span className="text-muted-foreground text-xs lg:text-sm">{label}</span>
         {children}
       </div>
@@ -50,7 +49,7 @@ const Figure = ({
       onClick={onClick}
       className={cn(
         figure,
-        "min-h-11 cursor-pointer rounded-xl transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring lg:hover:bg-card lg:hover:shadow-md",
+        "min-h-11 cursor-pointer rounded-xl p-1 transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring",
       )}
     >
       {body}
@@ -58,14 +57,14 @@ const Figure = ({
   );
 };
 
-const circle = "flex size-10 shrink-0 items-center justify-center rounded-full lg:size-12 lg:rounded-xl";
-const amount = "font-bold text-sm leading-5 sm:text-base lg:text-2xl";
+const circle = "flex size-10 shrink-0 items-center justify-center rounded-full";
+const amount = "whitespace-nowrap font-bold text-sm leading-5 tracking-tight sm:text-base xl:text-lg";
 
 /** Entradas, Saídas (bills + daily) and Projetado, overlapping the hero. */
 const MonthSummary = ({ view, onLaunch }: { view: MonthView; onLaunch: (kind: "income" | "bill") => void }) => (
   <section
     aria-label="Resumo do mês"
-    className="relative -mt-10 grid grid-cols-3 gap-2 rounded-2xl bg-card p-4 shadow-sm lg:-mt-16 lg:gap-6 lg:bg-transparent lg:p-0 lg:px-6 lg:shadow-none"
+    className="relative mx-2 -mt-10 grid grid-cols-3 gap-2 rounded-2xl bg-card p-4 shadow-sm sm:mx-4 lg:gap-4 lg:p-5"
   >
     <Figure
       label="Entradas"
@@ -127,7 +126,7 @@ export const MonthHero = ({
     <div className={cn("flex flex-col", className)}>
       <section
         aria-label="Saldo hoje"
-        className="rounded-3xl bg-linear-to-br from-hero-from to-hero-to px-4 pt-6 pb-14 text-hero-foreground lg:px-8 lg:pt-8 lg:pb-24"
+        className="rounded-3xl bg-linear-to-br from-hero-from to-hero-to px-4 pt-6 pb-14 text-hero-foreground lg:px-8 lg:pt-8"
       >
         <div className="flex flex-col items-center gap-3 lg:flex-row lg:items-end lg:gap-4">
           <div className="flex flex-col items-center gap-1 lg:items-start">
