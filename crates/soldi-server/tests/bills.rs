@@ -548,3 +548,30 @@ async fn r8_only_the_callers_standalone_saida_becomes_a_bill(pool: PgPool) {
         serde_json::Value::Null
     );
 }
+
+#[sqlx::test]
+async fn a_bill_keeps_its_archived_category_until_another_is_picked(pool: PgPool) {
+    let ana = TestApp::signed_in(pool.clone(), "ana@example.com").await;
+    let rent_category = category_id(&ana, "Aluguel").await;
+    let light = category_id(&ana, "Luz").await;
+    let bill = create(&ana, rent(rent_category)).await;
+    sqlx::query("UPDATE categories SET archived_at = now() WHERE id = ANY($1)")
+        .bind(vec![rent_category, light])
+        .execute(&pool)
+        .await
+        .unwrap();
+    let uri = bill_uri(&bill);
+
+    let (status, kept) = ana
+        .patch(
+            &uri,
+            json!({ "name": "Aluguel novo", "category_id": rent_category }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{kept}");
+    assert_eq!(kept["category_id"], rent_category.to_string());
+    assert_eq!(kept["name"], "Aluguel novo");
+
+    let (status, refused) = ana.patch(&uri, json!({ "category_id": light })).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{refused}");
+}

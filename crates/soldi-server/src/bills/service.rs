@@ -84,7 +84,8 @@ pub async fn update(
         },
         "",
     )?;
-    if let Some(category_id) = patch.category_id {
+    // A bill keeps an archived category until the user picks another one.
+    if let Some(category_id) = patch.category_id.filter(|id| *id != current.category_id) {
         check_category(&mut conn, user, category_id, "category_id").await?;
     }
     let active = patch.active.unwrap_or(current.active);
