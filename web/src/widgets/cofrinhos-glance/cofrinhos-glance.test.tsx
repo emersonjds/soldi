@@ -31,6 +31,17 @@ describe("Cofrinhos glance", () => {
     expect(within(card()).getByRole("link", { name: "Ver todos" })).toHaveAttribute("href", "/economia");
   });
 
+  it("puts the cofrinho's progress bar under a row with a target, none without", async () => {
+    show({ status: 200, body: COFRINHOS });
+
+    const [viagem, reserva] = await within(card()).findAllByRole("listitem");
+    expect(within(viagem).queryByRole("progressbar")).not.toBeInTheDocument();
+    expect(within(reserva).getByRole("progressbar", { name: "Progresso de Reserva" })).toHaveAttribute(
+      "aria-valuenow",
+      "3",
+    );
+  });
+
   it("shows two row skeletons while loading", () => {
     show({ status: 200, body: COFRINHOS });
     expect(within(card()).getAllByTestId("row-skeleton")).toHaveLength(2);
