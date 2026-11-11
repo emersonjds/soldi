@@ -1,7 +1,14 @@
+import { cn } from "@/lib/utils";
 import { useCurrency } from "@/shared/lib/currency";
 import { currencySymbol, toInput } from "@/shared/lib/money";
 
 import { amountMask } from "./amount-input";
+
+/** Steps down from 1.000.000,00 and again from 100.000.000,00, so the widest amount fits w-48 at 375. */
+const sizeOf = (shown: string) => {
+  if (shown.length > 13) return "text-xl";
+  return shown.length > 10 ? "text-[26px]" : "text-[34px]";
+};
 
 /** The big `R$ 0,00` field (in the user's currency) of Lançar and Pagar, bank-style; `value` is the API decimal. */
 export const HeroAmount = ({
@@ -35,7 +42,12 @@ export const HeroAmount = ({
         <span aria-hidden className="font-bold text-2xl text-muted-foreground">
           {currencySymbol(useCurrency())}
         </span>
-        <div className="grid w-48 font-bold text-[34px] tabular-nums leading-10 tracking-[-0.02em] *:[grid-area:1/1]">
+        <div
+          className={cn(
+            "grid w-48 overflow-hidden font-bold tabular-nums leading-10 tracking-[-0.02em] *:[grid-area:1/1]",
+            sizeOf(shown),
+          )}
+        >
           <span aria-hidden className="text-center text-foreground">
             {shown ? (
               shown.slice(0, shown.length - cents.length)
