@@ -57,6 +57,20 @@ test("Contas fixas sums the active bills against this month's income and pauses 
   await expect(total).toContainText(`Comprometem 73% das entradas de ${month}`);
   await expect(page.getByRole("region", { name: "Próximo vencimento" })).toContainText("Vence hoje");
 
+  // Desfazer must not reach the server: a resume would move active_since (D17).
+  const patches: string[] = [];
+  page.on("request", (sent) => sent.method() === "PATCH" && patches.push(sent.url()));
+  await page.getByRole("switch", { name: "Ativa: Aluguel Residencial" }).click();
+  await expect(page.getByRole("list", { name: "Pausadas" })).toContainText("Aluguel Residencial");
+  await expect(total).toContainText("2 contas ativas");
+  await page.getByRole("button", { name: "Desfazer" }).click();
+  await expect(page.getByRole("list", { name: "Contas ativas" })).toContainText("Aluguel Residencial");
+  await page.reload();
+  await expect(page.getByRole("switch", { name: "Ativa: Aluguel Residencial" })).toBeChecked();
+  await expect(total).toContainText("3 contas ativas");
+  await expect(page.getByRole("region", { name: "Próximo vencimento" })).toContainText("Aluguel Residencial");
+  expect(patches).toEqual([]);
+
   await page.getByRole("switch", { name: "Ativa: Academia" }).click();
   await expect(page.getByText("Conta pausada")).toBeVisible();
   await expect(page.getByRole("list", { name: "Pausadas" })).toContainText("Academia");
@@ -72,6 +86,9 @@ test("Contas fixas sums the active bills against this month's income and pauses 
   await page.mouse.move(0, 0);
   await page.evaluate(() => document.activeElement instanceof HTMLElement && document.activeElement.blur());
   await expect(page.getByText("Conta pausada")).toHaveCount(0, { timeout: 10_000 });
+  await expect.poll(() => patches.length).toBe(1);
+  await page.reload();
+  await expect(page.getByRole("list", { name: "Pausadas" })).toContainText("Academia");
 
   for (const width of [375, 1024, 1280, 1440]) {
     await page.setViewportSize({ width, height: 900 });
