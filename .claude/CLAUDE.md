@@ -14,7 +14,7 @@ Personal-finance thermometer: a web product that replaces the owner's `Termômet
 2. Design panel for anything a user sees: `product`, `ux` and `finance` vote on every open question, `architect` challenges on data, performance and readability; winner, trade-off and acceptance criteria (every state) go to `docs/specs/cards/SOL-<n>.md`. Cross-cutting outcomes get a D-entry in `docs/specs/decisions.md`. Implementers never decide UX alone.
 3. Build: `backend` → `designer` (tokens, components, motion) → `web`, TDD; the prompt names the model file to copy and the card brief.
 4. Review: `qa` when risky (auth, migration, contract, user isolation, > ~200 lines); `pixel` checks screenshots at 375 and 1440, light and dark, against the brief. Findings fixed on the same branch by a fresh agent.
-5. Merge to `developer`; bump semver in `Cargo.toml`, `web/package.json` and `CHANGELOG.md`; PR `developer` → `main`, merged when CI is green; tag `vX.Y.Z` (Railway deploys `main`). Card → Done with a comment: what shipped, deviations, follow-up cards.
+5. Merge to `developer`; bump semver in `Cargo.toml`, `web/package.json` and `CHANGELOG.md`, then refresh the `web/openapi.json` version with `UPDATE_OPENAPI=1 SQLX_OFFLINE=true cargo test -p soldi-server --test openapi`; PR `developer` → `main`, merged when CI is green; tag `vX.Y.Z` (Railway deploys `main`). Card → Done with a comment: what shipped, deviations, follow-up cards.
 
 ## Layout
 
