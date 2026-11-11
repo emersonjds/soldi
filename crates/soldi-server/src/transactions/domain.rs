@@ -78,18 +78,28 @@ fn check_installments(input: &CreateTransaction, amount: Decimal) -> Result<(), 
 }
 
 /// R1: the dates of the `months - 1` copies, each the original's day in its own month.
-pub fn repeat_dates(date: NaiveDate, months: i16) -> Vec<NaiveDate> {
+pub fn repeat_dates(date: NaiveDate, months: i16) -> Result<Vec<NaiveDate>, AppError> {
     following_dates(date, date, u32::try_from(months - 1).unwrap_or(0))
 }
 
-/// L1: `count` dates in the months after `last`'s, each on `first`'s day clamped to its month.
-pub fn following_dates(first: NaiveDate, last: NaiveDate, count: u32) -> Vec<NaiveDate> {
+/// L1, L4: `count` dates in the months after `last`'s, each on `first`'s day clamped to its
+/// month; refused when one passes 2100.
+pub fn following_dates(
+    first: NaiveDate,
+    last: NaiveDate,
+    count: u32,
+) -> Result<Vec<NaiveDate>, AppError> {
     let month = last.with_day(1).unwrap_or(last);
     let day = i16::try_from(first.day()).unwrap_or(1);
     (1..=count)
-        .filter_map(|k| month.checked_add_months(Months::new(k)))
-        .map(|month| crate::bills::domain::due_date(month, day))
-        .collect()
+        .map(|k| {
+            month
+                .checked_add_months(Months::new(k))
+                .map(|month| crate::bills::domain::due_date(month, day))
+                .filter(|date| date.year() <= 2100)
+        })
+        .collect::<Option<Vec<_>>>()
+        .ok_or_else(|| AppError::invalid("date", "must leave room for every month"))
 }
 
 /// L3, L4: a series resized to `months` keeps the member at `position` and those before it.
@@ -320,19 +330,22 @@ mod tests {
     #[test]
     fn r1_each_copy_clamps_the_original_day_to_its_own_month() {
         assert_eq!(
-            repeat_dates(date("2027-01-31"), 4),
+            repeat_dates(date("2027-01-31"), 4).unwrap(),
             [date("2027-02-28"), date("2027-03-31"), date("2027-04-30")]
         );
-        assert_eq!(repeat_dates(date("2028-01-31"), 2), [date("2028-02-29")]);
         assert_eq!(
-            repeat_dates(date("2026-11-30"), 3),
+            repeat_dates(date("2028-01-31"), 2).unwrap(),
+            [date("2028-02-29")]
+        );
+        assert_eq!(
+            repeat_dates(date("2026-11-30"), 3).unwrap(),
             [date("2026-12-30"), date("2027-01-30")]
         );
     }
 
     #[test]
     fn r2_twelve_entries_are_the_original_and_eleven_copies() {
-        let copies = repeat_dates(date("2026-11-05"), 12);
+        let copies = repeat_dates(date("2026-11-05"), 12).unwrap();
 
         assert_eq!(copies.len(), 11);
         assert_eq!(copies[0], date("2026-12-05"));
@@ -385,17 +398,31 @@ mod tests {
     #[test]
     fn l1_growth_takes_the_first_members_day_in_the_months_after_the_last_ones() {
         assert_eq!(
-            following_dates(date("2027-01-31"), date("2027-04-30"), 2),
+            following_dates(date("2027-01-31"), date("2027-04-30"), 2).unwrap(),
             [date("2027-05-31"), date("2027-06-30")]
         );
         assert_eq!(
-            following_dates(date("2026-11-05"), date("2027-10-20"), 3),
+            following_dates(date("2026-11-05"), date("2027-10-20"), 3).unwrap(),
             [date("2027-11-05"), date("2027-12-05"), date("2028-01-05")]
         );
         assert_eq!(
-            following_dates(date("2026-10-05"), date("2027-10-05"), 1),
+            following_dates(date("2026-10-05"), date("2027-10-05"), 1).unwrap(),
             [date("2027-11-05")]
         );
+    }
+
+    #[test]
+    fn l4_r2_every_date_of_a_series_stays_up_to_2100() {
+        assert_eq!(
+            following_dates(date("2100-06-05"), date("2100-11-05"), 1).unwrap(),
+            [date("2100-12-05")]
+        );
+        assert_eq!(repeat_dates(date("2100-01-31"), 12).unwrap().len(), 11);
+        assert_eq!(
+            field(following_dates(date("2100-06-05"), date("2100-08-05"), 5)),
+            "date"
+        );
+        assert_eq!(field(repeat_dates(date("2100-06-05"), 12)), "date");
     }
 
     #[test]

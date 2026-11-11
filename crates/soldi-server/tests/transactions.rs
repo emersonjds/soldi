@@ -534,6 +534,41 @@ async fn a_date_after_2100_is_refused(pool: PgPool) {
     assert_eq!(problem["errors"][0]["field"], "date");
 }
 
+#[sqlx::test]
+async fn sol60_a_series_reaching_past_2100_is_refused_and_writes_nothing(pool: PgPool) {
+    let user = opened(pool, "ana@example.com").await;
+    let market = user.category_id("Mercado").await;
+
+    for count in ["repeat_months", "installments"] {
+        let (status, problem) = user
+            .post(
+                "/api/transactions",
+                json!({ "date": "2100-06-05", "amount": "120", "kind": "daily", "category_id": market, count: 12 }),
+            )
+            .await;
+        assert_eq!(
+            status,
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "{count}: {problem}"
+        );
+        assert_eq!(problem["errors"][0]["field"], "date");
+        assert_eq!(
+            problem["errors"][0]["message"],
+            "must leave room for every month"
+        );
+    }
+    assert_empty(&user, "2100-06", 7).await;
+
+    let alone = spend(&user, "2100-06-05", "10", "Mercado").await;
+    let (status, problem) = user
+        .patch(&uri(&alone), json!({ "repeat_months": 12 }))
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+    assert_eq!(problem["errors"][0]["field"], "date");
+    assert_eq!(only(&user, "2100-06").await["series"], Value::Null);
+    assert_empty(&user, "2100-07", 6).await;
+}
+
 async fn parcelas(user: &TestApp, total: &str, count: i64) -> Value {
     let market = user.category_id("Mercado").await;
     let (status, created) = user

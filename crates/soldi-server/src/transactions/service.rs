@@ -1,4 +1,3 @@
-use chrono::Datelike;
 use soldi_types::categories::Category;
 use soldi_types::transactions::{
     CreateTransaction, Scope, Transaction, TransactionSeries, UpdateTransaction,
@@ -97,10 +96,7 @@ pub async fn create(
     let series_id = count.map(|_| Uuid::new_v4());
     let id = repo::insert(&mut tx, user.id, &first, None, None, series_id).await?;
     if let (Some(count), Some(series_id)) = (count, series_id) {
-        let dates = domain::repeat_dates(first.date, count);
-        if dates.len() + 1 != amounts.len() {
-            return Err(AppError::invalid("date", "must leave room for every month"));
-        }
+        let dates = domain::repeat_dates(first.date, count)?;
         repo::insert_copies(&mut tx, user.id, &first, series_id, &dates, &amounts[1..]).await?;
     }
     tx.commit().await?;
@@ -162,7 +158,7 @@ pub async fn update(
             if !repo::set_series(&mut tx, user.id, id, series_id).await? {
                 return Err(domain::already_repeated());
             }
-            let dates = domain::repeat_dates(next.date, months);
+            let dates = domain::repeat_dates(next.date, months)?;
             let amounts = vec![next.amount; dates.len()];
             repo::insert_copies(&mut tx, user.id, &next, series_id, &dates, &amounts).await?;
         }
@@ -197,10 +193,7 @@ async fn resize(
             .await?
             .ok_or(AppError::NotFound)?;
         let count = u32::try_from(i64::from(months) - total).unwrap_or(0);
-        let added = domain::following_dates(first, last, count);
-        if added.iter().any(|date| date.year() > 2100) {
-            return Err(AppError::invalid("date", "must leave room for every month"));
-        }
+        let added = domain::following_dates(first, last, count)?;
         let amounts = vec![next.amount; added.len()];
         repo::insert_copies(conn, user.id, next, series_id, &added, &amounts).await?;
     }
