@@ -394,7 +394,7 @@ describe("Mês", () => {
     });
 
     const bills = await screen.findByRole("region", { name: "Contas a pagar" });
-    for (const name of ["Lançamentos", "Próximos meses", "Cofrinhos", "Para onde vai"]) {
+    for (const name of ["Lançamentos", "Próximos meses", "Cofrinhos", "Para Onde Vai"]) {
       await screen.findByRole("region", { name });
     }
     const order = [
@@ -404,7 +404,7 @@ describe("Mês", () => {
       "Termômetro do Mês",
       "Próximos meses",
       "Cofrinhos",
-      "Para onde vai",
+      "Para Onde Vai",
     ].map((name) => screen.getByRole("region", { name }));
     order.slice(1).forEach((card, index) => {
       expect(order[index].compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -449,8 +449,8 @@ describe("Mês", () => {
       await within(await screen.findByRole("region", { name: "Lançamentos" })).findByText("Compras da semana"),
     ).toBeInTheDocument();
     const cofrinhos = await screen.findByRole("region", { name: "Cofrinhos" });
-    expect(await within(cofrinhos).findByText("Viagem")).toBeVisible();
-    const spending = await screen.findByRole("region", { name: "Para onde vai" });
+    expect(await within(cofrinhos).findByText("Reserva")).toBeVisible();
+    const spending = await screen.findByRole("region", { name: "Para Onde Vai" });
     expect(await within(spending).findByText("Mercado")).toBeInTheDocument();
     const failed = { status: 500, body: problem(500, "Falhou.") };
     const requests = signedIn({
@@ -473,7 +473,7 @@ describe("Mês", () => {
     expect(screen.getAllByRole("region", { name: "Lançamentos" })).toHaveLength(1);
     expect(screen.getByRole("region", { name: "Saldo hoje" })).toHaveTextContent("R$ 957,79");
     expect(within(ledger()).getByText("Compras da semana")).toBeInTheDocument();
-    expect(within(cofrinhos).getByText("Viagem")).toBeVisible();
+    expect(within(cofrinhos).getByText("Reserva")).toBeVisible();
     expect(within(spending).getByText("Mercado")).toBeInTheDocument();
   });
 
@@ -485,7 +485,7 @@ describe("Mês", () => {
 
     const hero = await screen.findByRole("region", { name: "Saldo hoje" });
     expect(await within(hero).findByText("Não foi possível carregar o mês.")).toBeInTheDocument();
-    expect(await within(screen.getByRole("region", { name: "Cofrinhos" })).findByText("Viagem")).toBeVisible();
+    expect(await within(screen.getByRole("region", { name: "Cofrinhos" })).findByText("Reserva")).toBeVisible();
     expect(await screen.findByRole("region", { name: "Próximos meses" })).toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Contas a pagar" })).not.toBeInTheDocument();
     await userEvent.click(within(hero).getByRole("button", { name: "Tentar de novo" }));
@@ -527,7 +527,10 @@ describe("Mês", () => {
     const hero = await screen.findByRole("region", { name: "Saldo hoje" });
     expect(requests.some((request) => request.url.endsWith("/api/transactions?month=2026-12"))).toBe(true);
     expect(requests.some((request) => request.url.endsWith("/api/reports/categories?month=2026-12"))).toBe(true);
-    expect(await screen.findByRole("link", { name: "Ver tudo" })).toHaveAttribute("href", "/para-onde-vai?m=2026-12");
+    expect(await screen.findByRole("link", { name: "Ver análise" })).toHaveAttribute(
+      "href",
+      "/para-onde-vai?m=2026-12",
+    );
     const switcher = within(hero).getByRole("group", { name: "Mês" });
     expect(switcher).toHaveTextContent("Dezembro 2026");
     await userEvent.click(within(switcher).getByRole("button", { name: "Próximo mês" }));

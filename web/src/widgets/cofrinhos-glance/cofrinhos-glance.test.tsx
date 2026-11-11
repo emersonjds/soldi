@@ -22,30 +22,49 @@ const nothing = async (body: unknown) => {
 const card = () => screen.getByRole("region", { name: "Cofrinhos" });
 
 describe("Cofrinhos glance", () => {
-  it("shows the total saved and the two largest cofrinhos, the goal as a share of its target", async () => {
+  it("shows the total saved and the two largest cofrinhos with a goal, each with its share, bar and whole goal", async () => {
+    const casa = {
+      ...COFRINHO_RESERVA,
+      category_id: "c1000000-0000-4000-8000-000000000098",
+      name: "Casa",
+      balance: "50.00",
+    };
+    const carro = {
+      ...COFRINHO_RESERVA,
+      category_id: "c1000000-0000-4000-8000-000000000097",
+      name: "Carro",
+      balance: "1250.99",
+      target: "2000.00",
+    };
     show({
       status: 200,
-      body: { ...COFRINHOS, items: [COFRINHO_SEM_OBJETIVO, COFRINHO_RESERVA, COFRINHO_VIAGEM] },
+      body: { ...COFRINHOS, items: [COFRINHO_SEM_OBJETIVO, casa, COFRINHO_RESERVA, COFRINHO_VIAGEM, carro] },
     });
 
     const rows = await within(await screen.findByRole("region")).findAllByRole("listitem");
     expect(rows.map((row) => row.textContent?.replace(/\s/g, " "))).toEqual([
-      "ViagemR$ 1.000,00",
-      "Reserva3% de R$ 10.000,00",
+      "Carro63%R$ 1.250Meta: R$ 2.000",
+      "Reserva3%R$ 300Meta: R$ 10.000",
     ]);
-    expect(card()).toHaveTextContent("GuardadoR$ 1.300,00");
-    expect(within(card()).getByRole("link", { name: "Ver todos" })).toHaveAttribute("href", "/economia");
-  });
-
-  it("puts the cofrinho's progress bar under a row with a target, none without", async () => {
-    show({ status: 200, body: COFRINHOS });
-
-    const [viagem, reserva] = await within(await screen.findByRole("region")).findAllByRole("listitem");
-    expect(within(viagem).queryByRole("progressbar")).not.toBeInTheDocument();
-    expect(within(reserva).getByRole("progressbar", { name: "Progresso de Reserva" })).toHaveAttribute(
+    expect(within(rows[1]).getByRole("progressbar", { name: "Progresso de Reserva" })).toHaveAttribute(
       "aria-valuenow",
       "3",
     );
+    expect(card()).toHaveTextContent("Total guardadoR$ 1.300,00");
+    expect(within(card()).getByRole("heading", { name: "Cofrinhos" }).querySelector("svg")).toBeInTheDocument();
+    expect(within(card()).getByRole("link", { name: "Ver todos" })).toHaveAttribute("href", "/economia");
+  });
+
+  it("rounds the share half to even in whole percent: 125,00 of 1.000,00 is 12%", async () => {
+    show({
+      status: 200,
+      body: {
+        ...COFRINHOS,
+        items: [{ ...COFRINHO_RESERVA, balance: "125.00", target: "1000.00", progress_pct: "12.5" }],
+      },
+    });
+
+    expect(await within(await screen.findByRole("region")).findByRole("listitem")).toHaveTextContent(/^Reserva12%/);
   });
 
   it("renders nothing while loading, so it never flashes (D25)", async () => {

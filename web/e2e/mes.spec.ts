@@ -171,13 +171,13 @@ test("the hero shows the balance and the summary, and the spending glance opens 
   await expect(monthSummary).toContainText(/Saídas\s*R\$\s12,50/);
   await expect(hero).toContainText(/Saldo hoje em conta\s*R\$\s2\.987,50/);
 
-  const spending = page.getByRole("region", { name: "Para onde vai" });
-  await expect(spending.getByRole("listitem")).toHaveText([/Mercado\s*R\$\s12,50\s*100%/]);
-  await spending.getByRole("link", { name: "Ver tudo" }).click();
+  const spending = page.getByRole("region", { name: "Para Onde Vai" });
+  await expect(spending.getByRole("listitem")).toHaveText([/Mercado\s*R\$\s12,50\s*100,0%/]);
+  await spending.getByRole("link", { name: "Ver análise" }).click();
   await expect(page).toHaveURL(/\/para-onde-vai\?m=\d{4}-\d{2}$/);
 
   await page.goBack();
-  await expect(page.getByRole("region", { name: "Para onde vai" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Para Onde Vai" })).toBeVisible();
   await expect(page.getByRole("region", { name: "Cofrinhos" })).toHaveCount(0);
 });
 
@@ -306,10 +306,10 @@ test("Mês follows the mobile frame's order at 375, a stack and a 2-column rail 
   await expect(banner).toContainText(
     /(Dia 28 fica|Hoje está) no vermelho: -R\$\s612,50\. Conta de Aluguel prevista excede o saldo em caixa projetado\./,
   );
-  await expect(page.getByRole("region", { name: "Para onde vai" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Para Onde Vai" })).toBeVisible();
   await expect(page.getByRole("region", { name: "Próximos meses" })).toBeVisible();
 
-  const order = ["Saldo hoje", "Contas a pagar", "Termômetro do Mês", "Lançamentos", "Próximos meses", "Para onde vai"];
+  const order = ["Saldo hoje", "Contas a pagar", "Termômetro do Mês", "Lançamentos", "Próximos meses", "Para Onde Vai"];
   const tops = await Promise.all(order.map(async (name) => (await box(page, name)).y));
   expect(tops).toEqual([...tops].sort((a, b) => a - b));
   expect((await box(page, "Alerta do mês")).y).toBeLessThan(tops[0]);
@@ -317,7 +317,7 @@ test("Mês follows the mobile frame's order at 375, a stack and a 2-column rail 
 
   await page.setViewportSize({ width: 1024, height: 900 });
   const [ledger, thermometer, months, spending] = await Promise.all(
-    ["Lançamentos", "Termômetro do Mês", "Próximos meses", "Para onde vai"].map((name) => box(page, name)),
+    ["Lançamentos", "Termômetro do Mês", "Próximos meses", "Para Onde Vai"].map((name) => box(page, name)),
   );
   expect(thermometer.y).toBeGreaterThan(ledger.y);
   expect(months.y).toBe(thermometer.y);
@@ -327,7 +327,7 @@ test("Mês follows the mobile frame's order at 375, a stack and a 2-column rail 
   for (const width of [1280, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     const [hero, rail, glance] = await Promise.all(
-      ["Saldo hoje", "Termômetro do Mês", "Para onde vai"].map((name) => box(page, name)),
+      ["Saldo hoje", "Termômetro do Mês", "Para Onde Vai"].map((name) => box(page, name)),
     );
     expect(rail.x).toBeGreaterThan(hero.x + hero.width);
     expect(Math.abs(glance.width - rail.width)).toBeLessThan(2);
