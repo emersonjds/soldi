@@ -1,10 +1,9 @@
 import { expect, test } from "@playwright/test";
 
-const API = process.env.E2E_API_URL ?? "http://localhost:8080";
+import { requireServer } from "./server";
 
 test("a cofrinho fills from a Saída in Economia and empties with a resgate", async ({ page, request }) => {
-  const health = await request.get(`${API}/api/health`).catch(() => null);
-  test.skip(!health?.ok(), `Soldi server unreachable at ${API}/api/health; start it to run this flow.`);
+  await requireServer(request);
   test.setTimeout(90_000);
 
   await page.setViewportSize({ width: 375, height: 812 });

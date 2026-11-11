@@ -160,13 +160,19 @@ const TransactionForm = ({
     };
   };
 
-  const submit = (event: FormEvent) => {
-    event.preventDefault();
+  const save = () => {
     const valid = fields();
     if (valid) onSave(valid, series ? draft.scope : undefined, moving);
   };
 
-  const convertible = onConvert && (transaction?.kind ?? draft.kind) === "bill" && !draft.repeat && !installments;
+  // D16: while simulating, only Lançar de verdade writes; Enter must not.
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    if (!draft.simulate) save();
+  };
+
+  const convertible =
+    onConvert && (transaction?.kind ?? draft.kind) === "bill" && !draft.repeat && !installments && !draft.simulate;
 
   // Editar converts the stored entry; its unsaved edits stay out.
   const convert = () => {
@@ -399,7 +405,9 @@ const TransactionForm = ({
       <ResponsiveSheetFooter>
         {draft.simulate ? (
           <>
-            <BrandButton type="submit">Lançar de verdade</BrandButton>
+            <BrandButton type="button" onClick={save}>
+              Lançar de verdade
+            </BrandButton>
             <Button type="button" variant="ghost" className="h-12 w-full text-base" onClick={onDiscard}>
               Descartar
             </Button>
@@ -421,6 +429,8 @@ type TransactionSheetProps = {
   initialKind?: Draft["kind"];
   /** Preselected category when creating, of `initialKind`. */
   initialCategory?: Schemas["Category"];
+  /** Creating with Simular on: Posso comprar isso? */
+  initialSimulate?: boolean;
   /** A line above the form. */
   hint?: string;
   /** The bill sheet that Transformar em conta fixa opens; absent, the link is not offered. */
@@ -438,6 +448,7 @@ export const TransactionSheet = ({
   transaction,
   initialKind = "daily",
   initialCategory,
+  initialSimulate = false,
   hint,
   billSheet,
 }: TransactionSheetProps) => {
@@ -512,7 +523,15 @@ export const TransactionSheet = ({
         ...repeat,
         ...(total && { preset: PRESETS.includes(total) ? total : "other", custom: total }),
       }
-    : { kind: initialKind, amount: "", category: initialCategory, date: todayISO(), note: "", ...repeat };
+    : {
+        kind: initialKind,
+        amount: "",
+        category: initialCategory,
+        date: todayISO(),
+        note: "",
+        ...repeat,
+        simulate: initialSimulate,
+      };
 
   return (
     <ResponsiveSheet
@@ -523,7 +542,7 @@ export const TransactionSheet = ({
     >
       {hint && <p className="rounded-xl bg-secondary px-4 py-3 font-medium text-primary text-sm">{hint}</p>}
       <TransactionForm
-        key={transaction?.id ?? `${initialKind}-${initialCategory?.id}`}
+        key={transaction?.id ?? `${initialKind}-${initialCategory?.id}-${initialSimulate}`}
         initial={initial}
         transaction={transaction}
         onSave={save}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { currencySymbol, formatMoney, maskAmount, minusMoney, parseBRL, toInput } from "./money";
+import { currencySymbol, formatMoney, formatWhole, maskAmount, minusMoney, parseBRL, toInput } from "./money";
 
 describe("formatMoney", () => {
   it.each([
@@ -10,6 +10,19 @@ describe("formatMoney", () => {
     ["9999999999.99", "R$ 9.999.999.999,99"],
   ])("formats %s as %s in reais", (amount, expected) => {
     expect(formatMoney(amount, "BRL")).toBe(expected);
+  });
+});
+
+describe("formatWhole", () => {
+  it.each([
+    ["-0.40", "-1"],
+    ["1842.99", "1.842"],
+    ["0.00", "0"],
+    ["-0.00", "0"],
+    ["-12345.67", "-12.346"],
+    ["12345.67", "12.345"],
+  ])("floors %s to %s whole units, never showing more than there is", (amount, expected) => {
+    expect(formatWhole(amount)).toBe(expected);
   });
 });
 

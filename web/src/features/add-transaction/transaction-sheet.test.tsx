@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Toaster } from "sonner";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -640,7 +640,9 @@ describe("TransactionSheet", () => {
     await userEvent.keyboard("6700,00");
 
     const simulation = await screen.findByRole("region", { name: "Simulação" });
-    expect(await within(simulation).findByRole("status")).toHaveTextContent("Com essa compra, hoje vira Crítico");
+    expect(await within(simulation).findByRole("status")).toHaveTextContent(
+      "Com essa compra, hoje fica no vermelho: -R$ 550,00.",
+    );
     const week = within(simulation).getByRole("list", { name: "Próximos 7 dias" });
     expect(within(week).getAllByRole("listitem")).toHaveLength(7);
     expect(within(week).getAllByRole("listitem")[0]).toHaveTextContent("10/11Crítico");
@@ -654,6 +656,37 @@ describe("TransactionSheet", () => {
     expect(onOpenChange).toHaveBeenCalledWith(false);
     expect(requests.filter((request) => request.method === "POST")).toHaveLength(0);
     expect(requests.filter((request) => request.url.endsWith("/api/forecast"))).toHaveLength(1);
+  });
+
+  it("writes nothing on Enter while simulating, hides Transformar em conta fixa, and Lançar de verdade saves", async () => {
+    const { requests, sent } = setup({ billSheet }, simulated());
+
+    await userEvent.click(await screen.findByRole("switch", { name: "Simular" }));
+    await userEvent.click(screen.getByRole("radio", { name: "Saída" }));
+    await userEvent.click(screen.getByLabelText("Valor"));
+    await userEvent.keyboard("50,00{Enter}");
+    fireEvent.submit(screen.getByRole("dialog").querySelector("form") as HTMLFormElement);
+
+    expect(await screen.findByRole("status")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Transformar em conta fixa" })).not.toBeInTheDocument();
+    expect(requests.filter((request) => request.method === "POST")).toHaveLength(0);
+
+    await userEvent.click(screen.getByRole("button", { name: "Lançar de verdade" }));
+    expect(await sent("POST")).toMatchObject({ amount: "50.00", kind: "bill" });
+  });
+
+  it("saves on Enter in Valor when not simulating", async () => {
+    const { sent } = setup();
+    await screen.findByRole("combobox", { name: "Categoria" });
+    await userEvent.keyboard("35,90{Enter}");
+    expect(await sent("POST")).toMatchObject({ amount: "35.90", kind: "daily" });
+  });
+
+  it("opens on Diário with Simular on when asked", async () => {
+    setup({ initialSimulate: true }, simulated());
+    expect(await screen.findByRole("switch", { name: "Simular" })).toBeChecked();
+    expect(screen.getByRole("radio", { name: "Diário" })).toBeChecked();
+    expect(screen.getByRole("region", { name: "Simulação" })).toHaveTextContent("Digite um valor para simular.");
   });
 
   it("says when red days were already there", async () => {

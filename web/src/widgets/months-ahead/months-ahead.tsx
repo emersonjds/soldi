@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-import { CalendarRange } from "lucide-react";
+import { ArrowRight, CalendarRange } from "lucide-react";
 
 import { Skeleton } from "@/components/ui/skeleton";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -55,20 +55,36 @@ const Body = ({ count, viewing, onOpen }: Props & { count: number }) => {
   );
 };
 
-/** `Próximos meses`: today's month and the next 5 or 11, each by its lowest tier (D16); the toggle asks nothing new. */
-export const MonthsAhead = ({ viewing, onOpen, className }: Props & { className?: string }) => {
+type MonthsAheadProps = Props & {
+  /** `Posso comprar?`: Lançar with Simular on. */
+  onSimulate: () => void;
+  className?: string;
+};
+
+/** `Próximos meses`: today's month and the next 5 or 11, each by its lowest balance and tier (D16); the toggle asks nothing new. */
+export const MonthsAhead = ({ viewing, onOpen, onSimulate, className }: MonthsAheadProps) => {
   const [count, setCount] = useState("6");
   return (
     <section
       aria-labelledby="months-ahead-title"
       className={cn("flex flex-col gap-4 rounded-2xl bg-card p-4 shadow-sm lg:p-6", className)}
     >
-      <h2 id="months-ahead-title" className="flex items-center gap-3 font-semibold text-lg leading-6">
-        <span className="flex size-10 items-center justify-center rounded-full bg-secondary text-primary">
-          <CalendarRange className="size-5" aria-hidden />
-        </span>
-        Próximos meses
-      </h2>
+      <div className="flex flex-wrap items-center justify-between gap-x-2">
+        <h2 id="months-ahead-title" className="flex items-center gap-3 font-semibold text-lg leading-6">
+          <span className="flex size-10 items-center justify-center rounded-full bg-secondary text-primary">
+            <CalendarRange className="size-5" aria-hidden />
+          </span>
+          Próximos meses
+        </h2>
+        <button
+          type="button"
+          onClick={onSimulate}
+          className="inline-flex min-h-11 items-center gap-1 font-semibold text-primary text-sm hover:underline focus-visible:outline-2 focus-visible:outline-ring"
+        >
+          Posso comprar?
+          <ArrowRight className="size-4" aria-hidden />
+        </button>
+      </div>
       <ToggleGroup
         type="single"
         spacing={0}

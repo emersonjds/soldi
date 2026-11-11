@@ -5,7 +5,7 @@ import { type ReactNode, Suspense, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
-import { Calendar, PieChart, PiggyBank, Plus, ReceiptText, Settings } from "lucide-react";
+import { Calendar, PieChart, PiggyBank, Plus, ReceiptText, Settings, Sparkles } from "lucide-react";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -105,9 +105,15 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
   const isAt = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
   const me = useMe();
   const [launching, setLaunching] = useState(false);
+  const [simulating, setSimulating] = useState(false);
   const name = me.data?.name ?? "";
   const email = me.data?.email ?? "";
   const [firstName] = name.split(" ");
+  const greeting = firstName ? `Olá, ${firstName}` : "Olá";
+  const launch = (simulate = false) => {
+    setSimulating(simulate);
+    setLaunching(true);
+  };
   const current = SIDEBAR.flatMap((group) => group.items)
     .filter((item) => isAt(item.href))
     .sort((a, b) => b.href.length - a.href.length)[0];
@@ -142,6 +148,14 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
                           </SidebarMenuItem>
                         );
                       })}
+                      {group.label === "Menu" && (
+                        <SidebarMenuItem>
+                          <SidebarMenuButton className="h-11 gap-3 px-3 text-base" onClick={() => launch(true)}>
+                            <Sparkles className="size-5!" aria-hidden />
+                            Posso comprar isso?
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                      )}
                     </SidebarMenu>
                   </SidebarGroup>
                 ))}
@@ -159,7 +173,9 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
                   </Avatar>
                   <div className="grid min-w-0 text-sm leading-tight">
                     <span className="truncate font-medium">{name}</span>
-                    <span className="truncate text-muted-foreground text-xs">{email}</span>
+                    <span title={email} className="truncate text-muted-foreground text-xs">
+                      {email}
+                    </span>
                     <span className="text-[11px] text-muted-foreground/70 tabular-nums">
                       v{process.env.NEXT_PUBLIC_APP_VERSION}
                     </span>
@@ -174,7 +190,7 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
         <div className="flex min-w-0 flex-1 flex-col">
           <header className="flex flex-col gap-2 px-4 pt-4 lg:sticky lg:top-0 lg:z-30 lg:h-16 lg:flex-row lg:items-center lg:gap-4 lg:border-b lg:bg-background/90 lg:px-6 lg:pt-0 lg:backdrop-blur">
             <div className="flex items-center justify-between gap-3 rounded-2xl bg-card py-2 pr-2 pl-4 shadow-sm lg:hidden">
-              <p className="truncate font-semibold text-lg">{firstName ? `Olá, ${firstName}` : "Olá"}</p>
+              <p className="line-clamp-2 font-semibold text-lg">{greeting}</p>
               <Link
                 href="/ajustes/conta"
                 aria-label="Minha conta"
@@ -195,7 +211,7 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
             )}
             <Button
               className="ml-auto hidden min-h-11 bg-brand text-base text-brand-foreground hover:bg-brand-hover lg:inline-flex"
-              onClick={() => setLaunching(true)}
+              onClick={() => launch()}
             >
               <Plus className="size-5" aria-hidden />
               Lançar
@@ -218,7 +234,7 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
           <button
             type="button"
             aria-label="Lançar"
-            onClick={() => setLaunching(true)}
+            onClick={() => launch()}
             className="flex size-14 shrink-0 items-center justify-center rounded-full bg-brand text-brand-foreground shadow-lg transition-colors hover:bg-brand-hover focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2"
           >
             <Plus className="size-7" aria-hidden />
@@ -228,6 +244,7 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
         <TransactionSheet
           open={launching}
           onOpenChange={setLaunching}
+          initialSimulate={simulating}
           billSheet={(props) => <EditBillSheet open {...props} />}
         />
       </SidebarProvider>

@@ -1,10 +1,9 @@
 import { expect, test } from "@playwright/test";
 
-const API = process.env.E2E_API_URL ?? "http://localhost:8080";
+import { requireServer } from "./server";
 
 test("an entry shows up in Para onde vai and Cofrinhos starts empty", async ({ page, request }) => {
-  const health = await request.get(`${API}/api/health`).catch(() => null);
-  test.skip(!health?.ok(), `Soldi server unreachable at ${API}/api/health; start it to run this flow.`);
+  await requireServer(request);
   // The dev server compiles both report screens on first visit.
   test.setTimeout(90_000);
 

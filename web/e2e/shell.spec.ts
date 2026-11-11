@@ -1,6 +1,6 @@
 import { expect, type Page, test } from "@playwright/test";
 
-const API = process.env.E2E_API_URL ?? "http://localhost:8080";
+import { requireServer } from "./server";
 
 /** Scrolls to the end and returns how far the lowest piece of content inside `main` sits below the tab bar's top. */
 const overlap = (page: Page) =>
@@ -42,8 +42,7 @@ test("at 375 the tab bar never covers the last row of a long page, and a long La
   page,
   request,
 }) => {
-  const health = await request.get(`${API}/api/health`).catch(() => null);
-  test.skip(!health?.ok(), `Soldi server unreachable at ${API}/api/health; start it to run this flow.`);
+  await requireServer(request);
 
   await page.setViewportSize({ width: 375, height: 812 });
   await page.goto("/criar-conta");

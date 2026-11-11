@@ -27,7 +27,7 @@ export const ThermometerStrip = ({ tier, className }: { tier: Tier; className?: 
             />
             <span
               className={cn(
-                "whitespace-nowrap text-[11px] leading-4",
+                "max-w-full hyphens-auto break-words text-center text-[11px] leading-3.5",
                 current ? "font-bold text-foreground" : "font-medium text-muted-foreground",
               )}
             >
