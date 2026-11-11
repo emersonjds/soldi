@@ -68,14 +68,15 @@ export const CofrinhosGlance = ({ className }: { className?: string }) => {
             <li key={cofrinho.category_id} className="flex flex-col gap-2">
               <span className="flex min-h-11 items-center gap-3">
                 <CategoryIcon icon={cofrinho.icon} color={cofrinho.color} />
-                <span className="min-w-0 flex-1 truncate font-medium text-base">{cofrinho.name}</span>
-                {cofrinho.target ? (
-                  <span className="whitespace-nowrap text-muted-foreground text-sm tabular-nums">
-                    {formatPct(cofrinho.progress_pct ?? "0", 0)} de <Money amount={cofrinho.target} />
-                  </span>
-                ) : (
-                  <Money amount={cofrinho.balance} className="font-semibold" />
-                )}
+                <span className="flex min-w-0 flex-1 flex-col">
+                  <span className="line-clamp-2 break-words font-medium text-base">{cofrinho.name}</span>
+                  {cofrinho.target && (
+                    <span className="text-muted-foreground text-sm tabular-nums">
+                      {formatPct(cofrinho.progress_pct ?? "0", 0)} de <Money amount={cofrinho.target} />
+                    </span>
+                  )}
+                </span>
+                {!cofrinho.target && <Money amount={cofrinho.balance} className="font-semibold" />}
               </span>
               {cofrinho.target && <CofrinhoBar cofrinho={cofrinho} />}
             </li>
