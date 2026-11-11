@@ -7,6 +7,17 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.40.0
+
+> Headline: Editar série looks like Stitch
+
+### Web
+
+- The series sheet is titled Editar Lançamento Recorrente, with a `∞ Parte de uma série de {n} meses` chip and a line naming the member being edited.
+- Escopo da Alteração comes first, as radio cards with a line each that counts the remaining members; Este e os próximos is marked Recomendado. The delete dialog uses its own lines.
+- Valor por parcela, Duração da série (3, 6, 12 meses or Customizado, with Ciclo Atual) and Dia de vencimento follow Stitch's copy; shortening an outflow series shows the projected saving.
+- The footer offers Excluir da Série..., which opens the delete dialog, Cancelar and Salvar Alterações na Série. A resize ends with `Série ajustada com sucesso para {n} meses futuros.`
+
 ## 0.39.1
 
 > Headline: the end-to-end suite is green again
