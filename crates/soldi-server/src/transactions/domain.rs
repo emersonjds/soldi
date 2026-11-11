@@ -78,16 +78,43 @@ fn check_installments(input: &CreateTransaction, amount: Decimal) -> Result<(), 
 }
 
 /// R1: the dates of the `months - 1` copies, each the original's day in its own month.
-pub fn repeat_dates(date: NaiveDate, months: i16) -> Vec<NaiveDate> {
-    let first = date.with_day(1).unwrap_or(date);
-    let day = i16::try_from(date.day()).unwrap_or(1);
-    (1..months)
-        .filter_map(|k| first.checked_add_months(Months::new(k.unsigned_abs().into())))
-        .map(|month| crate::bills::domain::due_date(month, day))
-        .collect()
+pub fn repeat_dates(date: NaiveDate, months: i16) -> Result<Vec<NaiveDate>, AppError> {
+    following_dates(date, date, u32::try_from(months - 1).unwrap_or(0))
 }
 
-/// R3, R4: bill payments, resgates and series members do not repeat.
+/// L1, L4: `count` dates in the months after `last`'s, each on `first`'s day clamped to its
+/// month; refused when one passes 2100.
+pub fn following_dates(
+    first: NaiveDate,
+    last: NaiveDate,
+    count: u32,
+) -> Result<Vec<NaiveDate>, AppError> {
+    let month = last.with_day(1).unwrap_or(last);
+    let day = i16::try_from(first.day()).unwrap_or(1);
+    (1..=count)
+        .map(|k| {
+            month
+                .checked_add_months(Months::new(k))
+                .map(|month| crate::bills::domain::due_date(month, day))
+                .filter(|date| date.year() <= 2100)
+        })
+        .collect::<Option<Vec<_>>>()
+        .ok_or_else(|| AppError::invalid("date", "must leave room for every month"))
+}
+
+/// L3, L4: a series resized to `months` keeps the member at `position` and those before it.
+pub fn check_series_length(months: i16, position: i64) -> Result<i16, AppError> {
+    let months = check_repeat(months)?;
+    if i64::from(months) < position {
+        return Err(AppError::invalid(
+            "repeat_months",
+            "must keep this entry and the ones before it",
+        ));
+    }
+    Ok(months)
+}
+
+/// R3, R4: bill payments and resgates do not repeat.
 pub fn check_repeatable(entry: &Transaction) -> Result<(), AppError> {
     if entry.recurring_bill_id.is_some() {
         return Err(AppError::rule(
@@ -100,9 +127,6 @@ pub fn check_repeatable(entry: &Transaction) -> Result<(), AppError> {
             "repeat-not-allowed-on-cofrinho-withdrawal",
             "A resgate cannot repeat.",
         ));
-    }
-    if entry.series.is_some() {
-        return Err(already_repeated());
     }
     Ok(())
 }
@@ -239,6 +263,7 @@ mod tests {
             id: Uuid::nil(),
             position: 1,
             total: 2,
+            last_date: date("2026-12-05"),
         })
     }
 
@@ -306,19 +331,22 @@ mod tests {
     #[test]
     fn r1_each_copy_clamps_the_original_day_to_its_own_month() {
         assert_eq!(
-            repeat_dates(date("2027-01-31"), 4),
+            repeat_dates(date("2027-01-31"), 4).unwrap(),
             [date("2027-02-28"), date("2027-03-31"), date("2027-04-30")]
         );
-        assert_eq!(repeat_dates(date("2028-01-31"), 2), [date("2028-02-29")]);
         assert_eq!(
-            repeat_dates(date("2026-11-30"), 3),
+            repeat_dates(date("2028-01-31"), 2).unwrap(),
+            [date("2028-02-29")]
+        );
+        assert_eq!(
+            repeat_dates(date("2026-11-30"), 3).unwrap(),
             [date("2026-12-30"), date("2027-01-30")]
         );
     }
 
     #[test]
     fn r2_twelve_entries_are_the_original_and_eleven_copies() {
-        let copies = repeat_dates(date("2026-11-05"), 12);
+        let copies = repeat_dates(date("2026-11-05"), 12).unwrap();
 
         assert_eq!(copies.len(), 11);
         assert_eq!(copies[0], date("2026-12-05"));
@@ -326,7 +354,7 @@ mod tests {
     }
 
     #[test]
-    fn r3_r4_bill_payments_resgates_and_members_do_not_repeat() {
+    fn r3_r4_bill_payments_and_resgates_do_not_repeat_but_members_may_resize() {
         assert!(check_repeatable(&saved(CategoryKind::Daily)).is_ok());
         let deposit = saved(CategoryKind::Bill);
         assert!(check_repeatable(&deposit).is_ok());
@@ -350,7 +378,52 @@ mod tests {
             series: series(),
             ..deposit
         };
-        assert_eq!(slug(check_repeatable(&member)), "already-repeated");
+        assert!(check_repeatable(&member).is_ok());
+    }
+
+    #[test]
+    fn l3_l4_a_series_keeps_the_edited_member_and_2_to_60_entries() {
+        assert_eq!(check_series_length(6, 3).unwrap(), 6);
+        assert_eq!(check_series_length(5, 5).unwrap(), 5);
+        assert_eq!(check_series_length(2, 1).unwrap(), 2);
+        assert_eq!(check_series_length(60, 60).unwrap(), 60);
+        for (months, position) in [(4, 5), (1, 1), (61, 3), (0, 1)] {
+            assert_eq!(
+                field(check_series_length(months, position)),
+                "repeat_months",
+                "{months} from {position}"
+            );
+        }
+    }
+
+    #[test]
+    fn l1_growth_takes_the_first_members_day_in_the_months_after_the_last_ones() {
+        assert_eq!(
+            following_dates(date("2027-01-31"), date("2027-04-30"), 2).unwrap(),
+            [date("2027-05-31"), date("2027-06-30")]
+        );
+        assert_eq!(
+            following_dates(date("2026-11-05"), date("2027-10-20"), 3).unwrap(),
+            [date("2027-11-05"), date("2027-12-05"), date("2028-01-05")]
+        );
+        assert_eq!(
+            following_dates(date("2026-10-05"), date("2027-10-05"), 1).unwrap(),
+            [date("2027-11-05")]
+        );
+    }
+
+    #[test]
+    fn l4_r2_every_date_of_a_series_stays_up_to_2100() {
+        assert_eq!(
+            following_dates(date("2100-06-05"), date("2100-11-05"), 1).unwrap(),
+            [date("2100-12-05")]
+        );
+        assert_eq!(repeat_dates(date("2100-01-31"), 12).unwrap().len(), 11);
+        assert_eq!(
+            field(following_dates(date("2100-06-05"), date("2100-08-05"), 5)),
+            "date"
+        );
+        assert_eq!(field(repeat_dates(date("2100-06-05"), 12)), "date");
     }
 
     #[test]

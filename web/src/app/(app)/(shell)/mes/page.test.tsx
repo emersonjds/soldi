@@ -331,7 +331,7 @@ describe("Mês", () => {
     open({
       "GET /api/transactions": {
         status: 200,
-        body: [{ ...TRANSACTIONS[1], series: { id: "s1", position: 3, total: 12 } }],
+        body: [{ ...TRANSACTIONS[1], series: { id: "s1", position: 3, total: 12, last_date: "2027-08-04" } }],
       },
     });
 
@@ -345,7 +345,7 @@ describe("Mês", () => {
   });
 
   it("asks how much of a series to delete, then deletes without Desfazer", async () => {
-    const member = { ...TRANSACTIONS[1], series: { id: "s1", position: 3, total: 12 } };
+    const member = { ...TRANSACTIONS[1], series: { id: "s1", position: 3, total: 12, last_date: "2027-08-04" } };
     const requests = open({
       "GET /api/transactions": { status: 200, body: [member] },
       [`DELETE /api/transactions/${member.id}`]: { status: 204 },
@@ -377,7 +377,7 @@ describe("Mês", () => {
   });
 
   it("deletes only this member by default", async () => {
-    const member = { ...TRANSACTIONS[1], series: { id: "s1", position: 1, total: 2 } };
+    const member = { ...TRANSACTIONS[1], series: { id: "s1", position: 1, total: 2, last_date: "2026-12-04" } };
     open({
       "GET /api/transactions": { status: 200, body: [member] },
       [`DELETE /api/transactions/${member.id}`]: { status: 204 },

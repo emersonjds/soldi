@@ -95,26 +95,25 @@ pub async fn create(
     };
     let series_id = count.map(|_| Uuid::new_v4());
     let id = repo::insert(&mut tx, user.id, &first, None, None, series_id).await?;
+    let mut series = None;
     if let (Some(count), Some(series_id)) = (count, series_id) {
-        let dates = domain::repeat_dates(first.date, count);
-        if dates.len() + 1 != amounts.len() {
-            return Err(AppError::invalid("date", "must leave room for every month"));
-        }
+        let dates = domain::repeat_dates(first.date, count)?;
         repo::insert_copies(&mut tx, user.id, &first, series_id, &dates, &amounts[1..]).await?;
+        series = Some(TransactionSeries {
+            id: series_id,
+            position: 1,
+            total: count.into(),
+            last_date: dates.last().copied().unwrap_or(first.date),
+        });
     }
     tx.commit().await?;
-    let series = series_id.zip(count).map(|(id, total)| TransactionSeries {
-        id,
-        position: 1,
-        total: total.into(),
-    });
     Ok(Transaction {
         series,
         ..domain::transaction(id, first, category, None)
     })
 }
 
-/// R6: `following` also rewrites the series' later members; `repeat_months` starts a series.
+/// R6: `following` also rewrites the series' later members; `repeat_months` starts a series or resizes it (D19).
 pub async fn update(
     pool: &PgPool,
     user: &CurrentUser,
@@ -154,20 +153,54 @@ pub async fn update(
         let amount = (next.amount != current.amount).then_some(next.amount);
         repo::update_following(&mut tx, user.id, series.id, current.date, &next, amount).await?;
     }
-    if let Some(months) = next.repeat_months {
-        let series_id = Uuid::new_v4();
-        if !repo::set_series(&mut tx, user.id, id, series_id).await? {
-            return Err(domain::already_repeated());
+    match (next.repeat_months, &current.series) {
+        (Some(months), Some(series)) => resize(&mut tx, user, id, series.id, months, &next).await?,
+        (Some(months), None) => {
+            let series_id = Uuid::new_v4();
+            if !repo::set_series(&mut tx, user.id, id, series_id).await? {
+                return Err(domain::already_repeated());
+            }
+            let dates = domain::repeat_dates(next.date, months)?;
+            let amounts = vec![next.amount; dates.len()];
+            repo::insert_copies(&mut tx, user.id, &next, series_id, &dates, &amounts).await?;
         }
-        let dates = domain::repeat_dates(next.date, months);
-        let amounts = vec![next.amount; dates.len()];
-        repo::insert_copies(&mut tx, user.id, &next, series_id, &dates, &amounts).await?;
+        (None, _) => {}
     }
     let updated = repo::find(&mut tx, user.id, id)
         .await?
         .ok_or(AppError::NotFound)?;
     tx.commit().await?;
     Ok(updated)
+}
+
+/// L1–L4 (D19): the series ends after `months` entries; growth copies the edited member `next`.
+async fn resize(
+    conn: &mut PgConnection,
+    user: &CurrentUser,
+    id: Uuid,
+    series_id: Uuid,
+    months: i16,
+    next: &CreateTransaction,
+) -> Result<(), AppError> {
+    repo::lock_series(conn, series_id).await?;
+    let edited = repo::find(conn, user.id, id)
+        .await?
+        .and_then(|entry| entry.series)
+        .ok_or(AppError::NotFound)?;
+    let months = domain::check_series_length(months, edited.position)?;
+    let total = edited.total;
+    if i64::from(months) < total {
+        repo::delete_beyond(conn, user.id, series_id, months.into()).await?;
+    } else if i64::from(months) > total {
+        let (first, last) = repo::series_span(conn, user.id, series_id)
+            .await?
+            .ok_or(AppError::NotFound)?;
+        let count = u32::try_from(i64::from(months) - total).unwrap_or(0);
+        let added = domain::following_dates(first, last, count)?;
+        let amounts = vec![next.amount; added.len()];
+        repo::insert_copies(conn, user.id, next, series_id, &added, &amounts).await?;
+    }
+    Ok(())
 }
 
 /// `following` on a series member also deletes the members dated after it.
@@ -177,17 +210,22 @@ pub async fn delete(
     id: Uuid,
     scope: Scope,
 ) -> Result<(), AppError> {
-    let mut conn = pool.acquire().await?;
-    let current = repo::find(&mut conn, user.id, id)
+    let mut tx = pool.begin().await?;
+    let current = repo::find(&mut tx, user.id, id)
         .await?
         .ok_or(AppError::NotFound)?;
     match (scope, current.series) {
         (Scope::Following, Some(series)) => {
-            repo::delete_following(&mut conn, user.id, series.id, current.date).await?
+            repo::lock_series(&mut tx, series.id).await?;
+            let locked = repo::find(&mut tx, user.id, id)
+                .await?
+                .ok_or(AppError::NotFound)?;
+            repo::delete_following(&mut tx, user.id, series.id, locked.date).await?;
         }
         _ => {
-            repo::delete(&mut conn, user.id, id).await?;
+            repo::delete(&mut tx, user.id, id).await?;
         }
     }
+    tx.commit().await?;
     Ok(())
 }
