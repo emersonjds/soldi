@@ -43,6 +43,16 @@ describe("Money", () => {
     expect(screen.getByText("R$ 1.234,50").parentElement).toHaveClass("text-[40px]", "lg:text-5xl");
   });
 
+  it("draws a display plain on mobile and from lg raises the cents at 55%, the symbol kept whole", () => {
+    render(<Money amount="1842.10" size="display" />);
+
+    expect(screen.getByText("R$ 1.842,10").parentElement).toHaveClass("text-[34px]", "lg:text-[40px]");
+    expect(screen.getByText("10")).toHaveClass("lg:align-super", "lg:text-[0.55em]");
+    expect(screen.getByText(",")).toHaveClass("lg:align-super");
+    expect(screen.getByText("R$")).not.toHaveClass("text-[0.55em]", "lg:text-[0.55em]");
+    expect(screen.getByText("842")).not.toHaveClass("lg:align-super");
+  });
+
   it("keeps the sign and the red on a negative figure", () => {
     render(<Money amount="-10.00" size="figure" />);
 

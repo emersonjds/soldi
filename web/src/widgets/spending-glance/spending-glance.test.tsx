@@ -38,8 +38,8 @@ const GROUPS = [
 
 const show = (reply: { status: number; body?: unknown }) => {
   const requests = stubApi({ "GET /api/reports/categories?month=2026-11": reply });
-  renderWithQuery(<SpendingGlance month="2026-11" />);
-  return requests;
+  const { client } = renderWithQuery(<SpendingGlance month="2026-11" />);
+  return { requests, client };
 };
 
 const card = () => screen.getByRole("region", { name: "Para onde vai" });
@@ -48,7 +48,7 @@ describe("Para onde vai glance", () => {
   it("shows the four largest outflow groups with amount and share, and links the month's full screen", async () => {
     show({ status: 200, body: { ...REPORT, outflow_total: "2500.00", groups: GROUPS } });
 
-    const rows = await within(card()).findAllByRole("listitem");
+    const rows = await within(await screen.findByRole("region")).findAllByRole("listitem");
     expect(rows.map((row) => row.textContent?.replace(/\s/g, " "))).toEqual([
       "AluguelR$ 1.200,0048%",
       "MercadoR$ 650,0026%",
@@ -61,23 +61,29 @@ describe("Para onde vai glance", () => {
   it("rounds a share half to even, as Para onde vai does: 125,00 of 1.000,00 is 12%", async () => {
     show({ status: 200, body: { ...REPORT, outflow_total: "1000.00", groups: [group(ALUGUEL, "125.00", "12.5")] } });
 
-    expect(await within(card()).findByRole("listitem")).toHaveTextContent(/12%$/);
+    expect(await within(await screen.findByRole("region")).findByRole("listitem")).toHaveTextContent(/12%$/);
   });
 
-  it("shows four bar skeletons while loading", () => {
+  it("renders nothing while loading, so it never flashes (D25)", async () => {
     show({ status: 200, body: REPORT });
-    expect(within(card()).getAllByTestId("bar-skeleton")).toHaveLength(4);
+    expect(screen.queryByRole("region")).not.toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: "Para onde vai" })).toBeInTheDocument();
   });
 
-  it("says nothing was spent when the month has only income", async () => {
-    show({ status: 200, body: { ...REPORT, groups: [group(SALARIO, "500.00", "100.0")] } });
-    expect(await within(card()).findByText("Nenhum gasto neste mês ainda.")).toBeInTheDocument();
-    expect(within(card()).queryByRole("listitem")).not.toBeInTheDocument();
+  it("renders nothing when the month has no outflow (D25)", async () => {
+    const { client } = show({
+      status: 200,
+      body: { ...REPORT, outflow_total: "0.00", groups: [group(SALARIO, "500.00", "100.0")] },
+    });
+    await waitFor(() => expect(client.isFetching()).toBe(0));
+    expect(screen.queryByRole("region")).not.toBeInTheDocument();
   });
 
   it("says so when it fails and tries again", async () => {
-    const requests = show({ status: 500, body: problem(500, "Erro") });
-    await userEvent.click(await within(card()).findByRole("button", { name: "Tentar de novo" }));
+    const { requests } = show({ status: 500, body: problem(500, "Erro") });
+    await userEvent.click(
+      await within(await screen.findByRole("region")).findByRole("button", { name: "Tentar de novo" }),
+    );
     expect(card()).toHaveTextContent("Não foi possível carregar os gastos.");
     await waitFor(() => expect(requests.length).toBeGreaterThan(1));
   });

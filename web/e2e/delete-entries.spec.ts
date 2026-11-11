@@ -46,5 +46,6 @@ test("deleting this month's entries empties the ledger and the preview", async (
   await expect(page).toHaveURL(/\/ajustes\/apagar/);
 
   await page.goto(`/mes?m=${month}`);
-  await expect(page.getByRole("region", { name: "Lançamentos" })).toContainText("Nenhum lançamento ainda");
+  await expect(page.getByRole("region", { name: "Saldo hoje" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Lançamentos" })).toHaveCount(0);
 });

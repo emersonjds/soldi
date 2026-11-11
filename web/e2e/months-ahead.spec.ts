@@ -57,7 +57,7 @@ test("Próximos meses paints the first two months the rent is owed Crítico and 
 
   await chips.nth(first + 1).click();
   await expect(page).toHaveURL(new RegExp(`m=${monthFromNow(first + 1)}`));
-  const hero = page.getByRole("region", { name: "Saldo hoje" });
-  await expect(hero.getByRole("button", { name: /Dia 1 fica no vermelho: -R\$\s600,00/ })).toBeVisible();
-  await expect(hero.getByRole("button", { name: /Pior dia: 28\/\d\d, -R\$\s2\.200,00/ })).toBeVisible();
+  const banner = page.getByRole("region", { name: "Alerta do mês" });
+  await expect(banner).toContainText(/^Dia 1 fica no vermelho: -R\$\s600,00\./);
+  await expect(banner.getByRole("button", { name: "Ver o dia 1" })).toBeVisible();
 });

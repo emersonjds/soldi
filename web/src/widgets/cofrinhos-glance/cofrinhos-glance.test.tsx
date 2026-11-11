@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
@@ -9,8 +9,14 @@ import { CofrinhosGlance } from "./cofrinhos-glance";
 
 const show = (reply: { status: number; body?: unknown }) => {
   const requests = stubApi({ "GET /api/cofrinhos": reply });
-  renderWithQuery(<CofrinhosGlance />);
-  return requests;
+  const { client } = renderWithQuery(<CofrinhosGlance />);
+  return { requests, client };
+};
+
+const nothing = async (body: unknown) => {
+  const { client } = show({ status: 200, body });
+  await waitFor(() => expect(client.isFetching()).toBe(0));
+  expect(screen.queryByRole("region")).not.toBeInTheDocument();
 };
 
 const card = () => screen.getByRole("region", { name: "Cofrinhos" });
@@ -22,7 +28,7 @@ describe("Cofrinhos glance", () => {
       body: { ...COFRINHOS, items: [COFRINHO_SEM_OBJETIVO, COFRINHO_RESERVA, COFRINHO_VIAGEM] },
     });
 
-    const rows = await within(card()).findAllByRole("listitem");
+    const rows = await within(await screen.findByRole("region")).findAllByRole("listitem");
     expect(rows.map((row) => row.textContent?.replace(/\s/g, " "))).toEqual([
       "ViagemR$ 1.000,00",
       "Reserva3% de R$ 10.000,00",
@@ -34,7 +40,7 @@ describe("Cofrinhos glance", () => {
   it("puts the cofrinho's progress bar under a row with a target, none without", async () => {
     show({ status: 200, body: COFRINHOS });
 
-    const [viagem, reserva] = await within(card()).findAllByRole("listitem");
+    const [viagem, reserva] = await within(await screen.findByRole("region")).findAllByRole("listitem");
     expect(within(viagem).queryByRole("progressbar")).not.toBeInTheDocument();
     expect(within(reserva).getByRole("progressbar", { name: "Progresso de Reserva" })).toHaveAttribute(
       "aria-valuenow",
@@ -42,23 +48,35 @@ describe("Cofrinhos glance", () => {
     );
   });
 
-  it("shows two row skeletons while loading", () => {
+  it("renders nothing while loading, so it never flashes (D25)", async () => {
     show({ status: 200, body: COFRINHOS });
-    expect(within(card()).getAllByTestId("row-skeleton")).toHaveLength(2);
+    expect(screen.queryByRole("region")).not.toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: "Cofrinhos" })).toBeInTheDocument();
   });
 
-  it("invites the emergency reserve when there is no cofrinho yet", async () => {
-    show({ status: 200, body: { total_saved: "0.00", saved_this_month: "0.00", items: [] } });
-    expect(
-      await within(card()).findByText("Nenhum cofrinho ainda. Comece pela reserva de emergência."),
-    ).toBeInTheDocument();
-    expect(within(card()).getByRole("link", { name: "Ver cofrinhos" })).toHaveAttribute("href", "/economia");
-    expect(within(card()).queryByRole("link", { name: "Ver todos" })).not.toBeInTheDocument();
+  it("renders nothing without a cofrinho, or with only an empty Reserva Livre (D25)", async () => {
+    await nothing({ total_saved: "0.00", saved_this_month: "0.00", items: [] });
+    cleanup();
+    await nothing({ total_saved: "0.00", saved_this_month: "0.00", items: [COFRINHO_SEM_OBJETIVO] });
+  });
+
+  it("shows a Reserva Livre that holds money", async () => {
+    show({
+      status: 200,
+      body: {
+        total_saved: "150.00",
+        saved_this_month: "0.00",
+        items: [{ ...COFRINHO_SEM_OBJETIVO, balance: "150.00" }],
+      },
+    });
+    expect(await screen.findByRole("region", { name: "Cofrinhos" })).toHaveTextContent("R$ 150,00");
   });
 
   it("says so when it fails and tries again", async () => {
-    const requests = show({ status: 500, body: problem(500, "Erro") });
-    await userEvent.click(await within(card()).findByRole("button", { name: "Tentar de novo" }));
+    const { requests } = show({ status: 500, body: problem(500, "Erro") });
+    await userEvent.click(
+      await within(await screen.findByRole("region")).findByRole("button", { name: "Tentar de novo" }),
+    );
     expect(card()).toHaveTextContent("Não foi possível carregar os cofrinhos.");
     await waitFor(() => expect(requests.length).toBeGreaterThan(1));
   });

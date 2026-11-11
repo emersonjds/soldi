@@ -4,10 +4,10 @@ import { describe, expect, it } from "vitest";
 import { SplitBar } from "./split-bar";
 
 const segments = [
-  { label: "Contas", amount: "1800.00", tone: "bills" },
-  { label: "Guardado", amount: "480.00", tone: "saved" },
-  { label: "Diário", amount: "2580.00", tone: "daily" },
-  { label: "Livre", amount: "1140.00", tone: "free" },
+  { label: "Contas fixas", amount: "2708.00", tone: "bills" },
+  { label: "Guardado", amount: "776.13", tone: "saved" },
+  { label: "Gastos diários", amount: "1548.50", tone: "daily" },
+  { label: "Livre restante", amount: "1328.97", tone: "free" },
 ] as const;
 
 // Intl puts a no-break space after the symbol.
@@ -17,26 +17,30 @@ const grows = () =>
   Array.from(screen.getByRole("img").children, (segment) => Number((segment as HTMLElement).style.flexGrow));
 
 describe("SplitBar", () => {
-  it("sums the segments up to the base in one image label", () => {
+  it("sums the segments up to the base in one image label, each share with one decimal", () => {
     render(<SplitBar label="Entradas" segments={[...segments]} />);
 
     expect(
-      screen.getByRole("img", { name: named("Entradas R$ 6.000,00: contas 30%, guardado 8%, diário 43%, livre 19%") }),
+      screen.getByRole("img", {
+        name: named(
+          "Entradas R$ 6.361,60: contas fixas 42,6%, guardado 12,2%, gastos diários 24,3%, livre restante 20,9%",
+        ),
+      }),
     ).toBeInTheDocument();
-    expect(grows()).toEqual([180000, 48000, 258000, 114000]);
+    expect(grows()).toEqual([270800, 77613, 154850, 132897]);
   });
 
-  it("lists each segment with its value and share, in text ink, never color alone", () => {
+  it("lists each segment with a dot, its label, its value and its share, never color alone", () => {
     render(<SplitBar label="Entradas" segments={[...segments]} />);
 
     const rows = within(screen.getByRole("list")).getAllByRole("listitem");
     expect(rows.map((row) => row.textContent?.replace(/\s/g, " "))).toEqual([
-      "ContasR$ 1.800,00 · 30%",
-      "GuardadoR$ 480,00 · 8%",
-      "DiárioR$ 2.580,00 · 43%",
-      "LivreR$ 1.140,00 · 19%",
+      "Contas fixasR$ 2.708,0042,6%",
+      "GuardadoR$ 776,1312,2%",
+      "Gastos diáriosR$ 1.548,5024,3%",
+      "Livre restanteR$ 1.328,9720,9%",
     ]);
-    expect(rows[0].querySelector("span")).toHaveClass("bg-primary");
+    expect(rows[0].querySelector("span")).toHaveClass("bg-primary", "rounded-full");
     expect(rows[1].querySelector("span")).toHaveClass("bg-cat-11");
     expect(rows[2].querySelector("span")).toHaveClass("bg-split-daily");
     expect(rows[3].querySelector("span")).toHaveClass("bg-muted", "border-border");
@@ -47,33 +51,38 @@ describe("SplitBar", () => {
       <SplitBar
         label="Entradas"
         segments={[
-          { label: "Contas", amount: "3600.00", tone: "bills" },
+          { label: "Contas fixas", amount: "3600.00", tone: "bills" },
           { label: "Guardado", amount: "0.00", tone: "saved" },
-          { label: "Diário", amount: "2400.00", tone: "daily" },
-          { label: "Livre", amount: "0.00", tone: "free" },
+          { label: "Gastos diários", amount: "2400.00", tone: "daily" },
+          { label: "Livre restante", amount: "0.00", tone: "free" },
         ]}
       />,
     );
 
     expect(
-      screen.getByRole("img", { name: named("Entradas R$ 6.000,00: contas 60%, diário 40%") }),
+      screen.getByRole("img", { name: named("Entradas R$ 6.000,00: contas fixas 60,0%, gastos diários 40,0%") }),
     ).toBeInTheDocument();
     expect(grows()).toEqual([360000, 240000]);
     expect(screen.getAllByRole("listitem")).toHaveLength(2);
     expect(screen.queryByText("Guardado")).not.toBeInTheDocument();
   });
 
-  it("rounds each share half to even", () => {
+  it("rounds each share half to even at one decimal", () => {
     render(
       <SplitBar
         label="Entradas"
         segments={[
-          { label: "Contas", amount: "0.01", tone: "bills" },
-          { label: "Diário", amount: "0.07", tone: "daily" },
+          { label: "Contas fixas", amount: "0.50", tone: "bills" },
+          { label: "Gastos diários", amount: "1.50", tone: "daily" },
+          { label: "Livre restante", amount: "998.00", tone: "free" },
         ]}
       />,
     );
 
-    expect(screen.getByRole("img", { name: named("Entradas R$ 0,08: contas 12%, diário 88%") })).toBeInTheDocument();
+    expect(
+      screen.getByRole("img", {
+        name: named("Entradas R$ 1.000,00: contas fixas 0,0%, gastos diários 0,2%, livre restante 99,8%"),
+      }),
+    ).toBeInTheDocument();
   });
 });

@@ -11,7 +11,7 @@ const nextMonthDay = (day: number) => {
   return new Date(Date.UTC(year, month, day)).toISOString().slice(0, 10);
 };
 
-test("next month opens with this month's unpaid conta fixa and the worst-day line jumps to its due day", async ({
+test("next month opens with this month's unpaid conta fixa and the red banner names it and jumps to its day", async ({
   page,
   request,
 }) => {
@@ -41,28 +41,31 @@ test("next month opens with this month's unpaid conta fixa and the worst-day lin
     /Agendado · 28 .*-R\$\s2\.200,00.*Previsto · Crítico/,
   );
   await expect(ledger.getByRole("listitem", { name: "Aluguel" })).toContainText("Conta fixa · a pagar");
-
-  const hero = page.getByRole("region", { name: "Saldo hoje" });
-  await expect(hero.getByRole("button", { name: /Dia 1 fica no vermelho: -R\$\s600,00/ })).toBeVisible();
-  await hero.getByRole("button", { name: /Pior dia: 28\/\d\d, -R\$\s2\.200,00/ }).click();
-  await expect(page.locator(`#dia-${nextMonthDay(28)}`)).toHaveClass(/ring-2/);
   await expect(ledger.getByRole("listitem", { name: "Aluguel" })).toContainText("Motivo da queda");
 
-  const categories: { id: string; kind: string }[] = await (await page.request.get("/api/categories")).json();
+  const banner = page.getByRole("region", { name: "Alerta do mês" });
+  await expect(banner).toHaveText(/^Dia 1 fica no vermelho: -R\$\s600,00\.Ver o dia 1$/);
+  await expect(page.getByText(/Pior dia/)).toHaveCount(0);
+  const bannerTop = (await banner.boundingBox())?.y ?? 0;
+  const heroTop = (await page.getByRole("region", { name: "Saldo hoje" }).boundingBox())?.y ?? 0;
+  expect(bannerTop).toBeLessThan(heroTop);
+
+  const categories: { id: string; kind: string; name: string }[] = await (
+    await page.request.get("/api/categories")
+  ).json();
   const daily = categories.find((category) => category.kind === "daily");
-  for (const day of [2, 3, 4]) {
+  for (const day of [1, 2, 3, 4]) {
     const created = await page.request.post("/api/transactions", {
       data: { date: nextMonthDay(day), amount: "1.00", kind: "daily", category_id: daily?.id, note: null },
     });
     expect(created.ok()).toBe(true);
   }
   await page.reload();
-  const due = page.locator(`#dia-${nextMonthDay(28)}`);
-  await expect(ledger.getByRole("button", { name: "Ver o mês inteiro (4 dias)" })).toBeVisible();
-  await expect(due).toHaveCount(0);
-
-  await hero.getByRole("button", { name: /Pior dia: 28\// }).click();
-  await expect(due).toHaveClass(/ring-2/);
-  await expect(due).toBeInViewport();
-  await expect(ledger.getByRole("button", { name: "Mostrar menos" })).toBeVisible();
+  await expect(banner).toContainText(
+    `Dia 1 fica no vermelho: -R$\u00a0601,00. Conta de ${daily?.name} prevista excede o saldo em caixa projetado.`,
+  );
+  const first = page.locator(`#dia-${nextMonthDay(1)}`);
+  await banner.getByRole("button", { name: "Ver o dia 1" }).click();
+  await expect(first).toHaveClass(/ring-2/);
+  await expect(first).toBeInViewport();
 });
