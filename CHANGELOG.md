@@ -7,6 +7,19 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.39.0
+
+> Headline: Lançar as in the Stitch design
+
+### Web
+
+- Lançar has the Stitch header (Novo Registro on mobile, Novo Lançamento on desktop), the Entrada / Conta / Diário segment with icons, and the amount labelled "Valor do gasto" or "Valor da entrada" with lighter cents. A long amount steps its size down instead of scrolling sideways (SOL-84).
+- On a touch screen under 1024 px, an amount keypad is docked above Salvar Lançamento. It enters amounts like a calculator: digits are reais, the comma starts the cents.
+- The category row holds up to eight circles and scrolls with snap. A parent with subcategories shows "Sub:" pills, and the entry saves the child. "Nova categoria" moved into "Ver todas".
+- The date reads "Hoje (11 nov)" on desktop, then Ontem and Outra data. The note row has a clear button.
+- Repetir and Parcelar use the Stitch wording, and Parcelar says when the last installment absorbs the residual cents. "Criar como Conta Fixa" turns the entry into a fixed bill.
+- The desktop dialog is 560 px wide, with Cancelar and Salvar Lançamento in the footer. Enter saves from any field except the note.
+
 ## 0.38.0
 
 > Headline: Lançamentos, Próximos meses and the glances as in the Stitch design
