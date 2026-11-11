@@ -29,14 +29,19 @@ pub async fn count(pool: &PgPool, user: &CurrentUser, period: &str) -> Result<i6
     Ok(repo::count_period(&mut conn, user.id, period).await?)
 }
 
+/// SOL-67: takes the series locks in `series_id` order before any row lock (D19/D20).
 pub async fn delete_period(
     pool: &PgPool,
     user: &CurrentUser,
     period: &str,
 ) -> Result<i64, AppError> {
     let period = domain::period(period)?;
-    let mut conn = pool.acquire().await?;
-    let deleted = repo::delete_period(&mut conn, user.id, period).await?;
+    let mut tx = pool.begin().await?;
+    for series_id in repo::period_series(&mut tx, user.id, period).await? {
+        repo::lock_series(&mut tx, series_id).await?;
+    }
+    let deleted = repo::delete_period(&mut tx, user.id, period).await?;
+    tx.commit().await?;
     Ok(i64::try_from(deleted).unwrap_or(i64::MAX))
 }
 
