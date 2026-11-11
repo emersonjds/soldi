@@ -217,7 +217,10 @@ pub async fn delete(
     match (scope, current.series) {
         (Scope::Following, Some(series)) => {
             repo::lock_series(&mut tx, series.id).await?;
-            repo::delete_following(&mut tx, user.id, series.id, current.date).await?;
+            let locked = repo::find(&mut tx, user.id, id)
+                .await?
+                .ok_or(AppError::NotFound)?;
+            repo::delete_following(&mut tx, user.id, series.id, locked.date).await?;
         }
         _ => {
             repo::delete(&mut tx, user.id, id).await?;
