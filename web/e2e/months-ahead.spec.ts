@@ -41,12 +41,10 @@ test("Próximos meses paints the first two months the rent is owed Crítico and 
   const first = today()[2] > 28 ? 1 : 0;
   const strip = page.getByRole("region", { name: "Próximos meses" });
   const chips = strip.getByRole("button", { name: /\d{4}/ });
-  await expect(chips).toHaveCount(6);
-  const red = /: Crítico, menor saldo -R\$\s[\d.]+,\d\d, \d+ dias? no vermelho$/;
+  await expect(chips).toHaveCount(12);
+  const red = /: menor saldo -R\$\s[\d.]+,\d\d, Crítico$/;
   await expect(chips.nth(first)).toHaveAccessibleName(red);
   await expect(chips.nth(first + 1)).toHaveAccessibleName(red);
-  await strip.getByRole("radio", { name: "12 meses" }).click();
-  await expect(chips).toHaveCount(12);
   // Rent with nothing coming in: the last months fall below -R$ 10.000.
   await expect(chips.nth(11)).toContainText(/-\d{2}\.\d{3}/);
   await expectNoClipped(page);

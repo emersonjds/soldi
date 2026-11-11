@@ -42,6 +42,15 @@ const MONTH_NAMES = [
   "dezembro",
 ];
 
+/** `2026-11` → `Nov`; the year rides in `monthLong`. */
+export const monthShort = (month: string) => {
+  const name = MONTHS[Number(month.slice(5, 7)) - 1];
+  return name[0].toUpperCase() + name.slice(1);
+};
+
+/** `2026-11` → `novembro de 2026`. */
+export const monthLong = (month: string) => `${MONTH_NAMES[Number(month.slice(5, 7)) - 1]} de ${month.slice(0, 4)}`;
+
 /** `2026-10-10` seen from `2026-11` → `outubro`; from `2027-01` → `outubro de 2026`. */
 export const monthName = (date: string, viewing: string) => {
   const name = MONTH_NAMES[Number(date.slice(5, 7)) - 1];

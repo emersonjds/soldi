@@ -993,7 +993,7 @@ describe("Mês", () => {
     open({ "GET /api/forecast": { status: 200, body: FORECAST } });
 
     const strip = await screen.findByRole("region", { name: "Próximos meses" });
-    await userEvent.click(await within(strip).findByRole("button", { name: /^dez 2026/ }));
+    await userEvent.click(await within(strip).findByRole("button", { name: /^dezembro de 2026/ }));
 
     expect(router.replace).toHaveBeenCalledWith("/mes?m=2026-12", { scroll: false });
     expect(scrollTo).toHaveBeenCalledWith({ top: 0 });
