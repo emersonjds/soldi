@@ -399,6 +399,117 @@ describe("TransactionSheet", () => {
     expect(body).not.toHaveProperty("repeat_months");
   });
 
+  const pickDate = (date: string) => fireEvent.change(screen.getByLabelText("Outra data"), { target: { value: date } });
+
+  it("moves the day of this and the following members: helper names the day, toast Série movida", async () => {
+    const { sent } = setup({ transaction: MEMBER }, resize);
+
+    await userEvent.click(await screen.findByRole("radio", { name: "Este e os próximos" }));
+    pickDate("2026-11-10");
+    expect(screen.getByText("Os próximos também vão para o dia 10.")).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "12x" })).toBeDisabled();
+    await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
+
+    const body = await sent("PATCH");
+    expect(body).toMatchObject({ date: "2026-11-10" });
+    expect(body).not.toHaveProperty("repeat_months");
+    expect(await screen.findByText("Série movida para o dia 10")).toBeInTheDocument();
+  });
+
+  it("says Toda a série on the first member and warns about shorter months from day 29", async () => {
+    setup({ transaction: { ...MEMBER, series: { ...MEMBER.series, position: 1 } } });
+
+    await userEvent.click(await screen.findByRole("radio", { name: "Toda a série" }));
+    pickDate("2026-11-28");
+    expect(screen.getByText("Toda a série vai para o dia 28.")).toBeInTheDocument();
+    pickDate("2026-11-30");
+    expect(
+      screen.getByText("Toda a série vai para o dia 30. Nos meses mais curtos, no último dia."),
+    ).toBeInTheDocument();
+  });
+
+  it("shows no day helper with Só este", async () => {
+    setup({ transaction: MEMBER });
+
+    await screen.findByRole("radio", { name: "Só este" });
+    pickDate("2026-12-10");
+    expect(screen.queryByText(/va[io] para o dia/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("blocks a month change with Este e os próximos until Só este is chosen", async () => {
+    const { requests, sent } = setup({ transaction: MEMBER }, resize);
+
+    await userEvent.click(await screen.findByRole("radio", { name: "Este e os próximos" }));
+    pickDate("2026-12-10");
+    expect(screen.getByRole("alert")).toHaveTextContent("Para mudar o mês, use Só este.");
+    expect(screen.queryByText(/va[io] para o dia/)).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
+    expect(requests.filter((request) => request.method === "PATCH")).toHaveLength(0);
+
+    await userEvent.click(screen.getByRole("radio", { name: "Só este" }));
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
+
+    expect(await sent("PATCH")).toMatchObject({ date: "2026-12-10" });
+    expect(await screen.findByText("Lançamento atualizado")).toBeInTheDocument();
+  });
+
+  const dateRefused = (message: string) => ({
+    [`PATCH /api/transactions/${MEMBER.id}`]: {
+      status: 422,
+      body: { ...problem(422, "Invalid."), errors: [{ field: "date", message }] },
+    },
+  });
+
+  it("tells a shared month apart from any other failure of a day move", async () => {
+    setup({ transaction: MEMBER }, dateRefused("must not move a series with two entries in one month"));
+
+    await userEvent.click(await screen.findByRole("radio", { name: "Este e os próximos" }));
+    pickDate("2026-11-10");
+    await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
+
+    expect(
+      await screen.findByText("Outro lançamento da série está no mesmo mês. Mova-o com Só este antes."),
+    ).toBeInTheDocument();
+  });
+
+  it("says the save failed when a day move is refused for its date bounds", async () => {
+    setup({ transaction: MEMBER }, dateRefused("must be from 2000 to 2100"));
+
+    await userEvent.click(await screen.findByRole("radio", { name: "Este e os próximos" }));
+    pickDate("2026-11-10");
+    await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
+
+    expect(await screen.findByText("Não foi possível salvar o lançamento.")).toBeInTheDocument();
+    expect(screen.queryByText(/Outro lançamento da série/)).not.toBeInTheDocument();
+  });
+
+  it("keeps the stored date when the date is cleared: no month alert, no day helper", async () => {
+    const { sent } = setup({ transaction: MEMBER }, resize);
+
+    await userEvent.click(await screen.findByRole("radio", { name: "Este e os próximos" }));
+    pickDate("");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.queryByText(/va[io] para o dia/)).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
+
+    expect(await sent("PATCH")).toMatchObject({ date: MEMBER.date });
+  });
+
+  it("says the save failed when a day move fails for another reason", async () => {
+    setup(
+      { transaction: MEMBER },
+      { [`PATCH /api/transactions/${MEMBER.id}`]: { status: 500, body: problem(500, "No.") } },
+    );
+
+    await userEvent.click(await screen.findByRole("radio", { name: "Este e os próximos" }));
+    pickDate("2026-11-10");
+    await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
+
+    expect(await screen.findByText("Não foi possível salvar o lançamento.")).toBeInTheDocument();
+  });
+
   it("offers Transformar em conta fixa only for a Saída without Repetir", async () => {
     setup({ billSheet });
 

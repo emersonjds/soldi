@@ -56,7 +56,7 @@ pt-BR only product (D3): the server computes `today` in `America/Sao_Paulo` (chr
 
 ## D14 — Repeated entries are real rows grouped by `series_id` (2026-11-05, SOL-21 panel, architect arbitrated)
 
-"Repetir por N meses" (2..60, N counts the original) inserts all N rows at once, sharing a nullable `transactions.series_id`; position and total are counted at read time, never stored. A series action reaches only `this` row or `following` rows (date ≥ the edited one); past members are never rewritten, and a date change never propagates. Bill payments and resgates cannot repeat: an open-ended repeat is a recurring bill (D8), offered as "Transformar em conta fixa". Trade-off: D8's "no rows ahead of time" holds for bills only; a finite user-chosen repeat writes future rows, bounded by 60. Options: lazy generation (breaks D8's single ledger), a third "Toda a série" scope (rewrites reconciled months).
+"Repetir por N meses" (2..60, N counts the original) inserts all N rows at once, sharing a nullable `transactions.series_id`; position and total are counted at read time, never stored. A series action reaches only `this` row or `following` rows (date ≥ the edited one); past members are never rewritten, and a date change never propagates (D20: `following` moves the day of the month). Bill payments and resgates cannot repeat: an open-ended repeat is a recurring bill (D8), offered as "Transformar em conta fixa". Trade-off: D8's "no rows ahead of time" holds for bills only; a finite user-chosen repeat writes future rows, bounded by 60. Options: lazy generation (breaks D8's single ledger), a third "Toda a série" scope (rewrites reconciled months).
 
 ## D15 — Category colors are unique per kind; subcategories wear the parent's (2026-11-08, owner)
 
@@ -76,4 +76,38 @@ The `Termômetro.xlsx` importer (SOL-7) is removed: every spreadsheet has its ow
 
 ## D19 — A series is resized at its end, never re-split (2026-11-10, SOL-47 panel, architect arbitrated)
 
-`repeat_months` on a series member sets how many entries the series counts (2..60). Growing appends members in the months right after the last member's month, on the first member's day (D14 clamp), copying the edited member as saved; counting by month keeps a gap left by a deleted or moved member from doubling a month, and an advisory lock on the series id serializes resizes and `following` deletes of one series. shrinking deletes the last members, never one ranked before the edited member. Kept members keep their amounts, installment series included: the server stores no flag telling parcelas from a repeat, and the sheet names the rows added or removed before saving, so the total never changes silently. Rejected: re-splitting the remaining total (halves a repeat; needs a flag and a migration), refusing installment series (same flag), a floor at today (`Excluir · Toda a série` already reaches past members), a dedicated `/series` endpoint (two requests for one save). Detail: `docs/specs/cards/SOL-47.md`.
+`repeat_months` on a series member sets how many entries the series counts (2..60). Growing appends members in the months right after the last member's month, on the first member's day (D20: the last member's) (D14 clamp), copying the edited member as saved; counting by month keeps a gap left by a deleted or moved member from doubling a month, and an advisory lock on the series id serializes resizes and `following` deletes of one series. shrinking deletes the last members, never one ranked before the edited member. Kept members keep their amounts, installment series included: the server stores no flag telling parcelas from a repeat, and the sheet names the rows added or removed before saving, so the total never changes silently. Rejected: re-splitting the remaining total (halves a repeat; needs a flag and a migration), refusing installment series (same flag), a floor at today (`Excluir · Toda a série` already reaches past members), a dedicated `/series` endpoint (two requests for one save). Detail: `docs/specs/cards/SOL-47.md`.
+
+## D20 — `Este e os próximos` moves the day of the month (2026-11-10, SOL-48 panel, architect arbitrated)
+
+A date change with `scope=following` on a series member moves this and every later member to the new day, each clamped to its own month (D14 clamp); members before it never change and `scope=this` still moves one row to any month. The month never spreads: a month change with `following` is refused, and so is a move whose months hold two members of the series, so `(date, id)` order never changes. Money is untouched. D19's growth now takes the last member's day, or the larger day of the member before it when the last sits clamped on its month's last day, so a resize after a mid-series move lands on the new day. Rejected: a separate "move day" action (a second sheet for one field), keeping the first member as the anchor (wrong after a mid-series move), a stored series day (migration), applying a month change to this row only (one save with two meanings). Detail: `docs/specs/cards/SOL-48.md`.
+
+## D21 — Mês is a dashboard of cards; the shell owns the month and Lançar; Soldi stays light only (2026-11-10, SOL-61 panel, designer arbitrated)
+
+`/mes` becomes a grid of seven cards: Saldo hoje (with the split bar "Para onde foi a entrada"), Termômetro, Contas a pagar, Lançamentos, Próximos meses, Para onde vai, Cofrinhos. They are 1 column at 375, 2 columns at 768, and 3 at 1440. Every card composes existing endpoints; no field or route is added. The ledger is capped to recent days, with an in-place expand.
+
+Navigation:
+
+- Desktop keeps the sidebar (`Menu` and `Ajustes` groups) and gains a sticky top bar holding the title, the month switcher on month pages, and `Lançar`.
+- Mobile gets a floating pill tab bar with four labelled tabs and a separate `Lançar` FAB, both in `Navegação principal`.
+- Nav labels are unchanged (`Mês` stays).
+
+Visual system:
+
+- Money figures get a cents hierarchy, with the symbol and cents at 55%.
+- One new token, `--split-daily`.
+- Empty states reuse the tour's inline SVGs; there are no 3D assets.
+
+Dark mode stays off, per the owner's SOL-12 decision. This supersedes the "light and dark" screenshot lines of the v1 spec and earlier cards. Components stay on semantic tokens, so reopening dark mode is one card.
+
+The Economia year table stays unbuilt; Cofrinhos (SOL-20) is the savings screen.
+
+Rejected:
+
+- a top-bar-only shell (it loses the persistent nav);
+- an `/extrato` route (an extra page for a list one tap away);
+- a bell (no notification source);
+- licensed 3D illustrations (license, weight, decoration);
+- delivering dark mode now (doubles tokens and review for a layout epic).
+
+Detail: `docs/specs/2026-11-10-dashboard-redesign.md`, plan `docs/specs/plans/SOL-61.md`.

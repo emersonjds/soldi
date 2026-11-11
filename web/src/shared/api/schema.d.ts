@@ -2550,7 +2550,7 @@ export interface operations {
     update_transaction: {
         parameters: {
             query?: {
-                /** @description `following` also writes the amount, kind, category and note onto the series' later members; the date never spreads */
+                /** @description `following` also writes the amount, kind, category and note onto the series' later members, and a new day of the month onto this and every later member, each clamped to its month; the month never spreads */
                 scope?: components["schemas"]["Scope"];
             };
             header?: never;
@@ -2601,7 +2601,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Same rules as create, on the entry after the change, `before-opening-date` included; with `repeat_months`, `repeat-not-allowed-on-bill-payment` or `repeat-not-allowed-on-cofrinho-withdrawal` on an entry outside a series, `validation` on `repeat_months` outside 2..60 or below this member's position, on `date` when the series would pass 2100; nothing is written */
+            /** @description Same rules as create, on the entry after the change, `before-opening-date` included; with `repeat_months`, `repeat-not-allowed-on-bill-payment` or `repeat-not-allowed-on-cofrinho-withdrawal` on an entry outside a series, `validation` on `repeat_months` outside 2..60 or below this member's position, on `date` when the series would pass 2100; with `following` on a series member, `validation` on `date` when the new date leaves this entry's month (`must stay in this entry's month when the series moves`) or when two of the moved members share a month (`must not move a series with two entries in one month`); nothing is written */
             422: {
                 headers: {
                     [name: string]: unknown;
