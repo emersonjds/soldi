@@ -347,14 +347,16 @@ export const CofrinhosView = () => {
       <>
         <Total data={cofrinhos.data} />
         {items.length === 0 ? (
-          <div className={cn(card, "items-center gap-3 px-6 py-10 text-center")}>
+          <div className={cn(card, "items-center gap-3 px-6 py-10")}>
             <div
               aria-hidden
               className="pointer-events-none flex w-full select-none justify-center opacity-50 saturate-50"
             >
               <CofrinhoIllustration />
             </div>
-            <p className="max-w-xs text-muted-foreground">Nenhum cofrinho ainda. Comece pela reserva de emergência.</p>
+            <p className="max-w-xs text-center text-muted-foreground">
+              Nenhum cofrinho ainda. Comece pela reserva de emergência.
+            </p>
             <BrandButton className="w-auto px-6" onClick={create}>
               Criar cofrinho
             </BrandButton>

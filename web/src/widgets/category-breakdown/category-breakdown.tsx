@@ -248,14 +248,14 @@ export const CategoryBreakdown = ({ month }: { month: string }) => {
             </ToggleGroupItem>
           </ToggleGroup>
           {shares.length === 0 ? (
-            <div className="flex flex-col items-center gap-3 py-4 text-center">
+            <div className="flex flex-col items-center gap-3 py-4">
               <div
                 aria-hidden
                 className="pointer-events-none flex w-full select-none justify-center opacity-50 saturate-50"
               >
                 <Illustration />
               </div>
-              <p className="max-w-xs text-muted-foreground">{COPY[tab].empty}</p>
+              <p className="max-w-xs text-center text-muted-foreground">{COPY[tab].empty}</p>
             </div>
           ) : (
             <>
