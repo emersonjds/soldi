@@ -51,8 +51,16 @@ test("a cofrinho fills from a Saída in Economia and empties with a resgate", as
   }
   await page.setViewportSize({ width: 375, height: 812 });
 
-  await reservaCard.getByRole("button", { name: "Resgatar" }).click();
+  const actions = reservaCard.getByRole("button", { name: "Resgatar de Reserva" }).locator("..");
+  const row = await actions.boundingBox();
+  if (!row) throw new Error("no action row");
+  await page.mouse.click(row.x + row.width - 4, row.y + row.height / 2);
   const sheet = page.getByRole("dialog", { name: "Reserva" });
+  await expect(sheet.getByRole("button", { name: "Resgatar", exact: true })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(sheet).toHaveCount(0);
+
+  await reservaCard.getByRole("button", { name: "Resgatar de Reserva" }).click();
   await sheet.getByLabel("Valor").fill("5.000,00");
   await sheet.getByRole("button", { name: "Confirmar resgate" }).click();
   await expect(sheet.getByText("Você só tem R$ 200,00 guardado aqui")).toBeVisible();
