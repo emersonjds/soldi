@@ -24,7 +24,7 @@ const priorLow = (before: MonthAhead[] | undefined, month: string, low: string) 
 };
 
 const chip =
-  "@container flex min-h-16 w-full min-w-0 flex-col items-start justify-center gap-0.5 rounded-xl px-2 py-2 text-left";
+  "@container flex min-h-16 w-full min-w-0 flex-col items-start justify-center gap-0.5 rounded-xl px-[6%] py-2 text-left";
 
 type MonthChipsProps = {
   months: MonthAhead[];
@@ -39,8 +39,8 @@ type MonthChipsProps = {
 };
 
 /** A 4-column month grid: each month's lowest balance in whole units, its tier dot and its tier word (D22), a red month on `expense-soft`. */
-/** A low fills the cell left of its tier dot (0.75rem with the gap) at 0.6em per glyph, capped at `text-sm`. */
-const lowFit = "[--low-fit:min(var(--text-sm),calc((100cqi_-_0.75rem)/(var(--glyphs)*0.6)))] text-(length:--low-fit)";
+/** A low fills the cell left of its tier dot (0.75rem with the gap) at 0.68em per glyph (Linux hinting draws wider than macOS), capped at `text-sm`. */
+const lowFit = "[--low-fit:min(var(--text-sm),calc((100cqi_-_0.75rem)/(var(--glyphs)*0.68)))] text-(length:--low-fit)";
 const glyphs = (amount: string): CSSProperties & { "--glyphs": number } => ({ "--glyphs": amount.length });
 
 export const MonthChips = ({ months, neutral = false, current, onOpen, before }: MonthChipsProps) => {
