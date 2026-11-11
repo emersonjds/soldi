@@ -66,11 +66,19 @@ const SIDEBAR = [
 const PAGE_NAMES = [
   ["/ajustes/contas", "Contas Fixas"],
   ["/ajustes/categorias", "Categorias"],
+  ["/ajustes/conta", "Minha Conta"],
+  ["/ajustes/moeda", "Moeda"],
+  ["/ajustes/termometro", "Termômetro"],
+  ["/ajustes/saldo-inicial", "Saldo Inicial"],
+  ["/ajustes/apagar", "Apagar Lançamentos"],
   ["/ajustes", "Ajustes"],
   ["/economia", "Economia"],
   ["/para-onde-vai", "Para Onde Vai"],
   ["/mes", "Mês"],
 ] as const;
+
+/** The pages that read `?m=`; the switcher shows only there. */
+const MONTH_PAGES = ["/mes", "/para-onde-vai"];
 
 /** The month of `?m=`, moved in place. */
 const ShellMonthSwitcher = ({ pathname }: { pathname: string }) => {
@@ -93,7 +101,7 @@ const TodayTier = () => {
   if (!month.data) return null;
   const tier = month.data.balance_today_tier;
   return (
-    <div role="img" aria-label={`Saldo hoje: ${TIER_LABEL[tier]}`} className="hidden lg:block">
+    <div role="img" aria-label={`Saldo hoje: ${TIER_LABEL[tier]}`} title="Saldo hoje" className="hidden lg:block">
       <TierPill tier={tier} />
     </div>
   );
@@ -142,6 +150,7 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
     .filter((item) => isAt(item.href))
     .sort((a, b) => b.href.length - a.href.length)[0];
   const pageName = PAGE_NAMES.find(([href]) => isAt(href))?.[1];
+  const readsMonth = MONTH_PAGES.some(isAt);
 
   return (
     <SettingsCurrency>
@@ -202,6 +211,9 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
                   </span>
                 </div>
               </Link>
+              <p className="px-3 text-[11px] text-muted-foreground tabular-nums">
+                v{process.env.NEXT_PUBLIC_APP_VERSION}
+              </p>
             </SidebarFooter>
           </Sidebar>
         </aside>
@@ -210,11 +222,13 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
           <header className="sticky top-0 z-30 box-content grid h-14 grid-cols-[1fr_auto_1fr] items-center gap-3 bg-background/85 px-4 pt-[env(safe-area-inset-top)] backdrop-blur lg:flex lg:h-16 lg:gap-4 lg:border-b lg:px-6 lg:pt-0">
             <TodayLink className="-ml-2 lg:hidden" mark="flex-row-reverse text-xl" />
             <p className="font-semibold text-lg lg:hidden">{pageName}</p>
-            <Suspense>
-              <div className="hidden lg:mr-auto lg:block">
-                <ShellMonthSwitcher pathname={pathname} />
-              </div>
-            </Suspense>
+            <div className="hidden lg:mr-auto lg:block">
+              {readsMonth && (
+                <Suspense>
+                  <ShellMonthSwitcher pathname={pathname} />
+                </Suspense>
+              )}
+            </div>
             <TodayTier />
             <Button
               className="hidden min-h-11 bg-brand text-base text-brand-foreground hover:bg-brand-hover lg:inline-flex"
@@ -233,12 +247,14 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
               </Avatar>
             </Link>
           </header>
-          <Suspense>
-            <div className="mx-4 mt-4 rounded-2xl bg-card p-2 shadow-sm lg:hidden">
-              <ShellMonthSwitcher pathname={pathname} />
-            </div>
-          </Suspense>
           <main className="mx-auto w-full max-w-6xl flex-1 px-4 pt-4 pb-(--tabbar-space) lg:px-6 lg:pt-6 lg:pb-10">
+            {readsMonth && (
+              <Suspense>
+                <div className="mb-4 rounded-2xl bg-card p-2 shadow-sm lg:hidden">
+                  <ShellMonthSwitcher pathname={pathname} />
+                </div>
+              </Suspense>
+            )}
             {children}
           </main>
         </div>

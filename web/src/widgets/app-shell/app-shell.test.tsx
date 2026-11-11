@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { router, setPathname, setSearch } from "@/test/next-navigation";
 import { renderWithQuery } from "@/test/render";
-import { ANA, CATEGORIES, MONTH, signedIn, TRANSACTIONS } from "@/test/stub-api";
+import { ANA, CATEGORIES, MONTH, problem, signedIn, TRANSACTIONS } from "@/test/stub-api";
 
 import { AppShell } from "./app-shell";
 
@@ -20,6 +20,7 @@ describe("AppShell", () => {
 
   afterEach(() => {
     vi.useRealTimers();
+    vi.unstubAllEnvs();
   });
 
   it("marks the current screen in the bottom tab bar and the sidebar", () => {
@@ -54,7 +55,11 @@ describe("AppShell", () => {
     ["/para-onde-vai", "Para Onde Vai"],
     ["/economia", "Economia"],
     ["/ajustes", "Ajustes"],
-    ["/ajustes/conta", "Ajustes"],
+    ["/ajustes/conta", "Minha Conta"],
+    ["/ajustes/moeda", "Moeda"],
+    ["/ajustes/termometro", "Termômetro"],
+    ["/ajustes/saldo-inicial", "Saldo Inicial"],
+    ["/ajustes/apagar", "Apagar Lançamentos"],
     ["/ajustes/contas", "Contas Fixas"],
     ["/ajustes/categorias", "Categorias"],
   ])(
@@ -221,30 +226,51 @@ describe("AppShell", () => {
     expect(within(sidebar).getByRole("link", { name: "Ajustes" })).not.toHaveAttribute("aria-current");
   });
 
-  it.each(["/mes", "/para-onde-vai", "/economia", "/ajustes", "/ajustes/contas", "/ajustes/categorias"])(
-    "shows the month switcher on %s in the top bar and in a card under the mobile app bar",
+  it.each(["/mes", "/para-onde-vai"])(
+    "shows the month switcher on %s in the top bar and in a card opening the main content on mobile",
     (path) => {
       setPathname(path);
       renderWithQuery(<AppShell>conteúdo</AppShell>);
 
       const bar = screen.getByRole("banner");
       expect(within(bar).getByRole("group", { name: "Mês" }).parentElement).toHaveClass("hidden", "lg:block");
-      const switchers = screen.getAllByRole("group", { name: "Mês" });
-      expect(switchers).toHaveLength(2);
-      expect(switchers.find((switcher) => !bar.contains(switcher))?.parentElement).toHaveClass("lg:hidden");
+      const card = within(screen.getByRole("main")).getByRole("group", { name: "Mês" }).parentElement;
+      expect(card).toHaveClass("lg:hidden");
+      expect(screen.getByRole("main").firstElementChild).toBe(card);
+      expect(screen.getAllByRole("group", { name: "Mês" })).toHaveLength(2);
     },
   );
 
-  it("keeps the viewed month when moving from Mês to Contas fixas", async () => {
-    setPathname("/ajustes/contas");
-    setSearch("m=2026-12");
-    router.replace.mockClear();
-    renderWithQuery(<AppShell>conteúdo</AppShell>);
+  it.each(["/economia", "/ajustes", "/ajustes/contas", "/ajustes/categorias", "/ajustes/conta"])(
+    "hides the month switcher on %s, a page that does not read the month",
+    (path) => {
+      setPathname(path);
+      setSearch("m=2026-12");
+      renderWithQuery(<AppShell>conteúdo</AppShell>);
 
-    const bar = screen.getByRole("banner");
-    expect(within(bar).getByText("Dezembro 2026")).toBeInTheDocument();
-    await userEvent.click(within(bar).getByRole("button", { name: "Mês anterior" }));
-    expect(router.replace).toHaveBeenLastCalledWith("/ajustes/contas?m=2026-11", { scroll: false });
+      expect(screen.queryByRole("group", { name: "Mês" })).not.toBeInTheDocument();
+      expect(screen.getByRole("main").firstElementChild).toBeNull();
+      expect(within(screen.getByRole("banner")).getByRole("button", { name: "Lançar" })).toBeInTheDocument();
+    },
+  );
+
+  it("keeps the viewed month when moving from Mês to Para onde vai through the sidebar", async () => {
+    setSearch("m=2026-12");
+    const { unmount } = renderWithQuery(<AppShell>conteúdo</AppShell>);
+
+    const link = within(screen.getByRole("navigation", { name: "Menu lateral" })).getByRole("link", {
+      name: "Para onde vai",
+    });
+    expect(link).toHaveAttribute("href", "/para-onde-vai?m=2026-12");
+    await userEvent.click(link);
+    unmount();
+
+    setPathname("/para-onde-vai");
+    renderWithQuery(<AppShell>conteúdo</AppShell>);
+    expect(within(screen.getByRole("banner")).getByText("Dezembro 2026")).toBeInTheDocument();
+    expect(
+      within(screen.getByRole("navigation", { name: "Menu lateral" })).getByRole("link", { name: "Para onde vai" }),
+    ).toHaveAttribute("aria-current", "page");
   });
 
   it("carries the viewed month through the sidebar and the tab bar, and the logo back to today", () => {
@@ -284,7 +310,8 @@ describe("AppShell", () => {
     const bar = screen.getByRole("banner");
     expect(within(bar).queryByRole("img", { name: /^Saldo hoje/ })).not.toBeInTheDocument();
     const pill = await within(bar).findByRole("img", { name: "Saldo hoje: Apertado" });
-    expect(pill).toHaveTextContent("Apertado");
+    expect(pill).toHaveTextContent(/^Apertado$/);
+    expect(pill).toHaveAttribute("title", "Saldo hoje");
     expect(pill).toHaveClass("hidden", "lg:block");
     const launch = within(bar).getByRole("button", { name: "Lançar" });
     expect(pill.compareDocumentPosition(launch) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -296,10 +323,12 @@ describe("AppShell", () => {
   });
 
   it("leaves the tier pill out when today's month fails", async () => {
-    const requests = signedIn();
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 10, 5, 12));
+    const requests = signedIn({ "GET /api/months/2026-11": { status: 500, body: problem(500, "Falhou.") } });
     renderWithQuery(<AppShell>conteúdo</AppShell>);
 
-    await waitFor(() => expect(requests.some((request) => request.url.includes("/api/months/"))).toBe(true));
+    await waitFor(() => expect(requests.some((request) => request.url.endsWith("/api/months/2026-11"))).toBe(true));
     await screen.findByText("ana@example.com");
     expect(screen.queryByRole("img", { name: /^Saldo hoje/ })).not.toBeInTheDocument();
   });
@@ -323,7 +352,8 @@ describe("AppShell", () => {
     );
   });
 
-  it("takes the sidebar user card and the top-bar avatar to Minha conta, with no version and no sign-out", async () => {
+  it("takes the sidebar user card and the top-bar avatar to Minha conta, with the version under it and no sign-out", async () => {
+    vi.stubEnv("NEXT_PUBLIC_APP_VERSION", "0.34.0");
     renderWithQuery(<AppShell>conteúdo</AppShell>);
 
     const email = await screen.findByText("ana@example.com");
@@ -333,6 +363,9 @@ describe("AppShell", () => {
     expect(card.textContent).toBe("AAnaana@example.com");
     const sidebar = screen.getByRole("complementary", { name: "Barra lateral" });
     expect(within(sidebar).queryByRole("button", { name: "Sair" })).not.toBeInTheDocument();
+    const version = within(sidebar).getByText("v0.34.0");
+    expect(version).toHaveClass("text-muted-foreground");
+    expect(card.compareDocumentPosition(version) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     const avatar = within(screen.getByRole("banner")).getByRole("link", { name: "Minha conta" });
     expect(avatar).toHaveAttribute("href", "/ajustes/conta");
     expect(avatar).toHaveClass("size-11");
