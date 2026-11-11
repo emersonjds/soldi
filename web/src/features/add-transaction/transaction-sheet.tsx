@@ -11,6 +11,7 @@ import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { type BillPrefill, useCreateBill } from "@/entities/bill/bill-queries";
 import { CategoryChips, useCategoryChips } from "@/entities/category/category-chips";
+import { useSettings } from "@/entities/settings/settings-query";
 import { ScopeRadio } from "@/entities/transaction/scope-radio";
 import {
   type NewTransaction,
@@ -28,7 +29,7 @@ import { cents, fromCents } from "@/shared/lib/tier";
 import { BrandButton } from "@/shared/ui/brand-button";
 import { DateChips } from "@/shared/ui/date-chips";
 import { HeroAmount } from "@/shared/ui/hero-amount";
-import { ResponsiveSheet } from "@/shared/ui/responsive-sheet";
+import { ResponsiveSheet, ResponsiveSheetFooter } from "@/shared/ui/responsive-sheet";
 
 import { draftRows, type Plan } from "./draft-rows";
 import { Simulation } from "./simulation";
@@ -94,6 +95,7 @@ const TransactionForm = ({
   const [submitted, setSubmitted] = useState(false);
   const currency = useCurrency();
   const categories = useCategoryChips(draft.kind);
+  const settings = useSettings();
   const category = draft.category ?? categories.data?.[0];
   const amount = positiveAmount(draft.amount);
   const months = Number(draft.preset === "other" ? draft.custom : draft.preset);
@@ -237,7 +239,12 @@ const TransactionForm = ({
       </fieldset>
 
       <div className="flex flex-col gap-2">
-        <DateChips legend="Quando foi?" value={draft.date} onChange={(date) => set({ date })} />
+        <DateChips
+          legend="Quando foi?"
+          value={draft.date}
+          min={settings.data?.opening_date}
+          onChange={(date) => set({ date })}
+        />
         {monthChanged && (
           <p role="alert" className="text-destructive text-sm">
             Para mudar o mês, use Só este.
@@ -389,16 +396,18 @@ const TransactionForm = ({
 
       {draft.simulate && <Simulation rows={rows} countInvalid={Boolean(amount) && monthsChecked && !monthsValid} />}
 
-      {draft.simulate ? (
-        <div className="flex flex-col gap-2">
-          <BrandButton type="submit">Lançar de verdade</BrandButton>
-          <Button type="button" variant="ghost" className="h-12 w-full text-base" onClick={onDiscard}>
-            Descartar
-          </Button>
-        </div>
-      ) : (
-        <BrandButton type="submit">Salvar</BrandButton>
-      )}
+      <ResponsiveSheetFooter>
+        {draft.simulate ? (
+          <>
+            <BrandButton type="submit">Lançar de verdade</BrandButton>
+            <Button type="button" variant="ghost" className="h-12 w-full text-base" onClick={onDiscard}>
+              Descartar
+            </Button>
+          </>
+        ) : (
+          <BrandButton type="submit">Salvar</BrandButton>
+        )}
+      </ResponsiveSheetFooter>
     </form>
   );
 };

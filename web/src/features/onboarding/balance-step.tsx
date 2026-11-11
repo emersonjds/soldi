@@ -6,14 +6,15 @@ import { z } from "zod";
 
 import { Button } from "@/components/ui/button";
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
+import { todayISO } from "@/shared/lib/date";
 import { parseBRL } from "@/shared/lib/money";
 import { AmountInput } from "@/shared/ui/amount-input";
 import { BrandButton } from "@/shared/ui/brand-button";
+import { DateField } from "@/shared/ui/date-field";
 
 const schema = z.object({
   amount: z.string().refine((value) => parseBRL(value) !== null, { message: "Informe um valor, como 1.250,00." }),
-  date: z.string().min(1, { message: "Informe a data." }),
+  date: z.string(),
 });
 
 export type Opening = z.infer<typeof schema>;
@@ -57,16 +58,22 @@ export const BalanceStep = ({
             <FieldDescription>Somando suas contas. Pode ser negativo.</FieldDescription>
           )}
         </Field>
-        <Field className="gap-1.5" data-invalid={Boolean(errors.date)}>
+        <Field className="gap-1.5">
           <FieldLabel htmlFor="opening-date">Data</FieldLabel>
-          <Input
-            {...form.register("date")}
-            id="opening-date"
-            type="date"
-            className="h-12 text-base md:text-base"
-            aria-invalid={Boolean(errors.date)}
+          <Controller
+            control={form.control}
+            name="date"
+            render={({ field: { value, onChange } }) => (
+              <DateField
+                id="opening-date"
+                label="Data"
+                value={value}
+                onChange={onChange}
+                max={todayISO()}
+                className="min-h-12"
+              />
+            )}
           />
-          {errors.date && <FieldError errors={[errors.date]} />}
         </Field>
       </FieldGroup>
       <div className="flex flex-col gap-2">

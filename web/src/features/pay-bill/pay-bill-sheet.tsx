@@ -11,7 +11,7 @@ import { positiveAmount } from "@/shared/lib/money";
 import { BrandButton } from "@/shared/ui/brand-button";
 import { DateChips } from "@/shared/ui/date-chips";
 import { HeroAmount } from "@/shared/ui/hero-amount";
-import { ResponsiveSheet } from "@/shared/ui/responsive-sheet";
+import { ResponsiveSheet, ResponsiveSheetFooter } from "@/shared/ui/responsive-sheet";
 
 type Payment = { date: string; amount: string };
 
@@ -39,7 +39,9 @@ const PayForm = ({ bill, month, onPay }: { bill: BillOfMonth; month: string; onP
         min={`${month}-01`}
         max={`${month}-${new Date(year, number, 0).getDate()}`}
       />
-      <BrandButton type="submit">Confirmar</BrandButton>
+      <ResponsiveSheetFooter>
+        <BrandButton type="submit">Confirmar</BrandButton>
+      </ResponsiveSheetFooter>
     </form>
   );
 };

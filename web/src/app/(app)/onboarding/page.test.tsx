@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { router } from "@/test/next-navigation";
+import { pickDate } from "@/test/pick-date";
 import { renderWithQuery } from "@/test/render";
 import { ANA, problem, signedIn } from "@/test/stub-api";
 
@@ -43,6 +44,20 @@ describe("Onboarding", () => {
     router.replace.mockClear();
   });
 
+  it("takes no opening date after today", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 10, 5, 12));
+    try {
+      stub();
+      await renderOnboarding();
+      await userEvent.click(screen.getByRole("button", { name: "Data, 05/11/2026" }));
+
+      expect(await screen.findByRole("button", { name: "sexta-feira, 6 de novembro de 2026" })).toBeDisabled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("walks the four steps and saves the currency, the balance and a bill", async () => {
     const requests = stub();
     renderWithQuery(<OnboardingPage />);
@@ -55,9 +70,8 @@ describe("Onboarding", () => {
     await userEvent.click(screen.getByRole("button", { name: "Continuar" }));
 
     expect(screen.getByText("Passo 2 de 4")).toBeInTheDocument();
-    expect(screen.getByLabelText("Data")).toHaveValue(new Date().toLocaleDateString("sv"));
-    await userEvent.clear(screen.getByLabelText("Data"));
-    await userEvent.type(screen.getByLabelText("Data"), "2026-11-05");
+    expect(screen.getByRole("button", { name: `Data, ${new Date().toLocaleDateString("pt-BR")}` })).toBeInTheDocument();
+    await pickDate("Data", "2026-11-05");
     await typeBalance("1.842,10");
 
     expect(await screen.findByRole("heading", { name: "Suas contas fixas" })).toBeInTheDocument();
@@ -147,15 +161,11 @@ describe("Onboarding", () => {
     expect(screen.getByRole("radio", { name: "Libra GBP" })).toBeChecked();
   });
 
-  it("asks for a name and a date and counts the bills", async () => {
+  it("asks for a name and counts the bills", async () => {
     stub();
     await renderOnboarding();
 
-    await userEvent.clear(screen.getByLabelText("Data"));
     await typeBalance("100");
-    expect(await screen.findByText("Informe a data.")).toBeInTheDocument();
-    await userEvent.type(screen.getByLabelText("Data"), "2026-11-05");
-    await userEvent.click(screen.getByRole("button", { name: "Continuar" }));
 
     await userEvent.type(await screen.findByLabelText("Valor"), "100");
     await userEvent.click(screen.getByRole("button", { name: "Continuar" }));

@@ -58,6 +58,24 @@ describe("AppShell", () => {
     expect(within(tabs).getByRole("link", { name: "Mês" })).not.toHaveAttribute("aria-current");
   });
 
+  it("floats four labelled tabs, the current one in the dark pill, then the Lançar button", () => {
+    setPathname("/para-onde-vai");
+    renderWithQuery(<AppShell>conteúdo</AppShell>);
+
+    const tabs = screen.getByRole("navigation", { name: "Navegação principal" });
+    const order = [...tabs.querySelectorAll("a, button")].map((el) => el.getAttribute("aria-label") ?? el.textContent);
+    expect(order).toEqual(["Mês", "Para onde vai", "Cofrinhos", "Ajustes", "Lançar"]);
+    expect(within(tabs).getByRole("link", { name: "Para onde vai" })).toHaveClass("bg-foreground", "text-background");
+    expect(within(tabs).getByRole("link", { name: "Mês" })).toHaveClass("text-muted-foreground");
+    expect(within(tabs).getByRole("link", { name: "Mês" })).not.toHaveClass("bg-foreground");
+  });
+
+  it("keeps the content's last row above the tab bar", () => {
+    renderWithQuery(<AppShell>conteúdo</AppShell>);
+
+    expect(screen.getByRole("main")).toHaveClass("pb-(--tabbar-space)");
+  });
+
   it("opens the Lançar sheet from the floating button at 375px", async () => {
     renderWithQuery(<AppShell>conteúdo</AppShell>);
 

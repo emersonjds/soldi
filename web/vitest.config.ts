@@ -3,6 +3,9 @@ import { defineConfig } from "vitest/config";
 
 import { fileURLToPath } from "node:url";
 
+// Every worker inherits it; a caller's own TZ wins, so `test:tz` can check another zone.
+process.env.TZ ??= "America/Sao_Paulo";
+
 export default defineConfig({
   plugins: [react()],
   resolve: { alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) } },

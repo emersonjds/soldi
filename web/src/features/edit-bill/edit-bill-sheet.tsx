@@ -15,7 +15,7 @@ import type { Schemas } from "@/shared/api/client";
 import { positiveAmount } from "@/shared/lib/money";
 import { AmountInput } from "@/shared/ui/amount-input";
 import { BrandButton } from "@/shared/ui/brand-button";
-import { ResponsiveSheet } from "@/shared/ui/responsive-sheet";
+import { ResponsiveSheet, ResponsiveSheetFooter } from "@/shared/ui/responsive-sheet";
 
 type Draft = { name: string; amount: string; dueDay: string; categoryId?: string; active: boolean };
 
@@ -133,7 +133,6 @@ const BillForm = ({
           />
         </label>
       )}
-      <BrandButton type="submit">Salvar</BrandButton>
       {bill && (
         <Button
           type="button"
@@ -145,6 +144,9 @@ const BillForm = ({
           Arquivar
         </Button>
       )}
+      <ResponsiveSheetFooter>
+        <BrandButton type="submit">Salvar</BrandButton>
+      </ResponsiveSheetFooter>
     </form>
   );
 };

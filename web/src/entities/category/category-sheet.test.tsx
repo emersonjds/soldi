@@ -1,10 +1,11 @@
 import { QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Toaster } from "sonner";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Schemas } from "@/shared/api/client";
+import { pickDate } from "@/test/pick-date";
 import { renderWithQuery } from "@/test/render";
 import {
   CATEGORIES,
@@ -451,7 +452,7 @@ describe("CategorySheet", () => {
       expect(within(sheet).getByLabelText("Nome")).toHaveValue("Viagem");
       expect(within(sheet).getByRole("radio", { name: "Ícone plane" })).toBeChecked();
       await userEvent.type(within(sheet).getByLabelText("Meta"), "500000");
-      fireEvent.change(within(sheet).getByLabelText("Prazo"), { target: { value: "2027-06-30" } });
+      await pickDate("Prazo", "2027-06-30", sheet);
       await userEvent.click(within(sheet).getByRole("button", { name: "Criar" }));
 
       await waitFor(() => expect(requests.some((request) => request.method === "POST")).toBe(true));
@@ -490,9 +491,11 @@ describe("CategorySheet", () => {
 
       const sheet = await screen.findByRole("dialog", { name: "Editar cofrinho" });
       await waitFor(() => expect(within(sheet).getByLabelText("Meta")).toHaveValue("10.000,00"));
-      expect(within(sheet).getByLabelText("Prazo")).toHaveValue("2027-06-30");
+      expect(within(sheet).getByRole("button", { name: "Prazo, 30/06/2027" })).toBeInTheDocument();
       expect(within(sheet).queryByRole("button", { name: "Viagem" })).not.toBeInTheDocument();
-      fireEvent.change(within(sheet).getByLabelText("Prazo"), { target: { value: "" } });
+      await userEvent.click(within(sheet).getByRole("button", { name: "Remover prazo" }));
+      expect(within(sheet).getByRole("button", { name: "Prazo" })).toHaveTextContent("Escolher data");
+      expect(within(sheet).queryByRole("button", { name: "Remover prazo" })).not.toBeInTheDocument();
       await userEvent.click(within(sheet).getByRole("button", { name: "Salvar" }));
 
       expect(await patched(requests)).toEqual({
