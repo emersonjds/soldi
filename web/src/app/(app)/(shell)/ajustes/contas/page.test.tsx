@@ -135,6 +135,25 @@ describe("Ajustes › Contas fixas", () => {
     });
   });
 
+  it("keeps a bill's archived category when it is saved without picking another", async () => {
+    const requests = open({
+      "GET /api/categories": { status: 200, body: CATEGORIES.filter((each) => each.id !== LUZ.id) },
+      [`PATCH /api/bills/${BILL_LUZ.id}`]: { status: 200, body: BILL_LUZ },
+    });
+
+    await userEvent.click(await screen.findByRole("button", { name: /^Luz \(Enel\)/ }));
+    const sheet = await screen.findByRole("dialog", { name: "Editar conta" });
+    const row = await within(sheet).findByRole("radiogroup", { name: "Categoria" });
+    expect(within(row).queryByRole("radio", { checked: true })).not.toBeInTheDocument();
+    expect(
+      within(sheet).getByText("Categoria arquivada. Fica a mesma se você não escolher outra."),
+    ).toBeInTheDocument();
+    await userEvent.click(within(sheet).getByRole("button", { name: "Salvar" }));
+
+    await waitFor(() => expect(sent(requests, "PATCH")).toHaveLength(1));
+    expect(await sent(requests, "PATCH")[0].json()).toMatchObject({ category_id: LUZ.id });
+  });
+
   it("says so when saving fails", async () => {
     open({ [`PATCH /api/bills/${BILL_PAUSED.id}`]: { status: 422, body: problem(422, "amount") } });
 

@@ -51,7 +51,10 @@ const BillForm = ({
   const [submitted, setSubmitted] = useState(false);
   const categories = useCategoryChips("bill");
   const thisMonth = useTransactions(todayISO().slice(0, 7));
-  const category = categories.data?.find((each) => each.id === draft.categoryId) ?? categories.data?.[0];
+  const found = categories.data?.find((each) => each.id === draft.categoryId);
+  const archived = Boolean(draft.categoryId && categories.data && !found);
+  const category = draft.categoryId ? found : categories.data?.[0];
+  const categoryId = draft.categoryId ?? category?.id;
 
   const name = draft.name.trim();
   const amount = positiveAmount(draft.amount);
@@ -68,8 +71,8 @@ const BillForm = ({
   const submit = (event: FormEvent) => {
     event.preventDefault();
     setSubmitted(true);
-    if (!name || !amount || !dayValid || !category) return;
-    onSave({ name, amount, due_day: day, category_id: category.id, active: draft.active });
+    if (!name || !amount || !dayValid || !categoryId) return;
+    onSave({ name, amount, due_day: day, category_id: categoryId, active: draft.active });
   };
 
   return (
@@ -119,6 +122,11 @@ const BillForm = ({
         onChoose={(chosen) => set({ categoryId: chosen.id })}
         entries={thisMonth.isError ? [] : thisMonth.data}
       />
+      {archived && (
+        <p className="-mt-3 text-muted-foreground text-sm">
+          Categoria arquivada. Fica a mesma se você não escolher outra.
+        </p>
+      )}
       {bill && (
         <label
           htmlFor="bill-active-switch"
