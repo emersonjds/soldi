@@ -38,7 +38,8 @@ test("an entry repeated 3x shows in three months; edit and delete reach this one
   const internet = ledger.getByRole("button", { name: /^Internet/ });
   const visit = async (month: string) => {
     await page.goto(`/mes?m=${month}`);
-    await expect(ledger).toBeVisible();
+    await expect(page.getByRole("region", { name: "Saldo hoje" })).toBeVisible();
+    await page.waitForLoadState("networkidle");
   };
 
   await page.getByRole("navigation", { name: "Navegação principal" }).getByRole("button", { name: "Lançar" }).click();
@@ -88,7 +89,7 @@ test("an entry repeated 3x shows in three months; edit and delete reach this one
   await expect(internet).toHaveCount(0);
 
   await visit(third);
-  await expect(ledger).toContainText("Nenhum lançamento ainda");
+  await expect(ledger).toHaveCount(0);
   await visit(first);
   await expect(internet).toContainText("Saída · 1/11 de 1R$ 100,00");
 });
@@ -117,7 +118,8 @@ test("a 12x series shrinks to 6 from its first entry and grows back to 12 from i
   const internet = ledger.getByRole("button", { name: /^Internet/ });
   const visit = async (month: string) => {
     await page.goto(`/mes?m=${month}`);
-    await expect(ledger).toBeVisible();
+    await expect(page.getByRole("region", { name: "Saldo hoje" })).toBeVisible();
+    await page.waitForLoadState("networkidle");
   };
   const resize = async (month: string, count: string) => {
     await visit(month);
@@ -143,7 +145,7 @@ test("a 12x series shrinks to 6 from its first entry and grows back to 12 from i
   await visit(sixth);
   await expect(internet).toContainText("Saída · 6/66 de 6");
   await visit(seventh);
-  await expect(ledger).toContainText("Nenhum lançamento ainda");
+  await expect(ledger).toHaveCount(0);
 
   await resize(sixth, "12x");
   await expect(page.getByText("Série ajustada para 12 meses")).toBeVisible();

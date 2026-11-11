@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { Schemas } from "@/shared/api/client";
 import { FORECAST_MONTH, FORECAST_TRANSACTIONS } from "@/test/stub-api";
 
-import { billKey, causeOf, forecastAlert } from "./forecast-alert";
+import { billKey, causeOf, forecastAlert, topOutflows } from "./forecast-alert";
 
 const day = (
   date: string,
@@ -27,11 +27,10 @@ const day = (
 const [CARTAO, FINANCIAMENTO] = FORECAST_MONTH.bills_of_month;
 
 describe("forecastAlert", () => {
-  it("finds the owner's November: red on the 23rd, worst on the 28th, back on the 30th", () => {
+  it("finds the owner's November: red on the 23rd, worst on the 28th", () => {
     expect(forecastAlert(FORECAST_MONTH.days)).toEqual({
       firstRed: { date: "2026-11-23", balance: "-675.00", today: false },
       lowest: { date: "2026-11-28", balance: "-2916.00" },
-      recoversOn: "2026-11-30",
     });
   });
 
@@ -52,25 +51,7 @@ describe("forecastAlert", () => {
     expect(forecastAlert(days)).toEqual({
       firstRed: { date: "2026-11-10", balance: "-675.00", today: true },
       lowest: { date: "2026-11-10", balance: "-675.00" },
-      recoversOn: "2026-11-11",
     });
-  });
-
-  it("counts the recovery from the lowest point, not from the first red day", () => {
-    const days = [
-      day("2026-11-10", "-100.00", "red", "today"),
-      day("2026-11-12", "500.00", "green"),
-      day("2026-11-20", "-900.00", "red"),
-      day("2026-11-25", "500.00", "green"),
-    ];
-
-    expect(forecastAlert(days)?.recoversOn).toBe("2026-11-25");
-  });
-
-  it("has no recovery when the month ends red", () => {
-    const days = [day("2026-11-10", "100.00", "yellow", "today"), day("2026-11-30", "-600.00", "red")];
-
-    expect(forecastAlert(days)?.recoversOn).toBeNull();
   });
 
   it("says nothing when only light red lies ahead, or the month is past", () => {
@@ -136,5 +117,31 @@ describe("causeOf", () => {
     const carried = { ...CARTAO, due_date: "2026-10-23", overdue: true, lands_on: "2026-11-20", amount: "1800.00" };
     const own = { ...CARTAO, lands_on: "2026-11-23" };
     expect(causeOf("2026-11-20", [today], [], [carried, own])).toBe(`${CARTAO.bill_id}@2026-10-23`);
+  });
+});
+
+describe("topOutflows", () => {
+  it("names the owner's two largest outflows on the 23rd: the Cartão bill, then the Seguro Saída", () => {
+    expect(topOutflows("2026-11-23", FORECAST_TRANSACTIONS, FORECAST_MONTH.bills_of_month)).toEqual([
+      "Cartão",
+      "Seguro",
+    ]);
+  });
+
+  it("keeps two by cents, leaves out income, paid bills and other days, and names an entry without a note by its category", () => {
+    const [salario, feira, seguro] = FORECAST_TRANSACTIONS;
+    const on = "2026-11-12";
+    const entries = [
+      { ...salario, id: "entrada", date: on, amount: "9000.00" },
+      { ...feira, id: "feira", date: on, amount: "100.10", note: null },
+      { ...seguro, id: "seguro", date: on, amount: "100.09" },
+      { ...seguro, id: "outro-dia", date: "2026-11-13", amount: "5000.00" },
+    ];
+    const paid = { ...CARTAO, name: "Paga", amount: "8000.00", lands_on: on, paid: true };
+    const open = { ...FINANCIAMENTO, name: "Luz", amount: "99.99", lands_on: on };
+
+    expect(topOutflows(on, entries, [paid, open])).toEqual(["Mercado", "Seguro"]);
+    expect(topOutflows(on, [], [open])).toEqual(["Luz"]);
+    expect(topOutflows(on, [], [])).toEqual([]);
   });
 });

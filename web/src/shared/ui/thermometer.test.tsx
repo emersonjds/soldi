@@ -35,6 +35,17 @@ describe("ThermometerStrip", () => {
   });
 });
 
+describe("ThermometerStrip with the marker", () => {
+  it("colors each label by its tier below 1024 and names the current tier above its segment from 1024", () => {
+    render(<ThermometerStrip tier="light_green" marker />);
+
+    expect(screen.getByText("Crítico")).toHaveClass("text-tier-red-foreground", "lg:text-muted-foreground");
+    expect(screen.getByText("Apertado")).toHaveClass("text-tier-yellow-foreground");
+    expect(screen.getByText("Confortável")).toHaveClass("font-bold", "text-tier-light-green-foreground");
+    expect(screen.getByText("Você está aqui: Confortável")).toHaveClass("hidden", "lg:block");
+  });
+});
+
 describe("Money", () => {
   it("formats in BRL with tabular figures", () => {
     render(<Money amount="1842.10" />);

@@ -1,21 +1,21 @@
 "use client";
 
-import Link from "next/link";
-
 import { CofrinhoBar } from "@/entities/cofrinho/cofrinho-bar";
 import { useCofrinhos } from "@/entities/cofrinho/cofrinho-queries";
 import { formatPct } from "@/shared/lib/percent";
 import { cents } from "@/shared/lib/tier";
 import { CategoryIcon } from "@/shared/ui/category-icon";
 import { DashCard } from "@/shared/ui/dash-card";
-import { CofrinhoIllustration } from "@/shared/ui/illustrations";
 import { Money } from "@/shared/ui/money";
-import { PageError, SkeletonRows } from "@/shared/ui/page-state";
+import { PageError } from "@/shared/ui/page-state";
 
 const TITLE = "Cofrinhos";
 const ALL = "/economia";
 
-/** C7: `total_saved`, never the month's saving (C1 shows that), and the two largest cofrinhos. */
+/**
+ * C7: `total_saved`, never the month's saving (C1 shows that), and the two largest cofrinhos. Nothing while loading,
+ * nor when only an empty Reserva Livre (the `parent`) exists (D25).
+ */
 export const CofrinhosGlance = ({ className }: { className?: string }) => {
   const cofrinhos = useCofrinhos();
   const items = cofrinhos.data?.items ?? [];
@@ -26,34 +26,8 @@ export const CofrinhosGlance = ({ className }: { className?: string }) => {
         <PageError message="Não foi possível carregar os cofrinhos." onRetry={() => cofrinhos.refetch()} />
       </DashCard>
     );
-  if (!cofrinhos.data)
-    return (
-      <DashCard title={TITLE} className={className}>
-        <SkeletonRows count={2} />
-      </DashCard>
-    );
-  if (items.length === 0)
-    return (
-      <DashCard title={TITLE} className={className}>
-        <div className="flex flex-col items-center gap-3">
-          <div
-            aria-hidden
-            className="pointer-events-none flex w-full select-none justify-center opacity-50 saturate-50"
-          >
-            <CofrinhoIllustration />
-          </div>
-          <p className="max-w-xs text-center text-muted-foreground">
-            Nenhum cofrinho ainda. Comece pela reserva de emergência.
-          </p>
-          <Link
-            href={ALL}
-            className="inline-flex min-h-11 items-center rounded-lg px-2 font-medium text-primary text-sm hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"
-          >
-            Ver cofrinhos
-          </Link>
-        </div>
-      </DashCard>
-    );
+  if (!cofrinhos.data) return null;
+  if (!items.some((cofrinho) => !cofrinho.parent) && cents(cofrinhos.data.total_saved) === 0) return null;
 
   const top = [...items].sort((a, b) => cents(b.balance) - cents(a.balance)).slice(0, 2);
   return (

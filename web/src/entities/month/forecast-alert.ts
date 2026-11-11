@@ -6,20 +6,17 @@ type Day = Schemas["Day"];
 export type ForecastAlert = {
   firstRed: { date: string; balance: string; today: boolean };
   lowest: { date: string; balance: string };
-  recoversOn: string | null;
 };
 
-/** D16 from today on: the first red day, the lowest point (earliest on ties), the first day after it out of red. */
+/** D16 from today on: the first red day and the lowest point (earliest on ties). */
 export const forecastAlert = (days: Day[]): ForecastAlert | null => {
   const ahead = days.filter((day) => day.is_today || day.is_future);
   const firstRed = ahead.find((day) => day.projected_tier === "red");
   if (!firstRed) return null;
   const lowest = ahead.reduce((low, day) => (cents(day.projected_balance) < cents(low.projected_balance) ? day : low));
-  const recovery = ahead.find((day) => day.date > lowest.date && day.projected_tier !== "red");
   return {
     firstRed: { date: firstRed.date, balance: firstRed.projected_balance, today: firstRed.is_today },
     lowest: { date: lowest.date, balance: lowest.projected_balance },
-    recoversOn: recovery?.date ?? null,
   };
 };
 
@@ -50,3 +47,20 @@ export const causeOf = (
   const [largest] = outflows.sort((a, b) => b.amount - a.amount || a.rank - b.rank);
   return largest ? largest.id : null;
 };
+
+/** The banner's cause (SOL-79 §2.2): the names of the day's two largest outflows, open bills landing on it and Saídas or Diários dated on it, by cents. */
+export const topOutflows = (date: string, transactions: Schemas["Transaction"][], bills: Schemas["BillOfMonth"][]) =>
+  [
+    ...bills
+      .filter((bill) => !bill.paid && bill.lands_on === date)
+      .map((bill) => ({ name: bill.name, amount: cents(bill.amount) })),
+    ...transactions
+      .filter((transaction) => transaction.date === date && transaction.kind !== "income")
+      .map((transaction) => ({
+        name: transaction.note || transaction.category.name,
+        amount: cents(transaction.amount),
+      })),
+  ]
+    .sort((a, b) => b.amount - a.amount)
+    .slice(0, 2)
+    .map(({ name }) => name);

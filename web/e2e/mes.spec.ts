@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 
 import { expectNoClipped } from "./clipped";
 import { requireServer } from "./server";
@@ -135,7 +135,7 @@ test("Lançar fills the cents from the right and a category created from the pic
   await expect(page.getByRole("radio", { name: "Feira" })).toHaveAttribute("aria-checked", "true");
 });
 
-test("the hero shows the balance and the summary, and the glance cards open their screens", async ({
+test("the hero shows the balance and the summary, and the spending glance opens its screen", async ({
   page,
   request,
 }) => {
@@ -169,7 +169,7 @@ test("the hero shows the balance and the summary, and the glance cards open thei
 
   await expect(monthSummary).toContainText(/Entradas\s*R\$\s2\.000,00/);
   await expect(monthSummary).toContainText(/Saídas\s*R\$\s12,50/);
-  await expect(hero).toContainText(/Saldo hoje\s*R\$\s2\.987,50/);
+  await expect(hero).toContainText(/Saldo hoje em conta\s*R\$\s2\.987,50/);
 
   const spending = page.getByRole("region", { name: "Para onde vai" });
   await expect(spending.getByRole("listitem")).toHaveText([/Mercado\s*R\$\s12,50\s*100%/]);
@@ -177,10 +177,8 @@ test("the hero shows the balance and the summary, and the glance cards open thei
   await expect(page).toHaveURL(/\/para-onde-vai\?m=\d{4}-\d{2}$/);
 
   await page.goBack();
-  const cofrinhos = page.getByRole("region", { name: "Cofrinhos" });
-  await expect(cofrinhos).toContainText("Nenhum cofrinho ainda. Comece pela reserva de emergência.");
-  await cofrinhos.getByRole("link", { name: "Ver cofrinhos" }).click();
-  await expect(page).toHaveURL(/\/economia$/);
+  await expect(page.getByRole("region", { name: "Para onde vai" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Cofrinhos" })).toHaveCount(0);
 });
 
 test("Lançamentos shows only bills under Contas, and Lançar picks from a row of categories", async ({
@@ -238,6 +236,104 @@ test("Lançamentos shows only bills under Contas, and Lançar picks from a row o
   await expect(launch.getByRole("radiogroup", { name: "Categoria" })).toBeVisible();
   for (const width of [1440, 1280, 1024]) {
     await page.setViewportSize({ width, height: 900 });
+    await expectNoClipped(page);
+  }
+});
+
+const signUp = async (page: Page, prefix: string, bill?: { name: string; amount: string; day: string }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto("/criar-conta");
+  await page.getByLabel("E-mail").fill(`e2e-${prefix}-${Date.now()}@example.com`);
+  await page.getByLabel("Senha").fill("uma-senha-bem-longa");
+  await page.getByRole("button", { name: "Criar conta" }).click();
+  await page.getByRole("button", { name: "Continuar" }).click();
+  await page.getByLabel("Saldo de hoje").fill("1.000,00");
+  await page.getByRole("button", { name: "Continuar" }).click();
+  if (bill) {
+    await page.getByLabel("Nome").fill(bill.name);
+    await page.getByLabel("Valor").fill(bill.amount);
+    await page.getByLabel("Dia").fill(bill.day);
+    await page.getByRole("radio", { name: "Aluguel" }).check({ force: true });
+    await page.getByRole("button", { name: "Continuar" }).click();
+  } else {
+    await page.getByRole("button", { name: "Pular por agora" }).click();
+  }
+  await page.getByRole("button", { name: "Ver meu mês" }).click();
+  await page.getByRole("button", { name: "Pular" }).click();
+  await page.getByRole("dialog", { name: "Lançar" }).getByRole("button", { name: "Fechar" }).click();
+};
+
+const box = async (page: Page, name: string) => {
+  const found = await page.getByRole("region", { name, exact: true }).boundingBox();
+  if (!found) throw new Error(`no ${name}`);
+  return found;
+};
+
+test("a fresh account's Mês shows the hero alone at every width (D25)", async ({ page, request }) => {
+  await requireServer(request);
+  await signUp(page, "fresh");
+
+  for (const width of [375, 1024, 1280, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.reload();
+    await expect(page.getByRole("region", { name: "Saldo hoje" })).toContainText("R$ 1.000,00");
+    await page.waitForLoadState("networkidle");
+    await expect(page.getByRole("main").getByRole("region", { name: /^(?!Saldo hoje$|Resumo do mês$)/ })).toHaveCount(
+      0,
+    );
+    await expect(page.getByText("Para onde foi a entrada deste mês")).toBeHidden();
+    await expectNoClipped(page);
+  }
+});
+
+test("Mês follows the mobile frame's order at 375, a stack and a 2-column rail at 1024, two stacks at 1440", async ({
+  page,
+  request,
+}) => {
+  await requireServer(request);
+  await signUp(page, "flow", { name: "Aluguel", amount: "1.600,00", day: "28" });
+
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
+  const categories: { id: string; kind: string }[] = await (await page.request.get("/api/categories")).json();
+  const daily = categories.find((category) => category.kind === "daily");
+  const created = await page.request.post("/api/transactions", {
+    data: { date: today, amount: "12.50", kind: "daily", category_id: daily?.id, note: "Padaria" },
+  });
+  expect(created.ok()).toBe(true);
+  await page.reload();
+
+  const banner = page.getByRole("region", { name: "Alerta do mês" });
+  await expect(banner).toContainText(
+    /(Dia 28 fica|Hoje está) no vermelho: -R\$\s612,50\. Conta de Aluguel prevista excede o saldo em caixa projetado\./,
+  );
+  await expect(page.getByRole("region", { name: "Para onde vai" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Próximos meses" })).toBeVisible();
+
+  const order = ["Saldo hoje", "Contas a pagar", "Termômetro do Mês", "Lançamentos", "Próximos meses", "Para onde vai"];
+  const tops = await Promise.all(order.map(async (name) => (await box(page, name)).y));
+  expect(tops).toEqual([...tops].sort((a, b) => a - b));
+  expect((await box(page, "Alerta do mês")).y).toBeLessThan(tops[0]);
+  await expectNoClipped(page);
+
+  await page.setViewportSize({ width: 1024, height: 900 });
+  const [ledger, thermometer, months, spending] = await Promise.all(
+    ["Lançamentos", "Termômetro do Mês", "Próximos meses", "Para onde vai"].map((name) => box(page, name)),
+  );
+  expect(thermometer.y).toBeGreaterThan(ledger.y);
+  expect(months.y).toBe(thermometer.y);
+  expect(spending.width).toBeGreaterThan(thermometer.width * 1.8);
+  await expectNoClipped(page);
+
+  for (const width of [1280, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    const [hero, rail, glance] = await Promise.all(
+      ["Saldo hoje", "Termômetro do Mês", "Para onde vai"].map((name) => box(page, name)),
+    );
+    expect(rail.x).toBeGreaterThan(hero.x + hero.width);
+    expect(Math.abs(glance.width - rail.width)).toBeLessThan(2);
+    expect(Math.abs(rail.y - hero.y)).toBeLessThan(2);
+    await expect(page.getByRole("region", { name: "Resumo do mês" })).toBeHidden();
+    await expect(page.getByRole("img", { name: /^Entradas|^Saídas/ })).toHaveCount(0);
     await expectNoClipped(page);
   }
 });

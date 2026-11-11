@@ -3,7 +3,7 @@
 import { useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
-import { Pencil, ReceiptText, Repeat, Trash2 } from "lucide-react";
+import { Pencil, Repeat, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -24,7 +24,6 @@ import { EditBillSheet } from "@/features/edit-bill/edit-bill-sheet";
 import { cn } from "@/lib/utils";
 import type { Schemas } from "@/shared/api/client";
 import { dayMonth, monthName, shortDay, todayISO, yesterdayISO } from "@/shared/lib/date";
-import { BrandButton } from "@/shared/ui/brand-button";
 import { CategoryIcon } from "@/shared/ui/category-icon";
 import { Money } from "@/shared/ui/money";
 import { TierPill } from "@/shared/ui/tier-pill";
@@ -148,7 +147,6 @@ const FILTERS: { value: LedgerFilter; label: string; empty?: string }[] = [
 type LedgerProps = {
   view: Schemas["MonthView"];
   transactions: Transaction[];
-  onLaunch: () => void;
   /** The day ringed after a jump from the hero. */
   highlight?: string | null;
   /** Ids (`transaction.id` or `billKey(bill)`) captioned `Motivo da queda`. */
@@ -169,7 +167,6 @@ type LedgerProps = {
 export const Ledger = ({
   view,
   transactions,
-  onLaunch,
   highlight = null,
   causes = new Set<string>(),
   expanded,
@@ -239,6 +236,8 @@ export const Ledger = ({
     );
   };
 
+  if (!any) return null;
+
   return (
     <section
       aria-labelledby="ledger-title"
@@ -247,70 +246,56 @@ export const Ledger = ({
       <h2 id="ledger-title" className="font-semibold text-lg leading-6">
         Lançamentos
       </h2>
-      {any && (
-        <ToggleGroup
-          type="single"
-          spacing={0}
-          value={filter}
-          onValueChange={(value: LedgerFilter | "") => value && onFilterChange(value)}
-          aria-label="Filtrar lançamentos"
-          className="mb-2 rounded-xl bg-muted p-1"
-        >
-          {FILTERS.map((option) => (
-            <ToggleGroupItem
-              key={option.value}
-              value={option.value}
-              className="h-11 rounded-lg! px-4 font-medium text-base text-muted-foreground data-[state=on]:bg-card data-[state=on]:text-primary data-[state=on]:shadow-sm"
-            >
-              {option.label}
-            </ToggleGroupItem>
-          ))}
-        </ToggleGroup>
-      )}
-      {any && all.length === 0 && (
+      <ToggleGroup
+        type="single"
+        spacing={0}
+        value={filter}
+        onValueChange={(value: LedgerFilter | "") => value && onFilterChange(value)}
+        aria-label="Filtrar lançamentos"
+        className="mb-2 rounded-xl bg-muted p-1"
+      >
+        {FILTERS.map((option) => (
+          <ToggleGroupItem
+            key={option.value}
+            value={option.value}
+            className="h-11 rounded-lg! px-4 font-medium text-base text-muted-foreground data-[state=on]:bg-card data-[state=on]:text-primary data-[state=on]:shadow-sm"
+          >
+            {option.label}
+          </ToggleGroupItem>
+        ))}
+      </ToggleGroup>
+      {all.length === 0 && (
         <p className="px-2 py-8 text-center text-muted-foreground">
           {FILTERS.find((option) => option.value === filter)?.empty}
         </p>
       )}
-      {!any ? (
-        <div className="flex flex-col items-center gap-3 px-2 py-8 text-center">
-          <span className="flex size-12 items-center justify-center rounded-full bg-secondary text-primary">
-            <ReceiptText className="size-6" aria-hidden />
-          </span>
-          <p className="text-muted-foreground">Nenhum lançamento ainda</p>
-          <BrandButton className="w-auto px-6" onClick={onLaunch}>
-            Lançar agora
-          </BrandButton>
+      {groups.map(({ day, entries, due }) => (
+        <div
+          key={day.date}
+          id={`dia-${day.date}`}
+          tabIndex={-1}
+          className={cn("scroll-mt-28 rounded-xl", highlight === day.date && "ring-2 ring-expense")}
+        >
+          <h3 className="sticky top-14 z-10 -mx-2 flex items-center justify-between gap-2 bg-card/95 px-2 py-2 font-semibold text-muted-foreground text-sm backdrop-blur lg:top-0">
+            {dayLabel(day)}
+            <TierPill tier={day.projected_tier} amount={day.projected_balance} forecast={isForecast(day)} size="sm" />
+          </h3>
+          <ul className="flex flex-col">
+            {entries.map((transaction) => (
+              <Row
+                key={transaction.id}
+                entry={describe(transaction)}
+                transaction={transaction}
+                cause={causes.has(transaction.id)}
+                onOpen={() => open(transaction)}
+              />
+            ))}
+            {due.map((bill) => (
+              <DueRow key={billKey(bill)} bill={bill} month={view.month} cause={causes.has(billKey(bill))} />
+            ))}
+          </ul>
         </div>
-      ) : (
-        groups.map(({ day, entries, due }) => (
-          <div
-            key={day.date}
-            id={`dia-${day.date}`}
-            tabIndex={-1}
-            className={cn("scroll-mt-28 rounded-xl", highlight === day.date && "ring-2 ring-expense")}
-          >
-            <h3 className="sticky top-14 z-10 -mx-2 flex items-center justify-between gap-2 bg-card/95 px-2 py-2 font-semibold text-muted-foreground text-sm backdrop-blur lg:top-0">
-              {dayLabel(day)}
-              <TierPill tier={day.projected_tier} amount={day.projected_balance} forecast={isForecast(day)} size="sm" />
-            </h3>
-            <ul className="flex flex-col">
-              {entries.map((transaction) => (
-                <Row
-                  key={transaction.id}
-                  entry={describe(transaction)}
-                  transaction={transaction}
-                  cause={causes.has(transaction.id)}
-                  onOpen={() => open(transaction)}
-                />
-              ))}
-              {due.map((bill) => (
-                <DueRow key={billKey(bill)} bill={bill} month={view.month} cause={causes.has(billKey(bill))} />
-              ))}
-            </ul>
-          </div>
-        ))
-      )}
+      ))}
       {capped && (
         <Button
           variant="ghost"
