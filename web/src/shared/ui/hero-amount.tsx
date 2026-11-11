@@ -9,11 +9,14 @@ export const HeroAmount = ({
   value,
   onChange,
   invalid,
+  keypad = false,
 }: {
   id: string;
   value: string;
   onChange: (value: string) => void;
   invalid: boolean;
+  /** The on-screen keypad writes the amount, so the system keyboard stays closed; paste and hardware keys still work. */
+  keypad?: boolean;
 }) => (
   <div className="flex flex-col items-center gap-1">
     <label
@@ -32,6 +35,7 @@ export const HeroAmount = ({
         autoFocus
         placeholder="0,00"
         {...amountMask({ value, onValueChange: onChange })}
+        inputMode={keypad ? "none" : "numeric"}
         aria-invalid={invalid}
         aria-describedby={invalid ? `${id}-error` : undefined}
         className="w-48 border-transparent border-b-2 bg-transparent text-center font-bold text-[34px] text-foreground tabular-nums leading-10 tracking-[-0.02em] outline-none placeholder:text-muted-foreground/50 focus:border-ring aria-invalid:border-destructive"

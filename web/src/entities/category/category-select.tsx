@@ -3,7 +3,7 @@
 import { type Ref, useState } from "react";
 
 import { Command as CommandPrimitive } from "cmdk";
-import { Search } from "lucide-react";
+import { Plus, Search } from "lucide-react";
 
 import { Command, CommandEmpty, CommandItem, CommandList } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
@@ -15,12 +15,13 @@ import { categoryLabel } from "./categories-query";
 
 type Category = Schemas["Category"];
 
-/** `Ver todas`: a link that opens a sheet to search and tap any category. */
+/** `Ver todas`: a link that opens a sheet to search and tap any category, or create one. */
 export const CategorySelect = ({
   ref,
   categories,
   chosen,
   onChoose,
+  onCreate,
   onCloseAutoFocus,
 }: {
   ref?: Ref<HTMLButtonElement>;
@@ -28,6 +29,7 @@ export const CategorySelect = ({
   categories: Category[];
   chosen: Category | undefined;
   onChoose: (category: Category) => void;
+  onCreate: () => void;
   onCloseAutoFocus?: (event: Event) => void;
 }) => {
   const [open, setOpen] = useState(false);
@@ -96,6 +98,19 @@ export const CategorySelect = ({
             })}
           </CommandList>
         </Command>
+        <button
+          type="button"
+          onClick={() => {
+            setOpen(false);
+            onCreate();
+          }}
+          className="flex min-h-12 items-center gap-3 rounded-xl px-3 font-semibold text-base text-primary outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50"
+        >
+          <span className="flex size-8 items-center justify-center rounded-full border-2 border-primary/40 border-dashed">
+            <Plus aria-hidden className="size-4" />
+          </span>
+          Nova categoria
+        </button>
       </ResponsiveSheet>
     </>
   );

@@ -45,6 +45,14 @@ const LAZER: Schemas["Category"] = { ...CARRO, id: "c1000000-0000-4000-8000-0000
 /** In the API's order, Carro and Lazer after Pets. */
 const SIX_DAILY = [...WITH_CHILDREN, CARRO, LAZER];
 
+const more = (name: string, index: number): Schemas["Category"] => ({
+  ...CARRO,
+  id: `c1000000-0000-4000-8000-0000000000${90 + index}`,
+  name,
+});
+/** Nine top-level Diário, one more than the row holds. */
+const NINE_DAILY = [...SIX_DAILY, more("Saúde", 1), more("Casa", 2), more("Viagem", 3), more("Roupas", 4)];
+
 const entry = (category: Schemas["Category"], date: string, id: string): Schemas["Transaction"] => ({
   id,
   date,
@@ -66,7 +74,12 @@ const ENTRIES = [
 
 const Picker = ({ entries = [] }: { entries?: Schemas["Transaction"][] }) => {
   const [chosen, setChosen] = useState<Schemas["Category"]>();
-  return <CategoryChips kind="daily" chosen={chosen} onChoose={setChosen} entries={entries} />;
+  return (
+    <>
+      <CategoryChips kind="daily" chosen={chosen} onChoose={setChosen} entries={entries} />
+      <output aria-label="Escolhida">{chosen?.name}</output>
+    </>
+  );
 };
 
 const chips = () =>
@@ -95,7 +108,10 @@ const setup = (replies = {}, categories = CATEGORIES, entries?: Schemas["Transac
 
 /** Through the chooser: a top-level category, or a subcategory of `parent`. */
 const openCreate = async (parent?: string) => {
-  await userEvent.click(await screen.findByRole("button", { name: "Nova categoria" }));
+  await userEvent.click(await screen.findByRole("button", { name: "Ver todas" }));
+  await userEvent.click(
+    within(await screen.findByRole("dialog", { name: "Categoria" })).getByRole("button", { name: "Nova categoria" }),
+  );
   const chooser = await screen.findByRole("dialog", { name: "Nova" });
   await userEvent.click(within(chooser).getByRole("button", { name: parent ? /^Subcategoria/ : /^Categoria/ }));
   if (parent)
@@ -113,21 +129,23 @@ describe("CategoryChips", () => {
     window.innerWidth = 375;
   });
 
-  it("without entries shows the kind's first five, the preset one leading, as a radio row with Ver todas and +", async () => {
-    setup({}, SIX_DAILY);
+  it("without entries shows the kind's first eight parents, the preset one leading, as a scrolling radio row", async () => {
+    setup({}, NINE_DAILY);
 
     const row = await screen.findByRole("radiogroup", { name: "Categoria" });
-    expect(chips()).toEqual(["Mercado", "Comida fora", "Pets", "Ração", "Carro"]);
+    expect(chips()).toEqual(["Mercado", "Comida fora", "Pets", "Carro", "Lazer", "Saúde", "Casa", "Viagem"]);
+    expect(row).toHaveClass("overflow-x-auto", "snap-x");
     expect(within(row).queryByRole("radio", { checked: true })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Ver todas" })).toHaveAttribute("aria-expanded", "false");
-    expect(screen.getByRole("button", { name: "Nova categoria" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Nova categoria" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("radiogroup", { name: "Subcategoria" })).not.toBeInTheDocument();
   });
 
   it("ranks the month's Diário by count, a tie by the latest date, then fills from the preset and API order", async () => {
     setup({}, SIX_DAILY, ENTRIES);
 
     await screen.findByRole("radiogroup", { name: "Categoria" });
-    expect(chips()).toEqual(["Comida fora", "Carro", "Pets", "Mercado", "Ração"]);
+    expect(chips()).toEqual(["Comida fora", "Carro", "Pets", "Mercado", "Lazer"]);
   });
 
   it("shows fewer chips when the kind has fewer categories", async () => {
@@ -154,8 +172,8 @@ describe("CategoryChips", () => {
     expect(comida).toHaveAttribute("aria-checked", "true");
   });
 
-  it("searches every category from Ver todas and keeps a choice outside the five in the last slot", async () => {
-    setup({}, SIX_DAILY, ENTRIES);
+  it("searches every category from Ver todas and keeps a choice outside the eight in the last slot", async () => {
+    setup({}, NINE_DAILY, ENTRIES);
 
     const more = await screen.findByRole("button", { name: "Ver todas" });
     await userEvent.click(more);
@@ -165,18 +183,29 @@ describe("CategoryChips", () => {
       within(sheet)
         .getAllByRole("option")
         .map((option) => option.getAttribute("aria-label")),
-    ).toEqual(["Mercado", "Comida fora", "Pets", "Pets › Ração", "Carro", "Lazer"]);
-    await userEvent.type(within(sheet).getByRole("combobox"), "laz");
-    await userEvent.click(within(sheet).getByRole("option", { name: "Lazer" }));
+    ).toEqual([
+      "Mercado",
+      "Comida fora",
+      "Pets",
+      "Pets › Ração",
+      "Carro",
+      "Lazer",
+      "Saúde",
+      "Casa",
+      "Viagem",
+      "Roupas",
+    ]);
+    await userEvent.type(within(sheet).getByRole("combobox"), "roup");
+    await userEvent.click(within(sheet).getByRole("option", { name: "Roupas" }));
 
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-    expect(chips()).toEqual(["Comida fora", "Carro", "Pets", "Mercado", "Lazer"]);
-    const lazer = screen.getByRole("radio", { name: "Lazer" });
-    expect(lazer).toHaveAttribute("aria-checked", "true");
-    await waitFor(() => expect(lazer).toHaveFocus());
+    expect(chips()).toEqual(["Comida fora", "Carro", "Pets", "Mercado", "Lazer", "Saúde", "Casa", "Roupas"]);
+    const roupas = screen.getByRole("radio", { name: "Roupas" });
+    expect(roupas).toHaveAttribute("aria-checked", "true");
+    await waitFor(() => expect(roupas).toHaveFocus());
   });
 
-  it("returns focus to Ver todas or + when their sheet closes with Esc", async () => {
+  it("returns focus to Ver todas when its sheet or the create sheet closes with Esc", async () => {
     setup({}, SIX_DAILY);
 
     const more = await screen.findByRole("button", { name: "Ver todas" });
@@ -186,19 +215,58 @@ describe("CategoryChips", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     await waitFor(() => expect(more).toHaveFocus());
 
-    const create = screen.getByRole("button", { name: "Nova categoria" });
-    await userEvent.click(create);
+    await userEvent.click(more);
+    await userEvent.click(
+      within(await screen.findByRole("dialog", { name: "Categoria" })).getByRole("button", { name: "Nova categoria" }),
+    );
     await screen.findByRole("dialog", { name: "Nova" });
     await userEvent.keyboard("{Escape}");
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-    await waitFor(() => expect(create).toHaveFocus());
+    await waitFor(() => expect(more).toHaveFocus());
   });
 
-  it("names a subcategory chip with its parent and shows the short name", async () => {
+  it("shows the picked parent's children as Sub: pills; a pill picks the child, a second tap the parent", async () => {
     setup({}, WITH_CHILDREN);
 
-    const racao = await screen.findByRole("radio", { name: "Pets › Ração" });
+    await userEvent.click(await screen.findByRole("radio", { name: "Mercado" }));
+    expect(screen.queryByRole("radiogroup", { name: "Subcategoria" })).not.toBeInTheDocument();
+    const pets = screen.getByRole("radio", { name: "Pets" });
+    await userEvent.click(pets);
+    const sub = screen.getByRole("radiogroup", { name: "Subcategoria" });
+    expect(sub.parentElement).toHaveTextContent(/^Sub:/);
+    const racao = within(sub).getByRole("radio", { name: "Pets › Ração" });
     expect(racao).toHaveTextContent("Ração");
+    expect(racao).toHaveAttribute("aria-checked", "false");
+
+    await userEvent.click(racao);
+    expect(racao).toHaveAttribute("aria-checked", "true");
+    expect(pets).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByRole("status", { name: "Escolhida" })).toHaveTextContent("Ração");
+
+    await userEvent.click(racao);
+    expect(racao).toHaveAttribute("aria-checked", "false");
+    expect(screen.getByRole("status", { name: "Escolhida" })).toHaveTextContent("Pets");
+
+    await userEvent.click(racao);
+    await userEvent.click(pets);
+    expect(screen.getByRole("status", { name: "Escolhida" })).toHaveTextContent("Pets");
+  });
+
+  it("shows a child picked in Ver todas as its parent circle and its Sub: pill", async () => {
+    setup({}, WITH_CHILDREN);
+
+    const more = await screen.findByRole("button", { name: "Ver todas" });
+    await userEvent.click(more);
+    await userEvent.click(
+      within(await screen.findByRole("dialog", { name: "Categoria" })).getByRole("option", { name: "Pets › Ração" }),
+    );
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(screen.getByRole("radio", { name: "Pets" })).toHaveAttribute("aria-checked", "true");
+    const racao = screen.getByRole("radio", { name: "Pets › Ração" });
+    expect(racao).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByRole("status", { name: "Escolhida" })).toHaveTextContent("Ração");
+    await waitFor(() => expect(racao).toHaveFocus());
   });
 
   it("shows five round placeholders while the categories load", () => {

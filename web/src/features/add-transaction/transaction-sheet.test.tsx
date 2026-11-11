@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { Toaster } from "sonner";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { KEYPAD_QUERY } from "@/shared/ui/amount-keypad";
 import { pickDate } from "@/test/pick-date";
 import { renderWithQuery } from "@/test/render";
 import {
@@ -92,6 +93,29 @@ describe("TransactionSheet", () => {
     });
     expect(onOpenChange).toHaveBeenCalledWith(false);
     expect(await screen.findByText("Lançado")).toBeInTheDocument();
+  });
+
+  it("shows the keypad under the amount on a coarse pointer under 1024 px, with the system keyboard closed", async () => {
+    const base = window.matchMedia("");
+    vi.spyOn(window, "matchMedia").mockImplementation((query: string) => ({
+      ...base,
+      media: query,
+      matches: query === KEYPAD_QUERY,
+    }));
+    setup();
+
+    const amount = await screen.findByLabelText("Valor");
+    expect(amount).toHaveAttribute("inputmode", "none");
+    await userEvent.click(screen.getByRole("button", { name: "4" }));
+    await userEvent.click(screen.getByRole("button", { name: "2" }));
+    expect(amount).toHaveValue("0,42");
+  });
+
+  it("keeps the numeric system keyboard and no keypad elsewhere", async () => {
+    setup();
+
+    expect(await screen.findByLabelText("Valor")).toHaveAttribute("inputmode", "numeric");
+    expect(screen.queryByRole("button", { name: "Apagar" })).not.toBeInTheDocument();
   });
 
   it("ranks the category row by the current month's entries and keeps the preset chosen", async () => {
@@ -219,7 +243,10 @@ describe("TransactionSheet", () => {
     const carro = { ...MERCADO, id: "c1000000-0000-4000-8000-000000000099", name: "Carro", icon: "car" };
     setup();
 
-    await userEvent.click(await screen.findByRole("button", { name: "Nova categoria" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Ver todas" }));
+    await userEvent.click(
+      within(await screen.findByRole("dialog", { name: "Categoria" })).getByRole("button", { name: "Nova categoria" }),
+    );
     await userEvent.click(
       within(await screen.findByRole("dialog", { name: "Nova" })).getByRole("button", { name: /^Categoria/ }),
     );

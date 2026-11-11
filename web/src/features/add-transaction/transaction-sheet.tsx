@@ -27,6 +27,7 @@ import { addMonths, monthYear, todayISO } from "@/shared/lib/date";
 import { installmentCents } from "@/shared/lib/installments";
 import { formatMoney, positiveAmount } from "@/shared/lib/money";
 import { cents, fromCents } from "@/shared/lib/tier";
+import { AmountKeypad, useKeypad } from "@/shared/ui/amount-keypad";
 import { BrandButton } from "@/shared/ui/brand-button";
 import { DateChips } from "@/shared/ui/date-chips";
 import { HeroAmount } from "@/shared/ui/hero-amount";
@@ -96,6 +97,7 @@ const TransactionForm = ({
   const [submitted, setSubmitted] = useState(false);
   const currency = useCurrency();
   const categories = useCategoryChips(draft.kind);
+  const keypad = useKeypad();
   const thisMonth = useTransactions(todayISO().slice(0, 7));
   const settings = useSettings();
   const category = draft.category ?? categories.data?.[0];
@@ -234,7 +236,9 @@ const TransactionForm = ({
         value={draft.amount}
         onChange={(value) => set({ amount: value })}
         invalid={submitted && !amount}
+        keypad={keypad}
       />
+      {keypad && <AmountKeypad value={draft.amount} onValueChange={(value) => set({ amount: value })} />}
 
       <CategoryChips
         kind={draft.kind}

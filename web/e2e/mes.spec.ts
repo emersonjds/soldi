@@ -120,7 +120,8 @@ test("Lançar fills the cents from the right and a category created from the pic
   await expect(ledger.getByRole("button", { name: /Mercado/ })).toContainText("R$ 123,45");
 
   await tabs.getByRole("button", { name: "Lançar" }).click();
-  await page.getByRole("button", { name: "Nova categoria" }).click();
+  await page.getByRole("button", { name: "Ver todas" }).click();
+  await page.getByRole("dialog", { name: "Categoria" }).getByRole("button", { name: "Nova categoria" }).click();
   await page
     .getByRole("dialog", { name: "Nova" })
     .getByRole("button", { name: /^Categoria/ })
