@@ -47,7 +47,7 @@ const Rows = ({
             <button
               type="button"
               onClick={() => onOpen(bill)}
-              className="flex min-h-16 min-w-0 flex-1 items-center gap-3 rounded-xl px-2 py-2 text-left transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"
+              className="flex min-h-16 min-w-0 flex-1 items-center gap-2 rounded-xl px-2 py-2 text-left transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring sm:gap-3"
             >
               <CategoryIcon icon={category?.icon ?? ""} color={category?.color ?? ""} />
               <span className="flex min-w-0 flex-1 flex-col">
@@ -57,7 +57,7 @@ const Rows = ({
                   {category && ` · ${categoryLabel(category, categories.data)}`}
                 </span>
               </span>
-              <Money amount={bill.amount} className="font-bold text-base" />
+              <Money amount={bill.amount} className="font-bold text-sm sm:text-base" />
             </button>
             <Switch
               aria-label={`Ativa: ${bill.name}`}
