@@ -1421,7 +1421,56 @@ async fn a_grow_waits_for_a_following_delete_of_the_same_series(pool: PgPool) {
 }
 
 #[sqlx::test]
+async fn l3_r6_a_following_shrink_rewrites_the_kept_members_then_drops_the_tail(pool: PgPool) {
+    let user = opened(pool, "ana@example.com").await;
+    repeat(&user, "2026-11-05", "10", 12).await;
+    let third = only(&user, "2027-01").await;
+
+    let (status, shrunk) = user
+        .patch(
+            &format!("{}?scope=following", uri(&third)),
+            json!({ "amount": "20", "repeat_months": 6 }),
+        )
+        .await;
+
+    assert_eq!(status, StatusCode::OK, "{shrunk}");
+    assert_eq!(place(&shrunk), (3, 6));
+    let kept = run(&user, "2026-11", 6).await;
+    assert_eq!(
+        field_of(&kept, "amount"),
+        ["10.00", "10.00", "20.00", "20.00", "20.00", "20.00"]
+    );
+    assert_empty(&user, "2027-05", 6).await;
+}
+
+#[sqlx::test]
+async fn l1_growth_reads_the_span_after_the_edited_members_own_date_change(pool: PgPool) {
+    let user = opened(pool, "ana@example.com").await;
+    repeat(&user, "2026-11-05", "10", 3).await;
+    let third = only(&user, "2027-01").await;
+
+    let (status, grown) = user
+        .patch(
+            &uri(&third),
+            json!({ "date": "2027-02-10", "repeat_months": 5 }),
+        )
+        .await;
+
+    assert_eq!(status, StatusCode::OK, "{grown}");
+    assert_eq!(place(&grown), (3, 5));
+    assert_eq!(grown["series"]["last_date"], "2027-04-05");
+    assert_empty(&user, "2027-01", 1).await;
+    let tail = run(&user, "2027-02", 3).await;
+    assert_eq!(
+        field_of(&tail, "date"),
+        ["2027-02-10", "2027-03-05", "2027-04-05"]
+    );
+    assert_empty(&user, "2027-05", 1).await;
+}
+
+#[sqlx::test]
 async fn resizing_another_users_member_is_not_found(pool: PgPool) {
+    // The 404 comes from `find` at the top of `update`, before any resize runs.
     let ana = opened(pool, "ana@example.com").await;
     let bia = ana.another_user("bia@example.com").await;
     let first = repeat(&ana, "2026-11-05", "10", 3).await;
