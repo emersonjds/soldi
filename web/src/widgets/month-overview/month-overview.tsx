@@ -8,6 +8,8 @@ import { cn } from "@/lib/utils";
 import type { Schemas } from "@/shared/api/client";
 import { useCurrency } from "@/shared/lib/currency";
 import { formatMoney, positiveAmount } from "@/shared/lib/money";
+import { wholeShare } from "@/shared/lib/percent";
+import { cents } from "@/shared/lib/tier";
 import { BrandButton } from "@/shared/ui/brand-button";
 import { IncomeIllustration } from "@/shared/ui/illustrations";
 import { Money } from "@/shared/ui/money";
@@ -83,6 +85,10 @@ export const MonthHero = ({
         <h2 className="font-semibold text-base leading-6">Para onde foi a entrada</h2>
         {split ? (
           <>
+            <p className="-mt-3 text-muted-foreground text-sm">
+              {split.base === "income" ? "Entradas" : "Saídas"}{" "}
+              <Money amount={split.base === "income" ? view.totals.income : view.totals.outflow} />
+            </p>
             <SplitBar label={split.base === "income" ? "Entradas" : "Saídas"} segments={split.segments} />
             <SplitLine line={split.line} />
           </>
@@ -103,15 +109,15 @@ export const MonthHero = ({
 };
 
 const Insight = ({ totals, projected }: { totals: MonthView["totals"]; projected: string }) => {
-  const income = Number(totals.income);
-  const committed = Math.round((Number(totals.outflow) / income) * 100);
+  const income = cents(totals.income);
   return (
     <>
       {income === 0 ? (
         "Nenhuma entrada ainda este mês."
       ) : (
         <>
-          Você comprometeu <strong className="font-bold text-foreground">{committed}%</strong> da renda.
+          Você comprometeu{" "}
+          <strong className="font-bold text-foreground">{wholeShare(cents(totals.outflow), income)}%</strong> da renda.
         </>
       )}{" "}
       Com as contas em aberto, seu mês termina em{" "}
@@ -146,15 +152,17 @@ export const ThermometerCard = ({ view, className }: { view: MonthView; classNam
 
 const card = "rounded-2xl bg-card p-4 shadow-sm lg:p-6";
 
+/** C1 while the month loads: the figure and the bar. */
 export const HeroSkeleton = ({ className }: { className?: string }) => (
-  <div role="status" aria-label="Carregando" className={className}>
-    <Skeleton data-testid="hero-skeleton" className="h-80 rounded-3xl" />
+  <div aria-busy="true" className={cn("flex flex-col gap-4 rounded-3xl bg-card p-4 shadow-sm lg:p-6", className)}>
+    <Skeleton data-testid="hero-figure-skeleton" className="h-14 w-2/3 max-w-xs" />
+    <Skeleton data-testid="hero-bar-skeleton" className="h-3 w-full" />
   </div>
 );
 
 /** C2 while the month loads: the strip. */
 export const StripSkeleton = ({ className }: { className?: string }) => (
-  <div role="status" aria-label="Carregando" className={cn(card, "flex flex-col gap-5", className)}>
+  <div aria-busy="true" className={cn(card, "flex flex-col gap-5", className)}>
     <Skeleton className="h-6 w-1/2" />
     <Skeleton data-testid="strip-skeleton" className="h-3 w-full" />
   </div>

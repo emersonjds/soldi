@@ -19,7 +19,7 @@ export const CofrinhosGlance = ({ className }: { className?: string }) => {
   const cofrinhos = useCofrinhos();
   const items = cofrinhos.data?.items ?? [];
 
-  if (cofrinhos.isError)
+  if (cofrinhos.isError && !cofrinhos.data)
     return (
       <DashCard title={TITLE} className={className}>
         <PageError message="Não foi possível carregar os cofrinhos." onRetry={() => cofrinhos.refetch()} />

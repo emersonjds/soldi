@@ -19,7 +19,7 @@ export const PageError = ({ message, onRetry }: { message: string; onRetry: () =
 
 /** `count` list rows (icon, two lines, amount) while a card loads. */
 export const SkeletonRows = ({ count }: { count: number }) => (
-  <div role="status" aria-label="Carregando" className="flex flex-col gap-4">
+  <div aria-busy="true" className="flex flex-col gap-4">
     {Array.from({ length: count }, (_, row) => `row-${row}`).map((key) => (
       <div key={key} data-testid="row-skeleton" className="flex items-center gap-3">
         <Skeleton className="size-10 rounded-full" />

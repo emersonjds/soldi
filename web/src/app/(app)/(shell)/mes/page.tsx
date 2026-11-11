@@ -51,10 +51,13 @@ const MonthScreen = () => {
   const bills = view.data?.bills_of_month ?? [];
   const alert = forecastAlert(days);
   const causes = new Set(
-    (alert && entries ? [alert.firstRed.date, alert.lowest.date] : [])
-      .map((date) => causeOf(date, days, entries ?? [], bills))
-      .filter((id): id is string => id !== null),
+    (alert && entries
+      ? [alert.firstRed.date, alert.lowest.date].map((date) => causeOf(date, days, entries, bills))
+      : []
+    ).filter((id): id is string => id !== null),
   );
+  const monthFailed = view.isError && !view.data;
+  const entriesFailed = transactions.isError && !entries;
   const jump = (date: string) => {
     const group = document.getElementById(`dia-${date}`);
     group?.scrollIntoView({ block: "start" });
@@ -68,12 +71,15 @@ const MonthScreen = () => {
   return (
     <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2 xl:grid-cols-3 xl:gap-6">
       <h1 className="sr-only">Mês</h1>
-      {view.isError && (
+      <p role="status" className="sr-only">
+        {((!view.data && !monthFailed) || (!entries && !entriesFailed)) && "Carregando"}
+      </p>
+      {monthFailed && (
         <section aria-label="Saldo hoje" className={`rounded-3xl bg-card shadow-sm ${wide} xl:row-start-1`}>
           <PageError message="Não foi possível carregar o mês." onRetry={() => view.refetch()} />
         </section>
       )}
-      {!view.isError && !view.data && (
+      {!monthFailed && !view.data && (
         <>
           <HeroSkeleton className={`${wide} xl:row-start-1`} />
           <RowsSkeleton rows={3} className={`${wide} xl:row-start-2`} />
@@ -91,14 +97,12 @@ const MonthScreen = () => {
           <BillsOfMonth view={view.data} className={`${wide} xl:row-start-2`} />
         </>
       )}
-      {transactions.isError && !view.isError && (
+      {entriesFailed && !monthFailed && (
         <section aria-label="Lançamentos" className={`rounded-2xl bg-card shadow-sm ${ledgerPlace}`}>
           <PageError message="Não foi possível carregar os lançamentos." onRetry={() => transactions.refetch()} />
         </section>
       )}
-      {!transactions.isError && !view.isError && (!view.data || !entries) && (
-        <RowsSkeleton rows={5} className={ledgerPlace} />
-      )}
+      {!entriesFailed && !monthFailed && (!view.data || !entries) && <RowsSkeleton rows={5} className={ledgerPlace} />}
       {view.data && entries && (
         <Ledger
           view={view.data}
@@ -110,7 +114,7 @@ const MonthScreen = () => {
         />
       )}
       {view.data && <ThermometerCard view={view.data} className="xl:col-start-3 xl:row-start-1" />}
-      {!view.isError && !view.data && <StripSkeleton className="xl:col-start-3 xl:row-start-1" />}
+      {!monthFailed && !view.data && <StripSkeleton className="xl:col-start-3 xl:row-start-1" />}
       <MonthsAhead
         viewing={month}
         onOpen={(next) => {

@@ -172,6 +172,10 @@ Rows:
 
 Each card owns its query, skeleton and error. One failing request never blanks the page.
 
+- When the month request fails, C2, C3 and C4 are hidden and only C1 shows the error: C2 and C3 read the month, and C4 needs its `days`.
+- A refetch that fails after a card has data keeps the data and shows no error.
+- Each loading card carries `aria-busy="true"`; the page has a single `role="status"` that reads `Carregando` while the month or its entries load.
+
 | Card | Loading | Empty | Error |
 |------|---------|-------|-------|
 | C1 | skeleton of the figure and bar | `Nenhuma entrada neste mês` + button `Lançar entrada` (opens Lançar on Entrada) + `IncomeIllustration` | `Não foi possível carregar o mês.` + `Tentar de novo` |
@@ -190,7 +194,7 @@ Each card owns its query, skeleton and error. One failing request never blanks t
 - C1:
   - `Saldo hoje`;
   - `Projetado fim do mês`;
-  - `Para onde foi a entrada`;
+  - `Para onde foi a entrada`, with the base under it: `Entradas R$ 6.000,00`, or `Saídas R$ 1.384,31` when the outflow passes the income;
   - legend `Contas`, `Guardado`, `Diário`, `Livre`, each `R$ 1.800,00 · 30%`;
   - the lines from §2.1.
 - C3: as in §3.4.

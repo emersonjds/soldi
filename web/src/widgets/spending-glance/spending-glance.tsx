@@ -10,11 +10,11 @@ import { PageError } from "@/shared/ui/page-state";
 
 const Body = ({ month }: { month: string }) => {
   const report = useCategoryReport(month);
-  if (report.isError)
+  if (report.isError && !report.data)
     return <PageError message="Não foi possível carregar os gastos." onRetry={() => report.refetch()} />;
   if (!report.data)
     return (
-      <div role="status" aria-label="Carregando" className="flex flex-col gap-4">
+      <div aria-busy="true" className="flex flex-col gap-4">
         {[0, 1, 2, 3].map((row) => (
           <div key={row} data-testid="bar-skeleton" className="flex flex-col gap-2">
             <Skeleton className="h-4 w-2/3" />
