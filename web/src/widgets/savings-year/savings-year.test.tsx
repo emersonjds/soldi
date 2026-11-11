@@ -52,10 +52,10 @@ describe("SavingsYear", () => {
 
     const links = await within(card()).findAllByRole("link");
     expect(links.map((link) => link.getAttribute("aria-label")?.replace(/\s/g, " "))).toEqual([
-      "Novembro de 2026: guardou R$ 776,13, 11,9% das entradas",
-      "Outubro de 2026: guardou -R$ 200,00, -5,0% das entradas",
+      "Novembro de 2026: guardou R$ 776,13, 11,9% das entradas, faixa média",
+      "Outubro de 2026: guardou -R$ 200,00, -5,0% das entradas, faixa baixa",
       "Setembro de 2026: guardou R$ 0,00, sem entradas",
-      "Agosto de 2026: guardou R$ 4.840,40, 15,1% das entradas",
+      "Agosto de 2026: guardou R$ 4.840,40, 15,1% das entradas, faixa alta",
     ]);
     expect(links.map((link) => link.getAttribute("href"))).toEqual([
       "/mes?m=2026-11",
@@ -71,6 +71,15 @@ describe("SavingsYear", () => {
     expect(november).toHaveTextContent("NovembroAtualEntradas: R$ 6.500,00R$ 776,13faixa média11,9%");
     expect(await row("Agosto")).toHaveTextContent("Entradas: R$ 53.982,80");
     expect(within(await row("Agosto")).queryByText("Atual")).not.toBeInTheDocument();
+  });
+
+  it("marks today's month as current and names each row's band for screen readers", async () => {
+    show();
+
+    const november = await row("Novembro");
+    expect(november).toHaveAttribute("aria-current", "date");
+    expect(november).toHaveAccessibleName(/11,9% das entradas, faixa média$/);
+    expect(await row("Agosto")).not.toHaveAttribute("aria-current");
   });
 
   it("shows a minus and a red dot on a month that took out more than it saved", async () => {

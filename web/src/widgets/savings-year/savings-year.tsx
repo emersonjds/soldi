@@ -51,7 +51,8 @@ const MonthRow = ({ month, current }: { month: Schemas["SavingsMonth"]; current:
     <li>
       <Link
         href={`/mes?m=${month.month}`}
-        aria-label={`${name} de ${month.month.slice(0, 4)}: guardou ${formatMoney(month.saved, currency)}, ${share}`}
+        aria-label={`${name} de ${month.month.slice(0, 4)}: guardou ${formatMoney(month.saved, currency)}, ${share}${level ? `, ${level.word}` : ""}`}
+        aria-current={current ? "date" : undefined}
         className="-mx-2 flex min-h-11 items-center justify-between gap-3 rounded-xl px-2 py-2 hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"
       >
         <span className="flex min-w-0 flex-col">
@@ -135,7 +136,7 @@ export const SavingsYear = ({ className }: { className?: string }) => {
           label={String(year)}
           previousLabel="Ano anterior"
           nextLabel="Próximo ano"
-          atStart={minYear !== undefined && year <= minYear}
+          atStart={year <= (minYear ?? 2000)}
           atEnd={year >= thisYear}
           onShift={(delta) => setYear(year + delta)}
           tone="surface"

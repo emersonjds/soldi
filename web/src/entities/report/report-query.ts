@@ -1,4 +1,4 @@
-import { queryOptions, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, queryOptions, useQuery } from "@tanstack/react-query";
 
 import { api, dataOrThrow, type Schemas } from "@/shared/api/client";
 
@@ -20,4 +20,5 @@ export const savingsYearQuery = (year: number) =>
       dataOrThrow(await api.GET("/api/reports/savings", { params: { query: { year: String(year) } } })),
   });
 
-export const useSavingsYear = (year: number) => useQuery(savingsYearQuery(year));
+export const useSavingsYear = (year: number) =>
+  useQuery({ ...savingsYearQuery(year), placeholderData: keepPreviousData });
