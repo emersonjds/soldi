@@ -849,21 +849,17 @@ async fn two_concurrent_repeats_of_one_entry_make_one_series(pool: PgPool) {
         },
     );
 
-    let mut statuses = [first.0, second.0];
-    statuses.sort();
-    assert_eq!(
-        statuses,
-        [StatusCode::OK, StatusCode::UNPROCESSABLE_ENTITY],
-        "{} {}",
-        first.1,
-        second.1
-    );
-    let refused = if first.0 == StatusCode::OK {
-        second.1
-    } else {
-        first.1
-    };
-    assert_eq!(refused["type"], "urn:soldi:error:already-repeated");
+    // The loser either races `set_series` (422 already-repeated) or runs after the winner and finds a
+    // series of 3 already (a no-op resize, 200, SOL-47). Either way one series of 3 exists.
+    for (status, body) in [&first, &second] {
+        assert!(
+            *status == StatusCode::OK
+                || (*status == StatusCode::UNPROCESSABLE_ENTITY
+                    && body["type"] == "urn:soldi:error:already-repeated"),
+            "{status} {body}"
+        );
+    }
+    assert!(first.0 == StatusCode::OK || second.0 == StatusCode::OK);
     assert_eq!(place(&only(&user, "2026-11").await), (1, 3));
     assert_eq!(place(&only(&user, "2026-12").await), (2, 3));
     assert_eq!(place(&only(&user, "2027-01").await), (3, 3));
