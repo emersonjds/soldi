@@ -7,6 +7,20 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.39.1
+
+> Headline: the end-to-end suite is green again
+
+### Web
+
+- A month's lowest balance in Próximos meses sizes itself from its cell's width, so a negative low such as -2.213 no longer spills out of the chip at 375 px or in the 1280 px rail (SOL-97).
+- The Next.js dev indicator is hidden in development, where it covered the Mês tab at 375 px.
+- The end-to-end flows expect the signed ledger amounts (`- R$`) and run the round-check bill flow at 1440 px, where the day chips live.
+
+### Server
+
+- The committed OpenAPI snapshot carries the release version again; the release step now refreshes it.
+
 ## 0.39.0
 
 > Headline: Lançar as in the Stitch design
