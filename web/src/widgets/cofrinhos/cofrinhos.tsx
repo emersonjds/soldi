@@ -22,6 +22,8 @@ import { formatMoney, minusMoney, positiveAmount } from "@/shared/lib/money";
 import { formatPct } from "@/shared/lib/percent";
 import { BrandButton } from "@/shared/ui/brand-button";
 import { CategoryIcon, categoryFill } from "@/shared/ui/category-icon";
+import { DashCard } from "@/shared/ui/dash-card";
+import { CofrinhoIllustration } from "@/shared/ui/illustrations";
 import { Money } from "@/shared/ui/money";
 import { PageError } from "@/shared/ui/page-state";
 import { ResponsiveSheet } from "@/shared/ui/responsive-sheet";
@@ -90,26 +92,29 @@ const Status = ({ cofrinho }: { cofrinho: Cofrinho }) => {
   return <span className="text-muted-foreground text-sm tabular-nums">{formatPct(cofrinho.progress_pct, 0)}</span>;
 };
 
+/** The button stretches over the whole DashCard, so a tap anywhere on the card opens the cofrinho. */
 const CofrinhoCard = ({ cofrinho, onOpen }: { cofrinho: Cofrinho; onOpen: () => void }) => (
   <li className="min-w-0">
-    <button
-      type="button"
-      onClick={onOpen}
-      className={cn(
-        card,
-        "h-full w-full text-left transition-shadow hover:shadow-md focus-visible:outline-2 focus-visible:outline-ring",
-      )}
+    <DashCard
+      title={cofrinho.name}
+      className="relative h-full transition-shadow focus-within:ring-2 focus-within:ring-ring hover:shadow-md"
     >
-      <span className="flex items-center gap-3">
-        <CategoryIcon icon={cofrinho.icon} color={cofrinho.color} className="size-11" />
-        <span className="flex min-w-0 flex-1 flex-col">
-          <span className="truncate font-semibold text-base">{cofrinho.name}</span>
-          <Status cofrinho={cofrinho} />
+      <button
+        type="button"
+        onClick={onOpen}
+        className="flex w-full flex-col gap-4 text-left outline-none after:absolute after:inset-0"
+      >
+        <span className="sr-only">{cofrinho.name}</span>
+        <span className="flex min-h-11 items-center gap-3">
+          <CategoryIcon icon={cofrinho.icon} color={cofrinho.color} className="size-11" />
+          <span className="min-w-0 flex-1">
+            <Status cofrinho={cofrinho} />
+          </span>
+          <ChevronRight className="size-5 shrink-0 text-muted-foreground" aria-hidden />
         </span>
-        <ChevronRight className="size-5 shrink-0 text-muted-foreground" aria-hidden />
-      </span>
-      <Balance cofrinho={cofrinho} />
-    </button>
+        <Balance cofrinho={cofrinho} />
+      </button>
+    </DashCard>
   </li>
 );
 
@@ -241,7 +246,7 @@ const Total = ({ data }: { data: Schemas["Cofrinhos"] }) => {
         <h2 id="saved-total-title" className={caption}>
           Guardado
         </h2>
-        <Money amount={data.total_saved} className="font-bold text-[34px] leading-10 tracking-[-0.02em]" />
+        <Money amount={data.total_saved} size="hero" />
         <p className="text-muted-foreground text-sm tabular-nums">
           Este mês {month.startsWith("-") ? "" : "+"}
           {formatMoney(month, currency)}
@@ -263,7 +268,7 @@ export const CofrinhosSkeleton = () => (
       <Skeleton className="h-4 w-24" />
       <Skeleton className="h-10 w-48" />
     </div>
-    <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+    <div className="grid gap-4 lg:grid-cols-2">
       {[0, 1].map((index) => (
         <div key={index} className={card}>
           <div className="flex items-center gap-3">
@@ -343,16 +348,19 @@ export const CofrinhosView = () => {
         <Total data={cofrinhos.data} />
         {items.length === 0 ? (
           <div className={cn(card, "items-center gap-3 px-6 py-10 text-center")}>
-            <span className="flex size-12 items-center justify-center rounded-full bg-secondary text-primary">
-              <PiggyBank className="size-6" aria-hidden />
-            </span>
+            <div
+              aria-hidden
+              className="pointer-events-none flex w-full select-none justify-center opacity-50 saturate-50"
+            >
+              <CofrinhoIllustration />
+            </div>
             <p className="max-w-xs text-muted-foreground">Nenhum cofrinho ainda. Comece pela reserva de emergência.</p>
             <BrandButton className="w-auto px-6" onClick={create}>
               Criar cofrinho
             </BrandButton>
           </div>
         ) : (
-          <ul aria-label="Cofrinhos" className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+          <ul aria-label="Cofrinhos" className="grid gap-4 lg:grid-cols-2">
             {items.map((item) => (
               <CofrinhoCard key={item.category_id} cofrinho={item} onOpen={() => setSelectedId(item.category_id)} />
             ))}
