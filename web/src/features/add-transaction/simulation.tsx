@@ -1,5 +1,7 @@
 "use client";
 
+import type { ReactNode } from "react";
+
 import { useQuery } from "@tanstack/react-query";
 
 import { Skeleton } from "@/components/ui/skeleton";
@@ -20,12 +22,17 @@ const dayName = (date: string, today: string) => {
   return `dia ${dayMonth(date)}`;
 };
 
-const verdictLine = (verdict: Verdict, today: string, income: boolean, currency: Currency) => {
+const verdictLine = (verdict: Verdict, today: string, income: boolean, currency: Currency): ReactNode => {
   const subject = income ? "esse lançamento" : "essa compra";
   if (verdict.kind === "clear") return `Nenhum dia vermelho com ${subject}.`;
   if (verdict.kind === "already-red")
     return `${income ? "Esse lançamento" : "Essa compra"} não cria dia vermelho novo.`;
-  return `Com ${subject}, ${dayName(verdict.date, today)} fica no vermelho: ${formatMoney(verdict.balance, currency)}.`;
+  return (
+    <>
+      Com {subject}, {dayName(verdict.date, today)} fica no vermelho:{" "}
+      <span className="whitespace-nowrap">{formatMoney(verdict.balance, currency)}</span>.
+    </>
+  );
 };
 
 type Props = {
@@ -44,7 +51,7 @@ export const Simulation = ({ rows, countInvalid }: Props) => {
   const after = ready ? withDraft(forecast.data.days, rows, settings.data) : [];
   const week = ready ? after.filter((day) => day.date >= rows[0].date).slice(0, 7) : [];
   const spans = ready && new Set(rows.map((row) => row.date.slice(0, 7))).size > 1;
-  let status = "";
+  let status: ReactNode = "";
   if (!rows) status = countInvalid ? "Escolha de 2 a 60 parcelas para simular." : "Digite um valor para simular.";
   else if (ready) {
     const verdict: Verdict = week.length > 0 ? draftVerdict(forecast.data.days, after) : { kind: "clear" };

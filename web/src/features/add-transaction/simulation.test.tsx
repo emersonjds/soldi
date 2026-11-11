@@ -59,6 +59,7 @@ describe("Simulation", () => {
   it("names the balance of the day that turns red, not the month's lowest", async () => {
     show([{ date: "2026-11-10", cents: -670_000 }], { status: 200, body: FORECAST });
     await verdict("Com essa compra, hoje fica no vermelho: -R$ 550,00.");
+    expect(within(region()).getByText("-R$ 550,00")).toHaveClass("whitespace-nowrap");
   });
 
   it("hides the week for a date after the horizon", async () => {
