@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DateField } from "./date-field";
 
@@ -14,6 +14,16 @@ class EnglishByDefault extends NativeFormat {
 }
 
 describe("DateField", () => {
+  // A fixed today keeps the day buttons free of the `Hoje, ` prefix.
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 9, 15, 12));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("shows 05/11/2026 for 2026-11-05 on a 44px, 16px button even when the runner speaks en-US", () => {
     Object.defineProperty(Intl, "DateTimeFormat", { value: EnglishByDefault, configurable: true });
     try {
