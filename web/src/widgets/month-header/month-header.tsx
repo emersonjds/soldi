@@ -36,7 +36,9 @@ const CompactHeader = ({ title, children }: { title: string; children: ReactNode
 
 export const MonthHeader = ({ month, minMonth, balance, tier, title, onMonthChange, children }: MonthHeaderProps) => {
   const currency = useCurrency();
-  const switcher = <MonthSwitcher month={month} minMonth={minMonth} onMonthChange={onMonthChange} />;
+  const switcher = (
+    <MonthSwitcher month={month} minMonth={minMonth} onMonthChange={onMonthChange} className="lg:hidden" />
+  );
 
   if (title !== undefined) return <CompactHeader title={title}>{switcher}</CompactHeader>;
 
