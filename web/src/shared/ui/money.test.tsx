@@ -18,6 +18,14 @@ describe("Money", () => {
     expect(screen.getByText(/10,00/)).toHaveClass("text-expense");
   });
 
+  it("writes an outflow with a minus and no color of its own", () => {
+    render(<Money amount="184.31" outflow />);
+
+    const amount = screen.getByText("- R$ 184,31");
+    expect(amount).not.toHaveClass("text-expense");
+    expect(amount).not.toHaveClass("text-income-text");
+  });
+
   it("keeps the row size as one plain span", () => {
     render(<Money amount="1234.50" size="row" />);
 

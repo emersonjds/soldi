@@ -26,16 +26,19 @@ const minorOf = (size: "figure" | "hero" | "display", type: Intl.NumberFormatPar
 export const Money = ({
   amount,
   income = false,
+  outflow = false,
   size = "row",
   className,
 }: {
   amount: string;
   income?: boolean;
+  /** Money leaving the balance: `- R$ …`, uncolored. */
+  outflow?: boolean;
   size?: "row" | "figure" | "hero" | "display";
   className?: string;
 }) => {
   const currency = useCurrency();
-  const text = income ? `+ ${formatMoney(amount, currency)}` : formatMoney(amount, currency);
+  const text = `${income ? "+ " : ""}${outflow ? "- " : ""}${formatMoney(amount, currency)}`;
   const classes = cn(
     "whitespace-nowrap tabular-nums",
     size !== "row" && ["font-bold tracking-[-0.02em]", FIGURE[size]],

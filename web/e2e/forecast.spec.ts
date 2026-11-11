@@ -38,7 +38,7 @@ test("next month opens with this month's unpaid conta fixa and the red banner na
   await page.getByRole("button", { name: "Próximo mês" }).click();
   const ledger = page.getByRole("region", { name: "Lançamentos" });
   await expect(ledger.getByRole("heading", { level: 3 }).first()).toContainText(
-    /Agendado · 28 .*-R\$\s2\.200,00.*Previsto · Crítico/,
+    /Previsto · 28 .*Projeção:-R\$\s2\.200,00.*Crítico/,
   );
   await expect(ledger.getByRole("listitem", { name: "Aluguel" })).toContainText("Conta fixa · a pagar");
   await expect(ledger.getByRole("listitem", { name: "Aluguel" })).toContainText("Motivo da queda");

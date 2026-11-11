@@ -180,14 +180,34 @@ describe("Mês", () => {
       level: 3,
     });
     expect(days.map((day) => day.textContent?.replace(/\s/g, " "))).toEqual([
-      "Hoje, 5 novR$ 957,79Apertado",
-      "Ontem, 4 novR$ 1.142,10Confortável",
-      "3 novR$ 2.342,10Folga",
+      "Hoje, 5 novSaldo ao final:R$ 957,79Apertado",
+      "Ontem, 4 novSaldo ao final:R$ 1.142,10Confortável",
+      "3 novSaldo ao final:R$ 2.342,10Folga",
     ]);
     const groceries = within(ledger()).getByRole("button", { name: /Compras da semana/ });
-    expect(groceries).toHaveTextContent("Compras da semanaDiárioR$ 184,31");
-    expect(within(ledger()).getByRole("button", { name: /Aluguel/ })).toHaveTextContent("AluguelSaídaR$ 1.200,00");
+    expect(groceries).toHaveTextContent("Compras da semanaDiário- R$ 184,31");
+    expect(within(ledger()).getByRole("button", { name: /Aluguel/ })).toHaveTextContent("AluguelSaída- R$ 1.200,00");
     expect(within(ledger()).getByText("+ R$ 500,00")).toHaveClass("text-income-text");
+    expect(days[0]).toHaveClass("bg-muted", "rounded-lg");
+    expect(within(days[0]).getByText("R$ 957,79")).toHaveClass("text-tier-yellow-foreground");
+    expect(within(days[2]).getByText("R$ 2.342,10")).toHaveClass("text-tier-green-foreground");
+  });
+
+  it("puts the title, the filter and Ver o mês inteiro with an arrow on one row from lg", async () => {
+    open({
+      "GET /api/transactions": {
+        status: 200,
+        body: ["10", "09", "08", "07", "06", "04", "03", "02", "01"].map((day) => spent(`2026-11-${day}`)),
+      },
+    });
+
+    const toggle = await within(await screen.findByRole("region", { name: "Lançamentos" })).findByRole("button", {
+      name: "Ver o mês inteiro",
+    });
+    expect(ledger()).toHaveClass("lg:grid-cols-[auto_1fr_auto]");
+    expect(toggle).toHaveClass("lg:col-start-3", "lg:row-start-1");
+    expect(toggle.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
+    expect(toggle).not.toHaveTextContent("dias");
   });
 
   it("shows saving into a cofrinho as Guardado and a resgate as Resgatado, in income color", async () => {
@@ -207,10 +227,10 @@ describe("Mês", () => {
     expect(resgate).toHaveTextContent("Resgate › ReservaResgatado+ R$ 50,00");
     expect(within(resgate).getByText("+ R$ 50,00")).toHaveClass("text-income-text");
     expect(within(ledger()).getByRole("button", { name: /^Economia › Reserva.*R\$\s100,00/ })).toHaveTextContent(
-      "Economia › ReservaGuardadoR$ 100,00",
+      "Economia › ReservaGuardado- R$ 100,00",
     );
     expect(within(ledger()).getByRole("button", { name: /^Economia.*R\$\s10,00/ })).toHaveTextContent(
-      "EconomiaGuardadoR$ 10,00",
+      "EconomiaGuardado- R$ 10,00",
     );
     expect(screen.getByRole("region", { name: "Termômetro do Mês" })).not.toHaveTextContent("Guardou");
 
@@ -224,7 +244,7 @@ describe("Mês", () => {
     expect(await screen.findByRole("region", { name: "Termômetro do Mês" })).not.toHaveTextContent("Guardou");
   });
 
-  it("lists a future day first as Agendado with its Previsto balance, and its entry opens Editar / Excluir", async () => {
+  it("lists a future day first as Previsto with its Projeção, and its entry opens Editar / Excluir", async () => {
     const later = { ...TRANSACTIONS[0], id: "later", date: "2026-11-20", note: "Show" };
     open({ "GET /api/transactions": { status: 200, body: [later, ...TRANSACTIONS] } });
 
@@ -232,11 +252,17 @@ describe("Mês", () => {
       level: 3,
     });
     expect(days.map((day) => day.textContent?.replace(/\s/g, " "))).toEqual([
-      "Agendado · 20 novR$ 957,79Previsto · Apertado",
-      "Hoje, 5 novR$ 957,79Apertado",
-      "Ontem, 4 novR$ 1.142,10Confortável",
-      "3 novR$ 2.342,10Folga",
+      "Previsto · 20 novProjeção:R$ 957,79Apertado",
+      "Hoje, 5 novSaldo ao final:R$ 957,79Apertado",
+      "Ontem, 4 novSaldo ao final:R$ 1.142,10Confortável",
+      "3 novSaldo ao final:R$ 2.342,10Folga",
     ]);
+    expect(within(ledger()).getByRole("button", { name: /Show/ }).closest("ul")).toHaveClass("opacity-60");
+    expect(
+      within(ledger())
+        .getByRole("button", { name: /Compras/ })
+        .closest("ul"),
+    ).not.toHaveClass("opacity-60");
     await userEvent.click(within(ledger()).getByRole("button", { name: /Show/ }));
     const actions = await screen.findByRole("dialog", { name: "Show" });
     expect(within(actions).getByRole("button", { name: "Editar" })).toBeInTheDocument();
@@ -264,16 +290,16 @@ describe("Mês", () => {
       level: 3,
     });
     expect(days.map((day) => day.textContent?.replace(/\s/g, " "))).toEqual([
-      "Agendado · 10 nov-R$ 1.585,87Previsto · Crítico",
-      "Hoje, 5 novR$ 673,69Previsto · Apertado",
-      "Ontem, 4 novR$ 1.142,10Confortável",
-      "3 novR$ 2.342,10Folga",
+      "Previsto · 10 novProjeção:-R$ 1.585,87Crítico",
+      "Hoje, 5 novSaldo ao final:R$ 673,69Previsto · Apertado",
+      "Ontem, 4 novSaldo ao final:R$ 1.142,10Confortável",
+      "3 novSaldo ao final:R$ 2.342,10Folga",
     ]);
     expect(within(ledger()).getByRole("listitem", { name: "Aluguel Residencial" })).toHaveTextContent(
-      "Aluguel ResidencialConta fixa · a pagarR$ 2.259,56",
+      "Aluguel ResidencialConta fixa · a pagar- R$ 2.259,56",
     );
     expect(within(ledger()).getByRole("listitem", { name: "Luz (Enel)" })).toHaveTextContent(
-      "Luz (Enel)Conta fixa · venceu dia 02/11R$ 284,10",
+      "Luz (Enel)Conta fixa · venceu dia 02/11- R$ 284,10",
     );
   });
 
@@ -558,9 +584,9 @@ describe("Mês", () => {
     const row = await within(await screen.findByRole("region", { name: "Lançamentos" })).findByRole("button", {
       name: /Aluguel/,
     });
-    expect(row).toHaveTextContent(/^AluguelSaída · 3\/12/);
+    expect(row).toHaveTextContent(/^AluguelSaída↻ Saída · 3\/123 de 12- R\$/);
     expect(within(row).queryByRole("img")).not.toBeInTheDocument();
-    expect(within(row).getByText("· 3/12")).toHaveAttribute("aria-hidden", "true");
+    expect(within(row).getByText("↻ Saída · 3/12")).toHaveAttribute("aria-hidden", "true");
     expect(within(row).getByText("3 de 12")).toHaveClass("sr-only");
   });
 
@@ -738,7 +764,7 @@ describe("Mês", () => {
     });
 
     const toggle = await within(await screen.findByRole("region", { name: "Lançamentos" })).findByRole("button", {
-      name: "Ver o mês inteiro (9 dias)",
+      name: "Ver o mês inteiro",
     });
     const shownDays = () =>
       within(ledger())
@@ -762,7 +788,7 @@ describe("Mês", () => {
     expect(shownDays()).toHaveLength(9);
 
     await userEvent.click(toggle);
-    expect(toggle).toHaveTextContent("Ver o mês inteiro (9 dias)");
+    expect(toggle).toHaveTextContent("Ver o mês inteiro");
     expect(toggle).toHaveFocus();
     expect(shownDays()).toHaveLength(7);
   });
@@ -788,7 +814,7 @@ describe("Mês", () => {
     });
 
     await within(await screen.findByRole("region", { name: "Lançamentos" })).findByRole("button", {
-      name: "Ver o mês inteiro (8 dias)",
+      name: "Ver o mês inteiro",
     });
     expect(within(ledger()).queryByRole("button", { name: /Gasto 2026-10-02/ })).not.toBeInTheDocument();
     expect(within(ledger()).getByRole("button", { name: /Gasto 2026-10-05/ })).toBeInTheDocument();
@@ -811,14 +837,14 @@ describe("Mês", () => {
     expect(dayHeadings()).toHaveLength(4);
 
     await userEvent.click(within(filter()).getByRole("radio", { name: "Diário" }));
-    expect(dayHeadings()).toEqual(["Hoje, 5 novR$ 957,79Apertado"]);
+    expect(dayHeadings()).toEqual(["Hoje, 5 novSaldo ao final:R$ 957,79Apertado"]);
     expect(within(ledger()).getByRole("button", { name: /Compras da semana/ })).toBeInTheDocument();
     expect(within(ledger()).queryByRole("button", { name: /Aluguel/ })).not.toBeInTheDocument();
 
     await userEvent.click(within(filter()).getByRole("radio", { name: "Contas" }));
     expect(dayHeadings()).toEqual([
-      "Agendado · 10 novR$ 957,79Previsto · Apertado",
-      "Ontem, 4 novR$ 1.142,10Confortável",
+      "Previsto · 10 novProjeção:R$ 957,79Apertado",
+      "Ontem, 4 novSaldo ao final:R$ 1.142,10Confortável",
     ]);
     expect(within(ledger()).getByRole("listitem", { name: "Aluguel Residencial" })).toBeInTheDocument();
     expect(within(ledger()).getByRole("button", { name: /Aluguel/ })).toBeInTheDocument();
@@ -844,7 +870,7 @@ describe("Mês", () => {
     expect(within(ledger()).queryByText("Nenhum lançamento ainda")).not.toBeInTheDocument();
   });
 
-  it("counts the filtered days in Ver o mês inteiro", async () => {
+  it("keeps Ver o mês inteiro without a count while the filtered days pass the cap", async () => {
     open({
       "GET /api/transactions": {
         status: 200,
@@ -856,10 +882,10 @@ describe("Mês", () => {
     });
 
     await within(await screen.findByRole("region", { name: "Lançamentos" })).findByRole("button", {
-      name: "Ver o mês inteiro (11 dias)",
+      name: "Ver o mês inteiro",
     });
     await userEvent.click(within(filter()).getByRole("radio", { name: "Diário" }));
-    expect(within(ledger()).getByRole("button", { name: "Ver o mês inteiro (9 dias)" })).toBeInTheDocument();
+    expect(within(ledger()).getByRole("button", { name: "Ver o mês inteiro" })).toBeInTheDocument();
     await userEvent.click(within(filter()).getByRole("radio", { name: "Contas" }));
     expect(within(ledger()).queryByRole("button", { name: /Ver o mês inteiro/ })).not.toBeInTheDocument();
   });
@@ -943,7 +969,7 @@ describe("Mês", () => {
     await userEvent.click(within(filter()).getByRole("radio", { name: "Diário" }));
     await userEvent.click(within(filter()).getByRole("radio", { name: "Diário" }));
     expect(within(filter()).getByRole("radio", { name: "Diário" })).toHaveAttribute("aria-checked", "true");
-    expect(dayHeadings()).toEqual(["Hoje, 5 novR$ 957,79Apertado"]);
+    expect(dayHeadings()).toEqual(["Hoje, 5 novSaldo ao final:R$ 957,79Apertado"]);
   });
 
   it("has no expand button when the month fits the cap", async () => {
