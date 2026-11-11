@@ -59,11 +59,8 @@ export const ThermometerStrip = ({
               className={cn(
                 "max-w-full hyphens-auto break-words text-center text-[11px] leading-3.5",
                 current ? "font-bold" : "font-medium",
-                marker
-                  ? [TIER_STYLE[segment].label, "lg:text-muted-foreground"]
-                  : current
-                    ? "text-foreground"
-                    : "text-muted-foreground",
+                marker && [TIER_STYLE[segment].label, "lg:text-muted-foreground"],
+                !marker && (current ? "text-foreground" : "text-muted-foreground"),
               )}
             >
               {TIER_LABEL[segment]}

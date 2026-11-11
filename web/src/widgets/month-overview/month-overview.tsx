@@ -147,7 +147,7 @@ export const MonthHero = ({
   const first = useMe().data?.name.trim().split(/\s+/)[0] ?? "";
   return (
     <section aria-label="Saldo hoje" className={cn("flex flex-col", className)}>
-      <div className="flex flex-col gap-4 rounded-3xl bg-linear-to-br from-hero-from to-hero-to px-4 pt-5 pb-14 text-hero-foreground lg:gap-6 lg:bg-none lg:bg-card lg:p-6 lg:text-card-foreground lg:shadow-sm">
+      <div className="flex flex-col gap-4 rounded-3xl bg-linear-to-br from-hero-from to-hero-to px-4 pt-5 pb-14 text-hero-foreground lg:gap-6 lg:bg-card lg:bg-none lg:p-6 lg:text-card-foreground lg:shadow-sm">
         <div className="flex items-center gap-2 lg:hidden">
           {first && (
             <span aria-hidden className={cn(circle, "bg-white/15 font-semibold text-lg")}>
