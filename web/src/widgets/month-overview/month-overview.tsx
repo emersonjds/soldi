@@ -130,19 +130,17 @@ const Split = ({ totals }: { totals: MonthView["totals"] }) => {
 
 /**
  * C1 (SOL-79 §2.3). Below 1024 the indigo hero: the greeting, `switcher`, today's balance and the summary over its
- * edge. From 1024 a white card: today's balance, the Projetado box and the split. `children` (the red-day alert) under it.
+ * edge. From 1024 a white card: today's balance, the Projetado box and the split.
  */
 export const MonthHero = ({
   view,
   onLaunch,
   switcher,
-  children,
   className,
 }: {
   view: MonthView;
   onLaunch: (kind: "income" | "bill") => void;
   switcher?: ReactNode;
-  children?: ReactNode;
   className?: string;
 }) => {
   const first = useMe().data?.name.trim().split(/\s+/)[0] ?? "";
@@ -184,7 +182,6 @@ export const MonthHero = ({
           </div>
         </div>
         <Split totals={view.totals} />
-        {children}
       </div>
       <MonthSummary view={view} onLaunch={onLaunch} />
     </section>

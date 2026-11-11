@@ -1,34 +1,50 @@
-import { TrendingDown } from "lucide-react";
+import { ArrowRight, TriangleAlert } from "lucide-react";
 
 import type { ForecastAlert } from "@/entities/month/forecast-alert";
 import { useCurrency } from "@/shared/lib/currency";
-import { dayMonth } from "@/shared/lib/date";
 import { formatMoney } from "@/shared/lib/money";
 
-const Line = ({ text, onClick }: { text: string; onClick: () => void }) => (
-  <button
-    type="button"
-    onClick={onClick}
-    className="flex min-h-11 items-center gap-2 rounded-full px-3 text-left font-semibold text-sm transition-colors hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-white motion-reduce:transition-none"
-  >
-    <TrendingDown className="size-4 shrink-0" aria-hidden />
-    {text}
-  </button>
-);
+const causeOf = ([first, second]: string[]) => {
+  if (second) return ` Contas de ${first} e ${second} previstas excedem o saldo em caixa projetado.`;
+  return first ? ` Conta de ${first} prevista excede o saldo em caixa projetado.` : "";
+};
 
-/** SOL-50: the first red day and, when later, the worst day with its recovery; a tap jumps to the day. */
-export const RedDayAlert = ({ alert, onJump }: { alert: ForecastAlert; onJump: (date: string) => void }) => {
+/** SOL-79 §2.2: the first red day ahead and its two largest `outflows`, full width above the cards; the button jumps to the day. */
+export const RedDayAlert = ({
+  alert,
+  outflows,
+  onJump,
+}: {
+  alert: ForecastAlert;
+  outflows: string[];
+  onJump: (date: string) => void;
+}) => {
   const currency = useCurrency();
-  const { firstRed, lowest, recoversOn } = alert;
-  const first = firstRed.today
-    ? `Hoje está no vermelho: ${formatMoney(firstRed.balance, currency)}`
-    : `Dia ${Number(firstRed.date.slice(8))} fica no vermelho: ${formatMoney(firstRed.balance, currency)}`;
-  const recovery = recoversOn ? ` · recupera em ${dayMonth(recoversOn)}` : "";
-  const worst = `Pior dia: ${dayMonth(lowest.date)}, ${formatMoney(lowest.balance, currency)}${recovery}`;
+  const { date, balance, today } = alert.firstRed;
+  const day = Number(date.slice(8));
+  const title = `${today ? "Hoje está" : `Dia ${day} fica`} no vermelho: ${formatMoney(balance, currency)}.`;
   return (
-    <div className="mx-auto mt-4 flex w-fit max-w-full flex-col items-start gap-1 lg:mx-0">
-      <Line text={first} onClick={() => onJump(firstRed.date)} />
-      {lowest.date !== firstRed.date && <Line text={worst} onClick={() => onJump(lowest.date)} />}
-    </div>
+    <section
+      aria-label="Alerta do mês"
+      className="flex flex-col items-start gap-3 rounded-xl bg-expense-soft p-4 shadow-sm md:flex-row md:items-center md:justify-between"
+    >
+      <div className="flex items-center gap-3">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-expense text-background">
+          <TriangleAlert className="size-5" aria-hidden />
+        </span>
+        <p className="font-medium text-expense leading-6">
+          <span className="font-bold">{title}</span>
+          {causeOf(outflows)}
+        </p>
+      </div>
+      <button
+        type="button"
+        onClick={() => onJump(date)}
+        className="ml-13 flex min-h-11 shrink-0 items-center gap-1.5 rounded-lg bg-card px-4 font-medium text-expense shadow-sm transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring md:ml-0"
+      >
+        {today ? "Ver hoje" : `Ver o dia ${day}`}
+        <ArrowRight className="size-4" aria-hidden />
+      </button>
+    </section>
   );
 };

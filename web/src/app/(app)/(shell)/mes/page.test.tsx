@@ -649,18 +649,22 @@ describe("Mês", () => {
     expect(within(bill).getByLabelText("Vence dia")).toHaveValue("4");
   });
 
-  it("warns of the first red day and the worst day; a tap jumps to the day, rings it for 2 s and names the cause", async () => {
+  it("warns above the cards of the first red day and its two largest outflows; Ver o dia jumps, rings it for 2 s and names the cause", async () => {
     const scroll = vi.spyOn(Element.prototype, "scrollIntoView");
     open({
       "GET /api/months/2026-11": { status: 200, body: FORECAST_MONTH },
       "GET /api/transactions": { status: 200, body: FORECAST_TRANSACTIONS },
     });
 
-    const hero = await screen.findByRole("region", { name: "Saldo hoje" });
-    const first = await within(hero).findByRole("button", { name: /^Dia 23 fica no vermelho: -R\$\s675,00$/ });
-    expect(
-      within(hero).getByRole("button", { name: /^Pior dia: 28\/11, -R\$\s2\.916,00 · recupera em 30\/11$/ }),
-    ).toBeVisible();
+    const banner = await screen.findByRole("region", { name: "Alerta do mês" });
+    expect(banner).toHaveTextContent(
+      /^Dia 23 fica no vermelho: -R\$\s675,00\. Contas de Cartão e Seguro previstas excedem o saldo em caixa projetado\.Ver o dia 23$/,
+    );
+    expect(banner.compareDocumentPosition(screen.getByRole("region", { name: "Saldo hoje" }))).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    expect(screen.queryByText(/Pior dia/)).not.toBeInTheDocument();
+    const first = within(banner).getByRole("button", { name: "Ver o dia 23" });
     expect(within(ledger()).getByRole("listitem", { name: "Cartão" })).toHaveTextContent("Motivo da queda");
     expect(within(ledger()).getByRole("listitem", { name: "Financiamento" })).toHaveTextContent("Motivo da queda");
     expect(within(ledger()).getByRole("button", { name: /Seguro/ })).not.toHaveTextContent("Motivo da queda");
@@ -685,8 +689,7 @@ describe("Mês", () => {
       "GET /api/transactions": { status: 200, body: FORECAST_TRANSACTIONS },
     });
 
-    const hero = await screen.findByRole("region", { name: "Saldo hoje" });
-    const first = await within(hero).findByRole("button", { name: /^Dia 23 fica no vermelho/ });
+    const first = await screen.findByRole("button", { name: "Ver o dia 23" });
 
     vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
     vi.setSystemTime(new Date(2026, 10, 5, 12));
@@ -711,8 +714,7 @@ describe("Mês", () => {
       },
     });
 
-    const hero = await screen.findByRole("region", { name: "Saldo hoje" });
-    const first = await within(hero).findByRole("button", { name: /^Dia 23 fica no vermelho/ });
+    const first = await screen.findByRole("button", { name: "Ver o dia 23" });
     await within(ledger()).findByRole("button", { name: /Gasto 2026-11-06/ });
     expect(document.getElementById("dia-2026-11-23")).toBeNull();
 
@@ -866,8 +868,7 @@ describe("Mês", () => {
       "GET /api/transactions": { status: 200, body: FORECAST_TRANSACTIONS },
     });
 
-    const hero = await screen.findByRole("region", { name: "Saldo hoje" });
-    const first = await within(hero).findByRole("button", { name: /^Dia 23 fica no vermelho/ });
+    const first = await screen.findByRole("button", { name: "Ver o dia 23" });
     await within(ledger()).findByRole("button", { name: /Feira/ });
     await userEvent.click(within(filter()).getByRole("radio", { name: "Diário" }));
     expect(document.getElementById("dia-2026-11-23")).toBeNull();
@@ -951,11 +952,12 @@ describe("Mês", () => {
     expect(within(ledger()).queryByRole("button", { name: /Ver o mês inteiro/ })).not.toBeInTheDocument();
   });
 
-  it("says nothing in the hero when no day ahead is red", async () => {
+  it("shows no banner when no day ahead is red", async () => {
     open();
 
-    const hero = await screen.findByRole("region", { name: "Saldo hoje" });
-    expect(within(hero).queryByText(/no vermelho/)).not.toBeInTheDocument();
+    await screen.findByRole("region", { name: "Saldo hoje" });
+    expect(screen.queryByRole("region", { name: "Alerta do mês" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/no vermelho/)).not.toBeInTheDocument();
   });
 
   it("opens a month from Próximos meses at the top of the screen", async () => {

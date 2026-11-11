@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 
 import { flushSync } from "react-dom";
 
-import { causeOf, forecastAlert } from "@/entities/month/forecast-alert";
+import { causeOf, forecastAlert, topOutflows } from "@/entities/month/forecast-alert";
 import { useMonth } from "@/entities/month/month-query";
 import { useTransactions } from "@/entities/transaction/transaction-queries";
 import { TransactionSheet } from "@/features/add-transaction/transaction-sheet";
@@ -84,6 +84,9 @@ const MonthScreen = () => {
       <p role="status" className="sr-only">
         {((!view.data && !monthFailed) || (!entries && !entriesFailed)) && "Carregando"}
       </p>
+      {alert && (
+        <RedDayAlert alert={alert} outflows={topOutflows(alert.firstRed.date, entries ?? [], bills)} onJump={jump} />
+      )}
       <div className="flex flex-col gap-4 lg:grid lg:gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] xl:items-start">
         <div className="contents lg:flex lg:flex-col lg:gap-6">
           {monthFailed && (
@@ -98,9 +101,7 @@ const MonthScreen = () => {
                 view={view.data}
                 onLaunch={launch}
                 switcher={<ShellMonthSwitcher pathname="/mes" tone="hero" />}
-              >
-                {alert && <RedDayAlert alert={alert} onJump={jump} />}
-              </MonthHero>
+              />
               <BillsOfMonth view={view.data} className="max-lg:order-1" />
             </>
           )}
