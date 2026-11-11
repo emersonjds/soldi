@@ -7,6 +7,18 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.26.0
+
+> Headline: mobile polish, and the Saldo hoje hero is back
+
+### Web
+
+- Mobile tab bar floats as a pill (Mês, Para onde vai, Cofrinhos, Ajustes) with the selected tab in a dark pill and a separate round Lançar button; no screen's last row ever sits under it (SOL-65).
+- Lançar, Pagar and the bill sheet keep Salvar pinned at the bottom while the rows scroll, and a focused field never hides behind it; Arquivar stays in the rows.
+- Every date is picked on a pt-BR calendar showing dd/mm/aaaa; Lançar starts at the opening date, and the opening date cannot be in the future.
+- Toasts sit above the tab bar up to desktop width, and the app draws under the iOS safe areas.
+- Mês shows the previous Saldo hoje hero again, with the Entradas, Saídas and Projetado summary; the split bar is gone (SOL-69).
+
 ## 0.25.0
 
 > Headline: bills at a glance and a shorter ledger
