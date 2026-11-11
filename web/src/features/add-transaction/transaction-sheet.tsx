@@ -65,6 +65,9 @@ const lastMonth = (date: string, months: number) => monthYear(addMonths(date.sli
 
 type Source = Transaction | NewTransaction;
 
+/** The server's 422 `date` message when a move meets a month holding two members (M5). */
+const SHARED_MONTH = "must not move a series with two entries in one month";
+
 const prefillOf = ({ note, category, amount, date }: Source): BillPrefill => ({
   name: (note ?? category.name).slice(0, 100),
   amount,
@@ -81,7 +84,8 @@ const TransactionForm = ({
 }: {
   initial: Draft;
   transaction?: Transaction;
-  onSave: (fields: NewTransaction, scope?: Scope) => void;
+  /** `moving`: Este e os próximos moves the series to a new day. */
+  onSave: (fields: NewTransaction, scope?: Scope, moving?: boolean) => void;
   onDiscard: () => void;
   /** Absent: no Transformar em conta fixa. */
   onConvert?: (source: Source) => void;
@@ -157,7 +161,7 @@ const TransactionForm = ({
   const submit = (event: FormEvent) => {
     event.preventDefault();
     const valid = fields();
-    if (valid) onSave(valid, series ? draft.scope : undefined);
+    if (valid) onSave(valid, series ? draft.scope : undefined, moving);
   };
 
   const convertible = onConvert && (transaction?.kind ?? draft.kind) === "bill" && !draft.repeat && !installments;
@@ -434,7 +438,7 @@ export const TransactionSheet = ({
   const [converting, setConverting] = useState<Source>();
   const failed = () => toast.error("Não foi possível salvar o lançamento.");
 
-  const save = (fields: NewTransaction, scope?: Scope) => {
+  const save = (fields: NewTransaction, scope?: Scope, moving = false) => {
     onOpenChange(false);
     const done = (fallback: string) => {
       if (fields.installments) return toast.success(`${fields.installments} parcelas lançadas`);
@@ -442,7 +446,6 @@ export const TransactionSheet = ({
     };
     if (!transaction) return create.mutate(fields, { onSuccess: () => done("Lançado"), onError: failed });
     const { category: _category, ...patch } = fields;
-    const moving = scope === "following" && fields.date !== transaction.date;
     update.mutate(
       { id: transaction.id, scope, ...patch },
       {
@@ -453,7 +456,7 @@ export const TransactionSheet = ({
           done(scope === "following" ? "Série atualizada" : "Lançamento atualizado");
         },
         onError: (error) =>
-          moving && error instanceof ApiError && error.errors.some(({ field }) => field === "date")
+          error instanceof ApiError && error.errors.some(({ message }) => message === SHARED_MONTH)
             ? toast.error("Outro lançamento da série está no mesmo mês. Mova-o com Só este antes.")
             : failed(),
       },
