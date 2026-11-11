@@ -56,6 +56,7 @@ describe("Ajustes › Contas fixas", () => {
     const paused = screen.getByRole("list", { name: "Pausadas" });
     expect(within(paused).getByRole("button")).toHaveTextContent("Academia");
     expect(screen.getByRole("link", { name: "Ajustes" })).toHaveAttribute("href", "/ajustes");
+    expect(screen.getByRole("heading", { level: 1, name: "Contas fixas" })).not.toHaveClass("lg:sr-only");
     expect(new URL(requests.find((request) => request.url.includes("/api/bills"))?.url ?? "").search).toBe(
       "?include_inactive=true",
     );

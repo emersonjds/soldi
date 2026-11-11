@@ -117,7 +117,7 @@ const TabLink = ({ item, active }: { item: NavItem; active: boolean }) => (
     href={item.href}
     aria-current={active ? "page" : undefined}
     className={cn(
-      "flex min-h-11 flex-col items-center justify-center gap-0.5 text-balance rounded-lg px-1 py-1 text-center font-medium text-[11px] leading-tight transition-colors duration-200 focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2 motion-reduce:transition-none",
+      "flex min-h-11 min-w-14 flex-col items-center justify-center gap-0.5 whitespace-nowrap rounded-lg px-1 py-1 text-center font-medium text-[11px] leading-tight transition-colors duration-200 focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2 motion-reduce:transition-none",
       active ? "text-primary" : "text-muted-foreground hover:text-foreground",
     )}
   >
@@ -260,11 +260,11 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
           aria-label="Navegação principal"
           className="fixed inset-x-0 bottom-0 z-40 border-t bg-card pb-[env(safe-area-inset-bottom)] lg:hidden"
         >
-          <div className="mx-auto grid h-16 max-w-lg grid-cols-5 items-center px-1">
+          <div className="mx-auto flex h-16 max-w-lg items-center justify-around px-1">
             {NAV.slice(0, 2).map((item) => (
               <TabLink key={item.href} item={item} active={isAt(item.href)} />
             ))}
-            <div className="relative flex min-h-11 justify-center">
+            <div className="relative flex min-h-11 min-w-14 justify-center">
               <button
                 type="button"
                 aria-label="Lançar"

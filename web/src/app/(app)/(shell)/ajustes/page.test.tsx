@@ -15,7 +15,7 @@ describe("Ajustes", () => {
     signedIn();
     renderWithQuery(<AjustesPage />);
 
-    expect(screen.getByRole("heading", { level: 1, name: "Ajustes" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: "Ajustes" })).not.toHaveClass("lg:sr-only");
     for (const [name, href] of [
       ["Categorias", "/ajustes/categorias"],
       ["Contas fixas", "/ajustes/contas"],
