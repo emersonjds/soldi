@@ -136,7 +136,7 @@ describe("TransactionSheet", () => {
       { "GET /api/categories": { status: 200, body: WITH_COFRINHOS } },
     );
 
-    expect(await screen.findByRole("radio", { name: "Reserva" })).toHaveAttribute("aria-checked", "true");
+    expect(await screen.findByRole("radio", { name: "Economia › Reserva" })).toHaveAttribute("aria-checked", "true");
     expect(screen.getByRole("radio", { name: "Saída" })).toBeChecked();
     await userEvent.keyboard("200,00");
     await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
@@ -172,7 +172,9 @@ describe("TransactionSheet", () => {
 
     await userEvent.click(await screen.findByRole("button", { name: "Salvar" }));
     expect(await screen.findByText("Informe um valor")).toBeInTheDocument();
-    expect(screen.getByText("Escolha uma categoria")).toBeInTheDocument();
+    const row = screen.getByRole("radiogroup", { name: "Categoria" });
+    expect(row).toHaveAttribute("aria-invalid", "true");
+    expect(row).toHaveAccessibleDescription("Escolha uma categoria");
 
     await userEvent.type(screen.getByLabelText("Valor"), "0");
     await userEvent.click(screen.getByRole("button", { name: "Salvar" }));

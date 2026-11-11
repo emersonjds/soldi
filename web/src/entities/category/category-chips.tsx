@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import { type RefObject, useId, useRef, useState } from "react";
 
 import { Check, Plus } from "lucide-react";
 
@@ -10,7 +10,7 @@ import type { Schemas } from "@/shared/api/client";
 import { CategoryIcon } from "@/shared/ui/category-icon";
 import { PageError } from "@/shared/ui/page-state";
 
-import { useCategories } from "./categories-query";
+import { categoryLabel, useCategories } from "./categories-query";
 import { CategorySelect } from "./category-select";
 import { CategorySheet } from "./category-sheet";
 
@@ -63,21 +63,40 @@ export const CategoryChips = ({
   kind,
   chosen,
   onChoose,
-  entries = [],
+  entries,
+  error,
 }: {
   kind: Kind;
   chosen: Category | undefined;
   onChoose: (category: Category) => void;
-  /** The current month's entries, which rank the row; absent, the row keeps the preset order. */
-  entries?: Entry[];
+  /** The current month's entries, which rank the row; `undefined` while loading, `[]` keeps the preset order. */
+  entries: Entry[] | undefined;
+  /** Shown under the row and tied to it. */
+  error?: string;
 }) => {
   const categories = useCategoryChips(kind);
   const [creating, setCreating] = useState(false);
   const labelId = useId();
+  const errorId = useId();
+  const chipRow = useRef<HTMLDivElement>(null);
+  const more = useRef<HTMLButtonElement>(null);
+  const nova = useRef<HTMLButtonElement>(null);
+  const picked = useRef(false);
+
+  const pick = (category: Category) => {
+    picked.current = true;
+    onChoose(category);
+  };
+  const refocus = (opener: RefObject<HTMLButtonElement | null>) => (event: Event) => {
+    event.preventDefault();
+    const chip = picked.current && chipRow.current?.querySelector<HTMLElement>('[aria-checked="true"]');
+    picked.current = false;
+    (chip || opener.current)?.focus();
+  };
 
   if (categories.isError)
     return <PageError message="Não foi possível carregar as categorias." onRetry={() => categories.refetch()} />;
-  if (!categories.data)
+  if (!categories.data || !entries)
     return (
       <div className="flex gap-2">
         {["a", "b", "c", "d", "e"].map((slot) => (
@@ -96,9 +115,9 @@ export const CategoryChips = ({
         <span id={labelId} className="font-semibold text-sm">
           Categoria
         </span>
-        <CategorySelect categories={list} chosen={chosen} onChoose={onChoose} />
+        <CategorySelect ref={more} categories={list} chosen={chosen} onChoose={pick} onCloseAutoFocus={refocus(more)} />
       </div>
-      <div className="@container flex gap-1">
+      <div ref={chipRow} className="@container flex gap-1">
         <ToggleGroup
           type="single"
           value={chosen?.id ?? ""}
@@ -107,12 +126,15 @@ export const CategoryChips = ({
             if (picked) onChoose(picked);
           }}
           aria-labelledby={labelId}
+          aria-describedby={error ? errorId : undefined}
+          aria-invalid={error ? true : undefined}
           className="flex w-auto items-start gap-1"
         >
           {row.map((category) => (
             <ToggleGroupItem
               key={category.id}
               value={category.id}
+              aria-label={categoryLabel(category, list)}
               className={`${cell} group/chip h-auto min-h-11 flex-col justify-start gap-1 whitespace-normal rounded-xl px-0 py-1 font-medium text-foreground data-[state=on]:bg-transparent data-[state=on]:font-semibold data-[state=on]:text-primary`}
             >
               <span className="relative">
@@ -133,6 +155,7 @@ export const CategoryChips = ({
           ))}
         </ToggleGroup>
         <button
+          ref={nova}
           type="button"
           aria-label="Nova categoria"
           onClick={() => setCreating(true)}
@@ -144,7 +167,18 @@ export const CategoryChips = ({
           <span className={name}>Nova</span>
         </button>
       </div>
-      <CategorySheet kind={kind} open={creating} onOpenChange={setCreating} onSaved={onChoose} />
+      {error && (
+        <p id={errorId} role="alert" className="text-destructive text-sm">
+          {error}
+        </p>
+      )}
+      <CategorySheet
+        kind={kind}
+        open={creating}
+        onOpenChange={setCreating}
+        onSaved={pick}
+        onCloseAutoFocus={refocus(nova)}
+      />
     </div>
   );
 };

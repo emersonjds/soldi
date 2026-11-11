@@ -64,7 +64,7 @@ const ENTRIES = [
   entry(SALARIO, "2026-11-03", "e7"),
 ];
 
-const Picker = ({ entries }: { entries?: Schemas["Transaction"][] }) => {
+const Picker = ({ entries = [] }: { entries?: Schemas["Transaction"][] }) => {
   const [chosen, setChosen] = useState<Schemas["Category"]>();
   return <CategoryChips kind="daily" chosen={chosen} onChoose={setChosen} entries={entries} />;
 };
@@ -171,13 +171,51 @@ describe("CategoryChips", () => {
 
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(chips()).toEqual(["Comida fora", "Carro", "Pets", "Mercado", "Lazer"]);
-    expect(screen.getByRole("radio", { name: "Lazer" })).toHaveAttribute("aria-checked", "true");
+    const lazer = screen.getByRole("radio", { name: "Lazer" });
+    expect(lazer).toHaveAttribute("aria-checked", "true");
+    await waitFor(() => expect(lazer).toHaveFocus());
+  });
+
+  it("returns focus to Ver todas or + when their sheet closes with Esc", async () => {
+    setup({}, SIX_DAILY);
+
+    const more = await screen.findByRole("button", { name: "Ver todas" });
+    await userEvent.click(more);
+    await screen.findByRole("dialog", { name: "Categoria" });
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await waitFor(() => expect(more).toHaveFocus());
+
+    const create = screen.getByRole("button", { name: "Nova categoria" });
+    await userEvent.click(create);
+    await screen.findByRole("dialog", { name: "Nova" });
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await waitFor(() => expect(create).toHaveFocus());
+  });
+
+  it("names a subcategory chip with its parent and shows the short name", async () => {
+    setup({}, WITH_CHILDREN);
+
+    const racao = await screen.findByRole("radio", { name: "Pets › Ração" });
+    expect(racao).toHaveTextContent("Ração");
   });
 
   it("shows five round placeholders while the categories load", () => {
     stubApi({});
     const { container } = renderWithQuery(<Picker />);
 
+    expect(container.querySelectorAll('[data-slot="skeleton"].rounded-full')).toHaveLength(5);
+  });
+
+  it("waits with the placeholders while the month's entries load, so the row never reorders", async () => {
+    stubApi({ "GET /api/categories": { status: 200, body: SIX_DAILY } });
+    const { client, container } = renderWithQuery(
+      <CategoryChips kind="daily" chosen={undefined} onChoose={() => undefined} entries={undefined} />,
+    );
+
+    await waitFor(() => expect(client.getQueryData(["categories"])).toBeDefined());
+    expect(screen.queryByRole("radiogroup", { name: "Categoria" })).not.toBeInTheDocument();
     expect(container.querySelectorAll('[data-slot="skeleton"].rounded-full')).toHaveLength(5);
   });
 
@@ -206,7 +244,9 @@ describe("CategoryChips", () => {
     });
     expect(await screen.findByText("Categoria criada")).toBeInTheDocument();
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-    expect(await screen.findByRole("radio", { name: "Carro" })).toHaveAttribute("aria-checked", "true");
+    const carro = await screen.findByRole("radio", { name: "Carro" });
+    expect(carro).toHaveAttribute("aria-checked", "true");
+    await waitFor(() => expect(carro).toHaveFocus());
   });
 
   it("asks for a name and, with all 24 colors taken, still creates a subcategory in the parent's icon and color", async () => {
@@ -259,7 +299,7 @@ describe("CategoryChips", () => {
       icon: "dog",
       parent_id: PETS.id,
     });
-    expect(await screen.findByRole("radio", { name: "Pet shop" })).toHaveAttribute("aria-checked", "true");
+    expect(await screen.findByRole("radio", { name: "Pets › Pet shop" })).toHaveAttribute("aria-checked", "true");
   });
 
   it("says when the name is taken", async () => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { type Ref, useState } from "react";
 
 import { Command as CommandPrimitive } from "cmdk";
 import { Search } from "lucide-react";
@@ -17,14 +17,18 @@ type Category = Schemas["Category"];
 
 /** `Ver todas`: a link that opens a sheet to search and tap any category. */
 export const CategorySelect = ({
+  ref,
   categories,
   chosen,
   onChoose,
+  onCloseAutoFocus,
 }: {
+  ref?: Ref<HTMLButtonElement>;
   /** Parents each followed by their children. */
   categories: Category[];
   chosen: Category | undefined;
   onChoose: (category: Category) => void;
+  onCloseAutoFocus?: (event: Event) => void;
 }) => {
   const [open, setOpen] = useState(false);
   const labelOf = (category: Category) => categoryLabel(category, categories);
@@ -32,6 +36,7 @@ export const CategorySelect = ({
   return (
     <>
       <button
+        ref={ref}
         type="button"
         aria-haspopup="dialog"
         aria-expanded={open}
@@ -45,6 +50,7 @@ export const CategorySelect = ({
         onOpenChange={setOpen}
         title="Categoria"
         description="Busque e toque na categoria do lançamento."
+        onCloseAutoFocus={onCloseAutoFocus}
       >
         <Command defaultValue={chosen && labelOf(chosen)} className="gap-3 rounded-none! bg-transparent p-0">
           <div className="flex h-12 items-center gap-2 rounded-xl border border-input px-3 focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50">

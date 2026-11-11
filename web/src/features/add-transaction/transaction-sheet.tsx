@@ -96,7 +96,6 @@ const TransactionForm = ({
   const [submitted, setSubmitted] = useState(false);
   const currency = useCurrency();
   const categories = useCategoryChips(draft.kind);
-  // Lançar opens from any page: the row ranks by the month that is running, not the one on screen.
   const thisMonth = useTransactions(todayISO().slice(0, 7));
   const settings = useSettings();
   const category = draft.category ?? categories.data?.[0];
@@ -237,19 +236,13 @@ const TransactionForm = ({
         invalid={submitted && !amount}
       />
 
-      <div className="flex flex-col gap-2">
-        <CategoryChips
-          kind={draft.kind}
-          chosen={category}
-          onChoose={(chosen) => set({ category: chosen })}
-          entries={thisMonth.data}
-        />
-        {submitted && categories.data && !category && (
-          <p role="alert" className="text-destructive text-sm">
-            Escolha uma categoria
-          </p>
-        )}
-      </div>
+      <CategoryChips
+        kind={draft.kind}
+        chosen={category}
+        onChoose={(chosen) => set({ category: chosen })}
+        entries={thisMonth.isError ? [] : thisMonth.data}
+        error={submitted && !category ? "Escolha uma categoria" : undefined}
+      />
 
       <div className="flex flex-col gap-2">
         <DateChips

@@ -117,7 +117,7 @@ const BillForm = ({
         kind="bill"
         chosen={category}
         onChoose={(chosen) => set({ categoryId: chosen.id })}
-        entries={thisMonth.data}
+        entries={thisMonth.isError ? [] : thisMonth.data}
       />
       {bill && (
         <label
