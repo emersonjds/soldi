@@ -33,7 +33,9 @@ test("an entry shows up in Para onde vai and Cofrinhos starts empty", async ({ p
   await page.getByRole("radio", { name: "Entrada" }).click();
   await page.getByLabel("Valor").fill("2.000,00");
   await page.getByRole("button", { name: "Salvar" }).click();
-  await expect(page.getByRole("region", { name: "Resumo do mês" })).toContainText("R$ 2.000,00");
+  await expect(
+    page.getByRole("region", { name: "Saldo hoje" }).getByRole("img", { name: /^Entradas R\$\s2\.000,00:/ }),
+  ).toBeVisible();
 
   await nav.getByRole("link", { name: "Para onde vai" }).click();
   const mercado = page.getByRole("list", { name: "Categorias" }).getByRole("button", { name: /^Mercado/ });
