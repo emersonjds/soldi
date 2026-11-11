@@ -264,6 +264,16 @@ describe("AppShell", () => {
     }
   });
 
+  it.each(["m=x%26lancar%3D1", "m=garbage"])("carries no ?m= that is not a month (%s)", (query) => {
+    setSearch(query);
+    renderWithQuery(<AppShell>conteúdo</AppShell>);
+
+    const sidebar = screen.getByRole("navigation", { name: "Menu lateral" });
+    expect(within(sidebar).getByRole("link", { name: "Mês" })).toHaveAttribute("href", "/mes");
+    const tabs = screen.getByRole("navigation", { name: "Navegação principal" });
+    expect(within(tabs).getByRole("link", { name: "Mês" })).toHaveAttribute("href", "/mes");
+  });
+
   it("shows today's tier left of Lançar, whatever month is viewed, and nothing until it arrives", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date(2026, 10, 5, 12));

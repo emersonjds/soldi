@@ -1,7 +1,5 @@
 import type { ReactNode } from "react";
 
-import Link from "next/link";
-
 import {
   ChevronRight,
   CircleHelp,
@@ -16,6 +14,7 @@ import {
 } from "lucide-react";
 
 import { SignOutButton } from "@/features/sign-out/sign-out-button";
+import { MonthLink } from "@/shared/ui/month-link";
 
 type Item = { href: string; label: string; hint: string; icon: LucideIcon };
 
@@ -63,7 +62,7 @@ const Group = ({ title, children }: { title: string; children: ReactNode }) => (
 
 const Row = ({ href, label, hint, icon: Icon }: Item) => (
   <li>
-    <Link href={href} className="flex min-h-16 items-center gap-3 px-4 py-2 transition-colors hover:bg-muted">
+    <MonthLink href={href} className="flex min-h-16 items-center gap-3 px-4 py-2 transition-colors hover:bg-muted">
       <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-secondary text-primary">
         <Icon className="size-5" aria-hidden />
       </span>
@@ -72,7 +71,7 @@ const Row = ({ href, label, hint, icon: Icon }: Item) => (
         <span className="truncate text-muted-foreground text-xs">{hint}</span>
       </span>
       <ChevronRight className="size-5 text-muted-foreground" aria-hidden />
-    </Link>
+    </MonthLink>
   </li>
 );
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { type ComponentProps, type ReactNode, Suspense, useState } from "react";
+import { type ReactNode, Suspense, useState } from "react";
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -30,6 +30,7 @@ import { EditBillSheet } from "@/features/edit-bill/edit-bill-sheet";
 import { cn, getInitials } from "@/lib/utils";
 import { monthParam, todayISO } from "@/shared/lib/date";
 import { TIER_LABEL } from "@/shared/lib/tier";
+import { MonthLink } from "@/shared/ui/month-link";
 import { MonthSwitcher } from "@/shared/ui/month-switcher";
 import { TierPill } from "@/shared/ui/tier-pill";
 import { Wordmark } from "@/shared/ui/wordmark";
@@ -97,20 +98,6 @@ const TodayTier = () => {
     </div>
   );
 };
-
-type LinkProps = ComponentProps<typeof Link> & { href: string };
-
-const KeptMonthLink = ({ href, ...props }: LinkProps) => {
-  const month = useSearchParams().get("m");
-  return <Link href={month ? `${href}?m=${month}` : href} {...props} />;
-};
-
-/** A nav link that keeps the viewed month (`?m=`, D21) while moving between pages. */
-const MonthLink = (props: LinkProps) => (
-  <Suspense fallback={<Link {...props} />}>
-    <KeptMonthLink {...props} />
-  </Suspense>
-);
 
 const TabLink = ({ item, active }: { item: NavItem; active: boolean }) => (
   <MonthLink

@@ -2,7 +2,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import { router } from "@/test/next-navigation";
+import { router, setSearch } from "@/test/next-navigation";
 import { renderWithQuery } from "@/test/render";
 import { problem, signedIn } from "@/test/stub-api";
 
@@ -36,6 +36,16 @@ describe("Ajustes", () => {
     expect(conta.getByRole("link", { name: /^Minha conta/ })).toBeInTheDocument();
     expect(screen.queryByText(/em breve/i)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Sair" })).toHaveClass("text-destructive");
+  });
+
+  it("keeps the viewed month on every row", () => {
+    setSearch("m=2026-12");
+    signedIn();
+    renderWithQuery(<AjustesPage />);
+
+    expect(screen.getByRole("link", { name: /^Contas fixas/ })).toHaveAttribute("href", "/ajustes/contas?m=2026-12");
+    expect(screen.getByRole("link", { name: /^Minha conta/ })).toHaveAttribute("href", "/ajustes/conta?m=2026-12");
+    setSearch("");
   });
 
   it("signs out and goes to sign-in", async () => {

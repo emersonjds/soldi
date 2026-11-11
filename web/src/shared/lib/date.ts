@@ -11,8 +11,10 @@ export const yesterdayISO = (now = new Date()) => {
 
 const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
 
+export const isMonth = (value: string | null): value is string => value !== null && MONTH.test(value);
+
 /** The `?m=YYYY-MM` of the address, or the current month when absent or malformed. */
-export const monthParam = (asked: string | null) => (asked && MONTH.test(asked) ? asked : todayISO().slice(0, 7));
+export const monthParam = (asked: string | null) => (isMonth(asked) ? asked : todayISO().slice(0, 7));
 
 const MONTHS = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
 
