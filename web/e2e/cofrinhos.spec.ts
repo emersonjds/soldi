@@ -76,7 +76,7 @@ test("a cofrinho fills from a Saída in Economia and empties with a resgate", as
   const ledger = page.getByRole("region", { name: "Lançamentos" });
   await expect(ledger.getByRole("button", { name: /^Economia › Reserva/ })).toContainText("GuardadoR$ 200,00");
   await expect(ledger.getByRole("button", { name: /^Resgate › Reserva/ })).toContainText("Resgatado+ R$ 50,00");
-  await expect(page.getByRole("region", { name: "Termômetro do Mês" })).toContainText("Guardou R$ 150,00 este mês.");
+  await expect(page.getByRole("region", { name: "Termômetro do Mês" })).not.toContainText("Guardou");
   const glance = page.getByRole("region", { name: "Cofrinhos" });
   await expect(glance.getByRole("progressbar", { name: "Progresso de Reserva" })).toHaveAttribute(
     "aria-valuenow",

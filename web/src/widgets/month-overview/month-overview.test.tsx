@@ -39,11 +39,11 @@ describe("Termômetro do Mês", () => {
     expect(within(card()).getByText("67% Comprometido")).toHaveClass("lg:hidden", "bg-tier-light-green-soft");
   });
 
-  it("boxes Entradas, Saídas and a signed Resultado from 1024", () => {
+  it("boxes Entradas, Saídas and a signed Resultado from 1024, wrapping a row rather than clipping five digits", () => {
     render(<ThermometerCard view={STITCH} />);
 
     const box = within(card()).getByText("Resultado").parentElement?.parentElement as HTMLElement;
-    expect(box).toHaveClass("hidden", "lg:grid");
+    expect(box).toHaveClass("hidden", "lg:flex", "flex-wrap");
     expect(box.textContent?.replace(/\s/g, " ")).toBe("EntradasR$ 6.361,60SaídasR$ 4.256,50Resultado+ R$ 2.105,10");
     expect(within(box).getByText("R$ 6.361,60")).toHaveClass("text-income-text");
     expect(within(box).getByText("+ R$ 2.105,10")).toHaveClass("text-income-text");

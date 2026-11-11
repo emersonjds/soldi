@@ -37,7 +37,7 @@ test("Simular previews a purchase without writing it; Parcelar 3x writes three p
   await expect(launch.getByRole("status")).toHaveText(/^Com essa compra, hoje fica no vermelho: -R\$\s600,00\.$/);
   await launch.getByRole("button", { name: "Descartar" }).click();
   await expect(launch).toBeHidden();
-  await expect(page.getByRole("region", { name: "Lançamentos" })).toContainText("Nenhum lançamento ainda");
+  await expect(page.getByRole("region", { name: "Lançamentos" })).toHaveCount(0);
 
   await tabs.getByRole("button", { name: "Lançar" }).click();
   await launch.getByRole("radio", { name: "Saída" }).click();
@@ -51,7 +51,7 @@ test("Simular previews a purchase without writing it; Parcelar 3x writes three p
   await expect(page.getByRole("region", { name: "Lançamentos" })).toContainText("R$ 100,00");
 });
 
-test("Posso comprar? on Próximos meses: 6× R$ 12.000,00 names the red day's balance and marks the moved months", async ({
+test("Posso comprar isso? from the sidebar: 6× R$ 12.000,00 names the red day's balance and marks the moved months", async ({
   page,
   request,
 }) => {
@@ -72,7 +72,12 @@ test("Posso comprar? on Próximos meses: 6× R$ 12.000,00 names the red day's ba
   const launch = page.getByRole("dialog", { name: "Lançar" });
   await launch.getByRole("button", { name: "Fechar" }).click();
 
-  await page.getByRole("region", { name: "Próximos meses" }).getByRole("button", { name: "Posso comprar?" }).click();
+  // A fresh account has nothing ahead, so Próximos meses does not render (D25); the sidebar asks instead.
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page
+    .getByRole("complementary", { name: "Barra lateral" })
+    .getByRole("button", { name: "Posso comprar isso?" })
+    .click();
   await expect(launch.getByRole("switch", { name: "Simular" })).toBeChecked();
   await expect(launch.getByRole("radio", { name: "Diário" })).toBeChecked();
   await launch.getByLabel("Valor").fill("72.000,00");
@@ -90,5 +95,5 @@ test("Posso comprar? on Próximos meses: 6× R$ 12.000,00 names the red day's ba
   await expectNoClipped(page);
 
   await launch.getByRole("button", { name: "Descartar" }).click();
-  await expect(page.getByRole("region", { name: "Lançamentos" })).toContainText("Nenhum lançamento ainda");
+  await expect(page.getByRole("region", { name: "Lançamentos" })).toHaveCount(0);
 });

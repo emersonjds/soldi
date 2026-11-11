@@ -233,20 +233,20 @@ export const ThermometerCard = ({ view, className }: { view: MonthView; classNam
           </>
         )}
       </div>
-      <dl className="hidden grid-cols-3 gap-2 rounded-xl bg-muted p-3 text-sm lg:grid">
-        <div className="flex min-w-0 flex-col">
+      <dl className="hidden flex-wrap justify-between gap-x-4 gap-y-2 rounded-xl bg-muted p-3 text-sm lg:flex">
+        <div className="flex flex-col">
           <dt className="text-muted-foreground text-xs">Entradas</dt>
           <dd>
             <Money amount={income} className="font-bold text-income-text" />
           </dd>
         </div>
-        <div className="flex min-w-0 flex-col">
+        <div className="flex flex-col">
           <dt className="text-muted-foreground text-xs">Saídas</dt>
           <dd>
             <Money amount={outflow} className="font-bold" />
           </dd>
         </div>
-        <div className="flex min-w-0 flex-col">
+        <div className="flex flex-col">
           <dt className="text-muted-foreground text-xs">Resultado</dt>
           <dd>
             {result < 0 ? (
