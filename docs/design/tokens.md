@@ -54,9 +54,23 @@ The strip under "Termômetro do Mês" shows the five segments and highlights the
 
 ## Category icon circles (40px, white icon)
 
-Mercado `#F59E0B`, Comida fora `#F97316`, Transporte `#3B82F6`, Saúde `#EF4444`, Lazer `#A855F7`, Aluguel `#6366F1`, Luz `#EAB308`, Internet `#06B6D4`, Cartão `#EC4899`, Assinaturas `#8B5CF6`, Salário `#16A34A`, Extra `#22C55E`. Stored as token names `cat-1..cat-12`.
+`cat-1..cat-12` (re-stepped for color blindness in SOL-9, D22), white glyph contrast in parentheses: Mercado `#D5811D` (3.01:1), Comida fora `#AD561C` (5.09:1), Transporte `#2375C6` (4.74:1), Saúde `#A3130E` (7.90:1), Lazer `#A855F7` (3.96:1), Aluguel `#5111F9` (7.51:1), Luz `#987E0A` (3.94:1), Internet `#18A1C6` (3.02:1), Cartão `#EC4899` (3.53:1), Assinaturas `#701FC3` (7.86:1), Salário `#16A34A` (3.30:1), Extra `#237B50` (5.22:1). Stored as token names `cat-1..cat-12`. Glyph and card are both white, so one ratio covers the glyph on the circle and the circle on the card (WCAG 1.4.11).
 
-`cat-13..cat-24` (SOL-32), white glyph contrast in parentheses: Verde-azulado `#0D9488` (3.74:1), Framboesa `#BE185D` (6.04:1), Oliva `#6B7A1F` (4.74:1), Azul-petróleo `#075985` (7.56:1), Ameixa `#86198F` (8.24:1), Marrom `#854D0E` (6.85:1), Ardósia `#64748B` (4.76:1), Verde-escuro `#166534` (7.13:1), Vinho `#881337` (9.57:1), Telha `#C2410C` (5.18:1), Anil `#3730A3` (9.93:1), Malva `#9D4E8C` (5.38:1). Each sits at least 0.10 from its nearest palette neighbor in OKLab, twice the closest pair of the first twelve (0.05).
+`cat-13..cat-24` (SOL-32): Verde-azulado `#0D9488` (3.74:1), Framboesa `#BE185D` (6.04:1), Oliva `#6B7A1F` (4.74:1), Azul-petróleo `#075985` (7.56:1), Ameixa `#86198F` (8.24:1), Marrom `#854D0E` (6.85:1), Ardósia `#64748B` (4.76:1), Verde-escuro `#166534` (7.13:1), Vinho `#881337` (9.57:1), Telha `#C2410C` (5.18:1), Anil `#3730A3` (9.93:1), Malva `#9D4E8C` (5.38:1).
+
+Validator numbers for `cat-1..cat-12` (dataviz `validate_palette.js --pairs all --surface #ffffff`; OKLab ΔE ×100 under the Machado 2009 simulation at severity 1.0), before → after SOL-9:
+
+| Check | Before | After |
+|---|---|---|
+| Worst pair, protan | 0.3 (Lazer / Assinaturas) | 4.5 (Mercado / Salário) |
+| Worst pair, deutan | 0.9 (Transporte / Lazer) | 4.8 (Luz / Salário) |
+| Worst pair, tritan | 2.7 (Internet / Extra) | 5.0 (Internet / Salário) |
+| Worst same-kind pair, any CVD | 0.8 (Aluguel / Assinaturas) | 8.2 (Transporte / Lazer) |
+| Worst pair, normal vision | 5.1 (Lazer / Assinaturas) | 10.8 (Mercado / Luz) |
+| Lowest contrast on white | 1.92:1 (Luz) | 3.01:1 (Mercado) |
+| Closest pair of all 24, OKLab | 0.0507 (cat-5 / cat-10) | 0.0511 (cat-2 / cat-22) |
+
+Every pair within one kind (Daily `cat-1..5`, Bill `cat-6..10`, Income `cat-11..12`) clears 8 under protan, deutan and tritan. The pairs below 8 all cross kinds: Mercado / Luz, Mercado / Salário, Comida fora / Luz and Luz / Salário (4.5–4.8), Internet / Salário (5.0), Transporte / Extra (6.2), Comida fora / Extra (6.9), Transporte / Cartão (7.3), and five more between 7.4 and 7.9. `web/src/app/category-palette.test.ts` locks 3:1, the 0.05 OKLab spread, 8 within a kind and 4.4 across the twelve.
 
 Top-level colors are unique per kind and subcategories wear the parent's (D15).
 

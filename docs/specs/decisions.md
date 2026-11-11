@@ -113,3 +113,24 @@ Rejected:
 Detail: `docs/specs/2026-11-10-dashboard-redesign.md`, plan `docs/specs/plans/SOL-61.md`.
 
 Update (2026-11-11, owner, SOL-69): C1 went back to the 0.23.0 hero, today's balance with its tier and the Entradas / Saídas / Projetado summary; the split bar "Para onde foi a entrada" is dropped from Mês. The rest of the grid stays.
+
+## D22 — The category palette is checked for color blindness; color separates a kind, icon and label name the category (2026-11-11, SOL-9, designer)
+
+Nine of the first twelve `cat-*` tokens get new hex values (`cat-5`, `cat-9` and `cat-11` stay). Names do not change, so stored categories keep their token and no migration runs. Each token keeps its hue family (Mercado still amber, Aluguel still indigo); most moved in lightness, the axis a dichromat still sees.
+
+Method: the dataviz `validate_palette.js` validator. It measures OKLab ΔE between colors simulated for protan, deutan and tritan vision (Machado, Oliveira & Fernandes 2009, severity 1.0), and WCAG contrast on the white card. Candidates were searched inside each hue family under hard rules: at least 3:1 on white, every one of the 24 at least the old 0.05 OKLab apart, and `cat-11` fixed because Guardado wears it beside `--split-daily`.
+
+Rules, locked by `web/src/app/category-palette.test.ts`:
+
+- every `cat-*` reaches 3:1 against `--card` and under its white glyph (WCAG 1.4.11);
+- any two of the 24 sit at least 0.05 apart in OKLab;
+- the defaults of one kind (Daily `cat-1..5`, Bill `cat-6..10`, Income `cat-11..12`) sit at least 8 apart under all three simulations;
+- any two of the twelve defaults sit at least 4.4 apart.
+
+Limit: the target of 8 for all 66 pairs of the twelve is out of reach. 3:1 on white caps lightness at about OKLab 0.67, and a dichromat sees only lightness and one hue axis. Twelve colors in that band top out near 6, and only when every token, `cat-11` included, leaves its family (yellow turns olive, orange turns salmon). Pairs across kinds therefore go as low as 4.5 (Mercado / Salário, protan) and 4.8 (Luz / Salário, deutan). Ajustes › Categorias lists one kind at a time, so there those pairs never sit together. The "Saídas do mês" donut in Para onde vai does mix Daily and Bill, so Mercado and Luz can be neighboring slices. Each slice has a legend row with the category's lucide icon, its name, its share and its amount, and pressing the row highlights the slice. Color is never the only signal. A user's 13th to 24th categories of a kind share that fallback, which is why an icon and a label stay mandatory wherever a category color shows.
+
+Rejected:
+
+- a palette that reaches 6 on every pair (it repaints all twelve, `cat-11` included, out of their families);
+- renaming or reordering tokens (needs a migration and breaks D15's stored names);
+- patterns or textures in the circle (decoration on a 40 px icon that already carries a glyph).
