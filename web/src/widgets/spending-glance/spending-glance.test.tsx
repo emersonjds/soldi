@@ -42,32 +42,38 @@ const show = (reply: { status: number; body?: unknown }) => {
   return { requests, client };
 };
 
-const card = () => screen.getByRole("region", { name: "Para onde vai" });
+const card = () => screen.getByRole("region", { name: "Para Onde Vai" });
 
-describe("Para onde vai glance", () => {
+describe("Para Onde Vai glance", () => {
   it("shows the four largest outflow groups with amount and share, and links the month's full screen", async () => {
     show({ status: 200, body: { ...REPORT, outflow_total: "2500.00", groups: GROUPS } });
 
     const rows = await within(await screen.findByRole("region")).findAllByRole("listitem");
     expect(rows.map((row) => row.textContent?.replace(/\s/g, " "))).toEqual([
-      "AluguelR$ 1.200,0048%",
-      "MercadoR$ 650,0026%",
-      "LuzR$ 300,0012%",
-      "Comida foraR$ 200,008%",
+      "AluguelR$ 1.200,0048,0%",
+      "MercadoR$ 650,0026,0%",
+      "LuzR$ 300,0012,0%",
+      "Comida foraR$ 200,008,0%",
     ]);
-    expect(within(card()).getByRole("link", { name: "Ver tudo" })).toHaveAttribute("href", "/para-onde-vai?m=2026-11");
+    expect(within(card()).getByRole("heading", { name: "Para Onde Vai" }).querySelector("svg")).toBeInTheDocument();
+    expect(within(card()).getByRole("link", { name: "Ver análise" })).toHaveAttribute(
+      "href",
+      "/para-onde-vai?m=2026-11",
+    );
   });
 
-  it("rounds a share half to even, as Para onde vai does: 125,00 of 1.000,00 is 12%", async () => {
-    show({ status: 200, body: { ...REPORT, outflow_total: "1000.00", groups: [group(ALUGUEL, "125.00", "12.5")] } });
+  it("shows the report's share with one decimal, never recomputed from the amounts", async () => {
+    show({ status: 200, body: { ...REPORT, outflow_total: "1000.00", groups: [group(ALUGUEL, "125.00", "12.4")] } });
 
-    expect(await within(await screen.findByRole("region")).findByRole("listitem")).toHaveTextContent(/12%$/);
+    const row = await within(await screen.findByRole("region")).findByRole("listitem");
+    expect(row).toHaveTextContent(/12,4%$/);
+    expect(row.querySelector("svg")).not.toBeInTheDocument();
   });
 
   it("renders nothing while loading, so it never flashes (D25)", async () => {
     show({ status: 200, body: REPORT });
     expect(screen.queryByRole("region")).not.toBeInTheDocument();
-    expect(await screen.findByRole("region", { name: "Para onde vai" })).toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: "Para Onde Vai" })).toBeInTheDocument();
   });
 
   it("renders nothing when the month has no outflow (D25)", async () => {

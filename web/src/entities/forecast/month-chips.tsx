@@ -1,24 +1,16 @@
 import { cn } from "@/lib/utils";
 import { type Currency, useCurrency } from "@/shared/lib/currency";
-import { monthYear } from "@/shared/lib/date";
+import { monthLong, monthShort } from "@/shared/lib/date";
 import { formatMoney, formatWhole } from "@/shared/lib/money";
 import { cents, TIER_LABEL, TIER_STYLE } from "@/shared/lib/tier";
 
 import type { MonthAhead } from "./months-ahead";
 
-const reds = (count: number) => (count === 1 ? "1 dia no vermelho" : `${count} dias no vermelho`);
-
-const nameOf = (
-  { month, lowest, low, redDays }: MonthAhead,
-  neutral: boolean,
-  prior: string | null,
-  currency: Currency,
-) => {
-  const name = monthYear(month);
+const nameOf = ({ month, lowest, low }: MonthAhead, neutral: boolean, prior: string | null, currency: Currency) => {
+  const name = monthLong(month);
   if (lowest === null) return `${name}: antes do início`;
   if (neutral) return name;
-  const parts = [TIER_LABEL[lowest], `menor saldo ${formatMoney(low, currency)}`];
-  if (redDays > 0) parts.push(reds(redDays));
+  const parts = [`menor saldo ${formatMoney(low, currency)}`, TIER_LABEL[lowest]];
   if (prior !== null) parts.push(`antes ${formatMoney(prior, currency)}`);
   return `${name}: ${parts.join(", ")}`;
 };
@@ -29,11 +21,11 @@ const priorLow = (before: MonthAhead[] | undefined, month: string, low: string) 
   return prior !== null && cents(prior) !== cents(low) ? prior : null;
 };
 
-const chip = "relative flex min-h-16 w-full flex-col items-start justify-center gap-0.5 rounded-xl px-2 py-2 text-left";
+const chip = "flex min-h-16 w-full min-w-0 flex-col items-start justify-center gap-0.5 rounded-xl px-2 py-2 text-left";
 
 type MonthChipsProps = {
   months: MonthAhead[];
-  /** Nothing lands ahead: no tier, no amount, no badge. */
+  /** Nothing lands ahead: no tier, no amount. */
   neutral?: boolean;
   /** `YYYY-MM` on screen, ringed. */
   current?: string;
@@ -43,45 +35,50 @@ type MonthChipsProps = {
   before?: MonthAhead[];
 };
 
-/** One chip per month: its lowest balance in whole units, the tier's color with its label (D9) and a red-days badge (white on `tier-red`, 4.83:1). */
+/** A 4-column month grid: each month's lowest balance in whole units, its tier dot and its tier word (D22), a red month on `expense-soft`. */
+/** Five-digit lows shrink and six-digit ones shrink again so they fit a 4-column cell at 375 and in the 1440 rail. */
+const digitSize = (amount: string) => {
+  const digits = amount.replace(/\D/g, "").length;
+  if (digits >= 6) return "text-[10px]";
+  return digits === 5 ? "text-[11px]" : "text-sm";
+};
+
 export const MonthChips = ({ months, neutral = false, current, onOpen, before }: MonthChipsProps) => {
   const currency = useCurrency();
   return (
-    <ul className="grid grid-cols-3 gap-2">
+    <ul className="grid grid-cols-4 gap-2">
       {months.map((ahead) => {
-        const { month, lowest, low, redDays } = ahead;
-        const prior = lowest !== null && !neutral ? priorLow(before, month, low) : null;
+        const { month, lowest, low } = ahead;
+        const shown = lowest !== null && !neutral;
+        const prior = shown ? priorLow(before, month, low) : null;
         const style = cn(
           chip,
-          lowest !== null && !neutral ? TIER_STYLE[lowest].pill : "bg-muted text-muted-foreground",
+          shown && lowest === "red" ? "bg-expense-soft text-expense-text" : "bg-muted text-foreground",
           month === current && "ring-2 ring-primary",
         );
         const body = (
           <>
-            <span className="font-semibold text-sm">{monthYear(month)}</span>
-            {lowest === null && <span className="text-xs">Antes do início</span>}
-            {lowest !== null && !neutral && (
+            <span className="font-semibold text-sm">{monthShort(month)}</span>
+            {lowest === null && <span className="text-muted-foreground text-xs">Antes do início</span>}
+            {shown && (
               <>
-                <span
-                  className={cn(
-                    "break-all font-bold tabular-nums",
-                    formatWhole(low).replace(/\D/g, "").length >= 7 ? "text-xs" : "text-sm",
-                  )}
-                >
-                  {formatWhole(low)}
+                <span className="flex w-full min-w-0 items-center gap-1">
+                  <span aria-hidden className={cn("size-2 shrink-0 rounded-full", TIER_STYLE[lowest].dot)} />
+                  <span
+                    className={cn(
+                      "min-w-0 whitespace-nowrap font-bold tabular-nums tracking-tight",
+                      digitSize(formatWhole(low)),
+                    )}
+                  >
+                    {formatWhole(low)}
+                  </span>
                 </span>
                 {prior !== null && (
                   <span className="text-muted-foreground text-xs tabular-nums">antes {formatWhole(prior)}</span>
                 )}
-                <span className="text-xs">{TIER_LABEL[lowest]}</span>
-                {redDays > 0 && (
-                  <span
-                    aria-hidden
-                    className="absolute -top-1.5 -right-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-tier-red px-1 font-bold text-white text-xs"
-                  >
-                    {redDays}
-                  </span>
-                )}
+                <span className={cn("text-[11px]", lowest !== "red" && "text-muted-foreground")}>
+                  {TIER_LABEL[lowest]}
+                </span>
               </>
             )}
           </>
@@ -94,7 +91,7 @@ export const MonthChips = ({ months, neutral = false, current, onOpen, before }:
             </li>
           );
         return (
-          <li key={month}>
+          <li key={month} className="min-w-0">
             <button
               type="button"
               aria-label={name}
