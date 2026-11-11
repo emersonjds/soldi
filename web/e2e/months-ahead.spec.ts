@@ -1,8 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 import { expectNoClipped } from "./clipped";
-
-const API = process.env.E2E_API_URL ?? "http://localhost:8080";
+import { requireServer } from "./server";
 
 /** `[year, month, day]` of today in the server's São Paulo calendar. */
 const today = () =>
@@ -18,8 +17,7 @@ test("Próximos meses paints the first two months the rent is owed Crítico and 
   page,
   request,
 }) => {
-  const health = await request.get(`${API}/api/health`).catch(() => null);
-  test.skip(!health?.ok(), `Soldi server unreachable at ${API}/api/health; start it to run this flow.`);
+  await requireServer(request);
 
   await page.setViewportSize({ width: 375, height: 812 });
   await page.goto("/criar-conta");

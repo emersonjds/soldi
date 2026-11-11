@@ -1,8 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 import { pickDate } from "./pick-date";
-
-const API = process.env.E2E_API_URL ?? "http://localhost:8080";
+import { requireServer } from "./server";
 
 /** `YYYY-MM` of the month `offset` months from now. */
 const monthFrom = (offset: number) => {
@@ -16,8 +15,7 @@ test("an entry repeated 3x shows in three months; edit and delete reach this one
   page,
   request,
 }) => {
-  const health = await request.get(`${API}/api/health`).catch(() => null);
-  test.skip(!health?.ok(), `Soldi server unreachable at ${API}/api/health; start it to run this flow.`);
+  await requireServer(request);
   test.setTimeout(90_000);
 
   await page.setViewportSize({ width: 375, height: 812 });
@@ -96,8 +94,7 @@ test("an entry repeated 3x shows in three months; edit and delete reach this one
 });
 
 test("a 12x series shrinks to 6 from its first entry and grows back to 12 from its last", async ({ page, request }) => {
-  const health = await request.get(`${API}/api/health`).catch(() => null);
-  test.skip(!health?.ok(), `Soldi server unreachable at ${API}/api/health; start it to run this flow.`);
+  await requireServer(request);
   test.setTimeout(90_000);
 
   await page.setViewportSize({ width: 375, height: 812 });
@@ -155,8 +152,7 @@ test("a 12x series shrinks to 6 from its first entry and grows back to 12 from i
 });
 
 test("a 12x series on the 5th moves to the 10th from its third entry on", async ({ page, request }) => {
-  const health = await request.get(`${API}/api/health`).catch(() => null);
-  test.skip(!health?.ok(), `Soldi server unreachable at ${API}/api/health; start it to run this flow.`);
+  await requireServer(request);
   test.setTimeout(90_000);
 
   await page.setViewportSize({ width: 375, height: 812 });

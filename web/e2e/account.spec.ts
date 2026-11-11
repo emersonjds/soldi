@@ -1,13 +1,12 @@
 import { expect, test } from "@playwright/test";
 
-const API = process.env.E2E_API_URL ?? "http://localhost:8080";
+import { requireServer } from "./server";
 
 test("a user renames, changes the password, signs out everywhere and signs in with the new one", async ({
   page,
   request,
 }) => {
-  const health = await request.get(`${API}/api/health`).catch(() => null);
-  test.skip(!health?.ok(), `Soldi server unreachable at ${API}/api/health; start it to run this flow.`);
+  await requireServer(request);
 
   const email = `e2e-account-${Date.now()}@example.com`;
   await page.setViewportSize({ width: 1440, height: 900 });

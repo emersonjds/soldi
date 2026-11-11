@@ -1,13 +1,12 @@
 import { expect, test } from "@playwright/test";
 
-const API = process.env.E2E_API_URL ?? "http://localhost:8080";
+import { requireServer } from "./server";
 
 test("a new user walks the four-card tour after onboarding and lands on Lançar with a hint", async ({
   page,
   request,
 }) => {
-  const health = await request.get(`${API}/api/health`).catch(() => null);
-  test.skip(!health?.ok(), `Soldi server unreachable at ${API}/api/health; start it to run this flow.`);
+  await requireServer(request);
 
   await page.setViewportSize({ width: 375, height: 812 });
   await page.goto("/criar-conta");

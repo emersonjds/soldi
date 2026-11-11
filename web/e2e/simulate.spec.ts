@@ -1,8 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 import { expectNoClipped } from "./clipped";
-
-const API = process.env.E2E_API_URL ?? "http://localhost:8080";
+import { requireServer } from "./server";
 
 /** `YYYY-MM` of the month `offset` months from now. */
 const monthFrom = (offset: number) => {
@@ -13,8 +12,7 @@ const monthFrom = (offset: number) => {
 };
 
 test("Simular previews a purchase without writing it; Parcelar 3x writes three parcelas", async ({ page, request }) => {
-  const health = await request.get(`${API}/api/health`).catch(() => null);
-  test.skip(!health?.ok(), `Soldi server unreachable at ${API}/api/health; start it to run this flow.`);
+  await requireServer(request);
   test.setTimeout(90_000);
 
   await page.setViewportSize({ width: 375, height: 812 });
@@ -57,8 +55,7 @@ test("Posso comprar? on Próximos meses: 6× R$ 12.000,00 names the red day's ba
   page,
   request,
 }) => {
-  const health = await request.get(`${API}/api/health`).catch(() => null);
-  test.skip(!health?.ok(), `Soldi server unreachable at ${API}/api/health; start it to run this flow.`);
+  await requireServer(request);
   test.setTimeout(90_000);
 
   await page.setViewportSize({ width: 375, height: 812 });
