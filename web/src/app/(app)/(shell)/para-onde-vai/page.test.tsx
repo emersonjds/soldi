@@ -133,22 +133,25 @@ describe("Para onde vai", () => {
     );
   });
 
-  it("opens the month in the address and moves with the switcher", async () => {
+  const reportMonth = (requests: Request[]) =>
+    new URL(
+      requests.find((request) => request.url.includes("/api/reports/categories"))?.url ?? "http://x",
+    ).searchParams.get("month");
+
+  it("opens the month in the address and leaves the switcher to the shell", async () => {
     setSearch("m=2026-12");
     const requests = open();
 
-    expect(await screen.findByText("Dezembro 2026")).toBeInTheDocument();
-    const report = requests.find((request) => request.url.includes("/api/reports/categories"));
-    expect(new URL(report?.url ?? "http://x").searchParams.get("month")).toBe("2026-12");
-    await userEvent.click(screen.getByRole("button", { name: "Próximo mês" }));
-    expect(router.replace).toHaveBeenLastCalledWith("/para-onde-vai?m=2027-01", { scroll: false });
+    await screen.findByText("Saídas do mês");
+    expect(reportMonth(requests)).toBe("2026-12");
+    expect(screen.queryByRole("group", { name: "Mês" })).not.toBeInTheDocument();
   });
 
-  it("ignores a malformed month and stops at the opening month", async () => {
+  it("ignores a malformed month", async () => {
     setSearch("m=2026-13");
-    open();
+    const requests = open();
 
-    expect(await screen.findByText("Novembro 2026")).toBeInTheDocument();
-    await waitFor(() => expect(screen.getByRole("button", { name: "Mês anterior" })).toBeDisabled());
+    await screen.findByText("Saídas do mês");
+    expect(reportMonth(requests)).toBe("2026-11");
   });
 });

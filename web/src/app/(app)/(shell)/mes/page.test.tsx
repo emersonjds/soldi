@@ -66,7 +66,6 @@ describe("Mês", () => {
     const hero = await screen.findByRole("region", { name: "Saldo hoje" });
     expect(within(hero).getByText("R$ 957,79")).toBeInTheDocument();
     expect(within(hero).getByText("Apertado")).toBeInTheDocument();
-    expect(within(hero).getByText("Novembro 2026")).toBeInTheDocument();
 
     const summary = screen.getByRole("region", { name: "Resumo do mês" });
     expect(within(summary).getByText("R$ 500,00")).toHaveClass("text-income-text");
@@ -275,25 +274,24 @@ describe("Mês", () => {
     );
   });
 
-  it("opens the month in the address and moves through months with the arrows", async () => {
+  it("opens the month in the address and leaves the switcher to the shell", async () => {
     setSearch("m=2026-12");
     const requests = open({
       "GET /api/months/2026-12": { status: 200, body: { ...MONTH, month: "2026-12" } },
       "GET /api/transactions": { status: 200, body: [] },
     });
 
-    expect(await screen.findByText("Dezembro 2026")).toBeInTheDocument();
+    await screen.findByRole("region", { name: "Saldo hoje" });
     expect(requests.some((request) => request.url.endsWith("/api/transactions?month=2026-12"))).toBe(true);
-    await userEvent.click(screen.getByRole("button", { name: "Próximo mês" }));
-    expect(router.replace).toHaveBeenLastCalledWith("/mes?m=2027-01", { scroll: false });
+    expect(screen.queryByRole("group", { name: "Mês" })).not.toBeInTheDocument();
   });
 
-  it("ignores a malformed month in the address and stops at the opening month", async () => {
+  it("ignores a malformed month in the address", async () => {
     setSearch("m=nope");
-    open();
+    const requests = open();
 
-    expect(await screen.findByText("Novembro 2026")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Mês anterior" })).toBeDisabled();
+    await screen.findByRole("region", { name: "Saldo hoje" });
+    expect(requests.some((request) => request.url.endsWith("/api/months/2026-11"))).toBe(true);
   });
 
   it("deletes an entry at once and brings it back with Desfazer", async () => {

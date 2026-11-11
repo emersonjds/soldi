@@ -88,7 +88,7 @@ A date change with `scope=following` on a series member moves this and every lat
 
 Navigation:
 
-- Desktop keeps the sidebar (`Menu` and `Ajustes` groups) and gains a sticky top bar holding the title, the month switcher on month pages, and `Lançar`.
+- Desktop keeps the sidebar, in two groups with small uppercase grey labels: `MENU` (Mês, Para onde vai, Cofrinhos) and `CONFIGURAÇÕES` (Contas Fixas, linking to `/ajustes/contas`, and Ajustes), with 20 px line icons on 44 px rows and no `Lançar` entry (SOL-68). It gains a sticky top bar holding the title, the month switcher on month pages, and `Lançar`.
 - Mobile gets a floating pill tab bar with four labelled tabs and a separate `Lançar` FAB, both in `Navegação principal`.
 - Nav labels are unchanged (`Mês` stays).
 

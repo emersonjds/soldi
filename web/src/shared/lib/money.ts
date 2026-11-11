@@ -14,6 +14,10 @@ const formatFor = (currency: Currency) => {
 export const formatMoney = (amount: string, currency: Currency): string =>
   formatFor(currency).format(amount as Intl.StringNumericLiteral);
 
+/** `formatMoney` as Intl's typed parts: sign, currency, integer, group, decimal, fraction. */
+export const formatMoneyParts = (amount: string, currency: Currency) =>
+  formatFor(currency).formatToParts(amount as Intl.StringNumericLiteral);
+
 /** `R$`, `US$`, `£` or `€`, as pt-BR writes it. */
 export const currencySymbol = (currency: Currency) =>
   formatFor(currency)

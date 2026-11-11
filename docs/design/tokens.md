@@ -21,6 +21,18 @@ The `designer` agent maps these onto the template's shadcn semantic tokens in `w
 | expense | `#DC2626` on `#FEE2E2` | saídas, "Vencido", negative projected |
 | destructive | `#BA1A1A` | delete, "Sair" |
 | border | `#C8C4D7` | outline-variant |
+| split-daily | `#0891B2` | `SplitBar` Diário segment only (D21); 3:1 on white |
+
+## Split bar (`SplitBar`, "Para onde foi a entrada")
+
+| Segment | Token |
+|---------|-------|
+| Contas | `primary` `#5341CD` |
+| Guardado | `cat-11` `#16A34A` (Economia's color, D15) |
+| Diário | `split-daily` `#0891B2` |
+| Livre | `muted` track with a 1px `border` outline |
+
+Validated with the dataviz validator (`#5341CD,#0891B2,#16A34A`, light, all pairs): CVD worst ΔE 16.1 (deutan), normal-vision floor 17.4, each ≥ 3:1 on white. Amber is out: it reads as the tier `Apertado`. The bar is 12px tall with 4px rounded ends and 2px `card` gaps; widths follow the cents with a 200ms `motion-safe` transition. Text never wears a segment color: the legend is `foreground` beside a 12px swatch, and the bar is `role="img"` with a one-sentence summary.
 
 Dark: background `#0F1222`, card `#1A1E36`, header `#141734`, foreground `#F0EFFF`, same accent, income, expense and tier colors.
 
@@ -64,6 +76,16 @@ Icons: Stitch used Material Symbols; the web uses lucide (already in the templat
 | currency-md | 16 / 24 / 700 |
 | caption-md | 12 / 16 / 500 |
 | caption-sm | 11 / 16 / 600, uppercase for section eyebrows |
+
+`Money` sizes (spec 2026-11-10 §4.2), parts from `Intl.NumberFormat("pt-BR").formatToParts`:
+
+| `size` | Integer and sign | Symbol and `,cents` | Use |
+|--------|------------------|---------------------|-----|
+| `row` (default) | inherits | same as the integer | rows, legends, every amount in a list |
+| `figure` | 28 / 36 / 700 | 55% of the integer | card figures |
+| `hero` | 40 / 48 / 700 at 375, 48 / 56 from `lg` | 55% of the integer | the one headline number |
+
+`figure` and `hero` are bold, `tabular-nums`, tracking -0.02em, one text color for every part, on a shared baseline. Screen readers get one `sr-only` string; the split parts are `aria-hidden`.
 
 ## Spacing and shape
 

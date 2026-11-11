@@ -82,8 +82,9 @@ All math is in integer cents (`cents` in `shared/lib/tier.ts`), never floats (D7
 Sidebar, 240 px, `card` surface:
 
 - wordmark and `Seu mês no verde.`;
-- group `Menu`: Mês, Para onde vai, Cofrinhos;
-- group `Ajustes`: Ajustes;
+- group `MENU`: Mês (`Calendar`), Para onde vai (`PieChart`), Cofrinhos (`PiggyBank`);
+- group `CONFIGURAÇÕES`: Contas Fixas (`ReceiptText`, `/ajustes/contas`), Ajustes (`Settings`);
+- group labels in small uppercase grey text; 20 px line icons left of the label; 44 px rows; the active row highlighted (SOL-68);
 - the user card at the bottom: avatar, name, e-mail, version, Sair.
 
 `Lançar` moves out of the sidebar. Nav labels stay as they are: `Mês` is Soldi's word since v1, and the e2e suites and the tour use it.
