@@ -1,8 +1,11 @@
+import type { FormEvent } from "react";
+
 import { act, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { Toaster, toast } from "sonner";
 import { describe, expect, it, vi } from "vitest";
 
-import { ResponsiveSheet } from "./responsive-sheet";
+import { ResponsiveSheet, ResponsiveSheetFooter } from "./responsive-sheet";
 
 const sheet = (open: boolean) => (
   <>
@@ -25,5 +28,26 @@ describe("ResponsiveSheet", () => {
 
     expect(await screen.findByRole("dialog", { name: "Nova categoria" })).toBeInTheDocument();
     await waitFor(() => expect(screen.queryByText("Categoria criada")).not.toBeInTheDocument());
+  });
+
+  it("pins the footer to the bottom while the rows above it scroll, and Enter still submits the form", async () => {
+    const onSubmit = vi.fn((event: FormEvent) => event.preventDefault());
+    render(
+      <ResponsiveSheet open onOpenChange={vi.fn()} title="Lançar" description="Entrada, conta ou gasto do dia.">
+        <form onSubmit={onSubmit}>
+          <input aria-label="Valor" />
+          <input aria-label="Observação" />
+          <ResponsiveSheetFooter>
+            <button type="submit">Salvar</button>
+          </ResponsiveSheetFooter>
+        </form>
+      </ResponsiveSheet>,
+    );
+
+    const footer = screen.getByRole("button", { name: "Salvar" }).closest('[data-slot="responsive-sheet-footer"]');
+    expect(footer).toHaveClass("sticky", "bottom-0");
+    await userEvent.type(screen.getByLabelText("Observação"), "Feira{Enter}");
+
+    expect(onSubmit).toHaveBeenCalledOnce();
   });
 });

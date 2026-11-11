@@ -28,7 +28,7 @@ import { cents, fromCents } from "@/shared/lib/tier";
 import { BrandButton } from "@/shared/ui/brand-button";
 import { DateChips } from "@/shared/ui/date-chips";
 import { HeroAmount } from "@/shared/ui/hero-amount";
-import { ResponsiveSheet } from "@/shared/ui/responsive-sheet";
+import { ResponsiveSheet, ResponsiveSheetFooter } from "@/shared/ui/responsive-sheet";
 
 import { draftRows, type Plan } from "./draft-rows";
 import { Simulation } from "./simulation";
@@ -389,16 +389,18 @@ const TransactionForm = ({
 
       {draft.simulate && <Simulation rows={rows} countInvalid={Boolean(amount) && monthsChecked && !monthsValid} />}
 
-      {draft.simulate ? (
-        <div className="flex flex-col gap-2">
-          <BrandButton type="submit">Lançar de verdade</BrandButton>
-          <Button type="button" variant="ghost" className="h-12 w-full text-base" onClick={onDiscard}>
-            Descartar
-          </Button>
-        </div>
-      ) : (
-        <BrandButton type="submit">Salvar</BrandButton>
-      )}
+      <ResponsiveSheetFooter>
+        {draft.simulate ? (
+          <>
+            <BrandButton type="submit">Lançar de verdade</BrandButton>
+            <Button type="button" variant="ghost" className="h-12 w-full text-base" onClick={onDiscard}>
+              Descartar
+            </Button>
+          </>
+        ) : (
+          <BrandButton type="submit">Salvar</BrandButton>
+        )}
+      </ResponsiveSheetFooter>
     </form>
   );
 };

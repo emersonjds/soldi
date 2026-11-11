@@ -369,6 +369,9 @@ describe("Contas a pagar", () => {
     expect(date).toHaveValue("2026-10-10");
     expect(date).toHaveAttribute("min", "2026-10-01");
     expect(date).toHaveAttribute("max", "2026-10-31");
+    expect(
+      within(sheet).getByRole("button", { name: "Confirmar" }).closest('[data-slot="responsive-sheet-footer"]'),
+    ).not.toBeNull();
     await userEvent.click(within(sheet).getByRole("button", { name: "Confirmar" }));
 
     await waitFor(() => expect(requests.some((request) => request.method === "POST")).toBe(true));

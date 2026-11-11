@@ -78,6 +78,9 @@ describe("Ajustes › Contas fixas", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Nova conta" }));
     const sheet = await screen.findByRole("dialog", { name: "Nova conta" });
     expect(within(sheet).queryByRole("switch")).not.toBeInTheDocument();
+    expect(
+      within(sheet).getByRole("button", { name: "Salvar" }).closest('[data-slot="responsive-sheet-footer"]'),
+    ).not.toBeNull();
     await userEvent.click(within(sheet).getByRole("button", { name: "Salvar" }));
     expect(within(sheet).getByText("Informe o nome.")).toBeInTheDocument();
     expect(within(sheet).getByText("Informe um valor maior que zero.")).toBeInTheDocument();

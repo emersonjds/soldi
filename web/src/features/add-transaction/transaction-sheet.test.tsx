@@ -27,6 +27,8 @@ const MERCADO_ROW = TRANSACTIONS[0];
 const ALUGUEL_ROW = TRANSACTIONS[1];
 const MEMBER = { ...ALUGUEL_ROW, series: { id: "s1", position: 3, total: 12, last_date: "2027-09-04" } };
 
+const FOOTER = '[data-slot="responsive-sheet-footer"]';
+
 type SheetProps = Parameters<typeof TransactionSheet>[0];
 
 /** Stands in for the host's bill sheet: saves the prefill as is. */
@@ -73,6 +75,7 @@ describe("TransactionSheet", () => {
 
     const dialog = await screen.findByRole("dialog", { name: "Lançar" });
     expect(dialog).toHaveAttribute("data-slot", "sheet-content");
+    expect(within(dialog).getByRole("button", { name: "Salvar" }).closest(FOOTER)).not.toBeNull();
     expect(await screen.findByRole("combobox", { name: "Categoria" })).toHaveTextContent("Mercado");
     expect(screen.getByRole("radio", { name: "Diário" })).toBeChecked();
     await userEvent.keyboard("35,90");
@@ -674,6 +677,8 @@ describe("TransactionSheet", () => {
 
     expect(screen.getByText("9× R$ 100,00 + R$ 100,01 na última · até ago 2027")).toBeInTheDocument();
     expect(await screen.findByRole("heading", { name: "Meses com essa compra" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Lançar de verdade" }).closest(FOOTER)).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Descartar" }).closest(FOOTER)).not.toBeNull();
     await userEvent.click(screen.getByRole("button", { name: "Lançar de verdade" }));
 
     const body = await sent("POST");
