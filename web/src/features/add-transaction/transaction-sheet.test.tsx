@@ -1,8 +1,9 @@
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Toaster } from "sonner";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { pickDate } from "@/test/pick-date";
 import { renderWithQuery } from "@/test/render";
 import {
   ALUGUEL,
@@ -131,7 +132,8 @@ describe("TransactionSheet", () => {
     const { sent } = setup();
 
     await userEvent.type(await screen.findByLabelText("Valor"), "10");
-    fireEvent.change(screen.getByLabelText("Outra data"), { target: { value: "2026-10-28" } });
+    await pickDate("Outra data", "2026-10-28");
+    await waitFor(() => expect(screen.getByRole("button", { name: "Outra data, 28/10/2026" })).toHaveFocus());
     expect(screen.getByRole("button", { name: "Hoje" })).toHaveAttribute("aria-pressed", "false");
     await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
 
@@ -159,7 +161,7 @@ describe("TransactionSheet", () => {
     expect(amount).toHaveValue("184,31");
     expect(screen.getByLabelText("Observação")).toHaveValue("Compras da semana");
     expect(await screen.findByRole("combobox", { name: "Categoria" })).toHaveTextContent("Mercado");
-    expect(screen.getByLabelText("Outra data")).toHaveValue("2026-11-05");
+    expect(screen.getByRole("button", { name: "Outra data, 05/11/2026" })).toBeInTheDocument();
     await userEvent.clear(amount);
     await userEvent.type(amount, "20000");
     await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
@@ -237,7 +239,7 @@ describe("TransactionSheet", () => {
     const { requests, sent } = setup();
 
     await userEvent.type(await screen.findByLabelText("Valor"), "1000");
-    fireEvent.change(screen.getByLabelText("Outra data"), { target: { value: "2026-10-31" } });
+    await pickDate("Outra data", "2026-10-31");
     await userEvent.click(screen.getByRole("switch", { name: "Repetir" }));
     expect(screen.getByText("Em meses mais curtos, cai no último dia.")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("radio", { name: "Outro" }));
@@ -402,13 +404,11 @@ describe("TransactionSheet", () => {
     expect(body).not.toHaveProperty("repeat_months");
   });
 
-  const pickDate = (date: string) => fireEvent.change(screen.getByLabelText("Outra data"), { target: { value: date } });
-
   it("moves the day of this and the following members: helper names the day, toast Série movida", async () => {
     const { sent } = setup({ transaction: MEMBER }, resize);
 
     await userEvent.click(await screen.findByRole("radio", { name: "Este e os próximos" }));
-    pickDate("2026-11-10");
+    await pickDate("Outra data", "2026-11-10");
     expect(screen.getByText("Os próximos também vão para o dia 10.")).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: "12x" })).toBeDisabled();
     await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
@@ -423,9 +423,9 @@ describe("TransactionSheet", () => {
     setup({ transaction: { ...MEMBER, series: { ...MEMBER.series, position: 1 } } });
 
     await userEvent.click(await screen.findByRole("radio", { name: "Toda a série" }));
-    pickDate("2026-11-28");
+    await pickDate("Outra data", "2026-11-28");
     expect(screen.getByText("Toda a série vai para o dia 28.")).toBeInTheDocument();
-    pickDate("2026-11-30");
+    await pickDate("Outra data", "2026-11-30");
     expect(
       screen.getByText("Toda a série vai para o dia 30. Nos meses mais curtos, no último dia."),
     ).toBeInTheDocument();
@@ -435,7 +435,7 @@ describe("TransactionSheet", () => {
     setup({ transaction: MEMBER });
 
     await screen.findByRole("radio", { name: "Só este" });
-    pickDate("2026-12-10");
+    await pickDate("Outra data", "2026-12-10");
     expect(screen.queryByText(/va[io] para o dia/)).not.toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
@@ -444,7 +444,7 @@ describe("TransactionSheet", () => {
     const { requests, sent } = setup({ transaction: MEMBER }, resize);
 
     await userEvent.click(await screen.findByRole("radio", { name: "Este e os próximos" }));
-    pickDate("2026-12-10");
+    await pickDate("Outra data", "2026-12-10");
     expect(screen.getByRole("alert")).toHaveTextContent("Para mudar o mês, use Só este.");
     expect(screen.queryByText(/va[io] para o dia/)).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
@@ -469,7 +469,7 @@ describe("TransactionSheet", () => {
     setup({ transaction: MEMBER }, dateRefused("must not move a series with two entries in one month"));
 
     await userEvent.click(await screen.findByRole("radio", { name: "Este e os próximos" }));
-    pickDate("2026-11-10");
+    await pickDate("Outra data", "2026-11-10");
     await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
 
     expect(
@@ -481,18 +481,18 @@ describe("TransactionSheet", () => {
     setup({ transaction: MEMBER }, dateRefused("must be from 2000 to 2100"));
 
     await userEvent.click(await screen.findByRole("radio", { name: "Este e os próximos" }));
-    pickDate("2026-11-10");
+    await pickDate("Outra data", "2026-11-10");
     await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
 
     expect(await screen.findByText("Não foi possível salvar o lançamento.")).toBeInTheDocument();
     expect(screen.queryByText(/Outro lançamento da série/)).not.toBeInTheDocument();
   });
 
-  it("keeps the stored date when the date is cleared: no month alert, no day helper", async () => {
+  it("keeps the stored date when its own day is picked again: no month alert, no day helper", async () => {
     const { sent } = setup({ transaction: MEMBER }, resize);
 
     await userEvent.click(await screen.findByRole("radio", { name: "Este e os próximos" }));
-    pickDate("");
+    await pickDate("Outra data", MEMBER.date);
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(screen.queryByText(/va[io] para o dia/)).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
@@ -507,7 +507,7 @@ describe("TransactionSheet", () => {
     );
 
     await userEvent.click(await screen.findByRole("radio", { name: "Este e os próximos" }));
-    pickDate("2026-11-10");
+    await pickDate("Outra data", "2026-11-10");
     await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
 
     expect(await screen.findByText("Não foi possível salvar o lançamento.")).toBeInTheDocument();
@@ -650,7 +650,7 @@ describe("TransactionSheet", () => {
     await userEvent.click(await screen.findByRole("switch", { name: "Simular" }));
     await userEvent.click(screen.getByLabelText("Valor"));
     await userEvent.keyboard("100,00");
-    fireEvent.change(screen.getByLabelText("Outra data"), { target: { value: "2026-11-24" } });
+    await pickDate("Outra data", "2026-11-24");
     expect(await screen.findByRole("status")).toHaveTextContent("Essa compra não cria dia vermelho novo.");
   });
 

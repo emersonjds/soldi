@@ -16,6 +16,7 @@ import { positiveAmount } from "@/shared/lib/money";
 import { AmountInput } from "@/shared/ui/amount-input";
 import { BrandButton } from "@/shared/ui/brand-button";
 import { CategoryIcon, categoryBg } from "@/shared/ui/category-icon";
+import { DateField } from "@/shared/ui/date-field";
 import { ResponsiveSheet } from "@/shared/ui/responsive-sheet";
 
 import { systemCategoriesQuery, useCategories, useCreateCategory, useUpdateCategory } from "./categories-query";
@@ -219,13 +220,16 @@ const CategoryForm = ({ kind, category, parentId: presetParent, onChangeParent, 
           </Field>
           <Field className="gap-1.5">
             <FieldLabel htmlFor="category-deadline">Prazo</FieldLabel>
-            <Input
-              id="category-deadline"
-              type="date"
-              value={deadline}
-              onChange={(event) => setDeadline(event.target.value)}
-              className={field}
-            />
+            <DateField id="category-deadline" label="Prazo" value={deadline} onChange={setDeadline} className={field} />
+            {deadline && (
+              <button
+                type="button"
+                onClick={() => setDeadline("")}
+                className="inline-flex min-h-11 items-center self-start font-semibold text-primary text-sm underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring"
+              >
+                Remover prazo
+              </button>
+            )}
           </Field>
         </div>
       )}

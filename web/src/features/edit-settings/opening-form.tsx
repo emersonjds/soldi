@@ -5,12 +5,12 @@ import { type FormEvent, useState } from "react";
 import { toast } from "sonner";
 
 import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
 import { useUpdateSettings } from "@/entities/settings/settings-query";
 import type { Schemas } from "@/shared/api/client";
 import { parseBRL } from "@/shared/lib/money";
 import { AmountInput } from "@/shared/ui/amount-input";
 import { BrandButton } from "@/shared/ui/brand-button";
+import { DateField } from "@/shared/ui/date-field";
 
 /** The balance everything starts from, and the day it was true. */
 export const OpeningForm = ({ settings }: { settings: Schemas["Settings"] }) => {
@@ -55,14 +55,7 @@ export const OpeningForm = ({ settings }: { settings: Schemas["Settings"] }) => 
         </Field>
         <Field className="gap-1.5">
           <FieldLabel htmlFor="opening-date">Data</FieldLabel>
-          <Input
-            id="opening-date"
-            type="date"
-            required
-            value={date}
-            onChange={(event) => event.target.value && setDate(event.target.value)}
-            className="h-12 text-base md:text-base"
-          />
+          <DateField id="opening-date" label="Data" value={date} onChange={setDate} className="min-h-12" />
         </Field>
       </div>
       <BrandButton type="submit" className="lg:w-auto lg:self-start lg:px-8">

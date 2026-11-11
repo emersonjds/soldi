@@ -365,10 +365,13 @@ describe("Contas a pagar", () => {
     const sheet = await screen.findByRole("dialog", { name: "Pagar Aluguel Residencial" });
     expect(within(sheet).queryByRole("button", { name: "Hoje" })).not.toBeInTheDocument();
     expect(within(sheet).queryByRole("button", { name: "Ontem" })).not.toBeInTheDocument();
-    const date = within(sheet).getByLabelText("Outra data");
-    expect(date).toHaveValue("2026-10-10");
-    expect(date).toHaveAttribute("min", "2026-10-01");
-    expect(date).toHaveAttribute("max", "2026-10-31");
+    await userEvent.click(within(sheet).getByRole("button", { name: "Outra data, 10/10/2026" }));
+    expect(await screen.findByRole("button", { name: "quinta-feira, 1 de outubro de 2026" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Ir para o mês anterior" })).toHaveAttribute("aria-disabled", "true");
+    expect(screen.getByRole("button", { name: "sábado, 31 de outubro de 2026" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Ir para o próximo mês" })).toHaveAttribute("aria-disabled", "true");
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("grid")).not.toBeInTheDocument());
     expect(
       within(sheet).getByRole("button", { name: "Confirmar" }).closest('[data-slot="responsive-sheet-footer"]'),
     ).not.toBeNull();

@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+import { pickDate } from "./pick-date";
+
 const API = process.env.E2E_API_URL ?? "http://localhost:8080";
 
 /** `YYYY-MM` of the month `offset` months from now. */
@@ -45,7 +47,7 @@ test("an entry repeated 3x shows in three months; edit and delete reach this one
   const launch = page.getByRole("dialog", { name: "Lançar" });
   await launch.getByRole("radio", { name: "Saída" }).click();
   await launch.getByLabel("Valor").fill("100,00");
-  await launch.getByLabel("Outra data").fill(`${first}-01`);
+  await pickDate(launch, "Outra data", `${first}-01`);
   await launch.getByLabel("Observação").fill("Internet");
   await launch.getByRole("switch", { name: "Repetir" }).click();
   await launch.getByRole("radio", { name: "3x" }).click();
@@ -133,7 +135,7 @@ test("a 12x series shrinks to 6 from its first entry and grows back to 12 from i
   const launch = page.getByRole("dialog", { name: "Lançar" });
   await launch.getByRole("radio", { name: "Saída" }).click();
   await launch.getByLabel("Valor").fill("100,00");
-  await launch.getByLabel("Outra data").fill(`${first}-01`);
+  await pickDate(launch, "Outra data", `${first}-01`);
   await launch.getByLabel("Observação").fill("Internet");
   await launch.getByRole("switch", { name: "Repetir" }).click();
   await launch.getByRole("button", { name: "Salvar" }).click();
@@ -185,7 +187,7 @@ test("a 12x series on the 5th moves to the 10th from its third entry on", async 
   const launch = page.getByRole("dialog", { name: "Lançar" });
   await launch.getByRole("radio", { name: "Saída" }).click();
   await launch.getByLabel("Valor").fill("100,00");
-  await launch.getByLabel("Outra data").fill(`${first}-05`);
+  await pickDate(launch, "Outra data", `${first}-05`);
   await launch.getByLabel("Observação").fill("Internet");
   await launch.getByRole("switch", { name: "Repetir" }).click();
   await launch.getByRole("button", { name: "Salvar" }).click();
@@ -196,7 +198,7 @@ test("a 12x series on the 5th moves to the 10th from its third entry on", async 
   await page.getByRole("dialog", { name: "Internet" }).getByRole("button", { name: "Editar" }).click();
   const edit = page.getByRole("dialog", { name: "Editar lançamento" });
   await edit.getByRole("radio", { name: "Este e os próximos" }).click();
-  await edit.getByLabel("Outra data").fill(`${third}-10`);
+  await pickDate(edit, "Outra data", `${third}-10`);
   await expect(edit.getByText("Os próximos também vão para o dia 10.")).toBeVisible();
   await edit.getByRole("button", { name: "Salvar" }).click();
   await expect(page.getByText("Série movida para o dia 10")).toBeVisible();
