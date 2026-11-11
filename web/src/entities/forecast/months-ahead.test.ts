@@ -7,12 +7,12 @@ import { type DraftRow, draftVerdict, isFlat, monthsAhead, withDraft } from "./m
 describe("monthsAhead", () => {
   it("gives the owner's next six months by their lowest tier and red days", () => {
     expect(monthsAhead(FORECAST, 6)).toEqual([
-      { month: "2026-11", lowest: "red", redDays: 7 },
-      { month: "2026-12", lowest: "red", redDays: 9 },
-      { month: "2027-01", lowest: "red", redDays: 31 },
-      { month: "2027-02", lowest: "red", redDays: 28 },
-      { month: "2027-03", lowest: "red", redDays: 31 },
-      { month: "2027-04", lowest: "red", redDays: 30 },
+      { month: "2026-11", lowest: "red", low: "-2916.00", redDays: 7 },
+      { month: "2026-12", lowest: "red", low: "-7577.00", redDays: 9 },
+      { month: "2027-01", lowest: "red", low: "-7577.00", redDays: 31 },
+      { month: "2027-02", lowest: "red", low: "-7577.00", redDays: 28 },
+      { month: "2027-03", lowest: "red", low: "-7577.00", redDays: 31 },
+      { month: "2027-04", lowest: "red", low: "-7577.00", redDays: 30 },
     ]);
     expect(monthsAhead(FORECAST, 12).at(-1)?.month).toBe("2027-10");
   });
@@ -23,14 +23,30 @@ describe("monthsAhead", () => {
       ["2026-12-05", "2500.00"],
     ]);
     expect(monthsAhead(rising, 3)).toEqual([
-      { month: "2026-11", lowest: "light_green", redDays: 0 },
-      { month: "2026-12", lowest: "light_green", redDays: 0 },
-      { month: "2027-01", lowest: "green", redDays: 0 },
+      { month: "2026-11", lowest: "light_green", low: "1842.10", redDays: 0 },
+      { month: "2026-12", lowest: "light_green", low: "1842.10", redDays: 0 },
+      { month: "2027-01", lowest: "green", low: "2500.00", redDays: 0 },
+    ]);
+  });
+
+  it("finds the low on the month's last day, and in a month with one forecast day", () => {
+    const dip = forecastFixture("2026-11-10", "2026-11-10", "2026-12-01", [
+      ["2026-11-10", "100.00"],
+      ["2026-11-30", "-0.40"],
+      ["2026-12-01", "50.00"],
+    ]);
+    expect(monthsAhead(dip, 2).map(({ month, low }) => [month, low])).toEqual([
+      ["2026-11", "-0.40"],
+      ["2026-12", "50.00"],
     ]);
   });
 
   it("leaves the months before the opening date without a tier", () => {
-    expect(monthsAhead(FORECAST_LATE_OPENING, 3).map((ahead) => ahead.lowest)).toEqual([null, null, "light_green"]);
+    expect(monthsAhead(FORECAST_LATE_OPENING, 3).map(({ lowest, low }) => [lowest, low])).toEqual([
+      [null, null],
+      [null, null],
+      ["light_green", "1000.00"],
+    ]);
   });
 });
 
@@ -69,8 +85,12 @@ describe("draftVerdict", () => {
   const verdictOf = (rows: DraftRow[], forecast = FORECAST) =>
     draftVerdict(forecast.days, withDraft(forecast.days, rows, SETTINGS));
 
-  it("names the first day the draft turns red", () => {
-    expect(verdictOf([{ date: "2026-11-10", cents: -670_000 }])).toEqual({ kind: "turns-red", date: "2026-11-10" });
+  it("names the first day the draft turns red and its balance after the draft", () => {
+    expect(verdictOf([{ date: "2026-11-10", cents: -670_000 }])).toEqual({
+      kind: "turns-red",
+      date: "2026-11-10",
+      balance: "-550.00",
+    });
   });
 
   it("says when red days were already there", () => {

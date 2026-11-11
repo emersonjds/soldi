@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 
-const API = process.env.E2E_API_URL ?? "http://localhost:8080";
+import { expectNoClipped } from "./clipped";
+import { requireServer } from "./server";
 
 /** `[year, month, day]` of today in the server's São Paulo calendar. */
 const today = () =>
@@ -16,8 +17,7 @@ test("Próximos meses paints the first two months the rent is owed Crítico and 
   page,
   request,
 }) => {
-  const health = await request.get(`${API}/api/health`).catch(() => null);
-  test.skip(!health?.ok(), `Soldi server unreachable at ${API}/api/health; start it to run this flow.`);
+  await requireServer(request);
 
   await page.setViewportSize({ width: 375, height: 812 });
   await page.goto("/criar-conta");
@@ -42,11 +42,18 @@ test("Próximos meses paints the first two months the rent is owed Crítico and 
   const strip = page.getByRole("region", { name: "Próximos meses" });
   const chips = strip.getByRole("button", { name: /\d{4}/ });
   await expect(chips).toHaveCount(6);
-  await expect(chips.nth(first)).toHaveAccessibleName(/: Crítico, \d+ dias? no vermelho$/);
-  await expect(chips.nth(first + 1)).toHaveAccessibleName(/: Crítico, \d+ dias? no vermelho$/);
+  const red = /: Crítico, menor saldo -R\$\s[\d.]+,\d\d, \d+ dias? no vermelho$/;
+  await expect(chips.nth(first)).toHaveAccessibleName(red);
+  await expect(chips.nth(first + 1)).toHaveAccessibleName(red);
   await strip.getByRole("radio", { name: "12 meses" }).click();
   await expect(chips).toHaveCount(12);
-  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
+  // Rent with nothing coming in: the last months fall below -R$ 10.000.
+  await expect(chips.nth(11)).toContainText(/-\d{2}\.\d{3}/);
+  await expectNoClipped(page);
+  // A 1280 laptop squeezes the Termômetro card between the sidebar and the other columns.
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await expectNoClipped(page);
+  await page.setViewportSize({ width: 375, height: 812 });
 
   await chips.nth(first + 1).click();
   await expect(page).toHaveURL(new RegExp(`m=${monthFromNow(first + 1)}`));

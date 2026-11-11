@@ -1,14 +1,14 @@
 import { expect, test } from "@playwright/test";
 
-const API = process.env.E2E_API_URL ?? process.env.E2E_BASE_URL ?? "http://localhost:8080";
+import { requireServer } from "./server";
+
 const SHOTS = process.env.E2E_SHOTS;
 
 test("a subcategory is created under Pets from the header +, renamed, and deleted with its parent until Desfazer", async ({
   page,
   request,
 }) => {
-  const health = await request.get(`${API}/api/health`).catch(() => null);
-  test.skip(!health?.ok(), `Soldi server unreachable at ${API}/api/health; start it to run this flow.`);
+  await requireServer(request);
 
   await page.setViewportSize({ width: 375, height: 812 });
   await page.goto("/criar-conta");

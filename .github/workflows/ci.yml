@@ -164,6 +164,7 @@ jobs:
         working-directory: web
         env:
           E2E_BASE_URL: http://localhost:8089
+          E2E_API_URL: http://localhost:8089
 
   docker:
     runs-on: ubuntu-latest

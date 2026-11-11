@@ -1,6 +1,7 @@
 import { expect, type Page, test } from "@playwright/test";
 
-const API = process.env.E2E_API_URL ?? "http://localhost:8080";
+import { requireServer } from "./server";
+
 const PASSWORD = "uma-senha-bem-longa";
 
 const signUp = async (page: Page, email: string) => {
@@ -14,8 +15,7 @@ test("a user deletes the account, cannot sign in with it and can sign up again w
   page,
   request,
 }) => {
-  const health = await request.get(`${API}/api/health`).catch(() => null);
-  test.skip(!health?.ok(), `Soldi server unreachable at ${API}/api/health; start it to run this flow.`);
+  await requireServer(request);
 
   const email = `e2e-delete-${Date.now()}@example.com`;
   await page.setViewportSize({ width: 1440, height: 900 });
