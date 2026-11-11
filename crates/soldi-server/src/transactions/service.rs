@@ -1,3 +1,4 @@
+use chrono::Datelike;
 use soldi_types::categories::Category;
 use soldi_types::transactions::{
     CreateTransaction, Scope, Transaction, TransactionSeries, UpdateTransaction,
@@ -113,7 +114,8 @@ pub async fn create(
     })
 }
 
-/// R6: `following` also rewrites the series' later members; `repeat_months` starts a series or resizes it (D19).
+/// R6, M1 (D20): `following` also rewrites the series' later members and moves their day;
+/// `repeat_months` starts a series or resizes it (D19). A member locks its series first.
 pub async fn update(
     pool: &PgPool,
     user: &CurrentUser,
@@ -122,9 +124,15 @@ pub async fn update(
     patch: UpdateTransaction,
 ) -> Result<Transaction, AppError> {
     let mut tx = pool.begin().await?;
-    let current = repo::find(&mut tx, user.id, id)
+    let mut current = repo::find(&mut tx, user.id, id)
         .await?
         .ok_or(AppError::NotFound)?;
+    if let Some(series) = &current.series {
+        repo::lock_series(&mut tx, series.id).await?;
+        current = repo::find(&mut tx, user.id, id)
+            .await?
+            .ok_or(AppError::NotFound)?;
+    }
     if patch.repeat_months.is_some() {
         domain::check_repeatable(&current)?;
     }
@@ -142,6 +150,10 @@ pub async fn update(
         installments: None,
     })?;
     domain::check_kind(next.kind, &category)?;
+    let moves = scope == Scope::Following && current.series.is_some() && next.date != current.date;
+    if moves {
+        domain::check_day_move(current.date, next.date)?;
+    }
     check_opening(&mut tx, user, next.date).await?;
     if !repo::update(&mut tx, user.id, id, &next)
         .await
@@ -152,6 +164,16 @@ pub async fn update(
     if let (Scope::Following, Some(series)) = (scope, &current.series) {
         let amount = (next.amount != current.amount).then_some(next.amount);
         repo::update_following(&mut tx, user.id, series.id, current.date, &next, amount).await?;
+        if moves {
+            let month = next.date.with_day(1).unwrap_or(next.date);
+            let (ids, dates): (Vec<_>, Vec<_>) =
+                repo::members_from(&mut tx, user.id, series.id, month)
+                    .await?
+                    .into_iter()
+                    .unzip();
+            let dates = domain::moved_dates(&dates, next.date.day())?;
+            repo::set_dates(&mut tx, user.id, &ids, &dates).await?;
+        }
     }
     match (next.repeat_months, &current.series) {
         (Some(months), Some(series)) => resize(&mut tx, user, id, series.id, months, &next).await?,
@@ -174,6 +196,7 @@ pub async fn update(
 }
 
 /// L1–L4 (D19): the series ends after `months` entries; growth copies the edited member `next`.
+/// The caller holds the series lock.
 async fn resize(
     conn: &mut PgConnection,
     user: &CurrentUser,
@@ -182,7 +205,6 @@ async fn resize(
     months: i16,
     next: &CreateTransaction,
 ) -> Result<(), AppError> {
-    repo::lock_series(conn, series_id).await?;
     let edited = repo::find(conn, user.id, id)
         .await?
         .and_then(|entry| entry.series)
@@ -192,11 +214,11 @@ async fn resize(
     if i64::from(months) < total {
         repo::delete_beyond(conn, user.id, series_id, months.into()).await?;
     } else if i64::from(months) > total {
-        let (first, last) = repo::series_span(conn, user.id, series_id)
-            .await?
-            .ok_or(AppError::NotFound)?;
+        let end = repo::series_end(conn, user.id, series_id).await?;
+        let last = *end.first().ok_or(AppError::NotFound)?;
+        let day = domain::series_day(last, end.get(1).copied());
         let count = u32::try_from(i64::from(months) - total).unwrap_or(0);
-        let added = domain::following_dates(first, last, count)?;
+        let added = domain::following_dates(day, last, count)?;
         let amounts = vec![next.amount; added.len()];
         repo::insert_copies(conn, user.id, next, series_id, &added, &amounts).await?;
     }
@@ -204,6 +226,7 @@ async fn resize(
 }
 
 /// `following` on a series member also deletes the members dated after it.
+/// A member locks its series first, whatever the scope.
 pub async fn delete(
     pool: &PgPool,
     user: &CurrentUser,
@@ -211,16 +234,18 @@ pub async fn delete(
     scope: Scope,
 ) -> Result<(), AppError> {
     let mut tx = pool.begin().await?;
-    let current = repo::find(&mut tx, user.id, id)
+    let mut current = repo::find(&mut tx, user.id, id)
         .await?
         .ok_or(AppError::NotFound)?;
+    if let Some(series) = &current.series {
+        repo::lock_series(&mut tx, series.id).await?;
+        current = repo::find(&mut tx, user.id, id)
+            .await?
+            .ok_or(AppError::NotFound)?;
+    }
     match (scope, current.series) {
         (Scope::Following, Some(series)) => {
-            repo::lock_series(&mut tx, series.id).await?;
-            let locked = repo::find(&mut tx, user.id, id)
-                .await?
-                .ok_or(AppError::NotFound)?;
-            repo::delete_following(&mut tx, user.id, series.id, locked.date).await?;
+            repo::delete_following(&mut tx, user.id, series.id, current.date).await?;
         }
         _ => {
             repo::delete(&mut tx, user.id, id).await?;

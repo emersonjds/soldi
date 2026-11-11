@@ -151,3 +151,60 @@ test("a 12x series shrinks to 6 from its first entry and grows back to 12 from i
   await visit(twelfth);
   await expect(internet).toContainText("Saída · 12/1212 de 12");
 });
+
+test("a 12x series on the 5th moves to the 10th from its third entry on", async ({ page, request }) => {
+  const health = await request.get(`${API}/api/health`).catch(() => null);
+  test.skip(!health?.ok(), `Soldi server unreachable at ${API}/api/health; start it to run this flow.`);
+  test.setTimeout(90_000);
+
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto("/criar-conta");
+  await page.getByLabel("E-mail").fill(`e2e-move-${Date.now()}@example.com`);
+  await page.getByLabel("Senha").fill("uma-senha-bem-longa");
+  await page.getByRole("button", { name: "Criar conta" }).click();
+  await page.getByRole("button", { name: "Continuar" }).click();
+  await page.getByLabel("Saldo de hoje").fill("1.000,00");
+  await page.getByRole("button", { name: "Continuar" }).click();
+  await page.getByRole("button", { name: "Pular por agora" }).click();
+  await page.getByRole("button", { name: "Ver meu mês" }).click();
+  await page.getByRole("button", { name: "Pular" }).click();
+  await page.getByRole("dialog", { name: "Lançar" }).getByRole("button", { name: "Fechar" }).click();
+
+  const [first, second, third, twelfth] = [monthFrom(0), monthFrom(1), monthFrom(2), monthFrom(11)];
+  expect((await page.request.patch("/api/settings", { data: { opening_date: `${first}-01` } })).ok()).toBe(true);
+
+  const ledger = page.getByRole("region", { name: "Lançamentos" });
+  const internet = ledger.getByRole("button", { name: /^Internet/ });
+  const visit = async (month: string) => {
+    await page.goto(`/mes?m=${month}`);
+    await expect(ledger).toBeVisible();
+  };
+  const onDay = (date: string) => page.locator(`#dia-${date}`).getByRole("button", { name: /^Internet/ });
+
+  await page.getByRole("navigation", { name: "Navegação principal" }).getByRole("button", { name: "Lançar" }).click();
+  const launch = page.getByRole("dialog", { name: "Lançar" });
+  await launch.getByRole("radio", { name: "Saída" }).click();
+  await launch.getByLabel("Valor").fill("100,00");
+  await launch.getByLabel("Outra data").fill(`${first}-05`);
+  await launch.getByLabel("Observação").fill("Internet");
+  await launch.getByRole("switch", { name: "Repetir" }).click();
+  await launch.getByRole("button", { name: "Salvar" }).click();
+  await expect(page.getByText("12 lançamentos criados")).toBeVisible();
+
+  await visit(third);
+  await internet.click();
+  await page.getByRole("dialog", { name: "Internet" }).getByRole("button", { name: "Editar" }).click();
+  const edit = page.getByRole("dialog", { name: "Editar lançamento" });
+  await edit.getByRole("radio", { name: "Este e os próximos" }).click();
+  await edit.getByLabel("Outra data").fill(`${third}-10`);
+  await expect(edit.getByText("Os próximos também vão para o dia 10.")).toBeVisible();
+  await edit.getByRole("button", { name: "Salvar" }).click();
+  await expect(page.getByText("Série movida para o dia 10")).toBeVisible();
+
+  await visit(third);
+  await expect(onDay(`${third}-10`)).toContainText("Saída · 3/123 de 12");
+  await visit(twelfth);
+  await expect(onDay(`${twelfth}-10`)).toContainText("Saída · 12/1212 de 12");
+  await visit(second);
+  await expect(onDay(`${second}-05`)).toContainText("Saída · 2/122 de 12");
+});

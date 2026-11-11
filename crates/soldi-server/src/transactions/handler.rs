@@ -112,13 +112,13 @@ pub async fn create_transaction(
 #[utoipa::path(patch, path = "/api/transactions/{id}", tag = "transactions", request_body = UpdateTransaction,
     params(
         ("id" = Uuid, Path, description = "Transaction id"),
-        ("scope" = Option<Scope>, Query, description = "`following` also writes the amount, kind, category and note onto the series' later members; the date never spreads")),
+        ("scope" = Option<Scope>, Query, description = "`following` also writes the amount, kind, category and note onto the series' later members, and a new day of the month onto this and every later member, each clamped to its month; the month never spreads")),
     responses(
         (status = 200, body = Transaction, description = "The entry after the change, with the series' new total; absent fields stay as they are"),
         (status = 400, body = Problem, content_type = "application/problem+json", description = "`scope` is not `this` or `following`"),
         (status = 401, body = Problem, content_type = "application/problem+json"),
         (status = 404, body = Problem, content_type = "application/problem+json", description = "The entry is missing or another user's, or the new category is missing, archived or another user's"),
-        (status = 422, body = Problem, content_type = "application/problem+json", description = "Same rules as create, on the entry after the change, `before-opening-date` included; with `repeat_months`, `repeat-not-allowed-on-bill-payment` or `repeat-not-allowed-on-cofrinho-withdrawal` on an entry outside a series, `validation` on `repeat_months` outside 2..60 or below this member's position, on `date` when the series would pass 2100; nothing is written")))]
+        (status = 422, body = Problem, content_type = "application/problem+json", description = "Same rules as create, on the entry after the change, `before-opening-date` included; with `repeat_months`, `repeat-not-allowed-on-bill-payment` or `repeat-not-allowed-on-cofrinho-withdrawal` on an entry outside a series, `validation` on `repeat_months` outside 2..60 or below this member's position, on `date` when the series would pass 2100; with `following` on a series member, `validation` on `date` when the new date leaves this entry's month (`must stay in this entry's month when the series moves`) or when two of the moved members share a month (`must not move a series with two entries in one month`); nothing is written")))]
 pub async fn update_transaction(
     State(state): State<AppState>,
     user: CurrentUser,
