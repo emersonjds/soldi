@@ -39,6 +39,10 @@ const MonthScreen = () => {
   const [simulating, setSimulating] = useState(false);
   const [highlight, setHighlight] = useState<{ date: string } | null>(null);
   const [expandedMonth, setExpandedMonth] = useState<string | null>(null);
+  const launch = (kind: "income" | "bill" | "daily", simulate = false) => {
+    setSimulating(simulate);
+    setLaunching(kind);
+  };
 
   useEffect(() => {
     if (fromTour) window.history.replaceState(null, "", "/mes");
@@ -92,7 +96,7 @@ const MonthScreen = () => {
       )}
       {view.data && (
         <>
-          <MonthHero view={view.data} onLaunch={setLaunching} className={`${wide} xl:row-start-1`}>
+          <MonthHero view={view.data} onLaunch={launch} className={`${wide} xl:row-start-1`}>
             {alert && <RedDayAlert alert={alert} onJump={jump} />}
           </MonthHero>
           <BillsOfMonth view={view.data} className={`${wide} xl:row-start-2`} />
@@ -108,7 +112,7 @@ const MonthScreen = () => {
         <Ledger
           view={view.data}
           transactions={entries}
-          onLaunch={() => setLaunching("daily")}
+          onLaunch={() => launch("daily")}
           highlight={highlight?.date ?? null}
           causes={causes}
           expanded={expandedMonth === month}
@@ -120,10 +124,7 @@ const MonthScreen = () => {
       {!monthFailed && !view.data && <StripSkeleton className="xl:col-start-3 xl:row-start-1" />}
       <MonthsAhead
         viewing={month}
-        onSimulate={() => {
-          setSimulating(true);
-          setLaunching("daily");
-        }}
+        onSimulate={() => launch("daily", true)}
         onOpen={(next) => {
           router.replace(`/mes?m=${next}`, { scroll: false });
           window.scrollTo({ top: 0 });
@@ -140,7 +141,6 @@ const MonthScreen = () => {
           if (open) return;
           setLaunching(null);
           setHint(false);
-          setSimulating(false);
         }}
         initialKind={launching ?? "daily"}
         initialSimulate={simulating}

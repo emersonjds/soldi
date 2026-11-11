@@ -169,6 +169,18 @@ describe("AppShell", () => {
     expect(
       within(await screen.findByRole("dialog", { name: "Lançar" })).getByRole("switch", { name: "Simular" }),
     ).not.toBeChecked();
+
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await userEvent.click(simulate);
+    await screen.findByRole("dialog", { name: "Lançar" });
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    const tabs = screen.getByRole("navigation", { name: "Navegação principal" });
+    await userEvent.click(within(tabs).getByRole("button", { name: "Lançar" }));
+    expect(
+      within(await screen.findByRole("dialog", { name: "Lançar" })).getByRole("switch", { name: "Simular" }),
+    ).not.toBeChecked();
   });
 
   it("marks Contas Fixas, not Ajustes, in the sidebar on its screen", () => {

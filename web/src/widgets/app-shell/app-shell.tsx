@@ -110,6 +110,10 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
   const email = me.data?.email ?? "";
   const [firstName] = name.split(" ");
   const greeting = firstName ? `Olá, ${firstName}` : "Olá";
+  const launch = (simulate = false) => {
+    setSimulating(simulate);
+    setLaunching(true);
+  };
   const current = SIDEBAR.flatMap((group) => group.items)
     .filter((item) => isAt(item.href))
     .sort((a, b) => b.href.length - a.href.length)[0];
@@ -146,13 +150,7 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
                       })}
                       {group.label === "Menu" && (
                         <SidebarMenuItem>
-                          <SidebarMenuButton
-                            className="h-11 gap-3 px-3 text-base"
-                            onClick={() => {
-                              setSimulating(true);
-                              setLaunching(true);
-                            }}
-                          >
+                          <SidebarMenuButton className="h-11 gap-3 px-3 text-base" onClick={() => launch(true)}>
                             <Sparkles className="size-5!" aria-hidden />
                             Posso comprar isso?
                           </SidebarMenuButton>
@@ -215,7 +213,7 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
             )}
             <Button
               className="ml-auto hidden min-h-11 bg-brand text-base text-brand-foreground hover:bg-brand-hover lg:inline-flex"
-              onClick={() => setLaunching(true)}
+              onClick={() => launch()}
             >
               <Plus className="size-5" aria-hidden />
               Lançar
@@ -238,7 +236,7 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
           <button
             type="button"
             aria-label="Lançar"
-            onClick={() => setLaunching(true)}
+            onClick={() => launch()}
             className="flex size-14 shrink-0 items-center justify-center rounded-full bg-brand text-brand-foreground shadow-lg transition-colors hover:bg-brand-hover focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2"
           >
             <Plus className="size-7" aria-hidden />
@@ -247,10 +245,7 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
 
         <TransactionSheet
           open={launching}
-          onOpenChange={(open) => {
-            setLaunching(open);
-            if (!open) setSimulating(false);
-          }}
+          onOpenChange={setLaunching}
           initialSimulate={simulating}
           billSheet={(props) => <EditBillSheet open {...props} />}
         />
