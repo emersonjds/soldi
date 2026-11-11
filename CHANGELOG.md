@@ -7,6 +7,23 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.22.0
+
+> Headline: move the day of a whole series
+
+### Added
+
+- `PATCH /api/transactions/{id}?scope=following` with a new date in the same month moves this member and every later one to the new day, each clamped to its own month (D20). A month change with `following`, or a move through a month that holds two members, answers 422 on `date`.
+
+### Changed
+
+- Growing a series takes the last member's day, so a resize after a move lands on the new day (D19, D20).
+- Every write to a series member, including a single delete, takes the series lock before any row lock and re-reads the member, so concurrent edits cannot deadlock or write a stale date.
+
+### Web
+
+- Editing a series member with `Este e os próximos` names the new day under the date (`Os próximos também vão para o dia 10.`), blocks a month change (`Para mudar o mês, use Só este.`) and confirms with `Série movida para o dia 10`.
+
 ## 0.21.0
 
 > Headline: a series can change its length
