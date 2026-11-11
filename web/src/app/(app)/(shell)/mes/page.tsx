@@ -4,6 +4,8 @@ import { Suspense, useEffect, useState } from "react";
 
 import { useRouter, useSearchParams } from "next/navigation";
 
+import { flushSync } from "react-dom";
+
 import { causeOf, forecastAlert } from "@/entities/month/forecast-alert";
 import { useMonth } from "@/entities/month/month-query";
 import { useTransactions } from "@/entities/transaction/transaction-queries";
@@ -35,6 +37,7 @@ const MonthScreen = () => {
   const [launching, setLaunching] = useState<"income" | "daily" | null>(fromTour ? "income" : null);
   const [hint, setHint] = useState(fromTour);
   const [highlight, setHighlight] = useState<{ date: string } | null>(null);
+  const [expandedMonth, setExpandedMonth] = useState<string | null>(null);
 
   useEffect(() => {
     if (fromTour) window.history.replaceState(null, "", "/mes");
@@ -59,6 +62,7 @@ const MonthScreen = () => {
   const monthFailed = view.isError && !view.data;
   const entriesFailed = transactions.isError && !entries;
   const jump = (date: string) => {
+    flushSync(() => setExpandedMonth(month));
     const group = document.getElementById(`dia-${date}`);
     group?.scrollIntoView({ block: "start" });
     group?.focus({ preventScroll: true });
@@ -110,6 +114,8 @@ const MonthScreen = () => {
           onLaunch={() => setLaunching("daily")}
           highlight={highlight?.date ?? null}
           causes={causes}
+          expanded={expandedMonth === month}
+          onExpandedChange={(expanded) => setExpandedMonth(expanded ? month : null)}
           className={ledgerPlace}
         />
       )}

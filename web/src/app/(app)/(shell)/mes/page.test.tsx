@@ -54,6 +54,13 @@ const open = (replies: Record<string, Reply> = {}) => {
 
 const ledger = () => screen.getByRole("region", { name: "Lançamentos" });
 
+const spent = (date: string): Schemas["Transaction"] => ({
+  ...TRANSACTIONS[0],
+  id: `t-${date}`,
+  date,
+  note: `Gasto ${date}`,
+});
+
 const EMPTY = {
   ...MONTH,
   totals: { ...MONTH.totals, income: "0.00", bills: "0.00", daily: "0.00", outflow: "0.00", performance: "0.00" },
@@ -627,6 +634,104 @@ describe("Mês", () => {
     expect(day).toHaveClass("ring-2");
     act(() => vi.advanceTimersByTime(1));
     expect(day).not.toHaveClass("ring-2");
+  });
+
+  it("expands the capped ledger before jumping to a red day it hides", async () => {
+    const scroll = vi.spyOn(Element.prototype, "scrollIntoView");
+    open({
+      "GET /api/months/2026-11": { status: 200, body: FORECAST_MONTH },
+      "GET /api/transactions": {
+        status: 200,
+        body: [...FORECAST_TRANSACTIONS, ...["06", "07", "08"].map((day) => spent(`2026-11-${day}`))],
+      },
+    });
+
+    const hero = await screen.findByRole("region", { name: "Saldo hoje" });
+    const first = await within(hero).findByRole("button", { name: /^Dia 23 fica no vermelho/ });
+    await within(ledger()).findByRole("button", { name: /Gasto 2026-11-06/ });
+    expect(document.getElementById("dia-2026-11-23")).toBeNull();
+
+    fireEvent.click(first);
+    const day = document.getElementById("dia-2026-11-23");
+    expect(day).not.toBeNull();
+    expect(scroll.mock.contexts.at(-1)).toBe(day);
+    expect(day).toHaveFocus();
+    expect(within(ledger()).getByRole("button", { name: "Mostrar menos" })).toHaveAttribute("aria-expanded", "true");
+    scroll.mockRestore();
+  });
+
+  it("caps the ledger to the next 3 scheduled days, today and the 6 before, and expands in place keeping focus", async () => {
+    open({
+      "GET /api/transactions": {
+        status: 200,
+        body: ["10", "09", "08", "07", "06", "04", "03", "02", "01"].map((day) => spent(`2026-11-${day}`)),
+      },
+    });
+
+    const toggle = await within(await screen.findByRole("region", { name: "Lançamentos" })).findByRole("button", {
+      name: "Ver o mês inteiro (9 dias)",
+    });
+    const shownDays = () =>
+      within(ledger())
+        .getAllByRole("heading", { level: 3 })
+        .map((heading) => heading.closest("[id]")?.id);
+    expect(shownDays()).toEqual([
+      "dia-2026-11-08",
+      "dia-2026-11-07",
+      "dia-2026-11-06",
+      "dia-2026-11-04",
+      "dia-2026-11-03",
+      "dia-2026-11-02",
+      "dia-2026-11-01",
+    ]);
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+
+    toggle.focus();
+    await userEvent.click(toggle);
+    expect(toggle).toHaveTextContent("Mostrar menos");
+    expect(toggle).toHaveFocus();
+    expect(shownDays()).toHaveLength(9);
+
+    await userEvent.click(toggle);
+    expect(toggle).toHaveTextContent("Ver o mês inteiro (9 dias)");
+    expect(toggle).toHaveFocus();
+    expect(shownDays()).toHaveLength(7);
+  });
+
+  it("shows the last 7 days of a past month", async () => {
+    setSearch("m=2026-10");
+    const october = {
+      ...MONTH,
+      month: "2026-10",
+      days: MONTH.days.map((day) => ({
+        ...day,
+        date: day.date.replace("-11-", "-10-"),
+        is_today: false,
+        is_future: false,
+      })),
+    };
+    open({
+      "GET /api/months/2026-10": { status: 200, body: october },
+      "GET /api/transactions": {
+        status: 200,
+        body: ["30", "28", "25", "20", "15", "10", "05", "02"].map((day) => spent(`2026-10-${day}`)),
+      },
+    });
+
+    await within(await screen.findByRole("region", { name: "Lançamentos" })).findByRole("button", {
+      name: "Ver o mês inteiro (8 dias)",
+    });
+    expect(within(ledger()).queryByRole("button", { name: /Gasto 2026-10-02/ })).not.toBeInTheDocument();
+    expect(within(ledger()).getByRole("button", { name: /Gasto 2026-10-05/ })).toBeInTheDocument();
+    expect(within(ledger()).getByRole("button", { name: /Gasto 2026-10-30/ })).toBeInTheDocument();
+  });
+
+  it("has no expand button when the month fits the cap", async () => {
+    open();
+    await within(await screen.findByRole("region", { name: "Lançamentos" })).findByRole("button", {
+      name: /Compras da semana/,
+    });
+    expect(within(ledger()).queryByRole("button", { name: /Ver o mês inteiro/ })).not.toBeInTheDocument();
   });
 
   it("says nothing in the hero when no day ahead is red", async () => {
