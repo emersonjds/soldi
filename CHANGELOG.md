@@ -7,6 +7,17 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.36.0
+
+> Headline: Mês as in the Stitch design
+
+### Web
+
+- Mês hero as in Stitch: today's balance with its tier, the "Projetado no fim do mês" box and the split bar "Para onde foi a entrada deste mês" with its legend and total; on mobile, the indigo hero with the greeting and the month switcher (SOL-81, D24).
+- The red-day banner spans the page and names the day's two largest outflows.
+- Termômetro do Mês shows the spent share, the Entradas / Saídas / Resultado box and "Você está aqui".
+- A card with nothing to show does not render, and the cards flow in two stacks with no holes (D25).
+
 ## 0.35.0
 
 > Headline: the shell as in the Stitch design
