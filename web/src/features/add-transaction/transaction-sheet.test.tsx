@@ -919,7 +919,7 @@ describe("TransactionSheet", () => {
     expect(screen.queryByRole("switch", { name: "Parcelar compra" })).not.toBeInTheDocument();
   });
 
-  it("is a centered dialog from 1024px: Novo Lançamento, its description shown, Hoje with the day, no Quando foi?", async () => {
+  it("is a 560px centered dialog from 1024px: Novo Lançamento, its description shown, Hoje with the day, no Quando foi?, no Enter hint", async () => {
     window.innerWidth = 1440;
     setup();
 
@@ -929,8 +929,8 @@ describe("TransactionSheet", () => {
     expect(screen.getByRole("button", { name: "Hoje (5 nov)" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByText("Quando foi?")).toHaveClass("sr-only");
     const footer = screen.getByRole("button", { name: "Salvar Lançamento" }).closest(FOOTER) as HTMLElement;
-    expect(footer).toHaveTextContent(/^Pressione Enter ↵ para salvarCancelarSalvar Lançamento$/);
-    expect(within(footer).getByText("Enter ↵").tagName).toBe("KBD");
+    expect(footer).toHaveTextContent(/^CancelarSalvar Lançamento$/);
+    expect(dialog).toHaveClass("sm:max-w-[560px]");
   });
 
   it("keeps the description for screen readers only in Editar from 1024px", async () => {
@@ -970,20 +970,27 @@ describe("TransactionSheet", () => {
     expect(requests.filter((request) => request.method === "POST")).toHaveLength(0);
   });
 
-  it("puts the keypad under the note and Repetir after it", async () => {
-    const base = window.matchMedia("");
-    vi.spyOn(window, "matchMedia").mockImplementation((query: string) => ({
-      ...base,
-      media: query,
-      matches: query === KEYPAD_QUERY,
-    }));
+  it("docks the keypad in the pinned footer right above Salvar Lançamento, under the whole form", async () => {
+    coarse();
     setup();
 
     const erase = await screen.findByRole("button", { name: "Apagar" });
-    const note = screen.getByLabelText("Observação");
+    const save = screen.getByRole("button", { name: "Salvar Lançamento" });
     const repeat = screen.getByRole("switch", { name: "Repetir lançamento (Série)" });
-    expect(note.compareDocumentPosition(erase) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(erase.compareDocumentPosition(repeat) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(erase.closest(FOOTER)).toBe(save.closest(FOOTER));
+    expect(erase.compareDocumentPosition(save) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(repeat.compareDocumentPosition(erase) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("keeps the docked keypad above Lançar de verdade while simulating", async () => {
+    coarse();
+    setup();
+
+    await userEvent.click(await screen.findByRole("switch", { name: "Simular" }));
+    const erase = screen.getByRole("button", { name: "Apagar" });
+    const launch = screen.getByRole("button", { name: "Lançar de verdade" });
+    expect(erase.closest(FOOTER)).toBe(launch.closest(FOOTER));
+    expect(erase.compareDocumentPosition(launch) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it("sums a series: 12× de R$ 39,90 · repete todo dia 10 até out 2027", async () => {

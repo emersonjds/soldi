@@ -42,7 +42,7 @@ const seed = async (page: Page) => {
 test.describe("on a touch screen", () => {
   test.use({ hasTouch: true });
 
-  test("at 375×812 the tab bar never covers the last row of a long page, and a long Lançar with the keypad still shows Salvar Lançamento", async ({
+  test("at 375×812 the tab bar never covers the last row of a long page, and a long Lançar keeps the keypad and Salvar Lançamento in view", async ({
     page,
     request,
   }) => {
@@ -84,6 +84,7 @@ test.describe("on a touch screen", () => {
     await expect(launch.getByRole("button", { name: "Apagar" })).toBeVisible();
     expect(await launch.evaluate((sheet) => sheet.scrollHeight > sheet.clientHeight)).toBe(true);
     await launch.evaluate((sheet) => sheet.scrollTo(0, 0));
+    await expect(launch.getByRole("button", { name: "1", exact: true })).toBeInViewport({ ratio: 1 });
     await expect(launch.getByRole("button", { name: "Salvar Lançamento" })).toBeInViewport({ ratio: 1 });
   });
 });

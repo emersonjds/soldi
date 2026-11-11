@@ -19,7 +19,6 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Kbd } from "@/components/ui/kbd";
 import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { type BillPrefill, useCreateBill } from "@/entities/bill/bill-queries";
@@ -309,7 +308,6 @@ const TransactionForm = ({
           </button>
         )}
       </div>
-      {keypad && <AmountKeypad value={draft.amount} onValueChange={(value) => set({ amount: value })} />}
 
       {transaction?.recurring_bill_id && (
         <p className="text-muted-foreground text-sm">Já é uma conta fixa recorrente.</p>
@@ -452,6 +450,7 @@ const TransactionForm = ({
       {draft.simulate && <Simulation rows={rows} countInvalid={Boolean(amount) && monthsChecked && !monthsValid} />}
 
       <ResponsiveSheetFooter>
+        {keypad && <AmountKeypad value={draft.amount} onValueChange={(value) => set({ amount: value })} />}
         {draft.simulate ? (
           <>
             <BrandButton type="button" onClick={save}>
@@ -464,14 +463,9 @@ const TransactionForm = ({
         ) : (
           <div className="flex items-center gap-3">
             {isLg && (
-              <>
-                <span className="mr-auto text-muted-foreground text-sm">
-                  Pressione <Kbd>Enter ↵</Kbd> para salvar
-                </span>
-                <Button type="button" variant="ghost" className="h-12 text-base" onClick={onDiscard}>
-                  Cancelar
-                </Button>
-              </>
+              <Button type="button" variant="ghost" className="ml-auto h-12 text-base" onClick={onDiscard}>
+                Cancelar
+              </Button>
             )}
             <BrandButton type="submit" className="lg:w-auto lg:px-6">
               <CircleCheck aria-hidden />
@@ -610,6 +604,7 @@ export const TransactionSheet = ({
       title={title}
       description="Cadastre uma movimentação pontual ou recorrente"
       showDescription={!transaction}
+      wide
     >
       {hint && <p className="rounded-xl bg-secondary px-4 py-3 font-medium text-primary text-sm">{hint}</p>}
       <TransactionForm
