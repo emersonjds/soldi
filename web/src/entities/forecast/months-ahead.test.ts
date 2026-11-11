@@ -85,8 +85,12 @@ describe("draftVerdict", () => {
   const verdictOf = (rows: DraftRow[], forecast = FORECAST) =>
     draftVerdict(forecast.days, withDraft(forecast.days, rows, SETTINGS));
 
-  it("names the first day the draft turns red", () => {
-    expect(verdictOf([{ date: "2026-11-10", cents: -670_000 }])).toEqual({ kind: "turns-red", date: "2026-11-10" });
+  it("names the first day the draft turns red and its balance after the draft", () => {
+    expect(verdictOf([{ date: "2026-11-10", cents: -670_000 }])).toEqual({
+      kind: "turns-red",
+      date: "2026-11-10",
+      balance: "-550.00",
+    });
   });
 
   it("says when red days were already there", () => {

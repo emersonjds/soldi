@@ -7,8 +7,9 @@ import { useForecast } from "@/entities/forecast/forecast-query";
 import { MonthChips } from "@/entities/forecast/month-chips";
 import { type DraftRow, draftVerdict, monthsAhead, type Verdict, withDraft } from "@/entities/forecast/months-ahead";
 import { settingsQuery } from "@/entities/settings/settings-query";
+import { type Currency, useCurrency } from "@/shared/lib/currency";
 import { dayMonth } from "@/shared/lib/date";
-import { TIER_LABEL } from "@/shared/lib/tier";
+import { formatMoney } from "@/shared/lib/money";
 import { TierPill } from "@/shared/ui/tier-pill";
 
 const SLOTS = ["d1", "d2", "d3", "d4", "d5", "d6", "d7"];
@@ -19,12 +20,12 @@ const dayName = (date: string, today: string) => {
   return `dia ${dayMonth(date)}`;
 };
 
-const verdictLine = (verdict: Verdict, today: string, income: boolean) => {
+const verdictLine = (verdict: Verdict, today: string, income: boolean, currency: Currency) => {
   const subject = income ? "esse lançamento" : "essa compra";
   if (verdict.kind === "clear") return `Nenhum dia vermelho com ${subject}.`;
   if (verdict.kind === "already-red")
     return `${income ? "Esse lançamento" : "Essa compra"} não cria dia vermelho novo.`;
-  return `Com ${subject}, ${dayName(verdict.date, today)} vira ${TIER_LABEL.red}`;
+  return `Com ${subject}, ${dayName(verdict.date, today)} fica no vermelho: ${formatMoney(verdict.balance, currency)}.`;
 };
 
 type Props = {
@@ -37,6 +38,7 @@ type Props = {
 export const Simulation = ({ rows, countInvalid }: Props) => {
   const forecast = useForecast();
   const settings = useQuery(settingsQuery);
+  const currency = useCurrency();
   const failed = forecast.isError || settings.isError;
   const ready = rows && !failed && forecast.data && settings.data;
   const after = ready ? withDraft(forecast.data.days, rows, settings.data) : [];
@@ -46,7 +48,7 @@ export const Simulation = ({ rows, countInvalid }: Props) => {
   if (!rows) status = countInvalid ? "Escolha de 2 a 60 parcelas para simular." : "Digite um valor para simular.";
   else if (ready) {
     const verdict: Verdict = week.length > 0 ? draftVerdict(forecast.data.days, after) : { kind: "clear" };
-    status = verdictLine(verdict, forecast.data.today, rows[0].cents > 0);
+    status = verdictLine(verdict, forecast.data.today, rows[0].cents > 0, currency);
   }
   return (
     <section aria-label="Simulação" className="flex flex-col gap-3 rounded-2xl bg-muted p-4">
@@ -85,7 +87,10 @@ export const Simulation = ({ rows, countInvalid }: Props) => {
       {spans && ready && (
         <>
           <h3 className="font-semibold text-sm">Meses com essa compra</h3>
-          <MonthChips months={monthsAhead({ today: forecast.data.today, days: after }, 12)} />
+          <MonthChips
+            months={monthsAhead({ today: forecast.data.today, days: after }, 12)}
+            before={monthsAhead(forecast.data, 12)}
+          />
         </>
       )}
     </section>

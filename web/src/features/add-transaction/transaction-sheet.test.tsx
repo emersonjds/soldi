@@ -640,7 +640,9 @@ describe("TransactionSheet", () => {
     await userEvent.keyboard("6700,00");
 
     const simulation = await screen.findByRole("region", { name: "Simulação" });
-    expect(await within(simulation).findByRole("status")).toHaveTextContent("Com essa compra, hoje vira Crítico");
+    expect(await within(simulation).findByRole("status")).toHaveTextContent(
+      "Com essa compra, hoje fica no vermelho: -R$ 550,00.",
+    );
     const week = within(simulation).getByRole("list", { name: "Próximos 7 dias" });
     expect(within(week).getAllByRole("listitem")).toHaveLength(7);
     expect(within(week).getAllByRole("listitem")[0]).toHaveTextContent("10/11Crítico");

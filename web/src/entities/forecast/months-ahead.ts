@@ -44,11 +44,14 @@ export const withDraft = (days: ForecastDay[], rows: DraftRow[], bounds: TierBou
     return { ...day, projected_balance: balance, projected_tier: tierOf(balance, bounds) };
   });
 
-export type Verdict = { kind: "turns-red"; date: string } | { kind: "already-red" } | { kind: "clear" };
+export type Verdict =
+  | { kind: "turns-red"; date: string; balance: string }
+  | { kind: "already-red" }
+  | { kind: "clear" };
 
-/** The first day the draft turns red; `already-red` when red days exist but the draft adds none. */
+/** The first day the draft turns red, with its balance after the draft; `already-red` when red days exist but the draft adds none. */
 export const draftVerdict = (before: ForecastDay[], after: ForecastDay[]): Verdict => {
   const turned = after.find((day, index) => day.projected_tier === "red" && before[index].projected_tier !== "red");
-  if (turned) return { kind: "turns-red", date: turned.date };
+  if (turned) return { kind: "turns-red", date: turned.date, balance: turned.projected_balance };
   return after.some((day) => day.projected_tier === "red") ? { kind: "already-red" } : { kind: "clear" };
 };
