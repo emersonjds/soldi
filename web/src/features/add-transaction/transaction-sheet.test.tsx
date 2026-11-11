@@ -403,19 +403,38 @@ describe("TransactionSheet", () => {
     expect(screen.queryByText("Já é uma conta fixa recorrente.")).not.toBeInTheDocument();
   });
 
-  it("edits a series member: Só este by default, Este e os próximos sends the scope", async () => {
+  it("edits a series member as Stitch draws it: chip, title, the member, Escopo first, then value, duration and day", async () => {
+    window.innerWidth = 1440;
     const { requests } = setup(
-      { transaction: MEMBER },
+      { transaction: MEMBER, onDelete: vi.fn() },
       { [`PATCH /api/transactions/${MEMBER.id}`]: { status: 200, body: MEMBER } },
     );
 
-    expect(await screen.findByText("Parte de uma série de 12")).toBeInTheDocument();
+    const dialog = await screen.findByRole("dialog", { name: "Editar Lançamento Recorrente" });
+    expect(within(dialog).getByText("Parte de uma série de 12 meses")).toBeInTheDocument();
+    expect(within(dialog).getByText(/^Você está editando/)).toHaveTextContent(
+      'Você está editando a parcela 3 de 12: "Aluguel" (R$ 1.200,00)',
+    );
     expect(screen.queryByRole("switch", { name: "Repetir lançamento (Série)" })).not.toBeInTheDocument();
-    expect(screen.getByRole("radiogroup", { name: "Aplicar em" })).toBeInTheDocument();
-    expect(screen.getByText("Aplicar em")).toBeVisible();
-    expect(screen.getByRole("radio", { name: "Só este" })).toBeChecked();
+    expect(screen.queryByRole("group", { name: "Tipo" })).not.toBeInTheDocument();
+    const scope = screen.getByRole("radiogroup", { name: "Escopo da Alteração" });
+    const amount = screen.getByLabelText("Valor por parcela");
+    const months = screen.getByRole("radiogroup", { name: "Duração da série" });
+    const day = screen.getByText("Dia de vencimento");
+    const note = screen.getByLabelText("Observação");
+    const follows = (first: Element, second: Element) =>
+      expect(first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    follows(scope, amount);
+    follows(amount, months);
+    follows(months, day);
+    follows(day, note);
+    expect(screen.getByRole("radio", { name: "Só este lançamento" })).toBeChecked();
+    expect(screen.getByText("Novo valor aplicado só a esta cobrança.")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("radio", { name: "Este e os próximos" }));
-    await userEvent.click(screen.getByRole("button", { name: "Salvar Lançamento" }));
+    expect(screen.getByText("Novo valor monetário aplicado a partir desta cobrança.")).toBeInTheDocument();
+    const footer = screen.getByRole("button", { name: "Salvar Alterações na Série" }).closest(FOOTER) as HTMLElement;
+    expect(footer).toHaveTextContent(/^Excluir da Série\.\.\.CancelarSalvar Alterações na Série$/);
+    await userEvent.click(screen.getByRole("button", { name: "Salvar Alterações na Série" }));
 
     await waitFor(() => expect(requests.some((request) => request.method === "PATCH")).toBe(true));
     const patch = requests.find((request) => request.method === "PATCH");
@@ -426,69 +445,115 @@ describe("TransactionSheet", () => {
   it("reads Toda a série on the first member", async () => {
     setup({ transaction: { ...MEMBER, series: { ...MEMBER.series, position: 1 } } });
 
-    expect(await screen.findByRole("radio", { name: "Toda a série" })).toBeInTheDocument();
+    expect(await screen.findByRole("radio", { name: "Toda a série (12 lançamentos)" })).toBeInTheDocument();
+  });
+
+  it("closes and hands Excluir da Série... to the host", async () => {
+    const onDelete = vi.fn();
+    const { onOpenChange } = setup({ transaction: MEMBER, onDelete });
+
+    await userEvent.click(await screen.findByRole("button", { name: "Excluir da Série..." }));
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+    expect(onDelete).toHaveBeenCalledOnce();
+  });
+
+  it("offers no Excluir da Série... without a host to delete", async () => {
+    setup({ transaction: MEMBER });
+
+    await screen.findByRole("button", { name: "Salvar Alterações na Série" });
+    expect(screen.queryByRole("button", { name: "Excluir da Série..." })).not.toBeInTheDocument();
   });
 
   const resize = { [`PATCH /api/transactions/${MEMBER.id}`]: { status: 200, body: MEMBER } };
 
-  it("resizes a series member: Meses na série on the total, chips below the position off, helpers name the change", async () => {
+  it("resizes a series member: Duração da série on the total, chips below the position off, helpers name the change", async () => {
     const { sent } = setup({ transaction: MEMBER }, resize);
 
-    const months = await screen.findByRole("radiogroup", { name: "Meses na série" });
-    expect(screen.getByText("Meses na série")).toBeVisible();
-    expect(within(months).getByRole("radio", { name: "12×" })).toBeChecked();
-    expect(within(months).getByRole("radio", { name: "2×" })).toBeDisabled();
-    expect(within(months).getByRole("radio", { name: "3×" })).toBeEnabled();
-    expect(screen.queryByText(/Remove|· até/)).not.toBeInTheDocument();
+    const months = await screen.findByRole("radiogroup", { name: "Duração da série" });
+    expect(screen.getByText("Duração da série")).toBeVisible();
+    expect(within(months).getByRole("radio", { name: "12 meses" })).toBeChecked();
+    expect(within(months).getByRole("radio", { name: "3 meses" })).toBeEnabled();
+    expect(screen.queryByText(/Série encurtada|Série estendida/)).not.toBeInTheDocument();
 
-    await userEvent.click(within(months).getByRole("radio", { name: "6×" }));
-    expect(screen.getByText("Remove os 6 últimos · termina em mar 2027")).toBeInTheDocument();
-    await userEvent.click(within(months).getByRole("radio", { name: "Outro" }));
+    await userEvent.click(within(months).getByRole("radio", { name: "6 meses" }));
+    expect(screen.getByText("Série encurtada: Remove os 6 últimos meses. Termina em Março/2027.")).toBeInTheDocument();
+    await userEvent.click(within(months).getByRole("radio", { name: "Customizado" }));
     const custom = screen.getByLabelText("Meses");
     await userEvent.clear(custom);
     await userEvent.type(custom, "15");
-    expect(screen.getByText("+3× R$ 1.200,00 · até dez 2027")).toBeInTheDocument();
-    const amount = screen.getByLabelText(/^Valor d/);
+    expect(screen.getByText("Série estendida: Adiciona 3 meses. Termina em Dezembro/2027.")).toBeInTheDocument();
+    expect(screen.queryByText(/Economia projetada/)).not.toBeInTheDocument();
+    const amount = screen.getByLabelText("Valor por parcela");
     await userEvent.clear(amount);
-    expect(screen.getByText("+3× · até dez 2027")).toBeInTheDocument();
     await userEvent.type(amount, "9990");
-    expect(screen.getByText("+3× R$ 99,90 · até dez 2027")).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "Salvar Lançamento" }));
+    await userEvent.click(screen.getByRole("button", { name: "Salvar Alterações na Série" }));
 
     expect(await sent("PATCH")).toMatchObject({ amount: "99.90", repeat_months: 15 });
-    expect(await screen.findByText("Série ajustada para 15 meses")).toBeInTheDocument();
+    expect(await screen.findByText("Série ajustada com sucesso para 15 meses futuros.")).toBeInTheDocument();
   });
 
-  it("says Remove o último for one month and sends no count when it stays on the total", async () => {
+  it("shortens 12 to 6 from a March 2026 first member: ends Agosto/2026 and projects the saving", async () => {
+    const first = {
+      ...MEMBER,
+      date: "2026-03-04",
+      series: { id: "s1", position: 1, total: 12, last_date: "2027-02-04" },
+    };
+    setup({ transaction: first }, { [`PATCH /api/transactions/${MEMBER.id}`]: { status: 200, body: first } });
+
+    await userEvent.click(await screen.findByRole("radio", { name: "6 meses" }));
+    expect(screen.getByText("Série encurtada: Remove os 6 últimos meses. Termina em Agosto/2026.")).toBeInTheDocument();
+    expect(screen.getByText("Economia projetada de R$ 7.200,00 no orçamento previsto.")).toBeInTheDocument();
+  });
+
+  it("projects no saving when an income series shortens", async () => {
+    setup({ transaction: { ...TRANSACTIONS[2], series: MEMBER.series } });
+
+    await userEvent.click(await screen.findByRole("radio", { name: "6 meses" }));
+    expect(screen.getByText(/Série encurtada/)).toBeInTheDocument();
+    expect(screen.queryByText(/Economia projetada/)).not.toBeInTheDocument();
+  });
+
+  it("resets to the current total, not 12, on Ciclo Atual", async () => {
+    setup({ transaction: { ...MEMBER, series: { ...MEMBER.series, total: 6 } } });
+
+    await userEvent.click(await screen.findByRole("radio", { name: "12 meses" }));
+    expect(screen.getByRole("radio", { name: "12 meses" })).toBeChecked();
+    await userEvent.click(screen.getByRole("button", { name: "Ciclo Atual" }));
+    expect(screen.getByRole("radio", { name: "6 meses" })).toBeChecked();
+    expect(screen.queryByText(/Série estendida/)).not.toBeInTheDocument();
+  });
+
+  it("says Remove o último mês for one month and sends no count when it stays on the total", async () => {
     const { sent } = setup({ transaction: MEMBER }, resize);
 
-    await userEvent.click(await screen.findByRole("radio", { name: "Outro" }));
+    await userEvent.click(await screen.findByRole("radio", { name: "Customizado" }));
     const custom = screen.getByLabelText("Meses");
     await userEvent.clear(custom);
     await userEvent.type(custom, "11");
-    expect(screen.getByText("Remove o último · termina em ago 2027")).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("radio", { name: "12×" }));
-    expect(screen.queryByText(/Remove|· até/)).not.toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "Salvar Lançamento" }));
+    expect(screen.getByText("Série encurtada: Remove o último mês. Termina em Agosto/2027.")).toBeInTheDocument();
+    expect(screen.getByText("Economia projetada de R$ 1.200,00 no orçamento previsto.")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("radio", { name: "12 meses" }));
+    expect(screen.queryByText(/Série encurtada|Série estendida/)).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Salvar Alterações na Série" }));
 
     expect(await sent("PATCH")).not.toHaveProperty("repeat_months");
     expect(await screen.findByText("Lançamento atualizado")).toBeInTheDocument();
   });
 
-  it("preselects Outro for a total off the presets and asks for at least the member's position", async () => {
+  it("preselects Customizado for a total off the presets and asks for at least the member's position", async () => {
     const { requests } = setup(
       { transaction: { ...MEMBER, series: { ...MEMBER.series, position: 5, total: 7 } } },
       resize,
     );
 
-    expect(await screen.findByRole("radio", { name: "Outro" })).toBeChecked();
+    expect(await screen.findByRole("radio", { name: "Customizado" })).toBeChecked();
     const custom = screen.getByLabelText("Meses");
     expect(custom).toHaveValue("7");
-    expect(screen.getByRole("radio", { name: "3×" })).toBeDisabled();
-    expect(screen.getByRole("radio", { name: "6×" })).toBeEnabled();
+    expect(screen.getByRole("radio", { name: "3 meses" })).toBeDisabled();
+    expect(screen.getByRole("radio", { name: "6 meses" })).toBeEnabled();
     await userEvent.clear(custom);
     await userEvent.type(custom, "4");
-    await userEvent.click(screen.getByRole("button", { name: "Salvar Lançamento" }));
+    await userEvent.click(screen.getByRole("button", { name: "Salvar Alterações na Série" }));
 
     expect(custom).toHaveAccessibleDescription("Escolha de 5 a 60 meses.");
     expect(requests.filter((request) => request.method === "PATCH")).toHaveLength(0);
@@ -497,40 +562,43 @@ describe("TransactionSheet", () => {
   it("saves an edit to the only member left in a series without a count", async () => {
     const { sent } = setup({ transaction: { ...MEMBER, series: { ...MEMBER.series, position: 1, total: 1 } } }, resize);
 
-    const amount = await screen.findByLabelText(/^Valor d/);
+    const amount = await screen.findByLabelText("Valor por parcela");
     await userEvent.clear(amount);
     await userEvent.type(amount, "9990");
-    await userEvent.click(screen.getByRole("button", { name: "Salvar Lançamento" }));
+    await userEvent.click(screen.getByRole("button", { name: "Salvar Alterações na Série" }));
 
     const body = await sent("PATCH");
     expect(body).toMatchObject({ amount: "99.90" });
     expect(body).not.toHaveProperty("repeat_months");
   });
 
-  it("locks Meses na série while the member's date moves and sends no count", async () => {
+  it("locks Duração da série while the member's date moves and sends no count", async () => {
     const { sent } = setup({ transaction: MEMBER }, resize);
 
-    const months = await screen.findByRole("radiogroup", { name: "Meses na série" });
-    await userEvent.click(within(months).getByRole("radio", { name: "6×" }));
-    expect(screen.getByText("Remove os 6 últimos · termina em mar 2027")).toBeInTheDocument();
+    const months = await screen.findByRole("radiogroup", { name: "Duração da série" });
+    await userEvent.click(within(months).getByRole("radio", { name: "6 meses" }));
+    expect(screen.getByText(/Série encurtada/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Hoje" }));
-    expect(within(months).getByRole("radio", { name: "12×" })).toBeDisabled();
-    expect(screen.queryByText(/Remove|· até/)).not.toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "Salvar Lançamento" }));
+    expect(within(months).getByRole("radio", { name: "12 meses" })).toBeDisabled();
+    expect(screen.queryByText(/Série encurtada|Série estendida/)).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Salvar Alterações na Série" }));
 
     const body = await sent("PATCH");
     expect(body).toMatchObject({ date: "2026-11-05" });
     expect(body).not.toHaveProperty("repeat_months");
   });
 
-  it("moves the day of this and the following members: helper names the day, toast Série movida", async () => {
+  it("moves the day of this and the following members: the note shows only after the day changes, toast Série movida", async () => {
     const { sent } = setup({ transaction: MEMBER }, resize);
 
     await userEvent.click(await screen.findByRole("radio", { name: "Este e os próximos" }));
+    expect(screen.queryByText(/serão movidos/)).not.toBeInTheDocument();
     await pickDate("Outra data", "2026-11-10");
-    expect(screen.getByText("Os próximos também vão para o dia 10.")).toBeInTheDocument();
-    expect(screen.getByRole("radio", { name: "12×" })).toBeDisabled();
-    await userEvent.click(screen.getByRole("button", { name: "Salvar Lançamento" }));
+    expect(
+      screen.getByText("Os próximos lançamentos também serão movidos automaticamente para o dia 10."),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "12 meses" })).toBeDisabled();
+    await userEvent.click(screen.getByRole("button", { name: "Salvar Alterações na Série" }));
 
     const body = await sent("PATCH");
     expect(body).toMatchObject({ date: "2026-11-10" });
@@ -541,7 +609,7 @@ describe("TransactionSheet", () => {
   it("says Toda a série on the first member and warns about shorter months from day 29", async () => {
     setup({ transaction: { ...MEMBER, series: { ...MEMBER.series, position: 1 } } });
 
-    await userEvent.click(await screen.findByRole("radio", { name: "Toda a série" }));
+    await userEvent.click(await screen.findByRole("radio", { name: "Toda a série (12 lançamentos)" }));
     await pickDate("Outra data", "2026-11-28");
     expect(screen.getByText("Toda a série vai para o dia 28.")).toBeInTheDocument();
     await pickDate("Outra data", "2026-11-30");
@@ -553,9 +621,9 @@ describe("TransactionSheet", () => {
   it("shows no day helper with Só este", async () => {
     setup({ transaction: MEMBER });
 
-    await screen.findByRole("radio", { name: "Só este" });
+    await screen.findByRole("radio", { name: "Só este lançamento" });
     await pickDate("Outra data", "2026-12-10");
-    expect(screen.queryByText(/va[io] para o dia/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/para o dia/)).not.toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
@@ -565,13 +633,13 @@ describe("TransactionSheet", () => {
     await userEvent.click(await screen.findByRole("radio", { name: "Este e os próximos" }));
     await pickDate("Outra data", "2026-12-10");
     expect(screen.getByRole("alert")).toHaveTextContent("Para mudar o mês, use Só este.");
-    expect(screen.queryByText(/va[io] para o dia/)).not.toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "Salvar Lançamento" }));
+    expect(screen.queryByText(/para o dia/)).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Salvar Alterações na Série" }));
     expect(requests.filter((request) => request.method === "PATCH")).toHaveLength(0);
 
-    await userEvent.click(screen.getByRole("radio", { name: "Só este" }));
+    await userEvent.click(screen.getByRole("radio", { name: "Só este lançamento" }));
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "Salvar Lançamento" }));
+    await userEvent.click(screen.getByRole("button", { name: "Salvar Alterações na Série" }));
 
     expect(await sent("PATCH")).toMatchObject({ date: "2026-12-10" });
     expect(await screen.findByText("Lançamento atualizado")).toBeInTheDocument();
@@ -589,7 +657,7 @@ describe("TransactionSheet", () => {
 
     await userEvent.click(await screen.findByRole("radio", { name: "Este e os próximos" }));
     await pickDate("Outra data", "2026-11-10");
-    await userEvent.click(screen.getByRole("button", { name: "Salvar Lançamento" }));
+    await userEvent.click(screen.getByRole("button", { name: "Salvar Alterações na Série" }));
 
     expect(
       await screen.findByText("Outro lançamento da série está no mesmo mês. Mova-o com Só este antes."),
@@ -601,7 +669,7 @@ describe("TransactionSheet", () => {
 
     await userEvent.click(await screen.findByRole("radio", { name: "Este e os próximos" }));
     await pickDate("Outra data", "2026-11-10");
-    await userEvent.click(screen.getByRole("button", { name: "Salvar Lançamento" }));
+    await userEvent.click(screen.getByRole("button", { name: "Salvar Alterações na Série" }));
 
     expect(await screen.findByText("Não foi possível salvar o lançamento.")).toBeInTheDocument();
     expect(screen.queryByText(/Outro lançamento da série/)).not.toBeInTheDocument();
@@ -613,8 +681,8 @@ describe("TransactionSheet", () => {
     await userEvent.click(await screen.findByRole("radio", { name: "Este e os próximos" }));
     await pickDate("Outra data", MEMBER.date);
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-    expect(screen.queryByText(/va[io] para o dia/)).not.toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "Salvar Lançamento" }));
+    expect(screen.queryByText(/para o dia/)).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Salvar Alterações na Série" }));
 
     expect(await sent("PATCH")).toMatchObject({ date: MEMBER.date });
   });
@@ -627,7 +695,7 @@ describe("TransactionSheet", () => {
 
     await userEvent.click(await screen.findByRole("radio", { name: "Este e os próximos" }));
     await pickDate("Outra data", "2026-11-10");
-    await userEvent.click(screen.getByRole("button", { name: "Salvar Lançamento" }));
+    await userEvent.click(screen.getByRole("button", { name: "Salvar Alterações na Série" }));
 
     expect(await screen.findByText("Não foi possível salvar o lançamento.")).toBeInTheDocument();
   });

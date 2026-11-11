@@ -6,14 +6,19 @@ import {
   ArrowDown,
   ArrowRight,
   Calculator,
+  CalendarDays,
+  Check,
   CircleCheck,
   CircleX,
+  InfinityIcon,
   Lightbulb,
   type LucideIcon,
   NotebookPen,
   ReceiptText,
   Repeat,
+  Save,
   ShoppingBag,
+  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -37,7 +42,7 @@ import { useIsLg } from "@/hooks/use-lg";
 import { cn } from "@/lib/utils";
 import { ApiError, type Schemas } from "@/shared/api/client";
 import { useCurrency } from "@/shared/lib/currency";
-import { addMonths, monthYear, todayISO } from "@/shared/lib/date";
+import { addMonths, monthSlashYear, monthYear, todayISO } from "@/shared/lib/date";
 import { installmentCents } from "@/shared/lib/installments";
 import { formatMoney, positiveAmount } from "@/shared/lib/money";
 import { cents, fromCents } from "@/shared/lib/tier";
@@ -59,6 +64,9 @@ const KINDS: { value: Kind; label: string; icon: LucideIcon }[] = [
 ];
 
 const PRESETS = ["2", "3", "6", "12", "other"];
+const SERIES_PRESETS = ["3", "6", "12", "other"];
+
+const caption = "font-semibold text-muted-foreground text-xs uppercase tracking-[0.12em]";
 
 const chip =
   "h-11 rounded-xl! font-semibold text-base text-muted-foreground data-[state=on]:bg-brand data-[state=on]:text-brand-foreground data-[state=on]:shadow-sm";
@@ -98,6 +106,7 @@ const TransactionForm = ({
   onSave,
   onConvert,
   onDiscard,
+  onDelete,
 }: {
   initial: Draft;
   transaction?: Transaction;
@@ -106,6 +115,8 @@ const TransactionForm = ({
   onDiscard: () => void;
   /** Absent: no Criar como Conta Fixa. */
   onConvert?: (source: Source) => void;
+  /** Excluir da Série...; absent, not offered. */
+  onDelete?: () => void;
 }) => {
   const [draft, setDraft] = useState(initial);
   const [submitted, setSubmitted] = useState(false);
@@ -119,6 +130,7 @@ const TransactionForm = ({
   const amount = positiveAmount(draft.amount);
   const months = Number(draft.preset === "other" ? draft.custom : draft.preset);
   const series = transaction?.series;
+  const presets = series ? SERIES_PRESETS : PRESETS;
   const minMonths = Math.max(2, series?.position ?? 2);
   const monthsValid = Number.isInteger(months) && months >= minMonths && months <= 60;
   const canRepeat = !transaction?.recurring_bill_id && !transaction?.cofrinho_id && !series;
@@ -131,7 +143,7 @@ const TransactionForm = ({
   const moving = moved && draft.scope === "following";
   const monthChanged = moving && draft.date.slice(0, 7) !== transaction?.date.slice(0, 7);
   const day = Number(draft.date.slice(8));
-  const dayHelper = `${series?.position === 1 ? "Toda a série vai" : "Os próximos também vão"} para o dia ${day}.${
+  const dayHelper = `${series?.position === 1 ? "Toda a série vai" : "Os próximos lançamentos também serão movidos automaticamente"} para o dia ${day}.${
     day >= 29 ? " Nos meses mais curtos, no último dia." : ""
   }`;
   const resized = resizing && monthsValid ? months : undefined;
@@ -139,7 +151,7 @@ const TransactionForm = ({
   const monthsError = submitted && monthsChecked && !monthsValid;
   let monthsLabel = "Quantas vezes";
   if (installments) monthsLabel = "Quantas parcelas";
-  if (series) monthsLabel = "Meses na série";
+  if (series) monthsLabel = "Duração da série";
   const split = installments && amount && monthsValid ? installmentCents(cents(amount), months) : null;
   const splitValid = !split || split[0] > 0;
   const money = (value: number) => formatMoney(fromCents(value), currency);
@@ -151,15 +163,28 @@ const TransactionForm = ({
       ? draftRows({ kind: draft.kind, amount, date: draft.date, plan, count: months })
       : null;
 
+  let amountLabel = draft.kind === "income" ? "Valor da entrada" : "Valor do gasto";
+  if (series) amountLabel = "Valor por parcela";
+  let dateLegendClass = isLg ? "sr-only" : undefined;
+  if (series) dateLegendClass = caption;
+  const presetLabel = (preset: string) => {
+    if (series) return preset === "other" ? "Customizado" : `${preset} meses`;
+    return preset === "other" ? "Outro" : `${preset}×`;
+  };
+
   const resizeHelper = () => {
     if (!series || !resized) return;
     const added = resized - series.total;
-    const end = monthYear(addMonths(series.last_date.slice(0, 7), added));
-    if (added > 0) return `+${added}×${amount ? ` ${formatMoney(amount, currency)}` : ""} · até ${end}`;
-    if (added === -1) return `Remove o último · termina em ${end}`;
-    return `Remove os ${-added} últimos · termina em ${end}`;
+    const end = monthSlashYear(addMonths(series.last_date.slice(0, 7), added));
+    if (added > 0) return `Série estendida: Adiciona ${added} ${added === 1 ? "mês" : "meses"}. Termina em ${end}.`;
+    return `Série encurtada: Remove ${added === -1 ? "o último mês" : `os ${-added} últimos meses`}. Termina em ${end}.`;
   };
   const resizeNote = resizeHelper();
+  // Shortening an Entrada series loses money: no saving.
+  const saving =
+    series && resized && resized < series.total && amount && draft.kind !== "income"
+      ? money(cents(amount) * (series.total - resized))
+      : undefined;
 
   const set = (patch: Partial<Draft>) => setDraft((current) => ({ ...current, ...patch }));
 
@@ -199,252 +224,305 @@ const TransactionForm = ({
     if (source) onConvert?.(source);
   };
 
-  return (
-    <form noValidate onSubmit={submit} className="flex flex-col gap-6">
-      {series && (
-        <p className="flex items-center gap-2 font-medium text-muted-foreground text-sm">
-          <Repeat className="size-4" aria-hidden />
-          Parte de uma série de {series.total}
-        </p>
-      )}
-      {!transaction && (
-        <label
-          htmlFor="transaction-simulate-switch"
-          className="flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-xl bg-muted px-4 py-2"
-        >
-          <span className="flex flex-col">
-            <span id="transaction-simulate" className="font-medium text-base">
-              Simular
-            </span>
-            <span id="transaction-simulate-help" className="text-muted-foreground text-xs">
-              Veja o efeito antes de lançar.
-            </span>
-          </span>
-          <Switch
-            id="transaction-simulate-switch"
-            aria-labelledby="transaction-simulate"
-            aria-describedby="transaction-simulate-help"
-            checked={draft.simulate}
-            onCheckedChange={(simulate) => set({ simulate })}
-          />
-        </label>
-      )}
-      <ToggleGroup
-        type="single"
-        spacing={0}
-        value={draft.kind}
-        onValueChange={(kind: Kind | "") =>
-          kind && set({ kind, category: undefined, installments: draft.installments && kind !== "income" })
-        }
-        aria-label="Tipo"
-        className="grid w-full grid-cols-3 rounded-2xl bg-muted p-1"
-      >
-        {KINDS.map(({ value, label, icon: Icon }) => (
-          <ToggleGroupItem
-            key={value}
-            value={value}
-            className={cn(chip, "gap-1.5", value === "income" && "text-income-text")}
-          >
-            <Icon aria-hidden className="size-4" />
-            {label}
-          </ToggleGroupItem>
-        ))}
-      </ToggleGroup>
-
+  const amountField = (
+    <div className="flex flex-col gap-1">
       <HeroAmount
         id="transaction-amount"
-        label={draft.kind === "income" ? "Valor da entrada" : "Valor do gasto"}
+        label={amountLabel}
         value={draft.amount}
         onChange={(value) => set({ amount: value })}
         invalid={submitted && !amount}
         keypad={keypad}
       />
-
-      <CategoryChips
-        kind={draft.kind}
-        chosen={category}
-        onChoose={(chosen) => set({ category: chosen })}
-        entries={thisMonth.isError ? [] : thisMonth.data}
-        error={submitted && !category ? "Escolha uma categoria" : undefined}
-      />
-
-      <div className="flex flex-col gap-2">
-        <DateChips
-          legend="Quando foi?"
-          legendClassName={isLg ? "sr-only" : undefined}
-          value={draft.date}
-          min={settings.data?.opening_date}
-          onChange={(date) => set({ date })}
-        />
-        {monthChanged && (
-          <p role="alert" className="text-destructive text-sm">
-            Para mudar o mês, use Só este.
-          </p>
-        )}
-        {moving && !monthChanged && <p className="text-muted-foreground text-sm">{dayHelper}</p>}
-      </div>
-
-      <div className="flex items-center gap-2.5 rounded-xl bg-muted pl-3 focus-within:ring-3 focus-within:ring-ring/50">
-        <NotebookPen aria-hidden className="size-5 shrink-0 text-muted-foreground" />
-        <input
-          aria-label="Observação"
-          value={draft.note}
-          onChange={(event) => set({ note: event.target.value })}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") event.preventDefault();
-          }}
-          placeholder="Adicionar nota ou observação..."
-          maxLength={200}
-          className="h-12 min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground"
-        />
-        {draft.note && (
-          <button
-            type="button"
-            aria-label="Limpar observação"
-            onClick={() => set({ note: "" })}
-            className="flex size-11 shrink-0 items-center justify-center rounded-full text-muted-foreground focus-visible:outline-2 focus-visible:outline-ring"
-          >
-            <CircleX aria-hidden className="size-5" />
-          </button>
-        )}
-      </div>
-
-      {transaction?.recurring_bill_id && (
-        <p className="text-muted-foreground text-sm">Já é uma conta fixa recorrente.</p>
+      {series && (
+        <p className="text-center text-muted-foreground text-sm">
+          {draft.scope === "this"
+            ? "Novo valor aplicado só a esta cobrança."
+            : "Novo valor monetário aplicado a partir desta cobrança."}
+        </p>
       )}
-      {(canRepeat || series) && (
-        <div className="flex flex-col gap-3">
-          {series && (
-            <span id="transaction-series-months" className="font-semibold text-sm">
-              Meses na série
-            </span>
-          )}
-          {canRepeat && (
-            <label
-              htmlFor="transaction-repeat-switch"
-              className="flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-xl bg-muted px-4"
-            >
-              <span id="transaction-repeat" className="flex items-center gap-2 font-medium text-base">
-                <Repeat aria-hidden className="size-5 shrink-0 text-muted-foreground" />
-                Repetir lançamento (Série)
-              </span>
-              <Switch
-                id="transaction-repeat-switch"
-                aria-labelledby="transaction-repeat"
-                checked={draft.repeat}
-                onCheckedChange={(repeat) => set({ repeat, installments: false })}
-              />
-            </label>
-          )}
-          {!transaction && draft.kind !== "income" && (
-            <label
-              htmlFor="transaction-split-switch"
-              className="flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-xl bg-muted px-4"
-            >
-              <span id="transaction-split" className="flex items-center gap-2 font-medium text-base">
-                <Calculator aria-hidden className="size-5 shrink-0 text-muted-foreground" />
-                Parcelar compra
-              </span>
-              <Switch
-                id="transaction-split-switch"
-                aria-labelledby="transaction-split"
-                checked={installments}
-                onCheckedChange={(on) => set({ installments: on, repeat: false })}
-              />
-            </label>
-          )}
-          {counted && (
-            <>
-              <ToggleGroup
-                type="single"
-                spacing={0}
-                value={draft.preset}
-                onValueChange={(preset: string) => preset && set({ preset })}
-                aria-label={monthsLabel}
-                disabled={moved}
-                className="grid w-full grid-cols-5 rounded-2xl bg-muted p-1"
-              >
-                {PRESETS.map((preset) => (
-                  <ToggleGroupItem
-                    key={preset}
-                    value={preset}
-                    disabled={preset !== "other" && Number(preset) < minMonths}
-                    className={chip}
-                  >
-                    {preset === "other" ? "Outro" : `${preset}×`}
-                  </ToggleGroupItem>
-                ))}
-              </ToggleGroup>
-              {draft.preset === "other" && (
-                <div className="flex flex-col gap-1.5">
-                  <Input
-                    inputMode="numeric"
-                    aria-label={installments ? "Parcelas" : "Meses"}
-                    placeholder={`De ${minMonths} a 60`}
-                    value={draft.custom}
-                    disabled={moved}
-                    onChange={(event) => set({ custom: event.target.value.replace(/\D/g, "").slice(0, 2) })}
-                    aria-invalid={monthsError}
-                    aria-describedby={monthsError ? "transaction-months-error" : undefined}
-                    className="h-12 rounded-xl bg-muted text-base tabular-nums md:text-base"
-                  />
-                  {monthsError && (
-                    <p id="transaction-months-error" role="alert" className="text-destructive text-sm">
-                      {installments ? "Escolha de 2 a 60 parcelas." : `Escolha de ${minMonths} a 60 meses.`}
-                    </p>
-                  )}
-                </div>
-              )}
-              {draft.repeat && monthsValid && (
-                <p className="flex items-center gap-2 text-muted-foreground text-sm">
-                  <Lightbulb aria-hidden className="size-4 shrink-0" />
-                  {`${amount ? `${months}× de ${formatMoney(amount, currency)} · ` : ""}repete todo dia ${day} até ${lastMonth(draft.date, months)}`}
-                </p>
-              )}
-              {resizeNote && <p className="text-muted-foreground text-sm">{resizeNote}</p>}
-              {amount && split && splitValid && (
-                <div className="flex flex-col gap-1 text-muted-foreground text-sm">
-                  <p>{`Divide o valor total de ${formatMoney(amount, currency)} em ${months} parcelas automáticas`}</p>
-                  <p className="font-medium text-foreground">{`Projeção: ${months}× de ${money(split[0])}`}</p>
-                  {split[0] !== split[months - 1] && (
-                    <p>{`Última parcela será ajustada para ${money(split[months - 1])} devido a centavos residuais.`}</p>
-                  )}
-                </div>
-              )}
-              {submitted && !splitValid && (
-                <p role="alert" className="text-destructive text-sm">
-                  Valor pequeno demais para {months} parcelas.
-                </p>
-              )}
-              {!series && Number(draft.date.slice(8)) >= 29 && (
-                <p className="text-muted-foreground text-xs">Em meses mais curtos, cai no último dia.</p>
-              )}
-            </>
-          )}
-          {convertible && (
-            <p className="text-muted-foreground text-sm">
-              Prefere transformar em conta fixa recorrente?{" "}
-              <button
-                type="button"
-                onClick={convert}
-                className="inline-flex min-h-11 items-center gap-1 font-semibold text-primary underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring"
-              >
-                Criar como Conta Fixa
-                <ArrowRight aria-hidden className="size-4" />
-              </button>
-            </p>
-          )}
+    </div>
+  );
+  const categoryField = (
+    <CategoryChips
+      kind={draft.kind}
+      chosen={category}
+      onChoose={(chosen) => set({ category: chosen })}
+      entries={thisMonth.isError ? [] : thisMonth.data}
+      error={submitted && !category ? "Escolha uma categoria" : undefined}
+    />
+  );
+  const dateField = (
+    <div className="flex flex-col gap-2">
+      <DateChips
+        legend={series ? "Dia de vencimento" : "Quando foi?"}
+        legendClassName={dateLegendClass}
+        value={draft.date}
+        min={settings.data?.opening_date}
+        onChange={(date) => set({ date })}
+      />
+      {monthChanged && (
+        <p role="alert" className="text-destructive text-sm">
+          Para mudar o mês, use Só este.
+        </p>
+      )}
+      {moving && !monthChanged && (
+        <p className="flex items-center gap-2 text-muted-foreground text-sm">
+          <CalendarDays aria-hidden className="size-4 shrink-0" />
+          {dayHelper}
+        </p>
+      )}
+    </div>
+  );
+  const noteField = (
+    <div className="flex items-center gap-2.5 rounded-xl bg-muted pl-3 focus-within:ring-3 focus-within:ring-ring/50">
+      <NotebookPen aria-hidden className="size-5 shrink-0 text-muted-foreground" />
+      <input
+        aria-label="Observação"
+        value={draft.note}
+        onChange={(event) => set({ note: event.target.value })}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") event.preventDefault();
+        }}
+        placeholder="Adicionar nota ou observação..."
+        maxLength={200}
+        className="h-12 min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground"
+      />
+      {draft.note && (
+        <button
+          type="button"
+          aria-label="Limpar observação"
+          onClick={() => set({ note: "" })}
+          className="flex size-11 shrink-0 items-center justify-center rounded-full text-muted-foreground focus-visible:outline-2 focus-visible:outline-ring"
+        >
+          <CircleX aria-hidden className="size-5" />
+        </button>
+      )}
+    </div>
+  );
+  const recurringNote = transaction?.recurring_bill_id && (
+    <p className="text-muted-foreground text-sm">Já é uma conta fixa recorrente.</p>
+  );
+  const monthsField = (canRepeat || series) && (
+    <div className="flex flex-col gap-3">
+      {series && (
+        <div className="flex items-center justify-between gap-3">
+          <span className={caption}>Duração da série</span>
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={moved}
+            onClick={() => set({ preset: initial.preset, custom: initial.custom })}
+            className="h-11 px-3 font-medium text-primary text-sm"
+          >
+            Ciclo Atual
+          </Button>
         </div>
       )}
+      {canRepeat && (
+        <label
+          htmlFor="transaction-repeat-switch"
+          className="flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-xl bg-muted px-4"
+        >
+          <span id="transaction-repeat" className="flex items-center gap-2 font-medium text-base">
+            <Repeat aria-hidden className="size-5 shrink-0 text-muted-foreground" />
+            Repetir lançamento (Série)
+          </span>
+          <Switch
+            id="transaction-repeat-switch"
+            aria-labelledby="transaction-repeat"
+            checked={draft.repeat}
+            onCheckedChange={(repeat) => set({ repeat, installments: false })}
+          />
+        </label>
+      )}
+      {!transaction && draft.kind !== "income" && (
+        <label
+          htmlFor="transaction-split-switch"
+          className="flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-xl bg-muted px-4"
+        >
+          <span id="transaction-split" className="flex items-center gap-2 font-medium text-base">
+            <Calculator aria-hidden className="size-5 shrink-0 text-muted-foreground" />
+            Parcelar compra
+          </span>
+          <Switch
+            id="transaction-split-switch"
+            aria-labelledby="transaction-split"
+            checked={installments}
+            onCheckedChange={(on) => set({ installments: on, repeat: false })}
+          />
+        </label>
+      )}
+      {counted && (
+        <>
+          <ToggleGroup
+            type="single"
+            spacing={0}
+            value={draft.preset}
+            onValueChange={(preset: string) => preset && set({ preset })}
+            aria-label={monthsLabel}
+            disabled={moved}
+            className={cn(
+              "grid w-full rounded-2xl bg-muted p-1",
+              series ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-5",
+            )}
+          >
+            {presets.map((preset) => (
+              <ToggleGroupItem
+                key={preset}
+                value={preset}
+                disabled={preset !== "other" && Number(preset) < minMonths}
+                className={cn(chip, series && "gap-1")}
+              >
+                {series && draft.preset === preset && <Check aria-hidden className="size-4" />}
+                {presetLabel(preset)}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+          {draft.preset === "other" && (
+            <div className="flex flex-col gap-1.5">
+              <Input
+                inputMode="numeric"
+                aria-label={installments ? "Parcelas" : "Meses"}
+                placeholder={`De ${minMonths} a 60`}
+                value={draft.custom}
+                disabled={moved}
+                onChange={(event) => set({ custom: event.target.value.replace(/\D/g, "").slice(0, 2) })}
+                aria-invalid={monthsError}
+                aria-describedby={monthsError ? "transaction-months-error" : undefined}
+                className="h-12 rounded-xl bg-muted text-base tabular-nums md:text-base"
+              />
+              {monthsError && (
+                <p id="transaction-months-error" role="alert" className="text-destructive text-sm">
+                  {installments ? "Escolha de 2 a 60 parcelas." : `Escolha de ${minMonths} a 60 meses.`}
+                </p>
+              )}
+            </div>
+          )}
+          {draft.repeat && monthsValid && (
+            <p className="flex items-center gap-2 text-muted-foreground text-sm">
+              <Lightbulb aria-hidden className="size-4 shrink-0" />
+              {`${amount ? `${months}× de ${formatMoney(amount, currency)} · ` : ""}repete todo dia ${day} até ${lastMonth(draft.date, months)}`}
+            </p>
+          )}
+          {resizeNote && (
+            <p className="flex items-center gap-2 text-muted-foreground text-sm">
+              <Lightbulb aria-hidden className="size-4 shrink-0" />
+              {resizeNote}
+            </p>
+          )}
+          {saving && <p className="font-medium text-sm">{`Economia projetada de ${saving} no orçamento previsto.`}</p>}
+          {amount && split && splitValid && (
+            <div className="flex flex-col gap-1 text-muted-foreground text-sm">
+              <p>{`Divide o valor total de ${formatMoney(amount, currency)} em ${months} parcelas automáticas`}</p>
+              <p className="font-medium text-foreground">{`Projeção: ${months}× de ${money(split[0])}`}</p>
+              {split[0] !== split[months - 1] && (
+                <p>{`Última parcela será ajustada para ${money(split[months - 1])} devido a centavos residuais.`}</p>
+              )}
+            </div>
+          )}
+          {submitted && !splitValid && (
+            <p role="alert" className="text-destructive text-sm">
+              Valor pequeno demais para {months} parcelas.
+            </p>
+          )}
+          {!series && Number(draft.date.slice(8)) >= 29 && (
+            <p className="text-muted-foreground text-xs">Em meses mais curtos, cai no último dia.</p>
+          )}
+        </>
+      )}
+      {convertible && (
+        <p className="text-muted-foreground text-sm">
+          Prefere transformar em conta fixa recorrente?{" "}
+          <button
+            type="button"
+            onClick={convert}
+            className="inline-flex min-h-11 items-center gap-1 font-semibold text-primary underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring"
+          >
+            Criar como Conta Fixa
+            <ArrowRight aria-hidden className="size-4" />
+          </button>
+        </p>
+      )}
+    </div>
+  );
 
-      {series && transaction && (
-        <ScopeRadio
-          legend="Aplicar em"
-          series={series}
-          date={transaction.date}
-          value={draft.scope}
-          onChange={(scope) => set({ scope })}
-        />
+  return (
+    <form noValidate onSubmit={submit} className="flex flex-col gap-6">
+      {series && transaction ? (
+        <>
+          <p className="text-muted-foreground text-sm">
+            Você está editando a parcela {series.position} de {series.total}:{" "}
+            <span className="font-medium text-foreground">"{transaction.note ?? transaction.category.name}"</span> (
+            {formatMoney(transaction.amount, currency)})
+          </p>
+          <ScopeRadio
+            legend="Escopo da Alteração"
+            mode="edit"
+            series={series}
+            date={transaction.date}
+            value={draft.scope}
+            onChange={(scope) => set({ scope })}
+          />
+          {amountField}
+          {monthsField}
+          {dateField}
+          {categoryField}
+          {noteField}
+          {recurringNote}
+        </>
+      ) : (
+        <>
+          {!transaction && (
+            <label
+              htmlFor="transaction-simulate-switch"
+              className="flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-xl bg-muted px-4 py-2"
+            >
+              <span className="flex flex-col">
+                <span id="transaction-simulate" className="font-medium text-base">
+                  Simular
+                </span>
+                <span id="transaction-simulate-help" className="text-muted-foreground text-xs">
+                  Veja o efeito antes de lançar.
+                </span>
+              </span>
+              <Switch
+                id="transaction-simulate-switch"
+                aria-labelledby="transaction-simulate"
+                aria-describedby="transaction-simulate-help"
+                checked={draft.simulate}
+                onCheckedChange={(simulate) => set({ simulate })}
+              />
+            </label>
+          )}
+          <ToggleGroup
+            type="single"
+            spacing={0}
+            value={draft.kind}
+            onValueChange={(kind: Kind | "") =>
+              kind && set({ kind, category: undefined, installments: draft.installments && kind !== "income" })
+            }
+            aria-label="Tipo"
+            className="grid w-full grid-cols-3 rounded-2xl bg-muted p-1"
+          >
+            {KINDS.map(({ value, label, icon: Icon }) => (
+              <ToggleGroupItem
+                key={value}
+                value={value}
+                className={cn(chip, "gap-1.5", value === "income" && "text-income-text")}
+              >
+                <Icon aria-hidden className="size-4" />
+                {label}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+          {amountField}
+          {categoryField}
+          {dateField}
+          {noteField}
+          {recurringNote}
+          {monthsField}
+        </>
       )}
 
       {draft.simulate && <Simulation rows={rows} countInvalid={Boolean(amount) && monthsChecked && !monthsValid} />}
@@ -461,15 +539,26 @@ const TransactionForm = ({
             </Button>
           </>
         ) : (
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            {series && onDelete && (
+              <Button
+                type="button"
+                variant="ghost"
+                className="mr-auto h-12 text-base text-destructive hover:text-destructive"
+                onClick={onDelete}
+              >
+                <Trash2 aria-hidden />
+                Excluir da Série...
+              </Button>
+            )}
             {isLg && (
               <Button type="button" variant="ghost" className="ml-auto h-12 text-base" onClick={onDiscard}>
                 Cancelar
               </Button>
             )}
             <BrandButton type="submit" className="lg:w-auto lg:px-6">
-              <CircleCheck aria-hidden />
-              Salvar Lançamento
+              {series ? <Save aria-hidden /> : <CircleCheck aria-hidden />}
+              {series ? "Salvar Alterações na Série" : "Salvar Lançamento"}
             </BrandButton>
           </div>
         )}
@@ -493,6 +582,8 @@ type TransactionSheetProps = {
   initialDate?: string;
   /** A line above the form. */
   hint?: string;
+  /** Excluir da Série... closes the sheet and calls it; absent, not offered. */
+  onDelete?: () => void;
   /** The bill sheet that Criar como Conta Fixa opens; absent, the link is not offered. */
   billSheet?: (props: {
     prefill: BillPrefill;
@@ -512,6 +603,7 @@ export const TransactionSheet = ({
   initialDate = todayISO(),
   hint,
   billSheet,
+  onDelete,
 }: TransactionSheetProps) => {
   const create = useCreateTransaction();
   const update = useUpdateTransaction();
@@ -520,7 +612,7 @@ export const TransactionSheet = ({
   const isLg = useIsLg();
   const failed = () => toast.error("Não foi possível salvar o lançamento.");
   let title = isLg ? "Novo Lançamento" : "Novo Registro";
-  if (transaction) title = "Editar lançamento";
+  if (transaction) title = transaction.series ? "Editar Lançamento Recorrente" : "Editar lançamento";
 
   const save = (fields: NewTransaction, scope?: Scope, moving = false) => {
     onOpenChange(false);
@@ -535,7 +627,7 @@ export const TransactionSheet = ({
       {
         onSuccess: () => {
           if (transaction.series && fields.repeat_months)
-            return toast.success(`Série ajustada para ${fields.repeat_months} meses`);
+            return toast.success(`Série ajustada com sucesso para ${fields.repeat_months} meses futuros.`);
           if (moving) return toast.success(`Série movida para o dia ${Number(fields.date.slice(8))}`);
           done(scope === "following" ? "Série atualizada" : "Lançamento atualizado");
         },
@@ -585,7 +677,7 @@ export const TransactionSheet = ({
         date: transaction.date,
         note: transaction.note ?? "",
         ...repeat,
-        ...(total && { preset: PRESETS.includes(total) ? total : "other", custom: total }),
+        ...(total && { preset: SERIES_PRESETS.includes(total) ? total : "other", custom: total }),
       }
     : {
         kind: initialKind,
@@ -602,6 +694,14 @@ export const TransactionSheet = ({
       open={open}
       onOpenChange={onOpenChange}
       title={title}
+      eyebrow={
+        transaction?.series && (
+          <p className="-mb-4 flex items-center gap-2 pr-12 font-medium text-primary text-sm">
+            <InfinityIcon aria-hidden className="size-4" />
+            Parte de uma série de {transaction.series.total} meses
+          </p>
+        )
+      }
       description="Cadastre uma movimentação pontual ou recorrente"
       showDescription={!transaction}
       wide
@@ -614,6 +714,13 @@ export const TransactionSheet = ({
         onSave={save}
         onConvert={billSheet && setConverting}
         onDiscard={() => onOpenChange(false)}
+        onDelete={
+          onDelete &&
+          (() => {
+            onOpenChange(false);
+            onDelete();
+          })
+        }
       />
       {converting &&
         billSheet?.({
