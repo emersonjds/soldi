@@ -48,4 +48,22 @@ test("next month opens with this month's unpaid conta fixa and the worst-day lin
   await hero.getByRole("button", { name: /Pior dia: 28\/\d\d, -R\$\s2\.200,00/ }).click();
   await expect(page.locator(`#dia-${nextMonthDay(28)}`)).toHaveClass(/ring-2/);
   await expect(ledger.getByRole("listitem", { name: "Aluguel" })).toContainText("Motivo da queda");
+
+  const categories: { id: string; kind: string }[] = await (await page.request.get("/api/categories")).json();
+  const daily = categories.find((category) => category.kind === "daily");
+  for (const day of [2, 3, 4]) {
+    const created = await page.request.post("/api/transactions", {
+      data: { date: nextMonthDay(day), amount: "1.00", kind: "daily", category_id: daily?.id, note: null },
+    });
+    expect(created.ok()).toBe(true);
+  }
+  await page.reload();
+  const due = page.locator(`#dia-${nextMonthDay(28)}`);
+  await expect(ledger.getByRole("button", { name: "Ver o mês inteiro (4 dias)" })).toBeVisible();
+  await expect(due).toHaveCount(0);
+
+  await hero.getByRole("button", { name: /Pior dia: 28\// }).click();
+  await expect(due).toHaveClass(/ring-2/);
+  await expect(due).toBeInViewport();
+  await expect(ledger.getByRole("button", { name: "Mostrar menos" })).toBeVisible();
 });
