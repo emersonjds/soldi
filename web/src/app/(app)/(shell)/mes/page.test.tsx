@@ -802,7 +802,7 @@ describe("Mês", () => {
     expect(within(filter()).getByRole("radio", { name: "Todos" })).toHaveAttribute("aria-checked", "true");
   });
 
-  it("goes back to Todos when the month changes", async () => {
+  it("goes back to Todos when the month changes, and again on returning to the month left filtered", async () => {
     open({
       "GET /api/months/2026-12": { status: 200, body: { ...MONTH, month: "2026-12" } },
     });
@@ -817,6 +817,55 @@ describe("Mês", () => {
     await waitFor(() =>
       expect(within(filter()).getByRole("radio", { name: "Todos" })).toHaveAttribute("aria-checked", "true"),
     );
+    setSearch("");
+    rerender(<QueryClientProvider client={client}>{page()}</QueryClientProvider>);
+
+    await waitFor(() => expect(dayHeadings()).toHaveLength(3));
+    expect(within(filter()).getByRole("radio", { name: "Todos" })).toHaveAttribute("aria-checked", "true");
+  });
+
+  it("keeps an unpaid conta fixa under Contas and out of Diário", async () => {
+    open({
+      "GET /api/months/2026-11": {
+        status: 200,
+        body: { ...MONTH, bills_of_month: [{ ...BILLS_OF_MONTH[1], lands_on: "2026-11-10" }] },
+      },
+      "GET /api/transactions": { status: 200, body: [TRANSACTIONS[0]] },
+    });
+
+    await within(await screen.findByRole("region", { name: "Lançamentos" })).findByRole("button", {
+      name: /Compras da semana/,
+    });
+    await userEvent.click(within(filter()).getByRole("radio", { name: "Contas" }));
+    expect(within(ledger()).getByRole("listitem", { name: "Aluguel Residencial" })).toBeInTheDocument();
+    await userEvent.click(within(filter()).getByRole("radio", { name: "Diário" }));
+    expect(within(ledger()).queryByRole("listitem", { name: "Aluguel Residencial" })).not.toBeInTheDocument();
+  });
+
+  it("leaves money put in a cofrinho out of Contas and in Todos", async () => {
+    open({
+      "GET /api/categories": { status: 200, body: WITH_COFRINHOS },
+      "GET /api/transactions": { status: 200, body: [TRANSACTIONS[1], MOVEMENTS[1]] },
+    });
+
+    await within(await screen.findByRole("region", { name: "Lançamentos" })).findByText("Guardado");
+    await userEvent.click(within(filter()).getByRole("radio", { name: "Contas" }));
+    expect(within(ledger()).getByRole("button", { name: /Aluguel/ })).toBeInTheDocument();
+    expect(within(ledger()).queryByText("Guardado")).not.toBeInTheDocument();
+    await userEvent.click(within(filter()).getByRole("radio", { name: "Todos" }));
+    expect(within(ledger()).getByText("Guardado")).toBeInTheDocument();
+  });
+
+  it("keeps the filter when its own option is tapped again", async () => {
+    open();
+
+    await within(await screen.findByRole("region", { name: "Lançamentos" })).findByRole("button", {
+      name: /Compras da semana/,
+    });
+    await userEvent.click(within(filter()).getByRole("radio", { name: "Diário" }));
+    await userEvent.click(within(filter()).getByRole("radio", { name: "Diário" }));
+    expect(within(filter()).getByRole("radio", { name: "Diário" })).toHaveAttribute("aria-checked", "true");
+    expect(dayHeadings()).toEqual(["Hoje, 5 novR$ 957,79Apertado"]);
   });
 
   it("has no expand button when the month fits the cap", async () => {

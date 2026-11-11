@@ -41,6 +41,11 @@ const dayLabel = ({ date, is_future }: Schemas["Day"]) => {
 
 type Entry = { label: string; caption: string };
 
+/** Money put in a cofrinho: a bill under Economia or one of its children. */
+const isSaved = ({ kind, category }: Transaction, categories: Schemas["Category"][] = []) =>
+  kind === "bill" &&
+  (category.is_savings || categories.some((each) => each.id === category.parent_id && each.is_savings));
+
 /** `Economia › Reserva` with `Guardado` for money put away, `Resgate › Reserva` with `Resgatado` for money taken back. */
 const entryOf = (transaction: Transaction, categories: Schemas["Category"][] = []): Entry => {
   const { category } = transaction;
@@ -50,7 +55,7 @@ const entryOf = (transaction: Transaction, categories: Schemas["Category"][] = [
     return { label: from ? `${category.name} › ${from}` : category.name, caption: "Resgatado" };
   }
   const label = categoryLabel(category, categories);
-  if (category.is_savings || byId(category.parent_id)?.is_savings) return { label, caption: "Guardado" };
+  if (isSaved(transaction, categories)) return { label, caption: "Guardado" };
   return { label, caption: KIND_LABEL[transaction.kind] };
 };
 
@@ -134,8 +139,8 @@ const Row = ({ transaction, entry, cause, onOpen }: RowProps) => (
 
 export type LedgerFilter = "all" | "daily" | "bill";
 
-const FILTERS: { value: LedgerFilter; label: string; empty: string }[] = [
-  { value: "all", label: "Todos", empty: "Nenhum lançamento ainda" },
+const FILTERS: { value: LedgerFilter; label: string; empty?: string }[] = [
+  { value: "all", label: "Todos" },
   { value: "daily", label: "Diário", empty: "Nenhum gasto diário neste mês." },
   { value: "bill", label: "Contas", empty: "Nenhuma conta neste mês." },
 ];
@@ -151,7 +156,7 @@ type LedgerProps = {
   /** The whole month instead of the spec §3.3 cap; the page owns it so a jump can expand before it scrolls. */
   expanded: boolean;
   onExpandedChange: (expanded: boolean) => void;
-  /** Contas also holds the unpaid contas fixas; the page owns it so a jump can reset it before it scrolls. */
+  /** Contas holds bills and the unpaid contas fixas, not money put in a cofrinho; the page owns it so a jump can reset it before it scrolls. */
   filter: LedgerFilter;
   onFilterChange: (filter: LedgerFilter) => void;
   className?: string;
@@ -185,7 +190,9 @@ export const Ledger = ({
   const any = groupByDay(view.days, transactions, view.bills_of_month).length > 0;
   const all = groupByDay(
     view.days,
-    filter === "all" ? transactions : transactions.filter((transaction) => transaction.kind === filter),
+    filter === "all"
+      ? transactions
+      : transactions.filter((transaction) => transaction.kind === filter && !isSaved(transaction, categories)),
     filter === "daily" ? [] : view.bills_of_month,
   );
   const groups = visibleDays(all, todayISO(), expanded);

@@ -39,7 +39,12 @@ const MonthScreen = () => {
   const [simulating, setSimulating] = useState(false);
   const [highlight, setHighlight] = useState<{ date: string } | null>(null);
   const [expandedMonth, setExpandedMonth] = useState<string | null>(null);
-  const [filtered, setFiltered] = useState<{ month: string; filter: LedgerFilter } | null>(null);
+  const [filter, setFilter] = useState<LedgerFilter>("all");
+  const [filterMonth, setFilterMonth] = useState(month);
+  if (filterMonth !== month) {
+    setFilterMonth(month);
+    setFilter("all");
+  }
   const launch = (kind: "income" | "bill" | "daily", simulate = false) => {
     setSimulating(simulate);
     setLaunching(kind);
@@ -70,7 +75,7 @@ const MonthScreen = () => {
   const jump = (date: string) => {
     flushSync(() => {
       setExpandedMonth(month);
-      setFiltered(null);
+      setFilter("all");
     });
     const group = document.getElementById(`dia-${date}`);
     group?.scrollIntoView({ block: "start" });
@@ -121,8 +126,8 @@ const MonthScreen = () => {
           causes={causes}
           expanded={expandedMonth === month}
           onExpandedChange={(expanded) => setExpandedMonth(expanded ? month : null)}
-          filter={filtered?.month === month ? filtered.filter : "all"}
-          onFilterChange={(filter) => setFiltered({ month, filter })}
+          filter={filter}
+          onFilterChange={setFilter}
           className={ledgerPlace}
         />
       )}
