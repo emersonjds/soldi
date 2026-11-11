@@ -1,15 +1,15 @@
 "use client";
 
-import { type CSSProperties, useState } from "react";
+import { useState } from "react";
 
 import { ArrowDownToLine, ArrowUpFromLine, Check, ChevronRight, Pencil, PiggyBank, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useArchiveCategory, useCategories } from "@/entities/category/categories-query";
 import { CategorySheet } from "@/entities/category/category-sheet";
+import { CofrinhoBar } from "@/entities/cofrinho/cofrinho-bar";
 import { type Cofrinho, useCofrinhos, useMovements } from "@/entities/cofrinho/cofrinho-queries";
 import { TransactionSheet } from "@/features/add-transaction/transaction-sheet";
 import { EditBillSheet } from "@/features/edit-bill/edit-bill-sheet";
@@ -22,7 +22,7 @@ import { formatMoney, minusMoney, positiveAmount } from "@/shared/lib/money";
 import { formatPct } from "@/shared/lib/percent";
 import { cents } from "@/shared/lib/tier";
 import { BrandButton } from "@/shared/ui/brand-button";
-import { CategoryIcon, categoryFill } from "@/shared/ui/category-icon";
+import { CategoryIcon } from "@/shared/ui/category-icon";
 import { DashCard } from "@/shared/ui/dash-card";
 import { CofrinhoIllustration } from "@/shared/ui/illustrations";
 import { Money } from "@/shared/ui/money";
@@ -44,21 +44,6 @@ const useGoalCaption = () => {
   };
 };
 
-/** The template's Progress in the cofrinho's color; it keeps `value` off the root, so the meter reads aria-valuenow. */
-const Bar = ({ cofrinho }: { cofrinho: Cofrinho }) => {
-  const pct = Number(cofrinho.progress_pct ?? 0);
-  const color: CSSProperties & { "--bar": string } = { "--bar": categoryFill(cofrinho.color) };
-  return (
-    <Progress
-      value={pct}
-      aria-label={`Progresso de ${cofrinho.name}`}
-      aria-valuenow={pct}
-      style={color}
-      className="h-2 *:data-[slot=progress-indicator]:bg-(--bar)"
-    />
-  );
-};
-
 /** The balance, `de {meta}`, the bar and the caption: the card and the sheet show the same. */
 const Balance = ({ cofrinho, large = false }: { cofrinho: Cofrinho; large?: boolean }) => {
   const goal = useGoalCaption()(cofrinho);
@@ -75,7 +60,7 @@ const Balance = ({ cofrinho, large = false }: { cofrinho: Cofrinho; large?: bool
           </span>
         )}
       </p>
-      {cofrinho.target && <Bar cofrinho={cofrinho} />}
+      {cofrinho.target && <CofrinhoBar cofrinho={cofrinho} />}
       {goal && <p className="text-muted-foreground text-sm">{goal}</p>}
     </div>
   );
