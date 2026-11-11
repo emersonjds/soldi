@@ -849,21 +849,17 @@ async fn two_concurrent_repeats_of_one_entry_make_one_series(pool: PgPool) {
         },
     );
 
-    let mut statuses = [first.0, second.0];
-    statuses.sort();
-    assert_eq!(
-        statuses,
-        [StatusCode::OK, StatusCode::UNPROCESSABLE_ENTITY],
-        "{} {}",
-        first.1,
-        second.1
-    );
-    let refused = if first.0 == StatusCode::OK {
-        second.1
-    } else {
-        first.1
-    };
-    assert_eq!(refused["type"], "urn:soldi:error:already-repeated");
+    // The loser either races `set_series` (422 already-repeated) or runs after the winner and finds a
+    // series of 3 already (a no-op resize, 200, SOL-47). Either way one series of 3 exists.
+    for (status, body) in [&first, &second] {
+        assert!(
+            *status == StatusCode::OK
+                || (*status == StatusCode::UNPROCESSABLE_ENTITY
+                    && body["type"] == "urn:soldi:error:already-repeated"),
+            "{status} {body}"
+        );
+    }
+    assert!(first.0 == StatusCode::OK || second.0 == StatusCode::OK);
     assert_eq!(place(&only(&user, "2026-11").await), (1, 3));
     assert_eq!(place(&only(&user, "2026-12").await), (2, 3));
     assert_eq!(place(&only(&user, "2027-01").await), (3, 3));
@@ -1884,4 +1880,53 @@ async fn a_resize_waits_for_a_this_delete_of_a_member(pool: PgPool) {
     let entries = run(&user, "2026-11", 15).await;
     assert_ranked(&entries, 15);
     assert_empty(&user, "2028-02", 1).await;
+}
+
+#[sqlx::test]
+async fn sol67_a_period_cutting_a_series_in_half_leaves_the_rest_ranked(pool: PgPool) {
+    let user = opened(pool, "ana@example.com").await;
+    repeat(&user, "2026-11-05", "10", 12).await;
+
+    assert_eq!(wipe(&user, "2026").await, 2);
+
+    assert_empty(&user, "2026-11", 2).await;
+    assert_ranked(&run(&user, "2027-01", 10).await, 10);
+}
+
+#[sqlx::test]
+async fn sol67_a_period_delete_queues_behind_a_following_edit_of_a_series_it_cuts(pool: PgPool) {
+    let user = opened(pool.clone(), "ana@example.com").await;
+    repeat(&user, "2026-11-05", "10", 15).await;
+    let thirteenth = only(&user, "2027-11").await;
+    // Rewriting 2027-12 then 2027-11 puts them after 2028-01 in heap order.
+    for of in ["2027-12", "2027-11"] {
+        let entry = uri(&only(&user, of).await);
+        let (status, body) = user.patch(&entry, json!({ "note": "antes" })).await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+    }
+    // With statistics, as autovacuum leaves them, both writes scan the heap.
+    sqlx::query("ANALYZE transactions")
+        .execute(&pool)
+        .await
+        .unwrap();
+    let lock = hold(&pool, &only(&user, "2028-01").await).await;
+
+    let note_tail = following(&thirteenth);
+    let (edited, wiped) = tokio::join!(user.patch(&note_tail, json!({ "note": "fibra" })), async {
+        waiting(&pool, 1).await;
+        let wipe = user.delete("/api/transactions?period=2027");
+        behind(&pool, lock, 2, wipe).await
+    },);
+
+    assert_eq!(edited.0, StatusCode::OK, "{}", edited.1);
+    assert_eq!(wiped.0, StatusCode::OK, "{}", wiped.1);
+    assert_eq!(wiped.1["deleted"], 12);
+    assert_empty(&user, "2027-01", 12).await;
+    let entries = vec![
+        only(&user, "2026-11").await,
+        only(&user, "2026-12").await,
+        only(&user, "2028-01").await,
+    ];
+    assert_ranked(&entries, 3);
+    assert_eq!(entries[2]["note"], "fibra");
 }
