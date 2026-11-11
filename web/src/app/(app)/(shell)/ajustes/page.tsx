@@ -78,7 +78,7 @@ const Row = ({ href, label, hint, icon: Icon }: Item) => (
 
 const AjustesPage = () => (
   <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
-    <h1 className="font-bold text-[22px] leading-7">Ajustes</h1>
+    <h1 className="font-bold text-[22px] leading-7 lg:sr-only">Ajustes</h1>
     {GROUPS.map((group) => (
       <Group key={group.title} title={group.title}>
         {group.items.map((item) => (

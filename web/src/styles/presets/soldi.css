@@ -49,6 +49,8 @@ value: soldi
   --income-text: #15803d;
   --expense: #dc2626;
   --expense-soft: #fee2e2;
+  /* Split bar Diário: 3:1 on white, CVD-apart from primary and cat-11 (spec 2026-11-10 §4.1). */
+  --split-daily: #0891b2;
 
   /* Tier: strong color for strips and dots, soft background and AA text for pills. */
   --tier-red: #dc2626;

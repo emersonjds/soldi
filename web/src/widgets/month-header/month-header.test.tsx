@@ -5,10 +5,10 @@ import { describe, expect, it, vi } from "vitest";
 import { MonthHeader, YearHeader } from "./month-header";
 
 describe("MonthHeader", () => {
-  it("shows the month, today's balance and its tier label", () => {
-    render(<MonthHeader month="2026-11" balance="1842.10" tier="light_green" onMonthChange={vi.fn()} />);
+  it("shows today's balance and its tier label, and leaves the month to the shell", () => {
+    render(<MonthHeader balance="1842.10" tier="light_green" />);
 
-    expect(screen.getByText("Novembro 2026")).toBeInTheDocument();
+    expect(screen.queryByRole("group", { name: "Mês" })).not.toBeInTheDocument();
     expect(screen.getByText("Saldo hoje")).toBeInTheDocument();
     expect(screen.getByText("R$ 1.842,10")).toBeInTheDocument();
     expect(screen.getByText("Confortável")).toBeInTheDocument();
@@ -16,7 +16,7 @@ describe("MonthHeader", () => {
 
   it("shows what the page puts under the balance", () => {
     render(
-      <MonthHeader month="2026-11" balance="0" tier="yellow" onMonthChange={vi.fn()}>
+      <MonthHeader balance="0" tier="yellow">
         <p>Dia 23 fica no vermelho</p>
       </MonthHeader>,
     );
@@ -26,43 +26,12 @@ describe("MonthHeader", () => {
     ).toBeVisible();
   });
 
-  it("switches to the previous and the next month across years", async () => {
-    const onMonthChange = vi.fn();
-    const { rerender } = render(
-      <MonthHeader month="2026-01" balance="0" tier="yellow" onMonthChange={onMonthChange} />,
-    );
-
-    await userEvent.click(screen.getByRole("button", { name: "Mês anterior" }));
-    expect(onMonthChange).toHaveBeenLastCalledWith("2025-12");
-
-    rerender(<MonthHeader month="2026-12" balance="0" tier="yellow" onMonthChange={onMonthChange} />);
-    await userEvent.click(screen.getByRole("button", { name: "Próximo mês" }));
-    expect(onMonthChange).toHaveBeenLastCalledWith("2027-01");
-  });
-
-  it("moves with the keyboard arrows and never before the first month", () => {
-    const onMonthChange = vi.fn();
-    render(<MonthHeader month="2026-11" minMonth="2026-11" balance="0" tier="yellow" onMonthChange={onMonthChange} />);
-    const switcher = screen.getByRole("group", { name: "Mês" });
-
-    fireEvent.keyDown(switcher, { key: "ArrowLeft" });
-    expect(onMonthChange).not.toHaveBeenCalled();
-    fireEvent.keyDown(switcher, { key: "ArrowRight" });
-    expect(onMonthChange).toHaveBeenLastCalledWith("2026-12");
-    fireEvent.keyDown(switcher, { key: "Enter" });
-    expect(onMonthChange).toHaveBeenCalledTimes(1);
-    expect(screen.getByRole("button", { name: "Mês anterior" })).toBeDisabled();
-  });
-
-  it("has a compact variant: the screen's title over the switcher, no balance", async () => {
-    const onMonthChange = vi.fn();
-    render(<MonthHeader month="2026-11" title="Para onde vai" onMonthChange={onMonthChange} />);
+  it("has a compact variant: the screen's title, no balance and no switcher", () => {
+    render(<MonthHeader title="Para onde vai" />);
 
     expect(screen.getByRole("heading", { level: 1, name: "Para onde vai" })).toBeInTheDocument();
-    expect(screen.getByText("Novembro 2026")).toBeInTheDocument();
     expect(screen.queryByText("Saldo hoje")).not.toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "Próximo mês" }));
-    expect(onMonthChange).toHaveBeenLastCalledWith("2026-12");
+    expect(screen.queryByRole("group", { name: "Mês" })).not.toBeInTheDocument();
   });
 });
 

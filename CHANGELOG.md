@@ -7,6 +7,16 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.23.0
+
+> Headline: a desktop shell, the first step of the dashboard redesign
+
+### Web
+
+- Desktop sidebar in two groups, Menu (Mês, Para onde vai, Cofrinhos) and Configurações (Contas Fixas, Ajustes); Lançar moves to a sticky top bar with the page title and the month switcher on month pages (D21, SOL-62, SOL-68).
+- Mobile opens with an "Olá, {nome}" card and a month switcher card; the shell owns the month through `?m=`.
+- New primitives for the next cards: `Money` sizes with smaller cents, `DashCard`, `SplitBar` and the `--split-daily` token.
+
 ## 0.22.0
 
 > Headline: move the day of a whole series
