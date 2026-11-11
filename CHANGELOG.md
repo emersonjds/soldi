@@ -7,6 +7,19 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.34.0
+
+> Headline: Contas fixas at a glance
+
+### Web
+
+- Contas fixas shows the total of active bills, how much of this month's income they take, and the next bill due (SOL-78).
+- Each bill has an Ativa switch. A pause waits until its toast closes, so Desfazer keeps the bill's overdue months owed; a resume goes out at once.
+
+### Fixed
+
+- Saving a conta fixa from its sheet only sends "active" when it changed, so an edit can no longer resume a paused bill by accident.
+
 ## 0.33.0
 
 > Headline: Economia do ano
