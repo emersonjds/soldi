@@ -28,7 +28,7 @@ test("a user deletes the account, cannot sign in with it and can sign up again w
   await page.getByRole("button", { name: "Pular" }).click();
   await page.getByRole("dialog", { name: "Lançar" }).getByRole("button", { name: "Fechar" }).click();
 
-  await page.getByRole("link", { name: "Minha conta" }).click();
+  await page.getByRole("link", { name: "Minha conta", exact: true }).click();
   await page.getByRole("button", { name: "Excluir minha conta" }).click();
   const dialog = page.getByRole("alertdialog", { name: "Excluir sua conta?" });
   await dialog.getByLabel("Senha", { exact: true }).fill(PASSWORD);
