@@ -11,6 +11,8 @@ const nextConfig = {
   images: { unoptimized: true },
   trailingSlash: false,
   reactCompiler: true,
+  // The dev tools badge sits on the Mês tab at 375 and swallows its taps.
+  devIndicators: false,
   compiler: {
     removeConsole: isProduction,
   },

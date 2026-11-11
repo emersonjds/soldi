@@ -52,20 +52,31 @@ describe("MonthChips", () => {
     expect(november).not.toHaveTextContent("12.346");
   });
 
-  it("steps a low of 5 and 6 digits down a size on one line, so the chip never spills", () => {
+  it("sizes a low on one line from its cell's width and its character count, the minus sign and dots counted, so the chip never spills", () => {
     render(
       <MonthChips
         months={[
           { month: "2026-11", lowest: "red", low: "-12345.00", redDays: 30 },
           { month: "2026-12", lowest: "red", low: "-1234.00", redDays: 31 },
           { month: "2027-01", lowest: "red", low: "-123456.00", redDays: 31 },
+          { month: "2027-02", lowest: "green", low: "9999.00", redDays: 0 },
+          { month: "2027-03", lowest: "green", low: "12345.00", redDays: 0 },
         ]}
         onOpen={vi.fn()}
       />,
     );
-    expect(screen.getByText("-12.345")).toHaveClass("text-[11px]", "whitespace-nowrap");
-    expect(screen.getByText("-1.234")).toHaveClass("text-sm", "whitespace-nowrap");
-    expect(screen.getByText("-123.456")).toHaveClass("text-[10px]", "whitespace-nowrap");
+    for (const [low, glyphs] of [
+      ["9.999", "5"],
+      ["-1.234", "6"],
+      ["12.345", "6"],
+      ["-12.345", "7"],
+      ["-123.456", "8"],
+    ]) {
+      const amount = screen.getByText(low);
+      expect(amount).toHaveClass("whitespace-nowrap", "text-(length:--low-fit)");
+      expect(amount.style.getPropertyValue("--glyphs")).toBe(glyphs);
+      expect(amount.closest("li, button")).toHaveClass("@container");
+    }
   });
 
   it("shows the low before the draft only where it moved, matched by month", () => {
