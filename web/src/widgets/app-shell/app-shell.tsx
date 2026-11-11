@@ -21,21 +21,24 @@ import {
   SidebarMenuItem,
   SidebarProvider,
 } from "@/components/ui/sidebar";
+import { useMonth } from "@/entities/month/month-query";
 import { SettingsCurrency } from "@/entities/settings/settings-currency";
 import { useSettings } from "@/entities/settings/settings-query";
 import { useMe } from "@/entities/user/session";
 import { TransactionSheet } from "@/features/add-transaction/transaction-sheet";
 import { EditBillSheet } from "@/features/edit-bill/edit-bill-sheet";
-import { SignOutButton } from "@/features/sign-out/sign-out-button";
 import { cn, getInitials } from "@/lib/utils";
-import { monthParam } from "@/shared/lib/date";
+import { monthParam, todayISO } from "@/shared/lib/date";
+import { TIER_LABEL } from "@/shared/lib/tier";
+import { MonthLink } from "@/shared/ui/month-link";
 import { MonthSwitcher } from "@/shared/ui/month-switcher";
+import { TierPill } from "@/shared/ui/tier-pill";
 import { Wordmark } from "@/shared/ui/wordmark";
 
 const NAV = [
   { href: "/mes", label: "Mês", icon: Calendar },
   { href: "/para-onde-vai", label: "Para onde vai", icon: PieChart },
-  { href: "/economia", label: "Cofrinhos", icon: PiggyBank },
+  { href: "/economia", label: "Economia", icon: PiggyBank },
   { href: "/ajustes", label: "Ajustes", icon: Settings },
 ] as const;
 
@@ -59,6 +62,22 @@ const SIDEBAR = [
   },
 ];
 
+/** The mobile app bar's page name, most specific path first. */
+const PAGE_NAMES = [
+  ["/ajustes/contas", "Contas Fixas"],
+  ["/ajustes/categorias", "Categorias"],
+  ["/ajustes/conta", "Minha Conta"],
+  ["/ajustes/moeda", "Moeda"],
+  ["/ajustes/termometro", "Termômetro"],
+  ["/ajustes/saldo-inicial", "Saldo Inicial"],
+  ["/ajustes/apagar", "Apagar Lançamentos"],
+  ["/ajustes", "Ajustes"],
+  ["/economia", "Economia"],
+  ["/para-onde-vai", "Para Onde Vai"],
+  ["/mes", "Mês"],
+] as const;
+
+/** The pages that read `?m=`; the switcher shows only there. */
 const MONTH_PAGES = ["/mes", "/para-onde-vai"];
 
 /** The month of `?m=`, moved in place. */
@@ -76,27 +95,42 @@ const ShellMonthSwitcher = ({ pathname }: { pathname: string }) => {
   );
 };
 
+/** Today's tier, whatever month is viewed; nothing until it arrives. Shares Mês's query key. */
+const TodayTier = () => {
+  const month = useMonth(todayISO().slice(0, 7));
+  if (!month.data) return null;
+  const tier = month.data.balance_today_tier;
+  return (
+    <div role="img" aria-label={`Saldo hoje: ${TIER_LABEL[tier]}`} title="Saldo hoje" className="hidden lg:block">
+      <TierPill tier={tier} />
+    </div>
+  );
+};
+
 const TabLink = ({ item, active }: { item: NavItem; active: boolean }) => (
-  <Link
+  <MonthLink
     href={item.href}
     aria-current={active ? "page" : undefined}
     className={cn(
-      "flex min-h-14 flex-col items-center justify-center gap-0.5 text-balance rounded-full px-1 py-1 text-center font-medium text-[11px] leading-tight transition-colors duration-200 focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2 motion-reduce:transition-none",
-      active ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground",
+      "flex min-h-11 min-w-14 flex-col items-center justify-center gap-0.5 whitespace-nowrap rounded-lg px-1 py-1 text-center font-medium text-[11px] leading-tight transition-colors duration-200 focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2 motion-reduce:transition-none",
+      active ? "text-primary" : "text-muted-foreground hover:text-foreground",
     )}
   >
     <item.icon className="size-5" aria-hidden />
     {item.label}
-  </Link>
+  </MonthLink>
 );
 
-const TodayLink = () => (
+const TodayLink = ({ className, mark }: { className?: string; mark?: string }) => (
   <Link
     href="/mes"
     aria-label="Soldi, ir para hoje"
-    className="inline-flex min-h-11 w-fit items-center rounded-lg px-2 focus-visible:outline-2 focus-visible:outline-ring"
+    className={cn(
+      "inline-flex min-h-11 w-fit items-center rounded-lg px-2 focus-visible:outline-2 focus-visible:outline-ring",
+      className,
+    )}
   >
-    <Wordmark />
+    <Wordmark className={mark} />
   </Link>
 );
 
@@ -108,8 +142,6 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
   const [simulating, setSimulating] = useState(false);
   const name = me.data?.name ?? "";
   const email = me.data?.email ?? "";
-  const [firstName] = name.split(" ");
-  const greeting = firstName ? `Olá, ${firstName}` : "Olá";
   const launch = (simulate = false) => {
     setSimulating(simulate);
     setLaunching(true);
@@ -117,6 +149,8 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
   const current = SIDEBAR.flatMap((group) => group.items)
     .filter((item) => isAt(item.href))
     .sort((a, b) => b.href.length - a.href.length)[0];
+  const pageName = PAGE_NAMES.find(([href]) => isAt(href))?.[1];
+  const readsMonth = MONTH_PAGES.some(isAt);
 
   return (
     <SettingsCurrency>
@@ -140,10 +174,10 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
                         return (
                           <SidebarMenuItem key={item.href}>
                             <SidebarMenuButton asChild isActive={active} className="h-11 gap-3 px-3 text-base">
-                              <Link href={item.href} aria-current={active ? "page" : undefined}>
+                              <MonthLink href={item.href} aria-current={active ? "page" : undefined}>
                                 <item.icon className="size-5!" aria-hidden />
                                 {item.label}
-                              </Link>
+                              </MonthLink>
                             </SidebarMenuButton>
                           </SidebarMenuItem>
                         );
@@ -162,83 +196,91 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
               </nav>
             </SidebarContent>
             <SidebarFooter className="p-3">
-              <div className="flex items-center gap-1 rounded-2xl bg-muted p-1.5">
-                <Link
-                  href="/ajustes/conta"
-                  aria-label={`Minha conta, ${name}`}
-                  className="flex min-w-0 flex-1 items-center gap-3 rounded-xl p-1.5 transition-colors hover:bg-background/60 focus-visible:outline-2 focus-visible:outline-ring"
-                >
-                  <Avatar>
-                    <AvatarFallback className="bg-brand text-brand-foreground">{getInitials(name)}</AvatarFallback>
-                  </Avatar>
-                  <div className="grid min-w-0 text-sm leading-tight">
-                    <span className="truncate font-medium">{name}</span>
-                    <span title={email} className="truncate text-muted-foreground text-xs">
-                      {email}
-                    </span>
-                    <span className="text-[11px] text-muted-foreground/70 tabular-nums">
-                      v{process.env.NEXT_PUBLIC_APP_VERSION}
-                    </span>
-                  </div>
-                </Link>
-                <SignOutButton compact />
-              </div>
+              <Link
+                href="/ajustes/conta"
+                aria-label={`Minha conta, ${name}`}
+                className="flex min-w-0 items-center gap-3 rounded-2xl bg-muted p-3 transition-colors hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring"
+              >
+                <Avatar className="size-10">
+                  <AvatarFallback className="bg-brand text-brand-foreground">{getInitials(name)}</AvatarFallback>
+                </Avatar>
+                <div className="grid min-w-0 text-sm leading-tight">
+                  <span className="truncate font-medium">{name}</span>
+                  <span title={email} className="truncate text-muted-foreground text-xs">
+                    {email}
+                  </span>
+                </div>
+              </Link>
+              <p className="px-3 text-[11px] text-muted-foreground tabular-nums">
+                v{process.env.NEXT_PUBLIC_APP_VERSION}
+              </p>
             </SidebarFooter>
           </Sidebar>
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="flex flex-col gap-2 px-4 pt-4 lg:sticky lg:top-0 lg:z-30 lg:h-16 lg:flex-row lg:items-center lg:gap-4 lg:border-b lg:bg-background/90 lg:px-6 lg:pt-0 lg:backdrop-blur">
-            <div className="flex items-center justify-between gap-3 rounded-2xl bg-card py-2 pr-2 pl-4 shadow-sm lg:hidden">
-              <p className="line-clamp-2 font-semibold text-lg">{greeting}</p>
-              <Link
-                href="/ajustes/conta"
-                aria-label="Minha conta"
-                className="flex size-11 shrink-0 items-center justify-center rounded-full"
-              >
-                <Avatar>
-                  <AvatarFallback className="bg-brand text-brand-foreground">{getInitials(name)}</AvatarFallback>
-                </Avatar>
-              </Link>
-            </div>
-            <p className="hidden font-bold text-[22px] leading-7 lg:block">{current?.label}</p>
-            {MONTH_PAGES.some(isAt) && (
-              <Suspense>
-                <div className="max-lg:rounded-2xl max-lg:bg-card max-lg:p-2 max-lg:shadow-sm">
+          <header className="sticky top-0 z-30 box-content grid h-14 grid-cols-[1fr_auto_1fr] items-center gap-3 bg-background/85 px-4 pt-[env(safe-area-inset-top)] backdrop-blur lg:flex lg:h-16 lg:gap-4 lg:border-b lg:px-6 lg:pt-0">
+            <TodayLink className="-ml-2 lg:hidden" mark="flex-row-reverse text-xl" />
+            <p className="font-semibold text-lg lg:hidden">{pageName}</p>
+            <div className="hidden lg:mr-auto lg:block">
+              {readsMonth && (
+                <Suspense>
                   <ShellMonthSwitcher pathname={pathname} />
-                </div>
-              </Suspense>
-            )}
+                </Suspense>
+              )}
+            </div>
+            <TodayTier />
             <Button
-              className="ml-auto hidden min-h-11 bg-brand text-base text-brand-foreground hover:bg-brand-hover lg:inline-flex"
+              className="hidden min-h-11 bg-brand text-base text-brand-foreground hover:bg-brand-hover lg:inline-flex"
               onClick={() => launch()}
             >
               <Plus className="size-5" aria-hidden />
               Lançar
             </Button>
+            <Link
+              href="/ajustes/conta"
+              aria-label="Minha conta"
+              className="flex size-11 shrink-0 items-center justify-center justify-self-end rounded-full focus-visible:outline-2 focus-visible:outline-ring"
+            >
+              <Avatar className="size-10">
+                <AvatarFallback className="bg-brand text-brand-foreground">{getInitials(name)}</AvatarFallback>
+              </Avatar>
+            </Link>
           </header>
           <main className="mx-auto w-full max-w-6xl flex-1 px-4 pt-4 pb-(--tabbar-space) lg:px-6 lg:pt-6 lg:pb-10">
+            {readsMonth && (
+              <Suspense>
+                <div className="mb-4 rounded-2xl bg-card p-2 shadow-sm lg:hidden">
+                  <ShellMonthSwitcher pathname={pathname} />
+                </div>
+              </Suspense>
+            )}
             {children}
           </main>
         </div>
 
         <nav
           aria-label="Navegação principal"
-          className="fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-40 mx-auto flex max-w-lg items-center gap-2 lg:hidden"
+          className="fixed inset-x-0 bottom-0 z-40 border-t bg-card pb-[env(safe-area-inset-bottom)] lg:hidden"
         >
-          <div className="grid flex-1 grid-cols-4 gap-1 rounded-full bg-card p-1 shadow-md">
-            {NAV.map((item) => (
+          <div className="mx-auto flex h-16 max-w-lg items-center justify-around px-1">
+            {NAV.slice(0, 2).map((item) => (
+              <TabLink key={item.href} item={item} active={isAt(item.href)} />
+            ))}
+            <div className="relative flex min-h-11 min-w-14 justify-center">
+              <button
+                type="button"
+                aria-label="Lançar"
+                onClick={() => launch()}
+                className="absolute -top-5 flex size-14 items-center justify-center rounded-full bg-brand text-brand-foreground shadow-lg transition-colors hover:bg-brand-hover focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2"
+              >
+                <Plus className="size-7" aria-hidden />
+              </button>
+            </div>
+            {NAV.slice(2).map((item) => (
               <TabLink key={item.href} item={item} active={isAt(item.href)} />
             ))}
           </div>
-          <button
-            type="button"
-            aria-label="Lançar"
-            onClick={() => launch()}
-            className="flex size-14 shrink-0 items-center justify-center rounded-full bg-brand text-brand-foreground shadow-lg transition-colors hover:bg-brand-hover focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2"
-          >
-            <Plus className="size-7" aria-hidden />
-          </button>
         </nav>
 
         <TransactionSheet

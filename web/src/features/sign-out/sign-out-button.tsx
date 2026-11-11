@@ -6,24 +6,8 @@ import { Button } from "@/components/ui/button";
 import { useLeave } from "@/entities/user/session";
 import { api, okOrThrow } from "@/shared/api/client";
 
-/** `compact`: an icon-only button for the sidebar user card. */
-export const SignOutButton = ({ compact = false }: { compact?: boolean }) => {
+export const SignOutButton = () => {
   const signOut = useLeave(async () => okOrThrow(await api.POST("/api/auth/sign-out")));
-
-  if (compact)
-    return (
-      <Button
-        variant="ghost"
-        size="icon"
-        aria-label="Sair"
-        title="Sair"
-        className="size-11 shrink-0 rounded-full text-muted-foreground hover:text-destructive"
-        disabled={signOut.isPending}
-        onClick={() => signOut.mutate()}
-      >
-        <LogOut className="size-5" />
-      </Button>
-    );
 
   return (
     <div className="flex flex-col">

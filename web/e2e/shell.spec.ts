@@ -1,5 +1,6 @@
 import { expect, type Page, test } from "@playwright/test";
 
+import { expectNoClipped } from "./clipped";
 import { requireServer } from "./server";
 
 /** Scrolls to the end and returns how far the lowest piece of content inside `main` sits below the tab bar's top. */
@@ -77,4 +78,87 @@ test("at 375 the tab bar never covers the last row of a long page, and a long La
   expect(await launch.evaluate((sheet) => sheet.scrollHeight > sheet.clientHeight)).toBe(true);
   await launch.evaluate((sheet) => sheet.scrollTo(0, 0));
   await expect(launch.getByRole("button", { name: "Salvar" })).toBeInViewport({ ratio: 1 });
+});
+
+test("the shell follows Stitch from 375 to 1440: app bar and tab bar on mobile, switcher, today's tier and avatar on top", async ({
+  page,
+  request,
+}) => {
+  await requireServer(request);
+
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto("/criar-conta");
+  await page.getByLabel("E-mail").fill(`e2e-shell-bar-${Date.now()}@example.com`);
+  await page.getByLabel("Senha").fill("uma-senha-bem-longa");
+  await page.getByRole("button", { name: "Criar conta" }).click();
+  await page.getByRole("button", { name: "Continuar" }).click();
+  await page.getByLabel("Saldo de hoje").fill("12.345,67");
+  await page.getByRole("button", { name: "Continuar" }).click();
+  await page.getByRole("button", { name: "Pular por agora" }).click();
+  const today = page.waitForResponse((response) => /\/api\/months\/\d{4}-\d{2}$/.test(response.url()));
+  await page.getByRole("button", { name: "Ver meu mês" }).click();
+  await page.getByRole("button", { name: "Pular" }).click();
+  await page.getByRole("dialog", { name: "Lançar" }).getByRole("button", { name: "Fechar" }).click();
+  await today;
+
+  const bar = page.getByRole("banner");
+  const tabs = page.getByRole("navigation", { name: "Navegação principal" });
+  await expect(bar.getByRole("link", { name: "Soldi, ir para hoje" })).toBeVisible();
+  await expect(bar.locator("p", { hasText: /^Mês$/ })).toBeVisible();
+  await expect(bar.getByRole("link", { name: "Minha conta" })).toBeVisible();
+  const hiddenPill = bar.getByRole("img", { name: /^Saldo hoje: /, includeHidden: true });
+  await expect(hiddenPill).toHaveCount(1);
+  await expect(hiddenPill).toBeHidden();
+  await expect(tabs.locator("a, button")).toHaveText(["Mês", "Para onde vai", "", "Economia", "Ajustes"]);
+  await expect(tabs.getByRole("link", { name: "Mês" })).toHaveAttribute("aria-current", "page");
+  await tabs.getByRole("link", { name: "Ajustes" }).click();
+  await page.getByRole("link", { name: /^Contas fixas/ }).click();
+  await expect(bar.locator("p", { hasText: /^Contas Fixas$/ })).toBeVisible();
+  await expectNoClipped(page);
+
+  const main = page.getByRole("main");
+  await tabs.getByRole("link", { name: "Mês" }).click();
+  await main.getByRole("group", { name: "Mês" }).getByRole("button", { name: "Próximo mês" }).click();
+  await expect(page).toHaveURL(/\/mes\?m=\d{4}-\d{2}$/);
+  const next = new URL(page.url()).searchParams.get("m");
+  const label = await main.getByRole("group", { name: "Mês" }).locator("[aria-live]").innerText();
+  await tabs.getByRole("link", { name: "Ajustes" }).click();
+  await page.getByRole("link", { name: /^Contas fixas/ }).click();
+  await expect(page).toHaveURL(`/ajustes/contas?m=${next}`);
+  await expect(page.getByRole("group", { name: "Mês" })).toHaveCount(0);
+  await tabs.getByRole("link", { name: "Mês" }).click();
+  await expect(page).toHaveURL(`/mes?m=${next}`);
+  await expect(main.getByRole("group", { name: "Mês" }).locator("[aria-live]")).toHaveText(label);
+
+  for (const width of [1024, 1280, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/mes");
+    const pill = bar.getByRole("img", { name: /^Saldo hoje: / });
+    await expect(pill).toBeVisible();
+    const tier = await pill.getAttribute("aria-label");
+    await expect(bar.getByRole("button", { name: "Lançar" })).toBeVisible();
+    await expect(bar.getByRole("link", { name: "Minha conta", exact: true })).toHaveAttribute("href", "/ajustes/conta");
+    await expect(tabs).toBeHidden();
+    await expectNoClipped(page);
+
+    await bar.getByRole("button", { name: "Próximo mês" }).click();
+    await expect(page).toHaveURL(/\?m=/);
+    await expect(pill).toHaveAttribute("aria-label", tier ?? "");
+    await page
+      .getByRole("complementary", { name: "Barra lateral" })
+      .getByRole("link", { name: "Contas Fixas" })
+      .click();
+    await expect(page).toHaveURL(/\/ajustes\/contas\?m=/);
+    await expect(page.getByRole("heading", { level: 1, name: "Contas fixas" })).toBeVisible();
+    await expect(page.getByRole("group", { name: "Mês" })).toHaveCount(0);
+    await expect(pill).toHaveAttribute("aria-label", tier ?? "");
+    await expectNoClipped(page);
+    await page
+      .getByRole("complementary", { name: "Barra lateral" })
+      .getByRole("link", { name: "Para onde vai" })
+      .click();
+    await expect(page).toHaveURL(/\/para-onde-vai\?m=/);
+    await expect(bar.getByRole("group", { name: "Mês" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Para onde vai" })).toBeVisible();
+  }
 });

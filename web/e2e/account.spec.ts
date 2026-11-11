@@ -22,11 +22,11 @@ test("a user renames, changes the password, signs out everywhere and signs in wi
   await page.getByRole("button", { name: "Pular" }).click();
   await page.getByRole("dialog", { name: "Lançar" }).getByRole("button", { name: "Fechar" }).click();
 
-  await page.getByRole("link", { name: "Minha conta" }).click();
+  await page.getByRole("link", { name: "Minha conta", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Minha conta" })).toBeVisible();
   await page.getByLabel("Nome").fill("Ana Paula");
   await page.getByRole("button", { name: "Salvar" }).click();
-  await expect(page.getByRole("link", { name: "Minha conta" })).toContainText("Ana Paula");
+  await expect(page.getByRole("link", { name: /^Minha conta,/ })).toContainText("Ana Paula");
 
   await page.getByLabel("Senha atual").fill("uma-senha-bem-longa");
   await page.getByLabel("Nova senha").fill("outra-senha-bem-longa");
@@ -40,5 +40,5 @@ test("a user renames, changes the password, signs out everywhere and signs in wi
   await page.getByLabel("E-mail").fill(email);
   await page.getByLabel("Senha").fill("outra-senha-bem-longa");
   await page.getByRole("button", { name: "Entrar" }).click();
-  await expect(page.getByRole("link", { name: "Minha conta" })).toContainText("Ana Paula");
+  await expect(page.getByRole("link", { name: /^Minha conta,/ })).toContainText("Ana Paula");
 });

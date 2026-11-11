@@ -1793,7 +1793,7 @@ dependencies = [
 
 [[package]]
 name = "soldi-server"
-version = "0.34.0"
+version = "0.35.0"
 dependencies = [
  "argon2",
  "axum",
@@ -1823,7 +1823,7 @@ dependencies = [
 
 [[package]]
 name = "soldi-types"
-version = "0.34.0"
+version = "0.35.0"
 dependencies = [
  "chrono",
  "rust_decimal",

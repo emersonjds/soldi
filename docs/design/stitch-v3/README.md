@@ -1,5 +1,7 @@
 # Stitch v3 — verified gap analysis (SOL-72)
 
+> Superseded by `FIDELITY.md` (SOL-79). Fidelity is now the default (D24). The "Not built" and "Cut" tables below hold only where they cite one of the owner's explicit rules.
+
 The owner's Stitch project, 14 screens (PNG + HTML). Each screen is compared with `developer` at 0.28.0 (`719e814`), read through the code and the shipped screenshots in `docs/design/screens/SOL-62` … `SOL-70` and `SOL-9`. Spec: `docs/specs/2026-11-11-stitch-v3.md`. Plan: `docs/specs/plans/SOL-72.md`. Decision: D23.
 
 Rules applied:

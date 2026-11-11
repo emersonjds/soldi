@@ -114,6 +114,8 @@ Detail: `docs/specs/2026-11-10-dashboard-redesign.md`, plan `docs/specs/plans/SO
 
 Update (2026-11-11, owner, SOL-69): C1 went back to the 0.23.0 hero, today's balance with its tier and the Entradas / Saídas / Projetado summary; the split bar "Para onde foi a entrada" is dropped from Mês. The rest of the grid stays.
 
+Update (2026-11-11, owner, SOL-79): the update above is reversed by D24 (the Stitch hero with the split returns; the top bar gains the tier pill), and empty cards no longer render (D25).
+
 ## D22 — The category palette is checked for color blindness; icon and label name a category, color only helps (2026-11-11, SOL-9, designer)
 
 Ten of the first twelve `cat-*` tokens get new hex values (`cat-5` Lazer and `cat-11` Salário stay). Names do not change, so stored categories keep their token and no migration runs. Each token keeps its hue family (Mercado still amber, Aluguel still indigo); most moved in lightness, the axis a dichromat still sees.
@@ -162,3 +164,58 @@ Rejected:
 - per-category month totals on Ajustes › Categorias (Para onde vai already has them).
 
 Detail: `docs/specs/2026-11-11-stitch-v3.md`.
+
+Update (2026-11-11, owner, SOL-79): superseded by D24.
+
+## D24 — Stitch is the design source of truth; fidelity by default; only explicit rules cut elements (2026-11-11, owner, SOL-79)
+
+The owner rejected SOL-72's cuts. Many of them broke no rule; they were judged duplicate or YAGNI. From now on every element of the 14 Stitch v3 screens is built as drawn: layout, order, components, copy (verbatim from the HTML), states, sizes, and colors through tokens. Deleting what Stitch replaces is part of fidelity.
+
+Only these rules cut an element:
+
+- credit cards and fatura (a card bill is a plain conta fixa with its category);
+- AI copy: Diagnóstico, Dica, Sugestões, Classificação automática;
+- CDI yield;
+- the Pro plan;
+- recurring income;
+- averages, estimates and "no ritmo atual" (D16);
+- dark mode;
+- the bell.
+
+Where only a phrase breaks a rule, the element is built and the phrase adapted. Elements that need data the API lacks are listed with their smallest field or endpoint. Those that add stored data or reverse D14, D20 or D8 wait for the owner's yes, one card each.
+
+Frame conflicts: a mobile frame governs < 1024 px and a desktop frame ≥ 1024 px. Within one breakpoint the majority of frames wins.
+
+This reverses:
+
+- **SOL-69 and the D21 update.** The Mês hero follows Stitch: `Saldo hoje em conta` with its tier pill, the `Projetado no fim do mês` box with its pill, and the split bar `Para onde foi a entrada deste mês` with its 4-item legend and `Total`. At < 1024 the mobile frame's indigo hero with Entradas / Saídas / Projetado stays.
+- **D21 "no tier pill in the top bar".** The top bar shows today's tier pill next to `+ Lançar`. There is still no bell.
+- **D23's cut list,** except where it names a rule above. D23's chip rule (lowest balance, never the month-end) stays.
+
+Standing rules still bind: money as `Decimal`, `user_id` on every query, 44 px targets, 16 px form text, and D22 (color is never the only signal; it keeps the tier word on the month chips).
+
+Detail: `docs/design/stitch-v3/FIDELITY.md`, `docs/specs/2026-11-11-stitch-fidelity.md`, plan `docs/specs/plans/SOL-79.md`.
+
+## D25 — A card with no content does not render (2026-11-11, owner, SOL-79)
+
+The owner, looking at `Contas a pagar` showing `Nenhuma conta fixa / Cadastrar conta fixa`: cards appear only when there is something to show.
+
+- Every card defines its content, and without it renders nothing, title included. Examples:
+  - Contas a pagar without bills;
+  - the Cofrinhos glance without a cofrinho;
+  - the Para onde vai glance without spending;
+  - Lançamentos without entries;
+  - Próximos meses without a forecast;
+  - the Termômetro of an empty month;
+  - the split without an entrada;
+  - the red banner without a red day.
+- The Mês hero always shows, since a balance exists from the opening date.
+- Full screens whose page is where things are created keep a first-use empty state with the create action: Contas fixas, Cofrinhos, Categorias.
+- Only the hero has a skeleton, so a card never flashes and then vanishes.
+- An error is content: a failed card shows its retry.
+- A filter that empties a card shows its empty line, since the card has content under another filter.
+- Layouts flow: no pinned grid rows or columns. A hidden card leaves no hole at 375, 1024, 1280 or 1440.
+
+A fresh account's Mês shows the hero alone.
+
+This replaces the empty states of D21's dashboard cards.
