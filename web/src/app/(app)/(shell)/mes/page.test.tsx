@@ -475,11 +475,11 @@ describe("Mês", () => {
     expect(await screen.findByText("Não foi possível carregar os lançamentos.")).toBeInTheDocument();
     expect(ledger()).toHaveTextContent("Não foi possível carregar os lançamentos.");
     expect(screen.getByRole("region", { name: "Saldo hoje" })).toHaveTextContent("R$ 957,79");
+    const entries = () => requests.filter((request) => request.url.includes("/api/transactions")).length;
+    const before = entries();
     await userEvent.click(within(ledger()).getByRole("button", { name: "Tentar de novo" }));
 
-    await waitFor(() =>
-      expect(requests.filter((request) => request.url.includes("/api/transactions"))).toHaveLength(2),
-    );
+    await waitFor(() => expect(entries()).toBe(before + 1));
   });
 
   it("keeps the month on screen when the cofrinhos fail", async () => {
