@@ -15,6 +15,8 @@ type ResponsiveSheetProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
+  /** A line above the title. */
+  eyebrow?: ReactNode;
   /** Read by screen readers only, unless `showDescription`. */
   description: string;
   /** From 1024px the description shows under the title. */
@@ -33,6 +35,7 @@ export const ResponsiveSheet = ({
   open,
   onOpenChange,
   title,
+  eyebrow,
   description,
   showDescription = false,
   children,
@@ -85,6 +88,7 @@ export const ResponsiveSheet = ({
             wide && "sm:max-w-[560px]",
           )}
         >
+          {eyebrow}
           <DialogTitle className={heading}>{title}</DialogTitle>
           <DialogDescription className={showDescription ? "-mt-4 text-muted-foreground text-sm" : "sr-only"}>
             {description}
@@ -105,6 +109,7 @@ export const ResponsiveSheet = ({
         onCloseAutoFocus={onCloseAutoFocus}
         className="mx-auto max-h-[92dvh] max-w-lg gap-6 overflow-y-auto rounded-t-3xl px-4 pt-6 pb-(--sheet-pb) [--sheet-pb:calc(1.5rem+env(safe-area-inset-bottom))] [scrollbar-width:none] has-data-[slot=responsive-sheet-footer]:scroll-pb-[calc(var(--sheet-pb)+7.5rem)] has-data-[slot=responsive-sheet-footer]:pb-0 [&::-webkit-scrollbar]:hidden"
       >
+        {eyebrow}
         <SheetTitle className={heading}>{title}</SheetTitle>
         <SheetDescription className="sr-only">{description}</SheetDescription>
         {back}

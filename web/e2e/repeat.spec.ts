@@ -69,11 +69,11 @@ test("an entry repeated 3x shows in three months; edit and delete reach this one
   await visit(second);
   await internet.click();
   await page.getByRole("dialog", { name: "Internet" }).getByRole("button", { name: "Editar" }).click();
-  const edit = page.getByRole("dialog", { name: "Editar lançamento" });
-  await expect(edit).toContainText("Parte de uma série de 3");
+  const edit = page.getByRole("dialog", { name: "Editar Lançamento Recorrente" });
+  await expect(edit).toContainText("Parte de uma série de 3 meses");
   await edit.getByLabel("Valor").fill("120,00");
   await edit.getByRole("radio", { name: "Este e os próximos" }).click();
-  await edit.getByRole("button", { name: "Salvar" }).click();
+  await edit.getByRole("button", { name: "Salvar Alterações na Série" }).click();
   await expect(page.getByText("Série atualizada")).toBeVisible();
   await expect(internet).toContainText("R$ 120,00");
 
@@ -131,9 +131,9 @@ test("a 12x series shrinks to 6 from its first entry and grows back to 12 from i
     await visit(month);
     await internet.click();
     await page.getByRole("dialog", { name: "Internet" }).getByRole("button", { name: "Editar" }).click();
-    const edit = page.getByRole("dialog", { name: "Editar lançamento" });
-    await edit.getByRole("radiogroup", { name: "Meses na série" }).getByRole("radio", { name: count }).click();
-    await edit.getByRole("button", { name: "Salvar" }).click();
+    const edit = page.getByRole("dialog", { name: "Editar Lançamento Recorrente" });
+    await edit.getByRole("radiogroup", { name: "Duração da série" }).getByRole("radio", { name: count }).click();
+    await edit.getByRole("button", { name: "Salvar Alterações na Série" }).click();
   };
 
   await page.getByRole("navigation", { name: "Navegação principal" }).getByRole("button", { name: "Lançar" }).click();
@@ -146,15 +146,15 @@ test("a 12x series shrinks to 6 from its first entry and grows back to 12 from i
   await launch.getByRole("button", { name: "Salvar" }).click();
   await expect(page.getByText("12 lançamentos criados")).toBeVisible();
 
-  await resize(first, "6×");
-  await expect(page.getByText("Série ajustada para 6 meses")).toBeVisible();
+  await resize(first, "6 meses");
+  await expect(page.getByText("Série ajustada com sucesso para 6 meses futuros.")).toBeVisible();
   await visit(sixth);
   await expect(internet).toContainText("Saída · 6/66 de 6");
   await visit(seventh);
   await expect(ledger).toHaveCount(0);
 
-  await resize(sixth, "12×");
-  await expect(page.getByText("Série ajustada para 12 meses")).toBeVisible();
+  await resize(sixth, "12 meses");
+  await expect(page.getByText("Série ajustada com sucesso para 12 meses futuros.")).toBeVisible();
   await visit(twelfth);
   await expect(internet).toContainText("Saída · 12/1212 de 12");
 });
@@ -203,11 +203,13 @@ test("a 12x series on the 5th moves to the 10th from its third entry on", async 
   await visit(third);
   await internet.click();
   await page.getByRole("dialog", { name: "Internet" }).getByRole("button", { name: "Editar" }).click();
-  const edit = page.getByRole("dialog", { name: "Editar lançamento" });
+  const edit = page.getByRole("dialog", { name: "Editar Lançamento Recorrente" });
   await edit.getByRole("radio", { name: "Este e os próximos" }).click();
   await pickDate(edit, "Outra data", `${third}-10`);
-  await expect(edit.getByText("Os próximos também vão para o dia 10.")).toBeVisible();
-  await edit.getByRole("button", { name: "Salvar" }).click();
+  await expect(
+    edit.getByText("Os próximos lançamentos também serão movidos automaticamente para o dia 10."),
+  ).toBeVisible();
+  await edit.getByRole("button", { name: "Salvar Alterações na Série" }).click();
   await expect(page.getByText("Série movida para o dia 10")).toBeVisible();
 
   await visit(third);

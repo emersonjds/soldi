@@ -351,6 +351,7 @@ export const Ledger = ({
             <>
               <ScopeRadio
                 legend="Excluir quais?"
+                mode="delete"
                 series={selected.series}
                 date={selected.date}
                 value={scope}
@@ -386,6 +387,11 @@ export const Ledger = ({
         onOpenChange={setEditing}
         transaction={selected}
         billSheet={(props) => <EditBillSheet open {...props} />}
+        onDelete={() => {
+          setScope("this");
+          setConfirming(true);
+          setActing(true);
+        }}
       />
     </section>
   );
