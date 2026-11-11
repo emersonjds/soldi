@@ -326,8 +326,11 @@ test("Mês follows the mobile frame's order at 375, a stack and a 2-column rail 
 
   for (const width of [1280, 1440]) {
     await page.setViewportSize({ width, height: 900 });
-    const [hero, rail] = await Promise.all(["Saldo hoje", "Termômetro do Mês"].map((name) => box(page, name)));
+    const [hero, rail, glance] = await Promise.all(
+      ["Saldo hoje", "Termômetro do Mês", "Para onde vai"].map((name) => box(page, name)),
+    );
     expect(rail.x).toBeGreaterThan(hero.x + hero.width);
+    expect(Math.abs(glance.width - rail.width)).toBeLessThan(2);
     expect(Math.abs(rail.y - hero.y)).toBeLessThan(2);
     await expect(page.getByRole("region", { name: "Resumo do mês" })).toBeHidden();
     await expect(page.getByRole("img", { name: /^Entradas|^Saídas/ })).toHaveCount(0);

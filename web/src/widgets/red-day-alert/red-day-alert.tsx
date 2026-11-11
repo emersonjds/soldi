@@ -22,7 +22,7 @@ export const RedDayAlert = ({
   const currency = useCurrency();
   const { date, balance, today } = alert.firstRed;
   const day = Number(date.slice(8));
-  const title = `${today ? "Hoje está" : `Dia ${day} fica`} no vermelho: ${formatMoney(balance, currency)}.`;
+  const title = `${today ? "Hoje está" : `Dia ${day} fica`} no vermelho: `;
   return (
     <section
       aria-label="Alerta do mês"
@@ -33,7 +33,10 @@ export const RedDayAlert = ({
           <TriangleAlert className="size-5" aria-hidden />
         </span>
         <p className="font-medium text-expense leading-6">
-          <span className="font-bold">{title}</span>
+          <span className="font-bold">
+            {title}
+            <span className="whitespace-nowrap">{formatMoney(balance, currency)}</span>.
+          </span>
           {causeOf(outflows)}
         </p>
       </div>

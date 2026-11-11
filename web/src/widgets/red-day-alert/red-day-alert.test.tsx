@@ -27,11 +27,10 @@ describe("RedDayAlert", () => {
     expect(text(within(banner()).getByRole("paragraph"))).toBe(
       "Dia 23 fica no vermelho: -R$ 675,00. Contas de Cartão e Seguro previstas excedem o saldo em caixa projetado.",
     );
-    expect(
-      within(banner()).getByText("Dia 23 fica no vermelho: -R$ 675,00.", {
-        normalizer: (value) => value.replace(/\s/g, " "),
-      }),
-    ).toHaveClass("font-bold");
+    const title = within(banner()).getByRole("paragraph").firstElementChild as HTMLElement;
+    expect(text(title)).toBe("Dia 23 fica no vermelho: -R$ 675,00.");
+    expect(title).toHaveClass("font-bold");
+    expect(within(title).getByText("-R$ 675,00")).toHaveClass("whitespace-nowrap");
     expect(banner()).toHaveClass("bg-expense-soft");
     expect(within(banner()).getAllByRole("button").map(text)).toEqual(["Ver o dia 23"]);
     expect(banner()).not.toHaveTextContent("Pior dia");

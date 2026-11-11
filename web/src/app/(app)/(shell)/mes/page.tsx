@@ -124,7 +124,7 @@ const MonthScreen = () => {
             />
           )}
         </div>
-        <div className="contents lg:grid lg:grid-cols-2 lg:items-start lg:gap-6 xl:flex xl:flex-col lg:[&>:last-child:nth-child(odd)]:col-span-2">
+        <div className="contents lg:grid lg:grid-cols-2 lg:items-start lg:gap-6 xl:flex xl:flex-col xl:items-stretch lg:[&>:last-child:nth-child(odd)]:col-span-2">
           {view.data && <ThermometerCard view={view.data} className="max-lg:order-2" />}
           <MonthsAhead
             viewing={month}
