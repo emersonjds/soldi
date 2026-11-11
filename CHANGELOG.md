@@ -7,6 +7,17 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.37.0
+
+> Headline: Contas a pagar as in the Stitch design
+
+### Web
+
+- Contas a pagar has a Pagar pill on every open bill that pays at once, the same as the round check, with the same undo (SOL-82).
+- A paid bill shows a Pago badge, its name struck through and whether it was paid on time or late. An overdue bill shows a red ! in the check slot, "Atrasada desde {day}" and a Vencido badge.
+- The header shows "{n} de {total} pagas" and "Próxima: dia {dd} · {amount}", with the day chips on the right. The Todas / Pendentes / Pagas filter and the open total are gone.
+- On mobile the card is Contas do Mês with "{n} obrigações cadastradas". Each row has a status pill: Pagar pays, ✓ Pago undoes, Vencido pays.
+
 ## 0.36.0
 
 > Headline: Mês as in the Stitch design
