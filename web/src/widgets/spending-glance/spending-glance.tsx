@@ -2,7 +2,8 @@
 
 import { Skeleton } from "@/components/ui/skeleton";
 import { useCategoryReport } from "@/entities/report/report-query";
-import { formatPct } from "@/shared/lib/percent";
+import { wholeShare } from "@/shared/lib/percent";
+import { cents } from "@/shared/lib/tier";
 import { CategoryIcon, categoryBg } from "@/shared/ui/category-icon";
 import { DashCard } from "@/shared/ui/dash-card";
 import { Money } from "@/shared/ui/money";
@@ -44,7 +45,7 @@ const Body = ({ month }: { month: string }) => {
                 />
               </span>
               <span className="w-10 text-right text-muted-foreground text-sm tabular-nums">
-                {formatPct(group.pct, 0)}
+                {wholeShare(cents(group.amount), cents(report.data.outflow_total))}%
               </span>
             </span>
           </span>

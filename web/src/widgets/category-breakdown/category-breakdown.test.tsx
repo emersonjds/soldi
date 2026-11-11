@@ -132,6 +132,13 @@ describe("CategoryBreakdown by group", () => {
     expect(groupRows()).toEqual(["Salário100% das entradasR$ 500,00"]);
   });
 
+  it("rounds a group's share half to even: 125,00 of 1.000,00 is 12%", async () => {
+    show({ report: { ...REPORT, outflow_total: "1000.00", groups: [group(ALUGUEL, "125.00", "12.5", null)] } });
+    await screen.findByText("Saídas do mês");
+
+    expect(pick("Aluguel")).toHaveTextContent("12% das saídas");
+  });
+
   it("folds a group's subcategories with a sibling button, and adds the parent's own entries from cents", async () => {
     show();
     await screen.findByText("Saídas do mês");
