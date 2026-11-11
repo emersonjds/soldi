@@ -12,11 +12,18 @@ import { EditBillSheet } from "@/features/edit-bill/edit-bill-sheet";
 import { monthParam } from "@/shared/lib/date";
 import { PageError } from "@/shared/ui/page-state";
 import { BillsOfMonth } from "@/widgets/bills-of-month/bills-of-month";
+import { CofrinhosGlance } from "@/widgets/cofrinhos-glance/cofrinhos-glance";
 import { Ledger } from "@/widgets/ledger/ledger";
-import { MonthHeader } from "@/widgets/month-header/month-header";
-import { MonthSkeleton, MonthSummary, ThermometerCard } from "@/widgets/month-overview/month-overview";
+import {
+  HeroSkeleton,
+  MonthHero,
+  RowsSkeleton,
+  StripSkeleton,
+  ThermometerCard,
+} from "@/widgets/month-overview/month-overview";
 import { MonthsAhead } from "@/widgets/months-ahead/months-ahead";
 import { RedDayAlert } from "@/widgets/red-day-alert/red-day-alert";
+import { SpendingGlance } from "@/widgets/spending-glance/spending-glance";
 
 const MonthScreen = () => {
   const router = useRouter();
@@ -25,7 +32,7 @@ const MonthScreen = () => {
   const fromTour = search.get("lancar") === "1";
   const view = useMonth(month);
   const transactions = useTransactions(month);
-  const [launching, setLaunching] = useState<"income" | "bill" | "daily" | null>(fromTour ? "income" : null);
+  const [launching, setLaunching] = useState<"income" | "daily" | null>(fromTour ? "income" : null);
   const [hint, setHint] = useState(fromTour);
   const [highlight, setHighlight] = useState<{ date: string } | null>(null);
 
@@ -39,29 +46,18 @@ const MonthScreen = () => {
     return () => clearTimeout(timer);
   }, [highlight]);
 
-  if (view.isError || transactions.isError)
-    return (
-      <div className="rounded-2xl bg-card shadow-sm">
-        <PageError
-          message="Não foi possível carregar o mês."
-          onRetry={() => {
-            view.refetch();
-            transactions.refetch();
-          }}
-        />
-      </div>
-    );
-  if (!view.data || !transactions.data) return <MonthSkeleton />;
-
   const entries = transactions.data;
-  const bills = view.data.bills_of_month;
-  const days = view.data.days;
+  const days = view.data?.days ?? [];
+  const bills = view.data?.bills_of_month ?? [];
   const alert = forecastAlert(days);
   const causes = new Set(
-    (alert ? [alert.firstRed.date, alert.lowest.date] : [])
-      .map((date) => causeOf(date, days, entries, bills))
-      .filter((id): id is string => id !== null),
+    (alert && entries
+      ? [alert.firstRed.date, alert.lowest.date].map((date) => causeOf(date, days, entries, bills))
+      : []
+    ).filter((id): id is string => id !== null),
   );
+  const monthFailed = view.isError && !view.data;
+  const entriesFailed = transactions.isError && !entries;
   const jump = (date: string) => {
     const group = document.getElementById(`dia-${date}`);
     group?.scrollIntoView({ block: "start" });
@@ -69,35 +65,67 @@ const MonthScreen = () => {
     setHighlight({ date });
   };
 
+  const wide = "md:col-span-2 xl:col-start-1";
+  const ledgerPlace = `${wide} xl:row-start-3`;
+
   return (
-    <div className="flex flex-col gap-6">
+    <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2 xl:grid-cols-3 xl:gap-6">
       <h1 className="sr-only">Mês</h1>
-      <div className="flex flex-col">
-        <MonthHeader balance={view.data.balance_today} tier={view.data.balance_today_tier}>
-          {alert && <RedDayAlert alert={alert} onJump={jump} />}
-        </MonthHeader>
-        <MonthSummary view={view.data} onLaunch={setLaunching} />
-      </div>
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3 lg:items-start">
-        <BillsOfMonth view={view.data} className="lg:col-span-2 lg:col-start-1 lg:row-start-1" />
-        <div className="flex flex-col gap-6 lg:sticky lg:top-6 lg:col-start-3 lg:row-span-2 lg:row-start-1">
-          <ThermometerCard view={view.data} />
-          <MonthsAhead
-            viewing={month}
-            onOpen={(next) => {
-              router.replace(`/mes?m=${next}`, { scroll: false });
-              window.scrollTo({ top: 0 });
-            }}
-          />
-        </div>
+      <p role="status" className="sr-only">
+        {((!view.data && !monthFailed) || (!entries && !entriesFailed)) && "Carregando"}
+      </p>
+      {monthFailed && (
+        <section aria-label="Saldo hoje" className={`rounded-3xl bg-card shadow-sm ${wide} xl:row-start-1`}>
+          <PageError message="Não foi possível carregar o mês." onRetry={() => view.refetch()} />
+        </section>
+      )}
+      {!monthFailed && !view.data && (
+        <>
+          <HeroSkeleton className={`${wide} xl:row-start-1`} />
+          <RowsSkeleton rows={3} className={`${wide} xl:row-start-2`} />
+        </>
+      )}
+      {view.data && (
+        <>
+          <MonthHero
+            view={view.data}
+            onLaunchIncome={() => setLaunching("income")}
+            className={`${wide} xl:row-start-1`}
+          >
+            {alert && <RedDayAlert alert={alert} onJump={jump} />}
+          </MonthHero>
+          <BillsOfMonth view={view.data} className={`${wide} xl:row-start-2`} />
+        </>
+      )}
+      {entriesFailed && !monthFailed && (
+        <section aria-label="Lançamentos" className={`rounded-2xl bg-card shadow-sm ${ledgerPlace}`}>
+          <PageError message="Não foi possível carregar os lançamentos." onRetry={() => transactions.refetch()} />
+        </section>
+      )}
+      {!entriesFailed && !monthFailed && (!view.data || !entries) && <RowsSkeleton rows={5} className={ledgerPlace} />}
+      {view.data && entries && (
         <Ledger
           view={view.data}
           transactions={entries}
           onLaunch={() => setLaunching("daily")}
           highlight={highlight?.date ?? null}
           causes={causes}
-          className="lg:col-span-2 lg:col-start-1 lg:row-start-2"
+          className={ledgerPlace}
         />
+      )}
+      {view.data && <ThermometerCard view={view.data} className="xl:col-start-3 xl:row-start-1" />}
+      {!monthFailed && !view.data && <StripSkeleton className="xl:col-start-3 xl:row-start-1" />}
+      <MonthsAhead
+        viewing={month}
+        onOpen={(next) => {
+          router.replace(`/mes?m=${next}`, { scroll: false });
+          window.scrollTo({ top: 0 });
+        }}
+        className="xl:col-start-3 xl:row-start-2"
+      />
+      <div className="contents xl:col-start-3 xl:row-start-3 xl:flex xl:flex-col xl:gap-6">
+        <SpendingGlance month={month} />
+        <CofrinhosGlance />
       </div>
       <TransactionSheet
         open={launching !== null}
@@ -115,7 +143,7 @@ const MonthScreen = () => {
 };
 
 const MesPage = () => (
-  <Suspense fallback={<MonthSkeleton />}>
+  <Suspense fallback={<HeroSkeleton />}>
     <MonthScreen />
   </Suspense>
 );
