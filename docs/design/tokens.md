@@ -54,7 +54,7 @@ The strip under "Termômetro do Mês" shows the five segments and highlights the
 
 ## Category icon circles (40px, white icon)
 
-`cat-1..cat-12` (re-stepped for color blindness in SOL-9, D22), white glyph contrast in parentheses: Mercado `#AB6200` (4.69:1), Comida fora `#F6682E` (3.03:1), Transporte `#2676C8` (4.66:1), Saúde `#A11401` (8.03:1), Lazer `#A855F7` (3.96:1), Aluguel `#3518FE` (7.74:1), Luz `#B78B00` (3.13:1), Internet `#00A2C7` (3.00:1), Cartão `#FB3194` (3.52:1), Assinaturas `#6A22C8` (7.85:1), Salário `#16A34A` (3.30:1), Extra `#23754C` (5.65:1). Stored as token names `cat-1..cat-12`. Glyph and card are both white, so one ratio covers the glyph on the circle and the circle on the card (WCAG 1.4.11).
+`cat-1..cat-12` (re-stepped for color blindness in SOL-9, D22), white glyph contrast in parentheses: Mercado `#AB6200` (4.69:1), Comida fora `#F6682E` (3.03:1), Transporte `#2676C8` (4.66:1), Saúde `#A11401` (8.03:1), Lazer `#A855F7` (3.96:1), Aluguel `#4F46E5` (6.29:1), Luz `#B78B00` (3.13:1), Internet `#00A2C7` (3.00:1), Cartão `#FB3194` (3.52:1), Assinaturas `#6A22C8` (7.85:1), Salário `#16A34A` (3.30:1), Extra `#23754C` (5.65:1). Stored as token names `cat-1..cat-12`. Glyph and card are both white, so one ratio covers the glyph on the circle and the circle on the card (WCAG 1.4.11).
 
 `cat-13..cat-24` (SOL-32): Verde-azulado `#0D9488` (3.74:1), Framboesa `#BE185D` (6.04:1), Oliva `#6B7A1F` (4.74:1), Azul-petróleo `#075985` (7.56:1), Ameixa `#86198F` (8.24:1), Marrom `#854D0E` (6.85:1), Ardósia `#64748B` (4.76:1), Verde-escuro `#166534` (7.13:1), Vinho `#881337` (9.57:1), Telha `#C2410C` (5.18:1), Anil `#3730A3` (9.93:1), Malva `#9D4E8C` (5.38:1).
 
