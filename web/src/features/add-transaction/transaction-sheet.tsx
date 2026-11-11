@@ -19,7 +19,7 @@ import {
   useCreateTransaction,
   useUpdateTransaction,
 } from "@/entities/transaction/transaction-queries";
-import type { Schemas } from "@/shared/api/client";
+import { ApiError, type Schemas } from "@/shared/api/client";
 import { useCurrency } from "@/shared/lib/currency";
 import { addMonths, monthYear, todayISO } from "@/shared/lib/date";
 import { installmentCents } from "@/shared/lib/installments";
@@ -102,6 +102,13 @@ const TransactionForm = ({
   // A moved date can change the member's position; Meses na série waits for the next save.
   const moved = Boolean(series) && draft.date !== transaction?.date;
   const resizing = Boolean(series) && !moved && months !== series?.total;
+  // D20: Este e os próximos moves the day of the month, never the month.
+  const moving = moved && draft.scope === "following";
+  const monthChanged = moving && draft.date.slice(0, 7) !== transaction?.date.slice(0, 7);
+  const day = Number(draft.date.slice(8));
+  const dayHelper = `${series?.position === 1 ? "Toda a série vai" : "Os próximos também vão"} para o dia ${day}.${
+    day >= 29 ? " Nos meses mais curtos, no último dia." : ""
+  }`;
   const resized = resizing && monthsValid ? months : undefined;
   const monthsChecked = draft.repeat || installments || resizing;
   const monthsError = submitted && monthsChecked && !monthsValid;
@@ -133,7 +140,7 @@ const TransactionForm = ({
 
   const fields = (): NewTransaction | undefined => {
     setSubmitted(true);
-    if (!amount || !category || (monthsChecked && !monthsValid) || !splitValid) return;
+    if (!amount || !category || (monthsChecked && !monthsValid) || !splitValid || monthChanged) return;
     const note = draft.note.trim();
     return {
       date: draft.date,
@@ -225,7 +232,15 @@ const TransactionForm = ({
         )}
       </fieldset>
 
-      <DateChips legend="Quando foi?" value={draft.date} onChange={(date) => set({ date })} />
+      <div className="flex flex-col gap-2">
+        <DateChips legend="Quando foi?" value={draft.date} onChange={(date) => set({ date })} />
+        {monthChanged && (
+          <p role="alert" className="text-destructive text-sm">
+            Para mudar o mês, use Só este.
+          </p>
+        )}
+        {moving && !monthChanged && <p className="text-muted-foreground text-sm">{dayHelper}</p>}
+      </div>
 
       {transaction?.recurring_bill_id && (
         <p className="text-muted-foreground text-sm">Já é uma conta fixa recorrente.</p>
@@ -427,14 +442,20 @@ export const TransactionSheet = ({
     };
     if (!transaction) return create.mutate(fields, { onSuccess: () => done("Lançado"), onError: failed });
     const { category: _category, ...patch } = fields;
+    const moving = scope === "following" && fields.date !== transaction.date;
     update.mutate(
       { id: transaction.id, scope, ...patch },
       {
-        onSuccess: () =>
-          transaction.series && fields.repeat_months
-            ? toast.success(`Série ajustada para ${fields.repeat_months} meses`)
-            : done(scope === "following" ? "Série atualizada" : "Lançamento atualizado"),
-        onError: failed,
+        onSuccess: () => {
+          if (transaction.series && fields.repeat_months)
+            return toast.success(`Série ajustada para ${fields.repeat_months} meses`);
+          if (moving) return toast.success(`Série movida para o dia ${Number(fields.date.slice(8))}`);
+          done(scope === "following" ? "Série atualizada" : "Lançamento atualizado");
+        },
+        onError: (error) =>
+          moving && error instanceof ApiError && error.errors.some(({ field }) => field === "date")
+            ? toast.error("Outro lançamento da série está no mesmo mês. Mova-o com Só este antes.")
+            : failed(),
       },
     );
   };
