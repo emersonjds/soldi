@@ -14,9 +14,10 @@ import { categoriesQuery, useCategoryLabel } from "@/entities/category/categorie
 import { type CategoryShare, useCategoryReport } from "@/entities/report/report-query";
 import { useTransactions } from "@/entities/transaction/transaction-queries";
 import { TransactionSheet } from "@/features/add-transaction/transaction-sheet";
+import { EditBillSheet } from "@/features/edit-bill/edit-bill-sheet";
 import { cn } from "@/lib/utils";
 import type { Schemas } from "@/shared/api/client";
-import { shortDay } from "@/shared/lib/date";
+import { shortDay, todayISO } from "@/shared/lib/date";
 import { formatDelta, formatPct, wholeShare } from "@/shared/lib/percent";
 import { cents, fromCents } from "@/shared/lib/tier";
 import { CategoryIcon, categoryBg, categoryFill } from "@/shared/ui/category-icon";
@@ -241,6 +242,7 @@ const CategoryEntries = ({ month, chosen, onClear, className }: EntriesProps) =>
   const entries = useTransactions(month);
   const [adding, setAdding] = useState(false);
   const name = label(chosen);
+  const category = categories.data?.find((each) => each.id === chosen.category_id);
   const shown = entries.data?.filter((entry) => chosen.ids.includes(entry.category.id));
 
   return (
@@ -282,15 +284,19 @@ const CategoryEntries = ({ month, chosen, onClear, className }: EntriesProps) =>
           </ul>
         </>
       )}
-      <Button className="h-auto min-h-11 w-full whitespace-normal text-base" onClick={() => setAdding(true)}>
-        <Plus aria-hidden />
-        Adicionar lançamento em {name}
-      </Button>
+      {category && (
+        <Button className="h-auto min-h-11 w-full whitespace-normal text-base" onClick={() => setAdding(true)}>
+          <Plus aria-hidden />
+          Adicionar lançamento em {name}
+        </Button>
+      )}
       <TransactionSheet
         open={adding}
         onOpenChange={setAdding}
         initialKind={chosen.kind}
-        initialCategory={categories.data?.find((category) => category.id === chosen.category_id)}
+        initialCategory={category?.is_savings && !category.parent_id ? undefined : category}
+        initialDate={month === todayISO().slice(0, 7) ? undefined : `${month}-01`}
+        billSheet={(props) => <EditBillSheet open {...props} />}
       />
     </section>
   );

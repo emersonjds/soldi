@@ -90,13 +90,13 @@ const ENTRIES = [
   entry("t5", MERCADO, "184.31", "Compras da semana"),
 ];
 
-const show = () => {
+const show = ({ month = "2026-11", report = REPORT, categories = WITH_COFRINHOS } = {}) => {
   const requests = stubApi({
-    "GET /api/reports/categories": { status: 200, body: REPORT },
+    "GET /api/reports/categories": { status: 200, body: report },
     "GET /api/transactions": { status: 200, body: ENTRIES },
-    "GET /api/categories": { status: 200, body: WITH_COFRINHOS },
+    "GET /api/categories": { status: 200, body: categories },
   });
-  renderWithQuery(<CategoryBreakdown month="2026-11" />);
+  renderWithQuery(<CategoryBreakdown month={month} />);
   return requests;
 };
 
@@ -236,6 +236,71 @@ describe("CategoryBreakdown by group", () => {
     const sheet = await screen.findByRole("dialog", { name: "Lançar" });
     expect(await within(sheet).findByRole("radio", { name: "Mercado" })).toHaveAttribute("aria-checked", "true");
     expect(within(sheet).getByRole("radio", { name: "Diário" })).toBeChecked();
+    expect(within(sheet).getByRole("button", { name: "Hoje" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("opens Lançar as Entrada on Salário from the Entradas tab", async () => {
+    show();
+    await userEvent.click(await screen.findByRole("radio", { name: "Entradas" }));
+    await userEvent.click(pick("Salário"));
+
+    await userEvent.click(
+      await within(panel("Salário")).findByRole("button", { name: "Adicionar lançamento em Salário" }),
+    );
+
+    const sheet = await screen.findByRole("dialog", { name: "Lançar" });
+    expect(await within(sheet).findByRole("radio", { name: "Salário" })).toHaveAttribute("aria-checked", "true");
+    expect(within(sheet).getByRole("radio", { name: "Entrada" })).toBeChecked();
+  });
+
+  it("opens Lançar on Saída with no category for the savings group, so the cofrinho is picked", async () => {
+    show();
+    await userEvent.click(await screen.findByRole("button", { name: /^Economia/ }));
+
+    await userEvent.click(
+      await within(panel("Economia")).findByRole("button", { name: "Adicionar lançamento em Economia" }),
+    );
+
+    const sheet = await screen.findByRole("dialog", { name: "Lançar" });
+    expect(within(sheet).getByRole("radio", { name: "Saída" })).toBeChecked();
+    expect(await within(sheet).findByRole("radio", { name: "Aluguel" })).toHaveAttribute("aria-checked", "true");
+    expect(within(sheet).getByRole("radio", { name: "Economia" })).toHaveAttribute("aria-checked", "false");
+  });
+
+  it("dates the entry on the first day of a month other than the current one", async () => {
+    show({ month: "2026-10" });
+    await userEvent.click(await screen.findByRole("button", { name: /^Mercado/ }));
+
+    await userEvent.click(
+      await within(panel("Mercado")).findByRole("button", { name: "Adicionar lançamento em Mercado" }),
+    );
+
+    const sheet = await screen.findByRole("dialog", { name: "Lançar" });
+    expect(within(sheet).getByRole("button", { name: "Outra data, 01/10/2026" })).toBeInTheDocument();
+    expect(within(sheet).getByRole("button", { name: "Hoje" })).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("offers no Adicionar for a category that was archived", async () => {
+    show({ categories: WITH_COFRINHOS.filter((category) => category.id !== MERCADO.id) });
+    await within(await screen.findByRole("region", { name: "Top 5" })).findByText("Economia › Reserva");
+
+    await userEvent.click(pick("Mercado"));
+
+    expect(await within(panel("Mercado")).findByText("Compras da semana")).toBeInTheDocument();
+    expect(within(panel("Mercado")).queryByRole("button", { name: /^Adicionar lançamento/ })).not.toBeInTheDocument();
+  });
+
+  it("hands Transformar em conta fixa to the bill sheet", async () => {
+    show();
+    await userEvent.click(await screen.findByRole("button", { name: /^Aluguel/ }));
+    await userEvent.click(
+      await within(panel("Aluguel")).findByRole("button", { name: "Adicionar lançamento em Aluguel" }),
+    );
+    await userEvent.type(await screen.findByLabelText("Valor"), "12");
+
+    await userEvent.click(await screen.findByRole("button", { name: "Transformar em conta fixa" }));
+
+    expect(await screen.findByRole("dialog", { name: "Nova conta" })).toBeInTheDocument();
   });
 
   it("clears the selection when the tab changes", async () => {
