@@ -464,6 +464,26 @@ pub async fn count_period(
     .await
 }
 
+/// SOL-67: the series with members dated `from` to `to`, every date when `None`, in lock order.
+pub async fn period_series(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    period: Option<(NaiveDate, NaiveDate)>,
+) -> Result<Vec<Uuid>, sqlx::Error> {
+    let (from, to) = period.unzip();
+    sqlx::query_scalar!(
+        r#"SELECT DISTINCT series_id AS "series_id!" FROM transactions
+         WHERE user_id = $1 AND series_id IS NOT NULL
+           AND ($2::date IS NULL OR date BETWEEN $2 AND $3)
+         ORDER BY 1"#,
+        user_id,
+        from,
+        to
+    )
+    .fetch_all(&mut *conn)
+    .await
+}
+
 /// SOL-30: deletes the user's entries dated `from` to `to`, every date when `None`.
 pub async fn delete_period(
     conn: &mut PgConnection,

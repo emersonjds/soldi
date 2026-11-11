@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT DISTINCT series_id AS \"series_id!\" FROM transactions\n         WHERE user_id = $1 AND series_id IS NOT NULL\n           AND ($2::date IS NULL OR date BETWEEN $2 AND $3)\n         ORDER BY 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "series_id!",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "transactions",
+            "name": "series_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Date",
+        "Date"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "58613b276e02e2865bef97fc5d9f0cd8e09c6044d7c55839a933e3d99dc44957"
+}
