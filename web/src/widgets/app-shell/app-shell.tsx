@@ -190,9 +190,7 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
         <div className="flex min-w-0 flex-1 flex-col">
           <header className="flex flex-col gap-2 px-4 pt-4 lg:sticky lg:top-0 lg:z-30 lg:h-16 lg:flex-row lg:items-center lg:gap-4 lg:border-b lg:bg-background/90 lg:px-6 lg:pt-0 lg:backdrop-blur">
             <div className="flex items-center justify-between gap-3 rounded-2xl bg-card py-2 pr-2 pl-4 shadow-sm lg:hidden">
-              <p title={greeting} className="truncate font-semibold text-lg">
-                {greeting}
-              </p>
+              <p className="line-clamp-2 font-semibold text-lg">{greeting}</p>
               <Link
                 href="/ajustes/conta"
                 aria-label="Minha conta"

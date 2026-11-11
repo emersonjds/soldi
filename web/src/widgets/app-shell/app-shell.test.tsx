@@ -45,7 +45,9 @@ describe("AppShell", () => {
     renderWithQuery(<AppShell>conteúdo</AppShell>);
 
     const bar = screen.getByRole("banner");
-    expect(await within(bar).findByText("Olá, Ana")).toHaveAttribute("title", "Olá, Ana");
+    const greeting = await within(bar).findByText("Olá, Ana");
+    expect(greeting).toHaveClass("line-clamp-2");
+    expect(greeting).not.toHaveAttribute("title");
     expect(within(bar).getByRole("link", { name: "Minha conta" })).toHaveAttribute("href", "/ajustes/conta");
   });
 
