@@ -7,6 +7,16 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.35.0
+
+> Headline: the shell as in the Stitch design
+
+### Web
+
+- Desktop top bar: month switcher on the left, today's balance tier, Lançar and the avatar; mobile app bar with the page name and avatar; a full-width tab bar with a raised "+" and Economia (SOL-80, D24).
+- The viewed month travels with every navigation link, and the month switcher shows only where the month matters.
+- Pages open with their own title band.
+
 ## 0.34.0
 
 > Headline: Contas fixas at a glance
