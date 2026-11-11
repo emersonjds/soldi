@@ -1,15 +1,16 @@
 import type { ReactNode } from "react";
 
-import { ArrowDown, ArrowUp, Thermometer, TrendingDown, TrendingUp } from "lucide-react";
+import { ArrowDown, ArrowUp, CircleCheck, Gauge, TrendingDown, TrendingUp } from "lucide-react";
 
 import { Skeleton } from "@/components/ui/skeleton";
 import { splitOf } from "@/entities/month/split";
 import { useMe } from "@/entities/user/session";
 import { cn } from "@/lib/utils";
 import type { Schemas } from "@/shared/api/client";
-import { positiveAmount } from "@/shared/lib/money";
+import { useCurrency } from "@/shared/lib/currency";
+import { formatMoney } from "@/shared/lib/money";
 import { wholeShare } from "@/shared/lib/percent";
-import { cents } from "@/shared/lib/tier";
+import { cents, fromCents, TIER_STYLE, type Tier } from "@/shared/lib/tier";
 import { Money } from "@/shared/ui/money";
 import { SplitBar } from "@/shared/ui/split-bar";
 import { ThermometerStrip } from "@/shared/ui/thermometer-strip";
@@ -188,49 +189,104 @@ export const MonthHero = ({
   );
 };
 
-const Insight = ({ totals, projected }: { totals: MonthView["totals"]; projected: string }) => {
-  const income = cents(totals.income);
-  return (
-    <>
-      {income === 0 ? (
-        "Nenhuma entrada ainda este mês."
-      ) : (
-        <>
-          Você comprometeu{" "}
-          <strong className="font-bold text-foreground">{wholeShare(cents(totals.outflow), income)}%</strong> da renda.
-        </>
-      )}{" "}
-      Com as contas em aberto, seu mês termina em{" "}
-      <Money amount={projected} className={cn("font-bold", !projected.startsWith("-") && "text-foreground")} />.
-      {positiveAmount(totals.saved) && (
-        <>
-          {" "}
-          Guardou <Money amount={totals.saved} className="font-bold text-foreground" /> este mês.
-        </>
-      )}
-    </>
-  );
+const WORD: Record<Tier, string> = {
+  red: "vermelho",
+  light_red: "vermelho",
+  yellow: "amarelo",
+  light_green: "verde",
+  green: "verde",
 };
 
-/** C2: absent on a month with no entrada and no saída (D25). */
-export const ThermometerCard = ({ view, className }: { view: MonthView; className?: string }) =>
-  cents(view.totals.income) === 0 && cents(view.totals.outflow) === 0 ? null : (
+const share = "font-bold text-foreground";
+
+/** C2 (SOL-79 §2.5); absent on a month with no entrada and no saída (D25). */
+export const ThermometerCard = ({ view, className }: { view: MonthView; className?: string }) => {
+  const currency = useCurrency();
+  const { income, outflow, performance } = view.totals;
+  const base = cents(income);
+  const result = cents(performance);
+  if (base === 0 && cents(outflow) === 0) return null;
+  const spent = base > 0 ? `${wholeShare(cents(outflow), base)}%` : null;
+  return (
     <section
       aria-labelledby="thermometer-title"
       className={cn("flex flex-col gap-5 rounded-2xl bg-card p-4 shadow-sm lg:p-6", className)}
     >
-      <h2 id="thermometer-title" className="flex items-center gap-3 font-semibold text-lg leading-6">
-        <span className="flex size-10 items-center justify-center rounded-full bg-secondary text-primary">
-          <Thermometer className="size-5" aria-hidden />
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 id="thermometer-title" className="flex items-center gap-3 font-semibold text-lg leading-6">
+          <span className="flex size-10 items-center justify-center rounded-full bg-secondary text-primary">
+            <Gauge className="size-5" aria-hidden />
+          </span>
+          Termômetro do Mês
+        </h2>
+        {spent && (
+          <>
+            <span className="hidden font-semibold text-muted-foreground text-xs lg:inline">{spent} Gasto</span>
+            <span
+              className={cn(
+                "rounded-full px-2 py-0.5 font-bold text-xs lg:hidden",
+                TIER_STYLE[view.balance_today_tier].pill,
+              )}
+            >
+              {spent} Comprometido
+            </span>
+          </>
+        )}
+      </div>
+      <dl className="hidden grid-cols-3 gap-2 rounded-xl bg-muted p-3 text-sm lg:grid">
+        <div className="flex min-w-0 flex-col">
+          <dt className="text-muted-foreground text-xs">Entradas</dt>
+          <dd>
+            <Money amount={income} className="font-bold text-income-text" />
+          </dd>
+        </div>
+        <div className="flex min-w-0 flex-col">
+          <dt className="text-muted-foreground text-xs">Saídas</dt>
+          <dd>
+            <Money amount={outflow} className="font-bold" />
+          </dd>
+        </div>
+        <div className="flex min-w-0 flex-col">
+          <dt className="text-muted-foreground text-xs">Resultado</dt>
+          <dd>
+            {result < 0 ? (
+              <span className="whitespace-nowrap font-bold text-expense tabular-nums">
+                - {formatMoney(fromCents(-result), currency)}
+              </span>
+            ) : (
+              <Money amount={performance} income className="font-bold" />
+            )}
+          </dd>
+        </div>
+      </dl>
+      <ThermometerStrip tier={view.balance_today_tier} marker />
+      <p className="flex items-start gap-2.5 rounded-xl bg-muted p-3 text-muted-foreground text-sm leading-6">
+        <CircleCheck className="mt-0.5 size-5 shrink-0 text-income lg:hidden" aria-hidden />
+        <span>
+          {spent ? (
+            <>
+              <span className="lg:hidden">
+                Você comprometeu <strong className={share}>{spent}</strong> da renda líquida.
+              </span>
+              <span className="hidden lg:inline">
+                Você comprometeu <strong className={share}>{spent}</strong> das receitas líquidas.
+              </span>
+            </>
+          ) : (
+            <span>Nenhuma entrada ainda este mês.</span>
+          )}{" "}
+          <span>
+            Com as contas em aberto, o caixa fecha o mês no{" "}
+            <strong className={cn("font-bold", TIER_STYLE[view.projected_tier].label)}>
+              {WORD[view.projected_tier]}
+            </strong>
+            .
+          </span>
         </span>
-        Termômetro do Mês
-      </h2>
-      <ThermometerStrip tier={view.balance_today_tier} />
-      <p className="rounded-xl bg-muted p-4 text-muted-foreground text-sm leading-6">
-        <Insight totals={view.totals} projected={view.projected_balance} />
       </p>
     </section>
   );
+};
 
 /** C1 while the month loads: the hero and the summary. */
 export const HeroSkeleton = ({ className }: { className?: string }) => (

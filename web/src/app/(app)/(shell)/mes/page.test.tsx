@@ -140,6 +140,8 @@ describe("Mês", () => {
 
     const thermometer = screen.getByRole("region", { name: "Termômetro do Mês" });
     expect(within(thermometer).getByRole("meter")).toHaveAttribute("aria-valuetext", "Apertado");
+    expect(thermometer).toHaveTextContent("Você comprometeu 277% das receitas líquidas.");
+    expect(document.body).not.toHaveTextContent(/ritmo/i);
   });
 
   it("splits the entrada into Contas fixas, Guardado, Gastos diários and Livre restante, each with one decimal", async () => {
@@ -210,7 +212,7 @@ describe("Mês", () => {
     expect(within(ledger()).getByRole("button", { name: /^Economia.*R\$\s10,00/ })).toHaveTextContent(
       "EconomiaGuardadoR$ 10,00",
     );
-    expect(screen.getByRole("region", { name: "Termômetro do Mês" })).toHaveTextContent("Guardou R$ 250,00 este mês.");
+    expect(screen.getByRole("region", { name: "Termômetro do Mês" })).not.toHaveTextContent("Guardou");
 
     await userEvent.click(resgate);
     expect(await screen.findByText("Resgatado · Resgate › Reserva")).toBeInTheDocument();
@@ -300,9 +302,9 @@ describe("Mês", () => {
   it("rounds the committed share half to even", async () => {
     open(withTotals({ income: "1040.00", bills: "130.00", daily: "0.00", outflow: "130.00", performance: "910.00" }));
 
-    expect(await screen.findByRole("region", { name: "Termômetro do Mês" })).toHaveTextContent(
-      "Você comprometeu 12% da renda.",
-    );
+    expect(
+      within(await screen.findByRole("region", { name: "Termômetro do Mês" })).getByText("12% Gasto"),
+    ).toBeInTheDocument();
   });
 
   it("shows only the hero on a fresh account: no banner, no split and no other card (D25)", async () => {

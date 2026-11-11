@@ -12,24 +12,28 @@ export const TIER_LABEL: Record<Tier, string> = {
   green: "Folga",
 };
 
-/** Literal class names: Tailwind only ships classes it finds spelled out. */
-export const TIER_STYLE: Record<Tier, { pill: string; dot: string }> = {
-  red: { pill: "bg-tier-red-soft text-tier-red-foreground", dot: "bg-tier-red" },
+/** Literal class names: Tailwind only ships classes it finds spelled out. `label` is the tier's word on white. */
+export const TIER_STYLE: Record<Tier, { pill: string; dot: string; label: string }> = {
+  red: { pill: "bg-tier-red-soft text-tier-red-foreground", dot: "bg-tier-red", label: "text-tier-red-foreground" },
   light_red: {
     pill: "bg-tier-light-red-soft text-tier-light-red-foreground",
     dot: "bg-tier-light-red",
+    label: "text-tier-light-red-foreground",
   },
   yellow: {
     pill: "bg-tier-yellow-soft text-tier-yellow-foreground",
     dot: "bg-tier-yellow",
+    label: "text-tier-yellow-foreground",
   },
   light_green: {
     pill: "bg-tier-light-green-soft text-tier-light-green-foreground",
     dot: "bg-tier-light-green",
+    label: "text-tier-light-green-foreground",
   },
   green: {
     pill: "bg-tier-green-soft text-tier-green-foreground",
     dot: "bg-tier-green",
+    label: "text-tier-green-foreground",
   },
 };
 
