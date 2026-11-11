@@ -52,19 +52,23 @@ describe("MonthChips", () => {
     expect(november).not.toHaveTextContent("12.346");
   });
 
-  it("steps a low of 5 and 6 digits down a size on one line, so the chip never spills", () => {
+  it("steps a low of 5 and 6 characters down a size on one line, the minus sign counted, so the chip never spills", () => {
     render(
       <MonthChips
         months={[
           { month: "2026-11", lowest: "red", low: "-12345.00", redDays: 30 },
           { month: "2026-12", lowest: "red", low: "-1234.00", redDays: 31 },
           { month: "2027-01", lowest: "red", low: "-123456.00", redDays: 31 },
+          { month: "2027-02", lowest: "green", low: "9999.00", redDays: 0 },
+          { month: "2027-03", lowest: "green", low: "12345.00", redDays: 0 },
         ]}
         onOpen={vi.fn()}
       />,
     );
-    expect(screen.getByText("-12.345")).toHaveClass("text-[11px]", "whitespace-nowrap");
-    expect(screen.getByText("-1.234")).toHaveClass("text-sm", "whitespace-nowrap");
+    expect(screen.getByText("9.999")).toHaveClass("text-sm", "whitespace-nowrap");
+    expect(screen.getByText("-1.234")).toHaveClass("text-[11px]", "whitespace-nowrap");
+    expect(screen.getByText("12.345")).toHaveClass("text-[11px]", "whitespace-nowrap");
+    expect(screen.getByText("-12.345")).toHaveClass("text-[10px]", "whitespace-nowrap");
     expect(screen.getByText("-123.456")).toHaveClass("text-[10px]", "whitespace-nowrap");
   });
 

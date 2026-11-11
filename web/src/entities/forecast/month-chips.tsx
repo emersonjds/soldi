@@ -36,9 +36,9 @@ type MonthChipsProps = {
 };
 
 /** A 4-column month grid: each month's lowest balance in whole units, its tier dot and its tier word (D22), a red month on `expense-soft`. */
-/** Five-digit lows shrink and six-digit ones shrink again so they fit a 4-column cell at 375 and in the 1440 rail. */
+/** Lows of five characters shrink and six shrink again so they fit a 4-column cell at 375 and in the 1440 rail; the minus sign is as wide as a digit. */
 const digitSize = (amount: string) => {
-  const digits = amount.replace(/\D/g, "").length;
+  const digits = amount.replace(/[^\d-]/g, "").length;
   if (digits >= 6) return "text-[10px]";
   return digits === 5 ? "text-[11px]" : "text-sm";
 };
