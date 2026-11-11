@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, Suspense, useState } from "react";
+import { type ComponentProps, type ReactNode, Suspense, useState } from "react";
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -98,8 +98,22 @@ const TodayTier = () => {
   );
 };
 
+type LinkProps = ComponentProps<typeof Link> & { href: string };
+
+const KeptMonthLink = ({ href, ...props }: LinkProps) => {
+  const month = useSearchParams().get("m");
+  return <Link href={month ? `${href}?m=${month}` : href} {...props} />;
+};
+
+/** A nav link that keeps the viewed month (`?m=`, D21) while moving between pages. */
+const MonthLink = (props: LinkProps) => (
+  <Suspense fallback={<Link {...props} />}>
+    <KeptMonthLink {...props} />
+  </Suspense>
+);
+
 const TabLink = ({ item, active }: { item: NavItem; active: boolean }) => (
-  <Link
+  <MonthLink
     href={item.href}
     aria-current={active ? "page" : undefined}
     className={cn(
@@ -109,7 +123,7 @@ const TabLink = ({ item, active }: { item: NavItem; active: boolean }) => (
   >
     <item.icon className="size-5" aria-hidden />
     {item.label}
-  </Link>
+  </MonthLink>
 );
 
 const TodayLink = ({ className, mark }: { className?: string; mark?: string }) => (
@@ -164,10 +178,10 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
                         return (
                           <SidebarMenuItem key={item.href}>
                             <SidebarMenuButton asChild isActive={active} className="h-11 gap-3 px-3 text-base">
-                              <Link href={item.href} aria-current={active ? "page" : undefined}>
+                              <MonthLink href={item.href} aria-current={active ? "page" : undefined}>
                                 <item.icon className="size-5!" aria-hidden />
                                 {item.label}
-                              </Link>
+                              </MonthLink>
                             </SidebarMenuButton>
                           </SidebarMenuItem>
                         );

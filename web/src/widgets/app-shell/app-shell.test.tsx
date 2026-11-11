@@ -247,6 +247,23 @@ describe("AppShell", () => {
     expect(router.replace).toHaveBeenLastCalledWith("/ajustes/contas?m=2026-11", { scroll: false });
   });
 
+  it("carries the viewed month through the sidebar and the tab bar, and the logo back to today", () => {
+    setSearch("m=2026-12");
+    renderWithQuery(<AppShell>conteúdo</AppShell>);
+
+    const sidebar = screen.getByRole("navigation", { name: "Menu lateral" });
+    expect(within(sidebar).getByRole("link", { name: "Contas Fixas" })).toHaveAttribute(
+      "href",
+      "/ajustes/contas?m=2026-12",
+    );
+    expect(within(sidebar).getByRole("link", { name: "Mês" })).toHaveAttribute("href", "/mes?m=2026-12");
+    const tabs = screen.getByRole("navigation", { name: "Navegação principal" });
+    expect(within(tabs).getByRole("link", { name: "Economia" })).toHaveAttribute("href", "/economia?m=2026-12");
+    for (const logo of screen.getAllByRole("link", { name: "Soldi, ir para hoje" })) {
+      expect(logo).toHaveAttribute("href", "/mes");
+    }
+  });
+
   it("shows today's tier left of Lançar, whatever month is viewed, and nothing until it arrives", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date(2026, 10, 5, 12));
