@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { router, setPathname, setSearch } from "@/test/next-navigation";
 import { renderWithQuery } from "@/test/render";
-import { CATEGORIES, signedIn, TRANSACTIONS } from "@/test/stub-api";
+import { ANA, CATEGORIES, signedIn, TRANSACTIONS } from "@/test/stub-api";
 
 import { AppShell } from "./app-shell";
 
@@ -33,13 +33,20 @@ describe("AppShell", () => {
     expect(screen.getByText("conteúdo")).toBeInTheDocument();
   });
 
-  it("takes the logo to today's month from the sidebar and the top bar", () => {
+  it("takes the sidebar logo to today's month", () => {
     setPathname("/ajustes/categorias");
     renderWithQuery(<AppShell>conteúdo</AppShell>);
 
-    const logos = screen.getAllByRole("link", { name: "Soldi, ir para hoje" });
-    expect(logos).toHaveLength(2);
-    for (const logo of logos) expect(logo).toHaveAttribute("href", "/mes");
+    expect(screen.getByRole("link", { name: "Soldi, ir para hoje" })).toHaveAttribute("href", "/mes");
+  });
+
+  it("greets the user by first name in the mobile header card, next to the avatar", async () => {
+    signedIn({}, { ...ANA, name: "Ana Paula Souza" });
+    renderWithQuery(<AppShell>conteúdo</AppShell>);
+
+    const bar = screen.getByRole("banner");
+    expect(await within(bar).findByText("Olá, Ana")).toBeInTheDocument();
+    expect(within(bar).getByRole("link", { name: "Minha conta" })).toHaveAttribute("href", "/ajustes/conta");
   });
 
   it("keeps Ajustes marked on its sub-screens", () => {

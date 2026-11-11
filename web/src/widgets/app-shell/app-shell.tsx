@@ -90,13 +90,13 @@ const TabLink = ({ item, active }: { item: NavItem; active: boolean }) => (
   </Link>
 );
 
-const TodayLink = ({ className }: { className?: string }) => (
+const TodayLink = () => (
   <Link
     href="/mes"
     aria-label="Soldi, ir para hoje"
     className="inline-flex min-h-11 w-fit items-center rounded-lg px-2 focus-visible:outline-2 focus-visible:outline-ring"
   >
-    <Wordmark className={className} />
+    <Wordmark />
   </Link>
 );
 
@@ -107,6 +107,7 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
   const [launching, setLaunching] = useState(false);
   const name = me.data?.name ?? "";
   const email = me.data?.email ?? "";
+  const [firstName] = name.split(" ");
   const [mes, paraOndeVai, economia, ajustes] = NAV;
   const current = SIDEBAR.flatMap((group) => group.items)
     .filter((item) => isAt(item.href))
@@ -172,13 +173,13 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="sticky top-0 z-30 flex h-14 items-center justify-between gap-4 border-b bg-background/90 px-4 backdrop-blur lg:h-16 lg:px-6">
-            <div className="flex flex-1 items-center justify-between lg:hidden">
-              <TodayLink className="-ml-2 text-xl" />
+          <header className="flex flex-col gap-3 px-4 pt-4 lg:sticky lg:top-0 lg:z-30 lg:h-16 lg:flex-row lg:items-center lg:gap-4 lg:border-b lg:bg-background/90 lg:px-6 lg:pt-0 lg:backdrop-blur">
+            <div className="flex items-center justify-between gap-3 rounded-2xl bg-card py-2 pr-2 pl-4 shadow-sm lg:hidden">
+              <p className="truncate font-semibold text-lg">{firstName ? `Olá, ${firstName}` : "Olá"}</p>
               <Link
                 href="/ajustes/conta"
                 aria-label="Minha conta"
-                className="flex size-11 items-center justify-center rounded-full"
+                className="flex size-11 shrink-0 items-center justify-center rounded-full"
               >
                 <Avatar>
                   <AvatarFallback className="bg-brand text-brand-foreground">{getInitials(name)}</AvatarFallback>
@@ -188,7 +189,7 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
             <p className="hidden font-bold text-xl lg:block">{current?.label}</p>
             {MONTH_PAGES.some(isAt) && (
               <Suspense>
-                <div className="hidden lg:block">
+                <div className="rounded-2xl bg-card p-2 shadow-sm lg:bg-transparent lg:p-0 lg:shadow-none">
                   <ShellMonthSwitcher pathname={pathname} />
                 </div>
               </Suspense>
