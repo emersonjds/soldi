@@ -77,3 +77,33 @@ The `Termômetro.xlsx` importer (SOL-7) is removed: every spreadsheet has its ow
 ## D19 — A series is resized at its end, never re-split (2026-11-10, SOL-47 panel, architect arbitrated)
 
 `repeat_months` on a series member sets how many entries the series counts (2..60). Growing appends members in the months right after the last member's month, on the first member's day (D14 clamp), copying the edited member as saved; counting by month keeps a gap left by a deleted or moved member from doubling a month, and an advisory lock on the series id serializes resizes and `following` deletes of one series. shrinking deletes the last members, never one ranked before the edited member. Kept members keep their amounts, installment series included: the server stores no flag telling parcelas from a repeat, and the sheet names the rows added or removed before saving, so the total never changes silently. Rejected: re-splitting the remaining total (halves a repeat; needs a flag and a migration), refusing installment series (same flag), a floor at today (`Excluir · Toda a série` already reaches past members), a dedicated `/series` endpoint (two requests for one save). Detail: `docs/specs/cards/SOL-47.md`.
+
+## D21 — Mês is a dashboard of cards; the shell owns the month and Lançar; Soldi stays light only (2026-11-10, SOL-61 panel, designer arbitrated)
+
+`/mes` becomes a grid of seven cards: Saldo hoje (with the split bar "Para onde foi a entrada"), Termômetro, Contas a pagar, Lançamentos, Próximos meses, Para onde vai, Cofrinhos. They are 1 column at 375, 2 columns at 768, and 3 at 1440. Every card composes existing endpoints; no field or route is added. The ledger is capped to recent days, with an in-place expand.
+
+Navigation:
+
+- Desktop keeps the sidebar (`Menu` and `Ajustes` groups) and gains a sticky top bar holding the title, the month switcher on month pages, and `Lançar`.
+- Mobile gets a floating pill tab bar with four labelled tabs and a separate `Lançar` FAB, both in `Navegação principal`.
+- Nav labels are unchanged (`Mês` stays).
+
+Visual system:
+
+- Money figures get a cents hierarchy, with the symbol and cents at 55%.
+- One new token, `--split-daily`.
+- Empty states reuse the tour's inline SVGs; there are no 3D assets.
+
+Dark mode stays off, per the owner's SOL-12 decision. This supersedes the "light and dark" screenshot lines of the v1 spec and earlier cards. Components stay on semantic tokens, so reopening dark mode is one card.
+
+The Economia year table stays unbuilt; Cofrinhos (SOL-20) is the savings screen.
+
+Rejected:
+
+- a top-bar-only shell (it loses the persistent nav);
+- an `/extrato` route (an extra page for a list one tap away);
+- a bell (no notification source);
+- licensed 3D illustrations (license, weight, decoration);
+- delivering dark mode now (doubles tokens and review for a layout epic).
+
+Detail: `docs/specs/2026-11-10-dashboard-redesign.md`, plan `docs/specs/plans/SOL-61.md`.
