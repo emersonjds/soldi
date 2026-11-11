@@ -56,14 +56,14 @@ const unpaidLabel = (count: number) => {
 const carriedFrom = (bill: BillOfMonth, month: string) =>
   bill.due_date.startsWith(month) ? null : monthName(bill.due_date, month);
 
-const badge = "inline-flex w-fit items-center gap-1 rounded-full px-2 py-0.5 font-medium text-xs";
+const badge = "inline-flex w-fit items-center gap-1 rounded-lg px-2 py-0.5 font-medium text-xs";
 
 const Status = ({ bill, late }: { bill: BillOfMonth; late: string | null }) => {
   if (bill.paid) return <span className={cn(badge, "bg-income-soft text-tier-green-foreground")}>Pago</span>;
   if (bill.overdue)
     return (
       <span className={cn(badge, "bg-expense/15 text-expense")}>
-        <Clock className="size-3.5 shrink-0" aria-hidden />
+        <Clock className="hidden size-3.5 shrink-0 sm:block" aria-hidden />
         {late ? `Venceu em ${late}` : `Venceu dia ${dayMonth(bill.due_date)}`}
       </span>
     );
@@ -126,7 +126,10 @@ const Row = ({
   const late = carriedFrom(bill, month);
   const label = late ? `${bill.name} de ${late}` : bill.name;
   const amount = (
-    <Money amount={bill.amount} className={cn("font-bold text-base lg:text-lg", bill.overdue && "text-expense")} />
+    <Money
+      amount={bill.amount}
+      className={cn("font-bold text-sm sm:text-base lg:text-lg", bill.overdue && "text-expense")}
+    />
   );
   return (
     <li
