@@ -7,6 +7,16 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.32.0
+
+> Headline: save and withdraw right from each cofrinho
+
+### Web
+
+- Each cofrinho card has Guardar and Resgatar (Guardar primeiro valor while it is empty); a tap anywhere else on the card still opens it, and the actions wait for the categories to load (SOL-76).
+- "Seus cofrinhos" counts the active ones, and the Criar cofrinho invitation stays visible while only Sem objetivo holds money.
+- The Mês Cofrinhos card shows each goal's progress bar and keeps long names whole.
+
 ## 0.31.0
 
 > Headline: Para onde vai by group
