@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 
 import { Pie, PieChart } from "recharts";
 
@@ -15,6 +15,8 @@ import { cn } from "@/lib/utils";
 import { shortDay } from "@/shared/lib/date";
 import { formatDelta, formatPct } from "@/shared/lib/percent";
 import { CategoryIcon, categoryBg, categoryFill } from "@/shared/ui/category-icon";
+import { DashCard } from "@/shared/ui/dash-card";
+import { IncomeIllustration, LedgerIllustration } from "@/shared/ui/illustrations";
 import { Money } from "@/shared/ui/money";
 import { PageError, PageLoading } from "@/shared/ui/page-state";
 
@@ -24,9 +26,9 @@ const card = "flex flex-col gap-4 rounded-2xl bg-card p-4 shadow-sm lg:p-6";
 
 const caption = "font-semibold text-[11px] text-muted-foreground uppercase leading-4 tracking-[0.12em]";
 
-const COPY: Record<Tab, { center: string; empty: string }> = {
-  outflow: { center: "Saídas do mês", empty: "Nenhum gasto neste mês ainda." },
-  income: { center: "Entradas do mês", empty: "Nenhuma entrada neste mês ainda." },
+const COPY: Record<Tab, { center: string; empty: string; Illustration: () => ReactNode }> = {
+  outflow: { center: "Saídas do mês", empty: "Nenhum gasto neste mês ainda.", Illustration: LedgerIllustration },
+  income: { center: "Entradas do mês", empty: "Nenhuma entrada neste mês ainda.", Illustration: IncomeIllustration },
 };
 
 /** Spending that grew is bad news, income that grew is good news; no change stays neutral. */
@@ -91,7 +93,7 @@ const Donut = ({ shares, total, label, selected, onSelect }: DonutProps) => {
       </ChartContainer>
       <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-1 text-center">
         <span className={caption}>{label}</span>
-        <Money amount={total} className="font-bold text-xl leading-7 tracking-[-0.02em] lg:text-2xl" />
+        <Money amount={total} size="figure" />
       </div>
     </div>
   );
@@ -124,10 +126,7 @@ const LegendRow = ({ share, pressed, onSelect }: { share: CategoryShare; pressed
 const TopFive = ({ shares, className }: { shares: CategoryShare[]; className?: string }) => {
   const label = useCategoryLabel();
   return (
-    <section aria-labelledby="top-five-title" className={cn(card, className)}>
-      <h2 id="top-five-title" className="font-semibold text-lg leading-6">
-        Top 5
-      </h2>
+    <DashCard title="Top 5" className={className}>
       <ol className="flex flex-col gap-4">
         {shares.slice(0, 5).map((share) => (
           <li key={share.category_id} className="flex flex-col gap-1.5">
@@ -144,7 +143,7 @@ const TopFive = ({ shares, className }: { shares: CategoryShare[]; className?: s
           </li>
         ))}
       </ol>
-    </section>
+    </DashCard>
   );
 };
 
@@ -222,48 +221,59 @@ export const CategoryBreakdown = ({ month }: { month: string }) => {
 
   const shares = report.data[tab];
   const total = tab === "outflow" ? report.data.outflow_total : report.data.income_total;
+  const { Illustration } = COPY[tab];
   const chosen = shares.find((share) => share.category_id === selected);
   const toggle = (id: string) => setSelected((current) => (current === id ? undefined : id));
 
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:items-start">
-      <section aria-label="Por categoria" className={cn(card, "gap-6")}>
-        <ToggleGroup
-          type="single"
-          spacing={0}
-          value={tab}
-          onValueChange={(value) => {
-            if (value !== "outflow" && value !== "income") return;
-            setTab(value);
-            setSelected(undefined);
-          }}
-          className="w-full rounded-full bg-muted p-1"
-        >
-          <ToggleGroupItem value="outflow" className={segment}>
-            Saídas
-          </ToggleGroupItem>
-          <ToggleGroupItem value="income" className={segment}>
-            Entradas
-          </ToggleGroupItem>
-        </ToggleGroup>
-        {shares.length === 0 ? (
-          <p className="py-10 text-center text-muted-foreground">{COPY[tab].empty}</p>
-        ) : (
-          <>
-            <Donut shares={shares} total={total} label={COPY[tab].center} selected={selected} onSelect={toggle} />
-            <ul aria-label="Categorias" className="flex flex-col gap-1">
-              {shares.map((share) => (
-                <LegendRow
-                  key={share.category_id}
-                  share={share}
-                  pressed={share.category_id === selected}
-                  onSelect={() => toggle(share.category_id)}
-                />
-              ))}
-            </ul>
-          </>
-        )}
-      </section>
+      <DashCard title="Por categoria">
+        <div className="flex flex-col gap-6">
+          <ToggleGroup
+            type="single"
+            spacing={0}
+            value={tab}
+            onValueChange={(value) => {
+              if (value !== "outflow" && value !== "income") return;
+              setTab(value);
+              setSelected(undefined);
+            }}
+            className="w-full rounded-full bg-muted p-1"
+          >
+            <ToggleGroupItem value="outflow" className={segment}>
+              Saídas
+            </ToggleGroupItem>
+            <ToggleGroupItem value="income" className={segment}>
+              Entradas
+            </ToggleGroupItem>
+          </ToggleGroup>
+          {shares.length === 0 ? (
+            <div className="flex flex-col items-center gap-3 py-4 text-center">
+              <div
+                aria-hidden
+                className="pointer-events-none flex w-full select-none justify-center opacity-50 saturate-50"
+              >
+                <Illustration />
+              </div>
+              <p className="max-w-xs text-muted-foreground">{COPY[tab].empty}</p>
+            </div>
+          ) : (
+            <>
+              <Donut shares={shares} total={total} label={COPY[tab].center} selected={selected} onSelect={toggle} />
+              <ul aria-label="Categorias" className="flex flex-col gap-1">
+                {shares.map((share) => (
+                  <LegendRow
+                    key={share.category_id}
+                    share={share}
+                    pressed={share.category_id === selected}
+                    onSelect={() => toggle(share.category_id)}
+                  />
+                ))}
+              </ul>
+            </>
+          )}
+        </div>
+      </DashCard>
       <div className="flex flex-col gap-6">
         {chosen && <CategoryEntries month={month} share={chosen} onClear={() => setSelected(undefined)} />}
         {shares.length > 0 && <TopFive shares={shares} className="lg:order-first" />}
