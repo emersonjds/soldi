@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { router, setSearch } from "@/test/next-navigation";
 import { renderWithQuery } from "@/test/render";
-import { MERCADO, problem, REPORT, signedIn, TRANSACTIONS } from "@/test/stub-api";
+import { problem, REPORT, signedIn, TRANSACTIONS } from "@/test/stub-api";
 
 import ParaOndeVaiPage from "./page";
 
@@ -45,9 +45,9 @@ describe("Para onde vai", () => {
       screen.getByRole("heading", { level: 2, name: "Por categoria" }),
     );
 
-    expect(row("Aluguel")).toHaveTextContent("Aluguel87%−6% em relação ao mês anteriorR$ 1.200,00");
+    expect(row("Aluguel")).toHaveTextContent("Aluguel87% das saídas−6% em relação ao mês anteriorR$ 1.200,00");
     expect(within(row("Aluguel")).getByText("−6%")).toHaveClass("text-tier-green-foreground");
-    expect(row("Mercado")).toHaveTextContent("Mercado13%+18% em relação ao mês anteriorR$ 184,31");
+    expect(row("Mercado")).toHaveTextContent("Mercado13% das saídas+18% em relação ao mês anteriorR$ 184,31");
     expect(within(row("Mercado")).getByText("+18%")).toHaveClass("text-tier-red-foreground");
 
     const top = screen.getByRole("region", { name: "Top 5" });
@@ -56,8 +56,8 @@ describe("Para onde vai", () => {
     expect(
       within(top)
         .getAllByRole("listitem")
-        .map((item) => item.textContent),
-    ).toEqual(["Aluguel86,7%", "Mercado13,3%"]);
+        .map((item) => item.textContent?.replace(/\s/g, " ")),
+    ).toEqual(["AluguelR$ 1.200,00 (86,7%)", "MercadoR$ 184,31 (13,3%)"]);
   });
 
   it("switches to income, with no change badge when there was nothing before", async () => {
@@ -66,7 +66,7 @@ describe("Para onde vai", () => {
     await userEvent.click(await screen.findByRole("radio", { name: "Entradas" }));
 
     expect(screen.getByText("Entradas do mês")).toBeInTheDocument();
-    expect(row("Salário")).toHaveTextContent(/^Salário100%R\$ 500,00$/);
+    expect(row("Salário")).toHaveTextContent(/^Salário100% das entradasR\$ 500,00$/);
     expect(screen.queryByText("Aluguel")).not.toBeInTheDocument();
   });
 
@@ -82,7 +82,7 @@ describe("Para onde vai", () => {
     expect(await within(entries).findByText("Compras da semana")).toBeInTheDocument();
     expect(entries).toHaveTextContent("5 nov");
     const filtered = requests.find((request) => request.url.includes("/api/transactions"));
-    expect(new URL(filtered?.url ?? "http://x").searchParams.get("category_id")).toBe(MERCADO.id);
+    expect(new URL(filtered?.url ?? "http://x").searchParams.get("category_id")).toBeNull();
 
     await userEvent.click(within(entries).getByRole("button", { name: "Limpar filtro" }));
     expect(mercado).toHaveAttribute("aria-pressed", "false");
@@ -113,7 +113,10 @@ describe("Para onde vai", () => {
 
   it("says when nothing was spent yet", async () => {
     open({
-      "GET /api/reports/categories": { status: 200, body: { ...REPORT, outflow: [], outflow_total: "0.00" } },
+      "GET /api/reports/categories": {
+        status: 200,
+        body: { ...REPORT, outflow: [], outflow_total: "0.00", groups: REPORT.groups.slice(2) },
+      },
     });
 
     expect(await screen.findByText("Nenhum gasto neste mês ainda.")).toBeInTheDocument();
@@ -122,7 +125,12 @@ describe("Para onde vai", () => {
   });
 
   it("says when nothing came in yet", async () => {
-    open({ "GET /api/reports/categories": { status: 200, body: { ...REPORT, income: [], income_total: "0.00" } } });
+    open({
+      "GET /api/reports/categories": {
+        status: 200,
+        body: { ...REPORT, income: [], income_total: "0.00", groups: REPORT.groups.slice(0, 2) },
+      },
+    });
 
     await userEvent.click(await screen.findByRole("radio", { name: "Entradas" }));
 
