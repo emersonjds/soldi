@@ -24,6 +24,7 @@ const open = (replies: Record<string, Reply> = {}) => {
 
 const legend = () => screen.getByRole("list", { name: "Categorias" });
 const row = (name: string) => within(legend()).getByRole("button", { name: new RegExp(`^${name}`) });
+const decorative = (text: string) => screen.getByText(text).closest("[aria-hidden]");
 
 describe("Para onde vai", () => {
   beforeEach(() => {
@@ -38,8 +39,11 @@ describe("Para onde vai", () => {
 
     expect(screen.getByRole("heading", { level: 1, name: "Para onde vai" })).toBeInTheDocument();
     expect(await screen.findByText("Saídas do mês")).toBeInTheDocument();
-    expect(screen.getByText("R$ 1.384,31")).toBeInTheDocument();
+    expect(screen.getByText("R$ 1.384,31").parentElement).toHaveClass("text-[28px]");
     expect(screen.getByRole("radio", { name: "Saídas" })).toBeChecked();
+    expect(screen.getByRole("region", { name: "Por categoria" })).toContainElement(
+      screen.getByRole("heading", { level: 2, name: "Por categoria" }),
+    );
 
     expect(row("Aluguel")).toHaveTextContent("Aluguel87%−6% em relação ao mês anteriorR$ 1.200,00");
     expect(within(row("Aluguel")).getByText("−6%")).toHaveClass("text-tier-green-foreground");
@@ -47,6 +51,8 @@ describe("Para onde vai", () => {
     expect(within(row("Mercado")).getByText("+18%")).toHaveClass("text-tier-red-foreground");
 
     const top = screen.getByRole("region", { name: "Top 5" });
+    expect(top).toHaveAttribute("data-slot", "card");
+    expect(screen.getByRole("region", { name: "Por categoria" })).toHaveAttribute("data-slot", "card");
     expect(
       within(top)
         .getAllByRole("listitem")
@@ -112,6 +118,7 @@ describe("Para onde vai", () => {
 
     expect(await screen.findByText("Nenhum gasto neste mês ainda.")).toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Top 5" })).not.toBeInTheDocument();
+    expect(decorative("Aluguel")).toHaveClass("pointer-events-none", "select-none", "opacity-50", "saturate-50");
   });
 
   it("says when nothing came in yet", async () => {
@@ -120,6 +127,7 @@ describe("Para onde vai", () => {
     await userEvent.click(await screen.findByRole("radio", { name: "Entradas" }));
 
     expect(screen.getByText("Nenhuma entrada neste mês ainda.")).toBeInTheDocument();
+    expect(decorative("+ R$ 5.000,00")).toHaveClass("pointer-events-none", "select-none", "opacity-50", "saturate-50");
   });
 
   it("shows a skeleton while loading, then an error with a retry", async () => {

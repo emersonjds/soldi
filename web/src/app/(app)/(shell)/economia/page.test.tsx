@@ -81,10 +81,14 @@ describe("Cofrinhos", () => {
 
     expect(screen.getByRole("heading", { level: 1, name: "Cofrinhos" })).toBeInTheDocument();
     const total = await screen.findByRole("region", { name: "Guardado" });
-    expect(total).toHaveTextContent("R$ 1.300,00");
+    expect(within(total).getByText("R$ 1.300,00").parentElement).toHaveClass("text-[40px]");
     expect(total).toHaveTextContent("Este mês +R$ 500,00");
 
     const reserva = await card("Reserva");
+    const reservaCard = screen.getByRole("region", { name: "Reserva" });
+    expect(reservaCard).toHaveAttribute("data-slot", "card");
+    expect(reservaCard).toContainElement(reserva);
+    expect(screen.getByRole("list", { name: "Cofrinhos" })).not.toHaveClass("xl:grid-cols-3");
     expect(reserva).toHaveTextContent("R$ 300,00 de R$ 10.000,00");
     expect(reserva).toHaveTextContent("Faltam R$ 9.700,00 · R$ 1.212,50/mês até jun 2027");
     expect(within(reserva).getByRole("progressbar")).toHaveAttribute("aria-valuenow", "3");
@@ -120,6 +124,12 @@ describe("Cofrinhos", () => {
     open({ "GET /api/cofrinhos": { status: 200, body: { total_saved: "0.00", saved_this_month: "0.00", items: [] } } });
 
     expect(await screen.findByText("Nenhum cofrinho ainda. Comece pela reserva de emergência.")).toBeInTheDocument();
+    expect(screen.getByText("Reserva").closest("[aria-hidden]")).toHaveClass(
+      "pointer-events-none",
+      "select-none",
+      "opacity-50",
+      "saturate-50",
+    );
     await userEvent.click(screen.getByRole("button", { name: "Criar cofrinho" }));
 
     const sheet = await screen.findByRole("dialog", { name: "Novo cofrinho" });

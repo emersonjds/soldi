@@ -34,14 +34,16 @@ export const CofrinhosGlance = ({ className }: { className?: string }) => {
   if (items.length === 0)
     return (
       <DashCard title={TITLE} className={className}>
-        <div className="flex flex-col items-center gap-3 text-center">
+        <div className="flex flex-col items-center gap-3">
           <div
             aria-hidden
             className="pointer-events-none flex w-full select-none justify-center opacity-50 saturate-50"
           >
             <CofrinhoIllustration />
           </div>
-          <p className="max-w-xs text-muted-foreground">Nenhum cofrinho ainda. Comece pela reserva de emergência.</p>
+          <p className="max-w-xs text-center text-muted-foreground">
+            Nenhum cofrinho ainda. Comece pela reserva de emergência.
+          </p>
           <Link
             href={ALL}
             className="inline-flex min-h-11 items-center rounded-lg px-2 font-medium text-primary text-sm hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"
