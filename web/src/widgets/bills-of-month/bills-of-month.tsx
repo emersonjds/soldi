@@ -10,7 +10,7 @@ import { toast } from "sonner";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { type BillOfMonth, payDateFor, usePayBill, useUnpayBill } from "@/entities/bill/bill-queries";
 import { billKey } from "@/entities/month/forecast-alert";
-import { dueDays, nextDue } from "@/entities/month/schedule";
+import { dueDays, subtitleOf } from "@/entities/month/schedule";
 import { PayBillSheet } from "@/features/pay-bill/pay-bill-sheet";
 import { cn } from "@/lib/utils";
 import type { Schemas } from "@/shared/api/client";
@@ -29,20 +29,6 @@ const FILTERS: { value: Filter; label: string }[] = [
   { value: "open", label: "Pendentes" },
   { value: "paid", label: "Pagas" },
 ];
-
-const whenDue = (date: string, today: string) => {
-  const days = (Date.parse(date) - Date.parse(today)) / 86_400_000;
-  return days === 1 ? "amanhã" : `em ${days} dias`;
-};
-
-/** Spec 2026-11-10 §3.4: the next bill due, or that every bill is paid. */
-const subtitleOf = (bills: BillOfMonth[], today: string) => {
-  if (bills.every((bill) => bill.paid)) return "Todas as contas do mês pagas";
-  const next = nextDue(bills, today);
-  if (!next) return null;
-  if (next.due_date === today) return `Vence hoje: ${next.name}`;
-  return `Próxima: ${next.name} · dia ${next.due_date.slice(8)} · ${whenDue(next.due_date, today)}`;
-};
 
 /** `05` in the viewed month, `10/10` for a bill carried from an earlier one (D17). */
 const chipDay = (date: string, month: string) => (date.startsWith(month) ? date.slice(8) : dayMonth(date));

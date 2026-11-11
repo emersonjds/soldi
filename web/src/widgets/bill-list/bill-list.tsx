@@ -8,9 +8,16 @@ import { toast } from "sonner";
 
 import { type Bill, useArchiveBill, useBills } from "@/entities/bill/bill-queries";
 import { categoriesQuery, categoryLabel } from "@/entities/category/categories-query";
+import { useMonth } from "@/entities/month/month-query";
+import { nextDue, whenDue } from "@/entities/month/schedule";
 import { EditBillSheet } from "@/features/edit-bill/edit-bill-sheet";
+import type { Schemas } from "@/shared/api/client";
+import { monthName, todayISO } from "@/shared/lib/date";
+import { wholeShare } from "@/shared/lib/percent";
+import { cents, fromCents } from "@/shared/lib/tier";
 import { BrandButton } from "@/shared/ui/brand-button";
 import { CategoryIcon } from "@/shared/ui/category-icon";
+import { DashCard } from "@/shared/ui/dash-card";
 import { Money } from "@/shared/ui/money";
 import { PageError, PageLoading } from "@/shared/ui/page-state";
 
@@ -43,6 +50,60 @@ const Rows = ({ label, bills, onOpen }: { label: string; bills: Bill[]; onOpen: 
         );
       })}
     </ul>
+  );
+};
+
+const NextDue = ({ rows, today }: { rows: Schemas["BillOfMonth"][]; today: string }) => {
+  const next = nextDue(rows, today);
+  return (
+    <DashCard title="Próximo vencimento">
+      {next ? (
+        <p className="flex flex-col gap-1">
+          <span className="truncate font-medium text-base" title={next.name}>
+            {next.name}
+          </span>
+          <Money amount={next.amount} className="font-bold text-lg" />
+          <span className="text-muted-foreground text-sm">
+            Vence {next.due_date === today ? "hoje" : whenDue(next.due_date, today)}
+          </span>
+        </p>
+      ) : (
+        <p className="text-muted-foreground">
+          {rows.length > 0 && rows.every((row) => row.paid) ? "Todas as contas do mês pagas" : "Nada a vencer este mês"}
+        </p>
+      )}
+    </DashCard>
+  );
+};
+
+/** Spec SOL-72 §9: the active bills' total against this month's income (never the viewed one), and the next bill due. */
+const Summary = ({ active }: { active: Bill[] }) => {
+  const today = todayISO();
+  const month = today.slice(0, 7);
+  const view = useMonth(month);
+  const total = active.reduce((sum, bill) => sum + cents(bill.amount), 0);
+  const income = view.data ? cents(view.data.totals.income) : 0;
+  const name = monthName(`${month}-01`, month);
+
+  return (
+    <div className="grid gap-4 md:grid-cols-2">
+      <DashCard title="Total das contas fixas">
+        <p className="flex flex-col">
+          <Money amount={fromCents(total)} size="figure" />
+          <span className="text-muted-foreground text-sm">
+            {active.length === 1 ? "1 conta ativa" : `${active.length} contas ativas`}
+          </span>
+        </p>
+        {view.data && total > 0 && (
+          <p className="mt-3 text-sm">
+            {income > 0
+              ? `Comprometem ${wholeShare(total, income)}% das entradas de ${name}`
+              : `Sem entradas em ${name} ainda.`}
+          </p>
+        )}
+      </DashCard>
+      {view.data && <NextDue rows={view.data.bills_of_month} today={today} />}
+    </div>
   );
 };
 
@@ -98,6 +159,7 @@ export const BillList = () => {
 
   return (
     <div className="flex flex-col gap-6">
+      {visible.length > 0 && <Summary active={active} />}
       {visible.length === 0 ? (
         <div className="flex flex-col items-center gap-3 rounded-2xl bg-card px-4 py-10 text-center shadow-sm">
           <span className="flex size-12 items-center justify-center rounded-full bg-secondary text-primary">
