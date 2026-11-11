@@ -26,13 +26,13 @@ test("Simular previews a purchase without writing it; Parcelar 3x writes three p
   await page.getByRole("button", { name: "Pular por agora" }).click();
   await page.getByRole("button", { name: "Ver meu mês" }).click();
   await page.getByRole("button", { name: "Pular" }).click();
-  const launch = page.getByRole("dialog", { name: "Lançar" });
+  const launch = page.getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ });
   await launch.getByRole("button", { name: "Fechar" }).click();
 
   const tabs = page.getByRole("navigation", { name: "Navegação principal" });
   await tabs.getByRole("button", { name: "Lançar" }).click();
   await launch.getByRole("switch", { name: "Simular" }).click();
-  await launch.getByRole("radio", { name: "Saída" }).click();
+  await launch.getByRole("radio", { name: "Conta" }).click();
   await launch.getByLabel("Valor").fill("1.600,00");
   await expect(launch.getByRole("status")).toHaveText(/^Com essa compra, hoje fica no vermelho: -R\$\s600,00\.$/);
   await launch.getByRole("button", { name: "Descartar" }).click();
@@ -40,11 +40,11 @@ test("Simular previews a purchase without writing it; Parcelar 3x writes three p
   await expect(page.getByRole("region", { name: "Lançamentos" })).toHaveCount(0);
 
   await tabs.getByRole("button", { name: "Lançar" }).click();
-  await launch.getByRole("radio", { name: "Saída" }).click();
+  await launch.getByRole("radio", { name: "Conta" }).click();
   await launch.getByLabel("Valor").fill("300,00");
-  await launch.getByRole("switch", { name: "Parcelar" }).click();
-  await launch.getByRole("radio", { name: "3x" }).click();
-  await expect(launch).toContainText("3× R$ 100,00 · até");
+  await launch.getByRole("switch", { name: "Parcelar compra" }).click();
+  await launch.getByRole("radio", { name: "3×" }).click();
+  await expect(launch).toContainText("Projeção: 3× de R$ 100,00");
   await launch.getByRole("button", { name: "Salvar" }).click();
   await expect(page.getByText("3 parcelas lançadas")).toBeVisible();
   await page.goto(`/mes?m=${monthFrom(1)}`);
@@ -69,7 +69,7 @@ test("Posso comprar isso? from the sidebar: 6× R$ 12.000,00 names the red day's
   await page.getByRole("button", { name: "Pular por agora" }).click();
   await page.getByRole("button", { name: "Ver meu mês" }).click();
   await page.getByRole("button", { name: "Pular" }).click();
-  const launch = page.getByRole("dialog", { name: "Lançar" });
+  const launch = page.getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ });
   await launch.getByRole("button", { name: "Fechar" }).click();
 
   // A fresh account has nothing ahead, so Próximos meses does not render (D25); the sidebar asks instead.
@@ -81,9 +81,9 @@ test("Posso comprar isso? from the sidebar: 6× R$ 12.000,00 names the red day's
   await expect(launch.getByRole("switch", { name: "Simular" })).toBeChecked();
   await expect(launch.getByRole("radio", { name: "Diário" })).toBeChecked();
   await launch.getByLabel("Valor").fill("72.000,00");
-  await launch.getByRole("switch", { name: "Parcelar" }).click();
-  await launch.getByRole("radio", { name: "6x" }).click();
-  await expect(launch).toContainText("6× R$ 12.000,00 · até");
+  await launch.getByRole("switch", { name: "Parcelar compra" }).click();
+  await launch.getByRole("radio", { name: "6×" }).click();
+  await expect(launch).toContainText("Projeção: 6× de R$ 12.000,00");
 
   // Today keeps R$ 345,67; the second parcela is the first red day.
   await expect(launch.getByRole("status")).toHaveText(

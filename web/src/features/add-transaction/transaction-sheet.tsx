@@ -2,7 +2,19 @@
 
 import { type FormEvent, type ReactNode, useState } from "react";
 
-import { Repeat } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowRight,
+  Calculator,
+  CircleCheck,
+  CircleX,
+  Lightbulb,
+  type LucideIcon,
+  NotebookPen,
+  ReceiptText,
+  Repeat,
+  ShoppingBag,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -21,12 +33,15 @@ import {
   useTransactions,
   useUpdateTransaction,
 } from "@/entities/transaction/transaction-queries";
+import { useIsLg } from "@/hooks/use-lg";
+import { cn } from "@/lib/utils";
 import { ApiError, type Schemas } from "@/shared/api/client";
 import { useCurrency } from "@/shared/lib/currency";
 import { addMonths, monthYear, todayISO } from "@/shared/lib/date";
 import { installmentCents } from "@/shared/lib/installments";
 import { formatMoney, positiveAmount } from "@/shared/lib/money";
 import { cents, fromCents } from "@/shared/lib/tier";
+import { AmountKeypad, useKeypad } from "@/shared/ui/amount-keypad";
 import { BrandButton } from "@/shared/ui/brand-button";
 import { DateChips } from "@/shared/ui/date-chips";
 import { HeroAmount } from "@/shared/ui/hero-amount";
@@ -37,10 +52,10 @@ import { Simulation } from "./simulation";
 
 type Kind = Schemas["CategoryKind"];
 
-const KINDS: { value: Kind; label: string }[] = [
-  { value: "income", label: "Entrada" },
-  { value: "bill", label: "Saída" },
-  { value: "daily", label: "Diário" },
+const KINDS: { value: Kind; label: string; icon: LucideIcon }[] = [
+  { value: "income", label: "Entrada", icon: ArrowDown },
+  { value: "bill", label: "Conta", icon: ReceiptText },
+  { value: "daily", label: "Diário", icon: ShoppingBag },
 ];
 
 const PRESETS = ["2", "3", "6", "12", "other"];
@@ -89,13 +104,15 @@ const TransactionForm = ({
   /** `moving`: Este e os próximos moves the series to a new day. */
   onSave: (fields: NewTransaction, scope?: Scope, moving?: boolean) => void;
   onDiscard: () => void;
-  /** Absent: no Transformar em conta fixa. */
+  /** Absent: no Criar como Conta Fixa. */
   onConvert?: (source: Source) => void;
 }) => {
   const [draft, setDraft] = useState(initial);
   const [submitted, setSubmitted] = useState(false);
   const currency = useCurrency();
   const categories = useCategoryChips(draft.kind);
+  const keypad = useKeypad();
+  const isLg = useIsLg();
   const thisMonth = useTransactions(todayISO().slice(0, 7));
   const settings = useSettings();
   const category = draft.category ?? categories.data?.[0];
@@ -222,18 +239,25 @@ const TransactionForm = ({
         aria-label="Tipo"
         className="grid w-full grid-cols-3 rounded-2xl bg-muted p-1"
       >
-        {KINDS.map((kind) => (
-          <ToggleGroupItem key={kind.value} value={kind.value} className={chip}>
-            {kind.label}
+        {KINDS.map(({ value, label, icon: Icon }) => (
+          <ToggleGroupItem
+            key={value}
+            value={value}
+            className={cn(chip, "gap-1.5", value === "income" && "text-income-text")}
+          >
+            <Icon aria-hidden className="size-4" />
+            {label}
           </ToggleGroupItem>
         ))}
       </ToggleGroup>
 
       <HeroAmount
         id="transaction-amount"
+        label={draft.kind === "income" ? "Valor da entrada" : "Valor do gasto"}
         value={draft.amount}
         onChange={(value) => set({ amount: value })}
         invalid={submitted && !amount}
+        keypad={keypad}
       />
 
       <CategoryChips
@@ -247,6 +271,7 @@ const TransactionForm = ({
       <div className="flex flex-col gap-2">
         <DateChips
           legend="Quando foi?"
+          legendClassName={isLg ? "sr-only" : undefined}
           value={draft.date}
           min={settings.data?.opening_date}
           onChange={(date) => set({ date })}
@@ -257,6 +282,31 @@ const TransactionForm = ({
           </p>
         )}
         {moving && !monthChanged && <p className="text-muted-foreground text-sm">{dayHelper}</p>}
+      </div>
+
+      <div className="flex items-center gap-2.5 rounded-xl bg-muted pl-3 focus-within:ring-3 focus-within:ring-ring/50">
+        <NotebookPen aria-hidden className="size-5 shrink-0 text-muted-foreground" />
+        <input
+          aria-label="Observação"
+          value={draft.note}
+          onChange={(event) => set({ note: event.target.value })}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") event.preventDefault();
+          }}
+          placeholder="Adicionar nota ou observação..."
+          maxLength={200}
+          className="h-12 min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground"
+        />
+        {draft.note && (
+          <button
+            type="button"
+            aria-label="Limpar observação"
+            onClick={() => set({ note: "" })}
+            className="flex size-11 shrink-0 items-center justify-center rounded-full text-muted-foreground focus-visible:outline-2 focus-visible:outline-ring"
+          >
+            <CircleX aria-hidden className="size-5" />
+          </button>
+        )}
       </div>
 
       {transaction?.recurring_bill_id && (
@@ -274,8 +324,9 @@ const TransactionForm = ({
               htmlFor="transaction-repeat-switch"
               className="flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-xl bg-muted px-4"
             >
-              <span id="transaction-repeat" className="font-medium text-base">
-                Repetir
+              <span id="transaction-repeat" className="flex items-center gap-2 font-medium text-base">
+                <Repeat aria-hidden className="size-5 shrink-0 text-muted-foreground" />
+                Repetir lançamento (Série)
               </span>
               <Switch
                 id="transaction-repeat-switch"
@@ -290,8 +341,9 @@ const TransactionForm = ({
               htmlFor="transaction-split-switch"
               className="flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-xl bg-muted px-4"
             >
-              <span id="transaction-split" className="font-medium text-base">
-                Parcelar
+              <span id="transaction-split" className="flex items-center gap-2 font-medium text-base">
+                <Calculator aria-hidden className="size-5 shrink-0 text-muted-foreground" />
+                Parcelar compra
               </span>
               <Switch
                 id="transaction-split-switch"
@@ -319,7 +371,7 @@ const TransactionForm = ({
                     disabled={preset !== "other" && Number(preset) < minMonths}
                     className={chip}
                   >
-                    {preset === "other" ? "Outro" : `${preset}x`}
+                    {preset === "other" ? "Outro" : `${preset}×`}
                   </ToggleGroupItem>
                 ))}
               </ToggleGroup>
@@ -344,18 +396,20 @@ const TransactionForm = ({
                 </div>
               )}
               {draft.repeat && monthsValid && (
-                <p className="text-muted-foreground text-sm">
-                  {amount && `${months}× ${formatMoney(amount, currency)} · `}até {lastMonth(draft.date, months)}
+                <p className="flex items-center gap-2 text-muted-foreground text-sm">
+                  <Lightbulb aria-hidden className="size-4 shrink-0" />
+                  {`${amount ? `${months}× de ${formatMoney(amount, currency)} · ` : ""}repete todo dia ${day} até ${lastMonth(draft.date, months)}`}
                 </p>
               )}
               {resizeNote && <p className="text-muted-foreground text-sm">{resizeNote}</p>}
-              {split && splitValid && (
-                <p className="text-muted-foreground text-sm">
-                  {split[0] === split[months - 1]
-                    ? `${months}× ${money(split[0])}`
-                    : `${months - 1}× ${money(split[0])} + ${money(split[months - 1])} na última`}{" "}
-                  · até {lastMonth(draft.date, months)}
-                </p>
+              {amount && split && splitValid && (
+                <div className="flex flex-col gap-1 text-muted-foreground text-sm">
+                  <p>{`Divide o valor total de ${formatMoney(amount, currency)} em ${months} parcelas automáticas`}</p>
+                  <p className="font-medium text-foreground">{`Projeção: ${months}× de ${money(split[0])}`}</p>
+                  {split[0] !== split[months - 1] && (
+                    <p>{`Última parcela será ajustada para ${money(split[months - 1])} devido a centavos residuais.`}</p>
+                  )}
+                </div>
               )}
               {submitted && !splitValid && (
                 <p role="alert" className="text-destructive text-sm">
@@ -369,32 +423,19 @@ const TransactionForm = ({
           )}
           {convertible && (
             <p className="text-muted-foreground text-sm">
-              Prefere uma conta fixa, sem data pra acabar?{" "}
+              Prefere transformar em conta fixa recorrente?{" "}
               <button
                 type="button"
                 onClick={convert}
-                className="inline-flex min-h-11 items-center font-semibold text-primary underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring"
+                className="inline-flex min-h-11 items-center gap-1 font-semibold text-primary underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring"
               >
-                Transformar em conta fixa
+                Criar como Conta Fixa
+                <ArrowRight aria-hidden className="size-4" />
               </button>
             </p>
           )}
         </div>
       )}
-
-      <div className="flex flex-col gap-2">
-        <label htmlFor="transaction-note" className="font-semibold text-sm">
-          Observação
-        </label>
-        <Input
-          id="transaction-note"
-          value={draft.note}
-          onChange={(event) => set({ note: event.target.value })}
-          placeholder="Opcional"
-          maxLength={200}
-          className="h-12 rounded-xl bg-muted text-base md:text-base"
-        />
-      </div>
 
       {series && transaction && (
         <ScopeRadio
@@ -409,6 +450,7 @@ const TransactionForm = ({
       {draft.simulate && <Simulation rows={rows} countInvalid={Boolean(amount) && monthsChecked && !monthsValid} />}
 
       <ResponsiveSheetFooter>
+        {keypad && <AmountKeypad value={draft.amount} onValueChange={(value) => set({ amount: value })} />}
         {draft.simulate ? (
           <>
             <BrandButton type="button" onClick={save}>
@@ -419,7 +461,17 @@ const TransactionForm = ({
             </Button>
           </>
         ) : (
-          <BrandButton type="submit">Salvar</BrandButton>
+          <div className="flex items-center gap-3">
+            {isLg && (
+              <Button type="button" variant="ghost" className="ml-auto h-12 text-base" onClick={onDiscard}>
+                Cancelar
+              </Button>
+            )}
+            <BrandButton type="submit" className="lg:w-auto lg:px-6">
+              <CircleCheck aria-hidden />
+              Salvar Lançamento
+            </BrandButton>
+          </div>
         )}
       </ResponsiveSheetFooter>
     </form>
@@ -441,7 +493,7 @@ type TransactionSheetProps = {
   initialDate?: string;
   /** A line above the form. */
   hint?: string;
-  /** The bill sheet that Transformar em conta fixa opens; absent, the link is not offered. */
+  /** The bill sheet that Criar como Conta Fixa opens; absent, the link is not offered. */
   billSheet?: (props: {
     prefill: BillPrefill;
     onOpenChange: (open: boolean) => void;
@@ -465,7 +517,10 @@ export const TransactionSheet = ({
   const update = useUpdateTransaction();
   const createBill = useCreateBill();
   const [converting, setConverting] = useState<Source>();
+  const isLg = useIsLg();
   const failed = () => toast.error("Não foi possível salvar o lançamento.");
+  let title = isLg ? "Novo Lançamento" : "Novo Registro";
+  if (transaction) title = "Editar lançamento";
 
   const save = (fields: NewTransaction, scope?: Scope, moving = false) => {
     onOpenChange(false);
@@ -546,8 +601,10 @@ export const TransactionSheet = ({
     <ResponsiveSheet
       open={open}
       onOpenChange={onOpenChange}
-      title={transaction ? "Editar lançamento" : "Lançar"}
-      description="Entrada, conta ou gasto do dia."
+      title={title}
+      description="Cadastre uma movimentação pontual ou recorrente"
+      showDescription={!transaction}
+      wide
     >
       {hint && <p className="rounded-xl bg-secondary px-4 py-3 font-medium text-primary text-sm">{hint}</p>}
       <TransactionForm

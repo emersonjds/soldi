@@ -35,7 +35,10 @@ test("Próximos meses paints the first two months the rent is owed Crítico and 
   await page.getByRole("button", { name: "Continuar" }).click();
   await page.getByRole("button", { name: "Ver meu mês" }).click();
   await page.getByRole("button", { name: "Pular" }).click();
-  await page.getByRole("dialog", { name: "Lançar" }).getByRole("button", { name: "Fechar" }).click();
+  await page
+    .getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ })
+    .getByRole("button", { name: "Fechar" })
+    .click();
 
   // A new user's bill is owed from today (D17): after the 28th, this month's rent is not.
   const first = today()[2] > 28 ? 1 : 0;
