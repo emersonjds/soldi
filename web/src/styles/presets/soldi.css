@@ -97,6 +97,8 @@ value: soldi
 
   /* Mobile tab bar: 64px pill + 12px gap below it + safe area + 16px air (spec 2026-11-10 §3.1). */
   --tabbar-space: calc(5.75rem + env(safe-area-inset-bottom));
+  /* Sonner's own offset rules from 601px; the tab bar stays until lg. */
+  --toast-bottom: var(--tabbar-space);
 
   --shadow-2xs: 0 1px 2px rgb(30 27 75 / 0.04);
   --shadow-xs: 0 1px 2px rgb(30 27 75 / 0.06);
@@ -106,4 +108,10 @@ value: soldi
   --shadow-lg: 0 12px 32px rgb(83 65 205 / 0.28);
   --shadow-xl: 0 16px 40px rgb(30 27 75 / 0.16);
   --shadow-2xl: 0 24px 56px rgb(30 27 75 / 0.2);
+}
+
+@media (width >= 64rem) {
+  :root[data-theme-preset="soldi"] {
+    --toast-bottom: 24px;
+  }
 }

@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -15,13 +15,15 @@ export const metadata: Metadata = {
   description: APP_CONFIG.meta.description,
 };
 
+export const viewport: Viewport = { viewportFit: "cover" };
+
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
   return (
     <html lang="pt-BR" data-theme-preset="soldi">
       <body className={`${fontVars} min-h-screen antialiased`}>
         <TooltipProvider>
           <QueryProvider>{children}</QueryProvider>
-          <Toaster mobileOffset={{ bottom: "var(--tabbar-space)" }} />
+          <Toaster offset={{ bottom: "var(--toast-bottom)" }} mobileOffset={{ bottom: "var(--tabbar-space)" }} />
         </TooltipProvider>
       </body>
     </html>
