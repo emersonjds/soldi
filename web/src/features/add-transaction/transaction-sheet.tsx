@@ -99,7 +99,12 @@ const TransactionForm = ({
   const canRepeat = !transaction?.recurring_bill_id && !transaction?.cofrinho_id && !series;
   const installments = draft.installments && !transaction && draft.kind !== "income";
   const counted = draft.repeat || installments || Boolean(series);
-  const resized = series && monthsValid && months !== series.total ? months : undefined;
+  // A moved date can change the member's position; Meses na série waits for the next save.
+  const moved = Boolean(series) && draft.date !== transaction?.date;
+  const resizing = Boolean(series) && !moved && months !== series?.total;
+  const resized = resizing && monthsValid ? months : undefined;
+  const monthsChecked = draft.repeat || installments || resizing;
+  const monthsError = submitted && monthsChecked && !monthsValid;
   let monthsLabel = "Quantas vezes";
   if (installments) monthsLabel = "Quantas parcelas";
   if (series) monthsLabel = "Meses na série";
@@ -115,19 +120,20 @@ const TransactionForm = ({
       : null;
 
   const resizeHelper = () => {
-    if (!transaction?.series || !resized) return;
-    const { position, total } = transaction.series;
-    const end = lastMonth(transaction.date, resized - position + 1);
-    if (resized > total) return `+${resized - total}×${amount ? ` ${formatMoney(amount, currency)}` : ""} · até ${end}`;
-    if (resized === total - 1) return `Remove o último · termina em ${end}`;
-    return `Remove os ${total - resized} últimos · termina em ${end}`;
+    if (!series || !resized) return;
+    const added = resized - series.total;
+    const end = monthYear(addMonths(series.last_date.slice(0, 7), added));
+    if (added > 0) return `+${added}×${amount ? ` ${formatMoney(amount, currency)}` : ""} · até ${end}`;
+    if (added === -1) return "Remove o último";
+    return `Remove os ${-added} últimos`;
   };
+  const resizeNote = resizeHelper();
 
   const set = (patch: Partial<Draft>) => setDraft((current) => ({ ...current, ...patch }));
 
   const fields = (): NewTransaction | undefined => {
     setSubmitted(true);
-    if (!amount || !category || (counted && !monthsValid) || !splitValid) return;
+    if (!amount || !category || (monthsChecked && !monthsValid) || !splitValid) return;
     const note = draft.note.trim();
     return {
       date: draft.date,
@@ -271,6 +277,7 @@ const TransactionForm = ({
                 value={draft.preset}
                 onValueChange={(preset: string) => preset && set({ preset })}
                 aria-label={monthsLabel}
+                disabled={moved}
                 className="grid w-full grid-cols-5 rounded-2xl bg-muted p-1"
               >
                 {PRESETS.map((preset) => (
@@ -291,12 +298,13 @@ const TransactionForm = ({
                     aria-label={installments ? "Parcelas" : "Meses"}
                     placeholder={`De ${minMonths} a 60`}
                     value={draft.custom}
+                    disabled={moved}
                     onChange={(event) => set({ custom: event.target.value.replace(/\D/g, "").slice(0, 2) })}
-                    aria-invalid={submitted && !monthsValid}
-                    aria-describedby={submitted && !monthsValid ? "transaction-months-error" : undefined}
+                    aria-invalid={monthsError}
+                    aria-describedby={monthsError ? "transaction-months-error" : undefined}
                     className="h-12 rounded-xl bg-muted text-base tabular-nums md:text-base"
                   />
-                  {submitted && !monthsValid && (
+                  {monthsError && (
                     <p id="transaction-months-error" role="alert" className="text-destructive text-sm">
                       {installments ? "Escolha de 2 a 60 parcelas." : `Escolha de ${minMonths} a 60 meses.`}
                     </p>
@@ -308,7 +316,7 @@ const TransactionForm = ({
                   {amount && `${months}× ${formatMoney(amount, currency)} · `}até {lastMonth(draft.date, months)}
                 </p>
               )}
-              {resizeHelper() && <p className="text-muted-foreground text-sm">{resizeHelper()}</p>}
+              {resizeNote && <p className="text-muted-foreground text-sm">{resizeNote}</p>}
               {split && splitValid && (
                 <p className="text-muted-foreground text-sm">
                   {split[0] === split[months - 1]
@@ -360,7 +368,7 @@ const TransactionForm = ({
         <ScopeRadio legend="Aplicar em" series={series} value={draft.scope} onChange={(scope) => set({ scope })} />
       )}
 
-      {draft.simulate && <Simulation rows={rows} countInvalid={Boolean(amount) && counted && !monthsValid} />}
+      {draft.simulate && <Simulation rows={rows} countInvalid={Boolean(amount) && monthsChecked && !monthsValid} />}
 
       {draft.simulate ? (
         <div className="flex flex-col gap-2">

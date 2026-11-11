@@ -361,6 +361,11 @@ async fn r1_r2_r7_twelve_months_write_twelve_exact_entries_on_clamped_dates(pool
     let created = repeat(&user, "2027-01-31", "1234.57", 12).await;
 
     assert_eq!(place(&created), (1, 12));
+    assert_eq!(created["series"]["last_date"], "2027-12-31");
+    assert_eq!(
+        only(&user, "2027-03").await["series"]["last_date"],
+        "2027-12-31"
+    );
     assert_eq!(created["amount"], "1234.57");
     assert_eq!(created["date"], "2027-01-31");
     let series = created["series"]["id"].clone();
@@ -1323,6 +1328,7 @@ async fn l1_growth_after_a_deleted_member_continues_after_the_last_month(pool: P
 
     assert_eq!(status, StatusCode::OK, "{grown}");
     assert_eq!(place(&grown), (1, 12));
+    assert_eq!(grown["series"]["last_date"], "2027-11-05");
     assert_eq!(only(&user, "2027-10").await["date"], "2027-10-05");
     assert_eq!(only(&user, "2027-11").await["date"], "2027-11-05");
     assert_empty(&user, "2027-12", 1).await;

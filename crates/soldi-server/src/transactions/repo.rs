@@ -25,6 +25,7 @@ struct Row {
     series_id: Option<Uuid>,
     series_position: i64,
     series_total: i64,
+    series_last_date: Option<NaiveDate>,
 }
 
 impl From<Row> for Transaction {
@@ -37,11 +38,15 @@ impl From<Row> for Transaction {
             note: row.note,
             recurring_bill_id: row.recurring_bill_id,
             cofrinho_id: row.cofrinho_id,
-            series: row.series_id.map(|id| TransactionSeries {
-                id,
-                position: row.series_position,
-                total: row.series_total,
-            }),
+            series: row
+                .series_id
+                .zip(row.series_last_date)
+                .map(|(id, last_date)| TransactionSeries {
+                    id,
+                    position: row.series_position,
+                    total: row.series_total,
+                    last_date,
+                }),
             category: Category {
                 id: row.category_id,
                 name: row.category_name,
@@ -75,10 +80,11 @@ pub async fn list(
                   c.color AS category_color, c.parent_id AS category_parent_id,
                   c.is_savings AS category_is_savings, c.target AS category_target,
                   c.deadline AS category_deadline, t.series_id,
-                  s.position AS "series_position!", s.total AS "series_total!"
+                  s.position AS "series_position!", s.total AS "series_total!",
+                  s.last_date AS series_last_date
            FROM transactions t JOIN categories c ON c.user_id = t.user_id AND c.id = t.category_id
            LEFT JOIN LATERAL (
-               SELECT count(*) AS total, count(*) FILTER (WHERE (m.date, m.id) <= (t.date, t.id)) AS position
+               SELECT count(*) AS total, max(m.date) AS last_date, count(*) FILTER (WHERE (m.date, m.id) <= (t.date, t.id)) AS position
                FROM transactions m WHERE m.user_id = t.user_id AND m.series_id = t.series_id
            ) s ON true
            WHERE t.user_id = $1 AND t.date BETWEEN $2 AND $3
@@ -110,10 +116,11 @@ pub async fn movements(
                   c.color AS category_color, c.parent_id AS category_parent_id,
                   c.is_savings AS category_is_savings, c.target AS category_target,
                   c.deadline AS category_deadline, t.series_id,
-                  s.position AS "series_position!", s.total AS "series_total!"
+                  s.position AS "series_position!", s.total AS "series_total!",
+                  s.last_date AS series_last_date
            FROM transactions t JOIN categories c ON c.user_id = t.user_id AND c.id = t.category_id
            LEFT JOIN LATERAL (
-               SELECT count(*) AS total, count(*) FILTER (WHERE (m.date, m.id) <= (t.date, t.id)) AS position
+               SELECT count(*) AS total, max(m.date) AS last_date, count(*) FILTER (WHERE (m.date, m.id) <= (t.date, t.id)) AS position
                FROM transactions m WHERE m.user_id = t.user_id AND m.series_id = t.series_id
            ) s ON true
            WHERE t.user_id = $1 AND (t.category_id = $2 OR t.cofrinho_id = $2)
@@ -142,10 +149,11 @@ pub async fn find(
                   c.color AS category_color, c.parent_id AS category_parent_id,
                   c.is_savings AS category_is_savings, c.target AS category_target,
                   c.deadline AS category_deadline, t.series_id,
-                  s.position AS "series_position!", s.total AS "series_total!"
+                  s.position AS "series_position!", s.total AS "series_total!",
+                  s.last_date AS series_last_date
            FROM transactions t JOIN categories c ON c.user_id = t.user_id AND c.id = t.category_id
            LEFT JOIN LATERAL (
-               SELECT count(*) AS total, count(*) FILTER (WHERE (m.date, m.id) <= (t.date, t.id)) AS position
+               SELECT count(*) AS total, max(m.date) AS last_date, count(*) FILTER (WHERE (m.date, m.id) <= (t.date, t.id)) AS position
                FROM transactions m WHERE m.user_id = t.user_id AND m.series_id = t.series_id
            ) s ON true
            WHERE t.user_id = $1 AND t.id = $2"#,

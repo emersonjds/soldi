@@ -263,6 +263,7 @@ mod tests {
             id: Uuid::nil(),
             position: 1,
             total: 2,
+            last_date: date("2026-12-05"),
         })
     }
 

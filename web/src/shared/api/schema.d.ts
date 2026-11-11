@@ -858,6 +858,11 @@ export interface components {
             /** Format: uuid */
             id: string;
             /**
+             * Format: date
+             * @description The date of the series' last member; growth continues in the months after it.
+             */
+            last_date: string;
+            /**
              * Format: int64
              * @description 1-based, by date.
              */

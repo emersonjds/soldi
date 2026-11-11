@@ -95,16 +95,18 @@ pub async fn create(
     };
     let series_id = count.map(|_| Uuid::new_v4());
     let id = repo::insert(&mut tx, user.id, &first, None, None, series_id).await?;
+    let mut series = None;
     if let (Some(count), Some(series_id)) = (count, series_id) {
         let dates = domain::repeat_dates(first.date, count)?;
         repo::insert_copies(&mut tx, user.id, &first, series_id, &dates, &amounts[1..]).await?;
+        series = Some(TransactionSeries {
+            id: series_id,
+            position: 1,
+            total: count.into(),
+            last_date: dates.last().copied().unwrap_or(first.date),
+        });
     }
     tx.commit().await?;
-    let series = series_id.zip(count).map(|(id, total)| TransactionSeries {
-        id,
-        position: 1,
-        total: total.into(),
-    });
     Ok(Transaction {
         series,
         ..domain::transaction(id, first, category, None)

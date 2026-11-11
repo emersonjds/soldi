@@ -31,6 +31,8 @@ pub struct TransactionSeries {
     /// 1-based, by date.
     pub position: i64,
     pub total: i64,
+    /// The date of the series' last member; growth continues in the months after it.
+    pub last_date: NaiveDate,
 }
 
 /// Which entries of a series a change or a deletion reaches; `this` when absent.

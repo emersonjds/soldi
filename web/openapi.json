@@ -3096,12 +3096,18 @@
         "required": [
           "id",
           "position",
-          "total"
+          "total",
+          "last_date"
         ],
         "properties": {
           "id": {
             "type": "string",
             "format": "uuid"
+          },
+          "last_date": {
+            "type": "string",
+            "format": "date",
+            "description": "The date of the series' last member; growth continues in the months after it."
           },
           "position": {
             "type": "integer",
