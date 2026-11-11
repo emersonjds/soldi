@@ -180,6 +180,7 @@ async fn resize(
     months: i16,
     next: &CreateTransaction,
 ) -> Result<(), AppError> {
+    repo::lock_series(conn, series_id).await?;
     let edited = repo::find(conn, user.id, id)
         .await?
         .and_then(|entry| entry.series)
@@ -207,17 +208,19 @@ pub async fn delete(
     id: Uuid,
     scope: Scope,
 ) -> Result<(), AppError> {
-    let mut conn = pool.acquire().await?;
-    let current = repo::find(&mut conn, user.id, id)
+    let mut tx = pool.begin().await?;
+    let current = repo::find(&mut tx, user.id, id)
         .await?
         .ok_or(AppError::NotFound)?;
     match (scope, current.series) {
         (Scope::Following, Some(series)) => {
-            repo::delete_following(&mut conn, user.id, series.id, current.date).await?
+            repo::lock_series(&mut tx, series.id).await?;
+            repo::delete_following(&mut tx, user.id, series.id, current.date).await?;
         }
         _ => {
-            repo::delete(&mut conn, user.id, id).await?;
+            repo::delete(&mut tx, user.id, id).await?;
         }
     }
+    tx.commit().await?;
     Ok(())
 }

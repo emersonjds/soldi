@@ -273,6 +273,17 @@ pub async fn delete_following(
     Ok(())
 }
 
+/// Serializes resizes and `following` deletions of one series until the transaction ends.
+pub async fn lock_series(conn: &mut PgConnection, series_id: Uuid) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        "SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))",
+        series_id.to_string()
+    )
+    .execute(&mut *conn)
+    .await?;
+    Ok(())
+}
+
 /// L1: the dates of the series' first and last members; growth takes the first's day and
 /// continues after the last's month.
 pub async fn series_span(

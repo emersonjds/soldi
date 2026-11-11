@@ -1351,6 +1351,70 @@ async fn l1_growth_after_the_first_member_moved_back_leaves_no_month_twice(pool:
 }
 
 #[sqlx::test]
+async fn two_concurrent_grows_from_different_members_add_the_months_once(pool: PgPool) {
+    let user = opened(pool.clone(), "ana@example.com").await;
+    repeat(&user, "2026-11-05", "10", 12).await;
+    let first = only(&user, "2026-11").await;
+    let third = only(&user, "2027-01").await;
+    let mut lock = pool.begin().await.unwrap();
+    sqlx::query("SELECT 1 FROM transactions WHERE id IN ($1::uuid, $2::uuid) FOR UPDATE")
+        .bind(first["id"].as_str().unwrap())
+        .bind(third["id"].as_str().unwrap())
+        .execute(&mut *lock)
+        .await
+        .unwrap();
+
+    let (first, third) = (uri(&first), uri(&third));
+    let (from_first, from_third, ()) = tokio::join!(
+        user.patch(&first, json!({ "repeat_months": 15 })),
+        user.patch(&third, json!({ "repeat_months": 15 })),
+        async {
+            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+            lock.commit().await.unwrap();
+        },
+    );
+
+    assert_eq!(from_first.0, StatusCode::OK, "{}", from_first.1);
+    assert_eq!(from_third.0, StatusCode::OK, "{}", from_third.1);
+    let entries = run(&user, "2026-11", 15).await;
+    assert_eq!(place(&entries[14]), (15, 15));
+    assert_empty(&user, "2028-02", 1).await;
+}
+
+#[sqlx::test]
+async fn a_grow_waits_for_a_following_delete_of_the_same_series(pool: PgPool) {
+    let user = opened(pool.clone(), "ana@example.com").await;
+    let first = repeat(&user, "2026-11-05", "10", 12).await;
+    let tenth = only(&user, "2027-08").await;
+    let last = only(&user, "2027-10").await;
+    let mut lock = pool.begin().await.unwrap();
+    sqlx::query("SELECT 1 FROM transactions WHERE id = $1::uuid FOR UPDATE")
+        .bind(last["id"].as_str().unwrap())
+        .execute(&mut *lock)
+        .await
+        .unwrap();
+
+    let (first, following) = (uri(&first), format!("{}?scope=following", uri(&tenth)));
+    let (deleted, grown, ()) = tokio::join!(
+        user.delete(&following),
+        async {
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            user.patch(&first, json!({ "repeat_months": 15 })).await
+        },
+        async {
+            tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+            lock.commit().await.unwrap();
+        },
+    );
+
+    assert_eq!(deleted.0, StatusCode::NO_CONTENT, "{}", deleted.1);
+    assert_eq!(grown.0, StatusCode::OK, "{}", grown.1);
+    let entries = run(&user, "2026-11", 15).await;
+    assert_eq!(place(&entries[14]), (15, 15));
+    assert_empty(&user, "2028-02", 1).await;
+}
+
+#[sqlx::test]
 async fn resizing_another_users_member_is_not_found(pool: PgPool) {
     let ana = opened(pool, "ana@example.com").await;
     let bia = ana.another_user("bia@example.com").await;
