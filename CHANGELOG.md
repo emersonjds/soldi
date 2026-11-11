@@ -7,6 +7,20 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.24.0
+
+> Headline: Mês is a dashboard
+
+### Fixed
+
+- A month's saving starts at the opening date when the opening falls inside the month, so it can never exceed the month's bills.
+
+### Web
+
+- Mês is a grid of cards (1, 2 or 3 columns): the hero shows today's balance and the projected end of month with smaller cents, and the split bar "Para onde foi a entrada" divides the income into Contas, Guardado (gross deposits), Diário and Livre, with the base total under the title (SOL-63, D21).
+- New Para onde vai and Cofrinhos glance cards; each card loads and fails on its own and keeps its data when a background refresh fails.
+- Loading is announced once per page.
+
 ## 0.23.0
 
 > Headline: a desktop shell, the first step of the dashboard redesign
