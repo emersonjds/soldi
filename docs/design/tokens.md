@@ -54,9 +54,25 @@ The strip under "Termômetro do Mês" shows the five segments and highlights the
 
 ## Category icon circles (40px, white icon)
 
-Mercado `#F59E0B`, Comida fora `#F97316`, Transporte `#3B82F6`, Saúde `#EF4444`, Lazer `#A855F7`, Aluguel `#6366F1`, Luz `#EAB308`, Internet `#06B6D4`, Cartão `#EC4899`, Assinaturas `#8B5CF6`, Salário `#16A34A`, Extra `#22C55E`. Stored as token names `cat-1..cat-12`.
+`cat-1..cat-12` (re-stepped for color blindness in SOL-9, D22), white glyph contrast in parentheses: Mercado `#AB6200` (4.69:1), Comida fora `#F6682E` (3.03:1), Transporte `#2676C8` (4.66:1), Saúde `#A11401` (8.03:1), Lazer `#A855F7` (3.96:1), Aluguel `#4F46E5` (6.29:1), Luz `#B78B00` (3.13:1), Internet `#00A2C7` (3.00:1), Cartão `#FB3194` (3.52:1), Assinaturas `#6A22C8` (7.85:1), Salário `#16A34A` (3.30:1), Extra `#23754C` (5.65:1). Stored as token names `cat-1..cat-12`. Glyph and card are both white, so one ratio covers the glyph on the circle and the circle on the card (WCAG 1.4.11).
 
-`cat-13..cat-24` (SOL-32), white glyph contrast in parentheses: Verde-azulado `#0D9488` (3.74:1), Framboesa `#BE185D` (6.04:1), Oliva `#6B7A1F` (4.74:1), Azul-petróleo `#075985` (7.56:1), Ameixa `#86198F` (8.24:1), Marrom `#854D0E` (6.85:1), Ardósia `#64748B` (4.76:1), Verde-escuro `#166534` (7.13:1), Vinho `#881337` (9.57:1), Telha `#C2410C` (5.18:1), Anil `#3730A3` (9.93:1), Malva `#9D4E8C` (5.38:1). Each sits at least 0.10 from its nearest palette neighbor in OKLab, twice the closest pair of the first twelve (0.05).
+`cat-13..cat-24` (SOL-32): Verde-azulado `#0D9488` (3.74:1), Framboesa `#BE185D` (6.04:1), Oliva `#6B7A1F` (4.74:1), Azul-petróleo `#075985` (7.56:1), Ameixa `#86198F` (8.24:1), Marrom `#854D0E` (6.85:1), Ardósia `#64748B` (4.76:1), Verde-escuro `#166534` (7.13:1), Vinho `#881337` (9.57:1), Telha `#C2410C` (5.18:1), Anil `#3730A3` (9.93:1), Malva `#9D4E8C` (5.38:1).
+
+A new account fills a kind from the lowest free token, so its Diário shows 15 categories painted `cat-1..cat-15`; that set, not the twelve owners, is what a user compares. Validator numbers (dataviz `validate_palette.js --pairs all --surface #ffffff` for `cat-1..12`, its ΔE function for the `cat-1..15` rows; OKLab ΔE ×100 under the Machado 2009 simulation at severity 1.0), before → after SOL-9:
+
+| Check | Before | After |
+|---|---|---|
+| `cat-1..12`, worst pair, protan | 0.3 (Lazer / Assinaturas) | 4.0 (Luz / Salário) |
+| `cat-1..12`, worst pair, deutan | 0.9 (Transporte / Lazer) | 3.2 (Comida fora / Luz) |
+| `cat-1..12`, worst pair, tritan | 2.7 (Internet / Extra) | 5.3 (Internet / Salário) |
+| `cat-1..12`, worst pair, normal vision | 5.1 (Lazer / Assinaturas) | 10.8 (Mercado / Luz) |
+| `cat-1..15`, worst pair, protan or deutan | 0.3 (Lazer / Assinaturas) | 3.2 (Mercado / Oliva, Comida fora / Luz) |
+| `cat-1..15`, pairs below 6 (protan or deutan) | 12 | 6 |
+| `cat-1..15`, worst pair, tritan | 2.6 (Salário / Verde-azulado) | 2.6, both tokens untouched |
+| Lowest contrast on white | 1.92:1 (Luz) | 3.00:1 (Internet) |
+| Closest pair of all 24, OKLab | 0.0507 (cat-5 / cat-10) | 0.0557 (cat-12 / cat-20) |
+
+The six pairs of `cat-1..15` still below 6 under protan or deutan: Mercado / Oliva 3.2, Comida fora / Luz 3.2, Extra / Framboesa 3.4, Luz / Salário 4.0, Comida fora / Oliva 4.6, Mercado / Extra 5.8. `web/src/app/category-palette.test.ts` locks 3:1, the 0.05 OKLab spread, 3 across `cat-1..15` under protan and deutan, and 5 across `cat-1..12` under tritan.
 
 Top-level colors are unique per kind and subcategories wear the parent's (D15).
 
