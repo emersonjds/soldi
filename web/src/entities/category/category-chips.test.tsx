@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import type { Schemas } from "@/shared/api/client";
 import { renderHookWithQuery, renderWithQuery } from "@/test/render";
-import { CATEGORIES, MERCADO, problem, RESGATE, SALARIO, stubApi } from "@/test/stub-api";
+import { CATEGORIES, COMIDA, MERCADO, problem, RESGATE, SALARIO, stubApi } from "@/test/stub-api";
 
 import { CategoryChips, useCategoryChips } from "./category-chips";
 
@@ -40,12 +40,41 @@ const RACAO: Schemas["Category"] = {
 /** In the API's order: kind, parent name, then the children by name. */
 const WITH_CHILDREN = [...CATEGORIES, PETS, RACAO];
 
-const Picker = () => {
+const LAZER: Schemas["Category"] = { ...CARRO, id: "c1000000-0000-4000-8000-000000000098", name: "Lazer" };
+
+/** In the API's order, Carro and Lazer after Pets. */
+const SIX_DAILY = [...WITH_CHILDREN, CARRO, LAZER];
+
+const entry = (category: Schemas["Category"], date: string, id: string): Schemas["Transaction"] => ({
+  id,
+  date,
+  amount: "12345.67",
+  kind: category.kind,
+  category,
+});
+
+/** Comida fora twice; Carro and Pets once each, Carro later; three Salário that are not Diário. */
+const ENTRIES = [
+  entry(COMIDA, "2026-11-03", "e1"),
+  entry(COMIDA, "2026-11-04", "e2"),
+  entry(PETS, "2026-11-02", "e3"),
+  entry(CARRO, "2026-11-05", "e4"),
+  entry(SALARIO, "2026-11-01", "e5"),
+  entry(SALARIO, "2026-11-02", "e6"),
+  entry(SALARIO, "2026-11-03", "e7"),
+];
+
+const Picker = ({ entries = [] }: { entries?: Schemas["Transaction"][] }) => {
   const [chosen, setChosen] = useState<Schemas["Category"]>();
-  return <CategoryChips kind="daily" chosen={chosen} onChoose={setChosen} />;
+  return <CategoryChips kind="daily" chosen={chosen} onChoose={setChosen} entries={entries} />;
 };
 
-const setup = (replies = {}, categories = CATEGORIES) => {
+const chips = () =>
+  within(screen.getByRole("radiogroup", { name: "Categoria" }))
+    .getAllByRole("radio")
+    .map((radio) => radio.textContent);
+
+const setup = (replies = {}, categories = CATEGORIES, entries?: Schemas["Transaction"][]) => {
   const requests = stubApi({
     "GET /api/categories": { status: 200, body: categories },
     "POST /api/categories": { status: 201, body: CARRO },
@@ -53,7 +82,7 @@ const setup = (replies = {}, categories = CATEGORIES) => {
   });
   renderWithQuery(
     <>
-      <Picker />
+      <Picker entries={entries} />
       <Toaster />
     </>,
   );
@@ -84,47 +113,110 @@ describe("CategoryChips", () => {
     window.innerWidth = 375;
   });
 
-  it("below 640px picks from a searchable sheet, parents first and their children under them", async () => {
-    setup({}, WITH_CHILDREN);
+  it("without entries shows the kind's first five, the preset one leading, as a radio row with Ver todas and +", async () => {
+    setup({}, SIX_DAILY);
 
-    const trigger = await screen.findByRole("combobox", { name: "Categoria" });
-    expect(trigger).toHaveTextContent("Escolher categoria");
-    expect(trigger).toHaveAttribute("aria-expanded", "false");
-    expect(screen.queryByRole("radio")).not.toBeInTheDocument();
-    await userEvent.click(trigger);
-
-    const sheet = await screen.findByRole("dialog", { name: "Categoria" });
-    expect(trigger).toHaveAttribute("aria-expanded", "true");
-    expect(
-      within(sheet)
-        .getAllByRole("option")
-        .map((option) => option.getAttribute("aria-label")),
-    ).toEqual(["Mercado", "Comida fora", "Pets", "Pets › Ração"]);
-    await userEvent.type(within(sheet).getByRole("combobox"), "raç");
-    expect(
-      within(sheet)
-        .getAllByRole("option")
-        .map((option) => option.getAttribute("aria-label")),
-    ).toEqual(["Pets › Ração"]);
-    await userEvent.click(within(sheet).getByRole("option", { name: "Pets › Ração" }));
-
-    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-    expect(trigger).toHaveTextContent("Pets › Ração");
-    expect(trigger).toHaveAttribute("aria-expanded", "false");
+    const row = await screen.findByRole("radiogroup", { name: "Categoria" });
+    expect(chips()).toEqual(["Mercado", "Comida fora", "Pets", "Ração", "Carro"]);
+    expect(within(row).queryByRole("radio", { checked: true })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Ver todas" })).toHaveAttribute("aria-expanded", "false");
     expect(screen.getByRole("button", { name: "Nova categoria" })).toBeInTheDocument();
   });
 
-  it("uses the same searchable picker at 1440px, with children as Pai › Filho", async () => {
-    window.innerWidth = 1440;
+  it("ranks the month's Diário by count, a tie by the latest date, then fills from the preset and API order", async () => {
+    setup({}, SIX_DAILY, ENTRIES);
+
+    await screen.findByRole("radiogroup", { name: "Categoria" });
+    expect(chips()).toEqual(["Comida fora", "Carro", "Pets", "Mercado", "Ração"]);
+  });
+
+  it("shows fewer chips when the kind has fewer categories", async () => {
+    setup();
+
+    await screen.findByRole("radiogroup", { name: "Categoria" });
+    expect(chips()).toEqual(["Mercado", "Comida fora"]);
+  });
+
+  it("checks a tapped chip and moves along the row with the arrow keys", async () => {
+    setup({}, SIX_DAILY);
+
+    const mercado = await screen.findByRole("radio", { name: "Mercado" });
+    await userEvent.click(mercado);
+    expect(mercado).toHaveAttribute("aria-checked", "true");
+    expect(mercado).toHaveFocus();
+    await userEvent.keyboard("{ArrowRight}");
+    const comida = screen.getByRole("radio", { name: "Comida fora" });
+    expect(comida).toHaveFocus();
+    await userEvent.keyboard(" ");
+    expect(comida).toHaveAttribute("aria-checked", "true");
+    expect(mercado).toHaveAttribute("aria-checked", "false");
+    await userEvent.click(comida);
+    expect(comida).toHaveAttribute("aria-checked", "true");
+  });
+
+  it("searches every category from Ver todas and keeps a choice outside the five in the last slot", async () => {
+    setup({}, SIX_DAILY, ENTRIES);
+
+    const more = await screen.findByRole("button", { name: "Ver todas" });
+    await userEvent.click(more);
+    const sheet = await screen.findByRole("dialog", { name: "Categoria" });
+    expect(more).toHaveAttribute("aria-expanded", "true");
+    expect(
+      within(sheet)
+        .getAllByRole("option")
+        .map((option) => option.getAttribute("aria-label")),
+    ).toEqual(["Mercado", "Comida fora", "Pets", "Pets › Ração", "Carro", "Lazer"]);
+    await userEvent.type(within(sheet).getByRole("combobox"), "laz");
+    await userEvent.click(within(sheet).getByRole("option", { name: "Lazer" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(chips()).toEqual(["Comida fora", "Carro", "Pets", "Mercado", "Lazer"]);
+    const lazer = screen.getByRole("radio", { name: "Lazer" });
+    expect(lazer).toHaveAttribute("aria-checked", "true");
+    await waitFor(() => expect(lazer).toHaveFocus());
+  });
+
+  it("returns focus to Ver todas or + when their sheet closes with Esc", async () => {
+    setup({}, SIX_DAILY);
+
+    const more = await screen.findByRole("button", { name: "Ver todas" });
+    await userEvent.click(more);
+    await screen.findByRole("dialog", { name: "Categoria" });
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await waitFor(() => expect(more).toHaveFocus());
+
+    const create = screen.getByRole("button", { name: "Nova categoria" });
+    await userEvent.click(create);
+    await screen.findByRole("dialog", { name: "Nova" });
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await waitFor(() => expect(create).toHaveFocus());
+  });
+
+  it("names a subcategory chip with its parent and shows the short name", async () => {
     setup({}, WITH_CHILDREN);
 
-    const trigger = await screen.findByRole("combobox", { name: "Categoria" });
-    expect(screen.queryByRole("radio")).not.toBeInTheDocument();
-    await userEvent.click(trigger);
-    const sheet = await screen.findByRole("dialog", { name: "Categoria" });
-    await userEvent.click(within(sheet).getByRole("option", { name: "Pets › Ração" }));
-    expect(trigger).toHaveTextContent("Pets › Ração");
-    expect(screen.getByRole("button", { name: "Nova categoria" })).toBeInTheDocument();
+    const racao = await screen.findByRole("radio", { name: "Pets › Ração" });
+    expect(racao).toHaveTextContent("Ração");
+  });
+
+  it("shows five round placeholders while the categories load", () => {
+    stubApi({});
+    const { container } = renderWithQuery(<Picker />);
+
+    expect(container.querySelectorAll('[data-slot="skeleton"].rounded-full')).toHaveLength(5);
+  });
+
+  it("waits with the placeholders while the month's entries load, so the row never reorders", async () => {
+    stubApi({ "GET /api/categories": { status: 200, body: SIX_DAILY } });
+    const { client, container } = renderWithQuery(
+      <CategoryChips kind="daily" chosen={undefined} onChoose={() => undefined} entries={undefined} />,
+    );
+
+    await waitFor(() => expect(client.getQueryData(["categories"])).toBeDefined());
+    expect(screen.queryByRole("radiogroup", { name: "Categoria" })).not.toBeInTheDocument();
+    expect(container.querySelectorAll('[data-slot="skeleton"].rounded-full')).toHaveLength(5);
   });
 
   it("creates a category with the next free color, selects it and says so", async () => {
@@ -152,7 +244,9 @@ describe("CategoryChips", () => {
     });
     expect(await screen.findByText("Categoria criada")).toBeInTheDocument();
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-    expect(await screen.findByRole("combobox", { name: "Categoria" })).toHaveTextContent("Carro");
+    const carro = await screen.findByRole("radio", { name: "Carro" });
+    expect(carro).toHaveAttribute("aria-checked", "true");
+    await waitFor(() => expect(carro).toHaveFocus());
   });
 
   it("asks for a name and, with all 24 colors taken, still creates a subcategory in the parent's icon and color", async () => {
@@ -205,7 +299,7 @@ describe("CategoryChips", () => {
       icon: "dog",
       parent_id: PETS.id,
     });
-    expect(await screen.findByRole("combobox", { name: "Categoria" })).toHaveTextContent("Pets › Pet shop");
+    expect(await screen.findByRole("radio", { name: "Pets › Pet shop" })).toHaveAttribute("aria-checked", "true");
   });
 
   it("says when the name is taken", async () => {

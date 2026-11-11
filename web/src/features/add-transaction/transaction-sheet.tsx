@@ -18,6 +18,7 @@ import {
   type Scope,
   type Transaction,
   useCreateTransaction,
+  useTransactions,
   useUpdateTransaction,
 } from "@/entities/transaction/transaction-queries";
 import { ApiError, type Schemas } from "@/shared/api/client";
@@ -95,6 +96,7 @@ const TransactionForm = ({
   const [submitted, setSubmitted] = useState(false);
   const currency = useCurrency();
   const categories = useCategoryChips(draft.kind);
+  const thisMonth = useTransactions(todayISO().slice(0, 7));
   const settings = useSettings();
   const category = draft.category ?? categories.data?.[0];
   const amount = positiveAmount(draft.amount);
@@ -137,8 +139,8 @@ const TransactionForm = ({
     const added = resized - series.total;
     const end = monthYear(addMonths(series.last_date.slice(0, 7), added));
     if (added > 0) return `+${added}×${amount ? ` ${formatMoney(amount, currency)}` : ""} · até ${end}`;
-    if (added === -1) return "Remove o último";
-    return `Remove os ${-added} últimos`;
+    if (added === -1) return `Remove o último · termina em ${end}`;
+    return `Remove os ${-added} últimos · termina em ${end}`;
   };
   const resizeNote = resizeHelper();
 
@@ -234,15 +236,13 @@ const TransactionForm = ({
         invalid={submitted && !amount}
       />
 
-      <fieldset className="flex flex-col gap-2">
-        <legend className="mb-2 font-semibold text-sm">Categoria</legend>
-        <CategoryChips kind={draft.kind} chosen={category} onChoose={(chosen) => set({ category: chosen })} />
-        {submitted && categories.data && !category && (
-          <p role="alert" className="text-destructive text-sm">
-            Escolha uma categoria
-          </p>
-        )}
-      </fieldset>
+      <CategoryChips
+        kind={draft.kind}
+        chosen={category}
+        onChoose={(chosen) => set({ category: chosen })}
+        entries={thisMonth.isError ? [] : thisMonth.data}
+        error={submitted && !category ? "Escolha uma categoria" : undefined}
+      />
 
       <div className="flex flex-col gap-2">
         <DateChips
@@ -396,8 +396,14 @@ const TransactionForm = ({
         />
       </div>
 
-      {series && (
-        <ScopeRadio legend="Aplicar em" series={series} value={draft.scope} onChange={(scope) => set({ scope })} />
+      {series && transaction && (
+        <ScopeRadio
+          legend="Aplicar em"
+          series={series}
+          date={transaction.date}
+          value={draft.scope}
+          onChange={(scope) => set({ scope })}
+        />
       )}
 
       {draft.simulate && <Simulation rows={rows} countInvalid={Boolean(amount) && monthsChecked && !monthsValid} />}

@@ -9,6 +9,7 @@ import {
   ALUGUEL,
   BILL_ALUGUEL,
   CATEGORIES,
+  COMIDA,
   EXTRA,
   FORECAST,
   FORECAST_FLAT,
@@ -77,7 +78,7 @@ describe("TransactionSheet", () => {
     const dialog = await screen.findByRole("dialog", { name: "Lançar" });
     expect(dialog).toHaveAttribute("data-slot", "sheet-content");
     expect(within(dialog).getByRole("button", { name: "Salvar" }).closest(FOOTER)).not.toBeNull();
-    expect(await screen.findByRole("combobox", { name: "Categoria" })).toHaveTextContent("Mercado");
+    expect(await screen.findByRole("radio", { name: "Mercado" })).toHaveAttribute("aria-checked", "true");
     expect(screen.getByRole("radio", { name: "Diário" })).toBeChecked();
     await userEvent.keyboard("35,90");
     await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
@@ -93,12 +94,27 @@ describe("TransactionSheet", () => {
     expect(await screen.findByText("Lançado")).toBeInTheDocument();
   });
 
+  it("ranks the category row by the current month's entries and keeps the preset chosen", async () => {
+    const used = TRANSACTIONS.map((row) => ({ ...row, kind: "daily" as const, category: COMIDA }));
+    setup({}, { "GET /api/transactions?month=2026-11": { status: 200, body: used } });
+
+    const row = await screen.findByRole("radiogroup", { name: "Categoria" });
+    await waitFor(() =>
+      expect(
+        within(row)
+          .getAllByRole("radio")
+          .map((radio) => radio.textContent),
+      ).toEqual(["Comida fora", "Mercado"]),
+    );
+    expect(within(row).getByRole("radio", { name: "Mercado" })).toHaveAttribute("aria-checked", "true");
+  });
+
   it("switches kind, preselects its first category and takes yesterday and a note", async () => {
     const { sent } = setup();
 
     await userEvent.click(await screen.findByRole("radio", { name: "Entrada" }));
-    expect(await screen.findByRole("combobox", { name: "Categoria" })).toHaveTextContent("Salário");
-    await userEvent.click(screen.getByRole("combobox", { name: "Categoria" }));
+    expect(await screen.findByRole("radio", { name: "Salário" })).toHaveAttribute("aria-checked", "true");
+    await userEvent.click(screen.getByRole("button", { name: "Ver todas" }));
     await userEvent.click(await screen.findByRole("option", { name: "Extra" }));
     await userEvent.type(screen.getByLabelText("Valor"), "abc1.250,00");
     await userEvent.click(screen.getByRole("button", { name: "Ontem" }));
@@ -120,7 +136,7 @@ describe("TransactionSheet", () => {
       { "GET /api/categories": { status: 200, body: WITH_COFRINHOS } },
     );
 
-    expect(await screen.findByRole("combobox", { name: "Categoria" })).toHaveTextContent("Reserva");
+    expect(await screen.findByRole("radio", { name: "Economia › Reserva" })).toHaveAttribute("aria-checked", "true");
     expect(screen.getByRole("radio", { name: "Saída" })).toBeChecked();
     await userEvent.keyboard("200,00");
     await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
@@ -156,7 +172,9 @@ describe("TransactionSheet", () => {
 
     await userEvent.click(await screen.findByRole("button", { name: "Salvar" }));
     expect(await screen.findByText("Informe um valor")).toBeInTheDocument();
-    expect(screen.getByText("Escolha uma categoria")).toBeInTheDocument();
+    const row = screen.getByRole("radiogroup", { name: "Categoria" });
+    expect(row).toHaveAttribute("aria-invalid", "true");
+    expect(row).toHaveAccessibleDescription("Escolha uma categoria");
 
     await userEvent.type(screen.getByLabelText("Valor"), "0");
     await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
@@ -171,7 +189,7 @@ describe("TransactionSheet", () => {
     const amount = screen.getByLabelText("Valor");
     expect(amount).toHaveValue("184,31");
     expect(screen.getByLabelText("Observação")).toHaveValue("Compras da semana");
-    expect(await screen.findByRole("combobox", { name: "Categoria" })).toHaveTextContent("Mercado");
+    expect(await screen.findByRole("radio", { name: "Mercado" })).toHaveAttribute("aria-checked", "true");
     expect(screen.getByRole("button", { name: "Outra data, 05/11/2026" })).toBeInTheDocument();
     await userEvent.clear(amount);
     await userEvent.type(amount, "20000");
@@ -212,7 +230,7 @@ describe("TransactionSheet", () => {
     });
     await userEvent.type(within(create).getByLabelText("Nome"), "Carro{Enter}");
 
-    expect(await screen.findByRole("combobox", { name: "Categoria" })).toHaveTextContent("Carro");
+    expect(await screen.findByRole("radio", { name: "Carro" })).toHaveAttribute("aria-checked", "true");
     expect(screen.getByRole("dialog", { name: "Lançar" })).toBeInTheDocument();
     expect(requests.filter((request) => request.url.endsWith("/api/transactions"))).toHaveLength(0);
   });
@@ -331,10 +349,10 @@ describe("TransactionSheet", () => {
     expect(within(months).getByRole("radio", { name: "12x" })).toBeChecked();
     expect(within(months).getByRole("radio", { name: "2x" })).toBeDisabled();
     expect(within(months).getByRole("radio", { name: "3x" })).toBeEnabled();
-    expect(screen.queryByText(/Remove|até/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Remove|· até/)).not.toBeInTheDocument();
 
     await userEvent.click(within(months).getByRole("radio", { name: "6x" }));
-    expect(screen.getByText("Remove os 6 últimos")).toBeInTheDocument();
+    expect(screen.getByText("Remove os 6 últimos · termina em mar 2027")).toBeInTheDocument();
     await userEvent.click(within(months).getByRole("radio", { name: "Outro" }));
     const custom = screen.getByLabelText("Meses");
     await userEvent.clear(custom);
@@ -358,9 +376,9 @@ describe("TransactionSheet", () => {
     const custom = screen.getByLabelText("Meses");
     await userEvent.clear(custom);
     await userEvent.type(custom, "11");
-    expect(screen.getByText("Remove o último")).toBeInTheDocument();
+    expect(screen.getByText("Remove o último · termina em ago 2027")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("radio", { name: "12x" }));
-    expect(screen.queryByText(/Remove|até/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Remove|· até/)).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
 
     expect(await sent("PATCH")).not.toHaveProperty("repeat_months");
@@ -404,10 +422,10 @@ describe("TransactionSheet", () => {
 
     const months = await screen.findByRole("radiogroup", { name: "Meses na série" });
     await userEvent.click(within(months).getByRole("radio", { name: "6x" }));
-    expect(screen.getByText("Remove os 6 últimos")).toBeInTheDocument();
+    expect(screen.getByText("Remove os 6 últimos · termina em mar 2027")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Hoje" }));
     expect(within(months).getByRole("radio", { name: "12x" })).toBeDisabled();
-    expect(screen.queryByText(/Remove|até/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Remove|· até/)).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
 
     const body = await sent("PATCH");
@@ -553,7 +571,7 @@ describe("TransactionSheet", () => {
     );
 
     await userEvent.click(await screen.findByRole("radio", { name: "Saída" }));
-    expect(await screen.findByRole("combobox", { name: "Categoria" })).toHaveTextContent("Aluguel");
+    expect(await screen.findByRole("radio", { name: "Aluguel" })).toHaveAttribute("aria-checked", "true");
     await userEvent.type(screen.getByLabelText("Valor"), "120000");
     await userEvent.click(screen.getByRole("button", { name: "Transformar em conta fixa" }));
     expect(requests.some((request) => request.method === "POST")).toBe(false);
@@ -677,7 +695,7 @@ describe("TransactionSheet", () => {
 
   it("saves on Enter in Valor when not simulating", async () => {
     const { sent } = setup();
-    await screen.findByRole("combobox", { name: "Categoria" });
+    await screen.findByRole("radiogroup", { name: "Categoria" });
     await userEvent.keyboard("35,90{Enter}");
     expect(await sent("POST")).toMatchObject({ amount: "35.90", kind: "daily" });
   });

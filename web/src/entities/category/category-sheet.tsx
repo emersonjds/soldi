@@ -329,13 +329,21 @@ type CategorySheetProps = Omit<FormProps, "onSaved" | "onArchive"> & {
   onOpenChange: (open: boolean) => void;
   onSaved?: (category: Category) => void;
   onArchive?: (category: Category) => void;
+  onCloseAutoFocus?: (event: Event) => void;
 };
 
 /**
  * `Nova categoria` or `Editar categoria`: name, optional parent, any lucide icon and a palette color; the kind is fixed.
  * Under Economia it is a cofrinho: `Novo cofrinho` or `Editar cofrinho`, with an optional goal and deadline.
  */
-export const CategorySheet = ({ open, onOpenChange, onSaved, onArchive, ...form }: CategorySheetProps) => {
+export const CategorySheet = ({
+  open,
+  onOpenChange,
+  onSaved,
+  onArchive,
+  onCloseAutoFocus,
+  ...form
+}: CategorySheetProps) => {
   const categories = useCategories(form.kind);
   const start = form.category || form.parentId ? "form" : "kind";
   const [step, setStep] = useState<"kind" | "parent" | "form">(start);
@@ -377,6 +385,7 @@ export const CategorySheet = ({ open, onOpenChange, onSaved, onArchive, ...form 
       title={heading[0]}
       description={heading[1]}
       onBack={step === "parent" ? () => setStep("kind") : undefined}
+      onCloseAutoFocus={onCloseAutoFocus}
     >
       {step === "kind" && <ChooseKind onCategory={() => pick()} onSubcategory={() => setStep("parent")} />}
       {step === "parent" && <ChooseParent kind={form.kind} onPick={pick} />}
