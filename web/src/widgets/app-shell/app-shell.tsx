@@ -189,7 +189,7 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
             <p className="hidden font-bold text-xl lg:block">{current?.label}</p>
             {MONTH_PAGES.some(isAt) && (
               <Suspense>
-                <div className="rounded-2xl bg-card p-2 shadow-sm lg:bg-transparent lg:p-0 lg:shadow-none">
+                <div className="max-lg:rounded-2xl max-lg:bg-card max-lg:p-2 max-lg:shadow-sm">
                   <ShellMonthSwitcher pathname={pathname} />
                 </div>
               </Suspense>
