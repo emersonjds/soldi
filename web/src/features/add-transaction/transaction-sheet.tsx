@@ -437,6 +437,8 @@ type TransactionSheetProps = {
   initialCategory?: Schemas["Category"];
   /** Creating with Simular on: Posso comprar isso? */
   initialSimulate?: boolean;
+  /** `YYYY-MM-DD` when creating; today otherwise. */
+  initialDate?: string;
   /** A line above the form. */
   hint?: string;
   /** The bill sheet that Transformar em conta fixa opens; absent, the link is not offered. */
@@ -455,6 +457,7 @@ export const TransactionSheet = ({
   initialKind = "daily",
   initialCategory,
   initialSimulate = false,
+  initialDate = todayISO(),
   hint,
   billSheet,
 }: TransactionSheetProps) => {
@@ -533,7 +536,7 @@ export const TransactionSheet = ({
         kind: initialKind,
         amount: "",
         category: initialCategory,
-        date: todayISO(),
+        date: initialDate,
         note: "",
         ...repeat,
         simulate: initialSimulate,
@@ -548,7 +551,7 @@ export const TransactionSheet = ({
     >
       {hint && <p className="rounded-xl bg-secondary px-4 py-3 font-medium text-primary text-sm">{hint}</p>}
       <TransactionForm
-        key={transaction?.id ?? `${initialKind}-${initialCategory?.id}-${initialSimulate}`}
+        key={transaction?.id ?? `${initialKind}-${initialCategory?.id}-${initialSimulate}-${initialDate}`}
         initial={initial}
         transaction={transaction}
         onSave={save}

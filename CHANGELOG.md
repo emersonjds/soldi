@@ -7,6 +7,16 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.31.0
+
+> Headline: Para onde vai by group
+
+### Web
+
+- Para onde vai lists top-level groups that fold open to their subcategories, with a "(sem subcategoria)" row for the parent's own entries; the donut is by group (SOL-75).
+- Picking a group lists its own and its subcategories' entries with the count and total, and "Adicionar lançamento em {nome}" opens Lançar on that category, dated inside the viewed month.
+- Top 5 shows amounts, and a group's share rounds the same way on Mês and Para onde vai.
+
 ## 0.30.0
 
 > Headline: faster category picking and a Lançamentos filter

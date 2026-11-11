@@ -1,19 +1,25 @@
 "use client";
 
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useId, useState } from "react";
 
+import { useQuery } from "@tanstack/react-query";
+import { ChevronDown, Plus } from "lucide-react";
 import { Pie, PieChart } from "recharts";
 
 import { Button } from "@/components/ui/button";
 import { ChartContainer } from "@/components/ui/chart";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { useCategoryLabel } from "@/entities/category/categories-query";
+import { categoriesQuery, useCategoryLabel } from "@/entities/category/categories-query";
 import { type CategoryShare, useCategoryReport } from "@/entities/report/report-query";
 import { useTransactions } from "@/entities/transaction/transaction-queries";
+import { TransactionSheet } from "@/features/add-transaction/transaction-sheet";
+import { EditBillSheet } from "@/features/edit-bill/edit-bill-sheet";
 import { cn } from "@/lib/utils";
-import { shortDay } from "@/shared/lib/date";
-import { formatDelta, formatPct } from "@/shared/lib/percent";
+import type { Schemas } from "@/shared/api/client";
+import { shortDay, todayISO } from "@/shared/lib/date";
+import { formatDelta, formatPct, wholeShare } from "@/shared/lib/percent";
+import { cents, fromCents } from "@/shared/lib/tier";
 import { CategoryIcon, categoryBg, categoryFill } from "@/shared/ui/category-icon";
 import { DashCard } from "@/shared/ui/dash-card";
 import { IncomeIllustration, LedgerIllustration } from "@/shared/ui/illustrations";
@@ -22,21 +28,35 @@ import { PageError, PageLoading } from "@/shared/ui/page-state";
 
 type Tab = "outflow" | "income";
 
+type Group = Schemas["CategoryGroup"];
+
 const card = "flex flex-col gap-4 rounded-2xl bg-card p-4 shadow-sm lg:p-6";
 
 const caption = "font-semibold text-[11px] text-muted-foreground uppercase leading-4 tracking-[0.12em]";
 
-const COPY: Record<Tab, { center: string; empty: string; Illustration: () => ReactNode }> = {
-  outflow: { center: "Saídas do mês", empty: "Nenhum gasto neste mês ainda.", Illustration: LedgerIllustration },
-  income: { center: "Entradas do mês", empty: "Nenhuma entrada neste mês ainda.", Illustration: IncomeIllustration },
+const COPY: Record<Tab, { center: string; of: string; empty: string; Illustration: () => ReactNode }> = {
+  outflow: {
+    center: "Saídas do mês",
+    of: "das saídas",
+    empty: "Nenhum gasto neste mês ainda.",
+    Illustration: LedgerIllustration,
+  },
+  income: {
+    center: "Entradas do mês",
+    of: "das entradas",
+    empty: "Nenhuma entrada neste mês ainda.",
+    Illustration: IncomeIllustration,
+  },
 };
 
+type Kind = Schemas["CategoryKind"];
+
 /** Spending that grew is bad news, income that grew is good news; no change stays neutral. */
-const DeltaBadge = ({ share }: { share: CategoryShare }) => {
-  if (share.delta_pct === null || share.delta_pct === undefined) return null;
-  const label = formatDelta(share.delta_pct);
-  const rose = !share.delta_pct.startsWith("-");
-  const good = share.kind === "income" ? rose : !rose;
+const DeltaBadge = ({ delta_pct, kind }: { delta_pct?: string | null; kind: Kind }) => {
+  if (delta_pct === null || delta_pct === undefined) return null;
+  const label = formatDelta(delta_pct);
+  const rose = !delta_pct.startsWith("-");
+  const good = kind === "income" ? rose : !rose;
   return (
     <>
       <span
@@ -55,20 +75,20 @@ const DeltaBadge = ({ share }: { share: CategoryShare }) => {
 };
 
 type DonutProps = {
-  shares: CategoryShare[];
+  groups: Group[];
   total: string;
   label: string;
-  selected?: string;
+  active?: string;
   onSelect: (id: string) => void;
 };
 
-const Donut = ({ shares, total, label, selected, onSelect }: DonutProps) => {
+const Donut = ({ groups, total, label, active, onSelect }: DonutProps) => {
   // ponytail: Number() only sizes the slices; every amount on screen is the API string.
-  const data = shares.map((share) => ({
-    name: share.name,
-    value: Number(share.amount),
-    fill: categoryFill(share.color),
-    fillOpacity: selected && selected !== share.category_id ? 0.3 : 1,
+  const data = groups.map((group) => ({
+    name: group.name,
+    value: Number(group.amount),
+    fill: categoryFill(group.color),
+    fillOpacity: active && active !== group.category_id ? 0.3 : 1,
   }));
 
   return (
@@ -87,7 +107,7 @@ const Donut = ({ shares, total, label, selected, onSelect }: DonutProps) => {
             strokeWidth={2}
             cornerRadius={4}
             className="cursor-pointer"
-            onClick={(_sector, index) => onSelect(shares[index].category_id)}
+            onClick={(_sector, index) => onSelect(groups[index].category_id)}
           />
         </PieChart>
       </ChartContainer>
@@ -99,40 +119,108 @@ const Donut = ({ shares, total, label, selected, onSelect }: DonutProps) => {
   );
 };
 
-const LegendRow = ({ share, pressed, onSelect }: { share: CategoryShare; pressed: boolean; onSelect: () => void }) => {
-  const label = useCategoryLabel();
+const rowButton =
+  "w-full rounded-xl px-2 py-2 text-left transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring aria-pressed:bg-secondary";
+
+type GroupRowProps = {
+  group: Group;
+  shares: CategoryShare[];
+  of: string;
+  total: string;
+  open: boolean;
+  selected?: string;
+  onOpen: () => void;
+  onSelect: (id: string) => void;
+};
+
+const GroupRow = ({ group, shares, of, total, open, selected, onOpen, onSelect }: GroupRowProps) => {
+  const listId = useId();
+  const children = shares.filter((share) => share.parent_id === group.category_id);
+  const own = cents(group.amount) - children.reduce((sum, child) => sum + cents(child.amount), 0);
+  const folds = group.children.length > 0;
+
   return (
     <li>
-      <button
-        type="button"
-        aria-pressed={pressed}
-        onClick={onSelect}
-        className="flex min-h-16 w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring aria-pressed:bg-secondary"
-      >
-        <CategoryIcon icon={share.icon} color={share.color} />
-        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <span className="truncate font-medium text-base">{label(share)}</span>
-          <span className="flex items-center gap-2 text-muted-foreground text-sm tabular-nums">
-            {formatPct(share.pct, 0)}
-            <DeltaBadge share={share} />
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          aria-pressed={selected === group.category_id}
+          onClick={() => onSelect(group.category_id)}
+          className={cn(rowButton, "flex min-h-16 min-w-0 flex-1 items-center gap-3")}
+        >
+          <CategoryIcon icon={group.icon} color={group.color} />
+          <span className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-3 gap-y-0.5">
+            <span className="truncate font-medium text-base">{group.name}</span>
+            <span className="col-span-2 row-start-2 flex flex-wrap items-center gap-x-2 text-muted-foreground text-sm tabular-nums">
+              {wholeShare(cents(group.amount), cents(total))}% {of}
+              <DeltaBadge delta_pct={group.delta_pct} kind={group.kind} />
+            </span>
+            <Money amount={group.amount} className="col-start-2 row-start-1 font-bold text-base" />
           </span>
-        </span>
-        <Money amount={share.amount} className="font-bold text-base" />
-      </button>
+        </button>
+        {folds && (
+          <button
+            type="button"
+            aria-expanded={open}
+            aria-controls={listId}
+            aria-label={`${open ? "Ocultar" : "Mostrar"} subcategorias de ${group.name}`}
+            onClick={onOpen}
+            className="flex size-11 shrink-0 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"
+          >
+            <ChevronDown aria-hidden className={cn("size-5 transition-transform", open && "rotate-180")} />
+          </button>
+        )}
+      </div>
+      {folds && (
+        <ul id={listId} hidden={!open} className="ml-7 flex flex-col border-l pl-2">
+          {open &&
+            children.map((child) => (
+              <li key={child.category_id}>
+                <button
+                  type="button"
+                  aria-pressed={selected === child.category_id}
+                  onClick={() => onSelect(child.category_id)}
+                  className={cn(rowButton, "flex min-h-11 items-center gap-2")}
+                >
+                  <span aria-hidden className={cn("size-2 shrink-0 rounded-full", categoryBg(child.color))} />
+                  <span className="min-w-0 flex-1 truncate text-base">{child.name}</span>
+                  <DeltaBadge delta_pct={child.delta_pct} kind={child.kind} />
+                  <Money amount={child.amount} className="font-semibold text-base" />
+                </button>
+              </li>
+            ))}
+          {open && own > 0 && (
+            <li className="flex min-h-11 items-center gap-2 px-2 py-2 text-muted-foreground">
+              <span aria-hidden className="size-2 shrink-0 rounded-full bg-muted-foreground/40" />
+              <span className="min-w-0 flex-1 truncate text-base">{group.name} (sem subcategoria)</span>
+              <Money amount={fromCents(own)} className="font-semibold text-base" />
+            </li>
+          )}
+        </ul>
+      )}
     </li>
   );
 };
 
-const TopFive = ({ shares, className }: { shares: CategoryShare[]; className?: string }) => {
+type TopFiveProps = { shares: CategoryShare[]; groups: Group[]; className?: string };
+
+const TopFive = ({ shares, groups, className }: TopFiveProps) => {
   const label = useCategoryLabel();
+  const parents = new Set(groups.filter((group) => group.children.length > 0).map((group) => group.category_id));
   return (
     <DashCard title="Top 5" className={className}>
       <ol className="flex flex-col gap-4">
         {shares.slice(0, 5).map((share) => (
           <li key={share.category_id} className="flex flex-col gap-1.5">
             <span className="flex items-baseline justify-between gap-3 text-sm">
-              <span className="truncate">{label(share)}</span>
-              <span className="font-semibold tabular-nums">{formatPct(share.pct)}</span>
+              <span className="truncate">
+                {label(share)}
+                {parents.has(share.category_id) && " (sem subcategoria)"}
+              </span>
+              <span className="shrink-0 tabular-nums">
+                <Money amount={share.amount} className="font-semibold" />{" "}
+                <span className="text-muted-foreground">({formatPct(share.pct)})</span>
+              </span>
             </span>
             <span aria-hidden className="h-2 overflow-hidden rounded-full bg-muted">
               <span
@@ -147,18 +235,28 @@ const TopFive = ({ shares, className }: { shares: CategoryShare[]; className?: s
   );
 };
 
-type EntriesProps = { month: string; share: CategoryShare; onClear: () => void; className?: string };
+/** A group (its id and its children's) or one subcategory (its own id). */
+type Chosen = Pick<CategoryShare, "category_id" | "name" | "parent_id" | "color" | "kind" | "amount"> & {
+  ids: string[];
+};
 
-const CategoryEntries = ({ month, share, onClear, className }: EntriesProps) => {
+type EntriesProps = { month: string; chosen: Chosen; onClear: () => void; className?: string };
+
+const CategoryEntries = ({ month, chosen, onClear, className }: EntriesProps) => {
   const label = useCategoryLabel();
-  const entries = useTransactions(month, share.category_id);
+  const categories = useQuery(categoriesQuery);
+  const entries = useTransactions(month);
+  const [adding, setAdding] = useState(false);
+  const name = label(chosen);
+  const category = categories.data?.find((each) => each.id === chosen.category_id);
+  const shown = entries.data?.filter((entry) => chosen.ids.includes(entry.category.id));
 
   return (
     <section aria-labelledby="category-entries-title" className={cn(card, "gap-2", className)}>
       <div className="flex items-center justify-between gap-2">
         <h2 id="category-entries-title" className="flex min-w-0 items-center gap-2 font-semibold text-lg leading-6">
-          <span aria-hidden className={cn("size-2.5 shrink-0 rounded-full", categoryBg(share.color))} />
-          <span className="min-w-0 break-words">Lançamentos de {label(share)}</span>
+          <span aria-hidden className={cn("size-2.5 shrink-0 rounded-full", categoryBg(chosen.color))} />
+          <span className="min-w-0 break-words">Lançamentos de {name}</span>
         </h2>
         <Button variant="ghost" className="min-h-11 shrink-0 text-primary" onClick={onClear}>
           Limpar filtro
@@ -167,21 +265,45 @@ const CategoryEntries = ({ month, share, onClear, className }: EntriesProps) => 
       {entries.isError && (
         <PageError message="Não foi possível carregar os lançamentos." onRetry={() => entries.refetch()} />
       )}
-      {!entries.isError && !entries.data && <PageLoading />}
-      {entries.data && (
-        <ul className="flex flex-col">
-          {entries.data.map((entry) => (
-            <li key={entry.id} className="flex min-h-16 items-center gap-3 px-2 py-2">
-              <CategoryIcon icon={entry.category.icon} color={entry.category.color} />
-              <span className="flex min-w-0 flex-1 flex-col">
-                <span className="truncate font-medium text-base">{entry.note || label(entry.category)}</span>
-                <span className="text-muted-foreground text-xs">{shortDay(entry.date)}</span>
-              </span>
-              <Money amount={entry.amount} income={entry.kind === "income"} className="font-bold text-base" />
-            </li>
-          ))}
-        </ul>
+      {!entries.isError && !shown && <PageLoading />}
+      {shown && (
+        <>
+          <p className="flex flex-wrap items-baseline justify-between gap-x-3 px-2 text-muted-foreground text-sm">
+            <span>
+              {shown.length} {shown.length === 1 ? "lançamento" : "lançamentos"}
+            </span>
+            <span>
+              Total: <Money amount={chosen.amount} className="font-semibold text-foreground" />
+            </span>
+          </p>
+          <ul className="flex flex-col">
+            {shown.map((entry) => (
+              <li key={entry.id} className="flex min-h-16 items-center gap-3 px-2 py-2">
+                <CategoryIcon icon={entry.category.icon} color={entry.category.color} />
+                <span className="flex min-w-0 flex-1 flex-col">
+                  <span className="truncate font-medium text-base">{entry.note || label(entry.category)}</span>
+                  <span className="text-muted-foreground text-xs">{shortDay(entry.date)}</span>
+                </span>
+                <Money amount={entry.amount} income={entry.kind === "income"} className="font-bold text-base" />
+              </li>
+            ))}
+          </ul>
+        </>
       )}
+      {category && (
+        <Button className="h-auto min-h-11 w-full whitespace-normal text-base" onClick={() => setAdding(true)}>
+          <Plus aria-hidden />
+          Adicionar lançamento em {name}
+        </Button>
+      )}
+      <TransactionSheet
+        open={adding}
+        onOpenChange={setAdding}
+        initialKind={chosen.kind}
+        initialCategory={category}
+        initialDate={month === todayISO().slice(0, 7) ? undefined : `${month}-01`}
+        billSheet={(props) => <EditBillSheet open {...props} />}
+      />
     </section>
   );
 };
@@ -205,11 +327,12 @@ export const BreakdownSkeleton = () => (
 const segment =
   "min-h-11 flex-1 rounded-full text-base data-[state=on]:bg-card data-[state=on]:text-primary data-[state=on]:shadow-sm";
 
-/** `Para onde vai`: the month by category, a slice or row picks one category and lists its entries. */
+/** `Para onde vai`: the month by top-level group; a slice, group or subcategory row lists its entries. */
 export const CategoryBreakdown = ({ month }: { month: string }) => {
   const report = useCategoryReport(month);
   const [tab, setTab] = useState<Tab>("outflow");
   const [selected, setSelected] = useState<string>();
+  const [open, setOpen] = useState<string[]>([]);
 
   if (report.isError)
     return (
@@ -220,10 +343,18 @@ export const CategoryBreakdown = ({ month }: { month: string }) => {
   if (!report.data) return <BreakdownSkeleton />;
 
   const shares = report.data[tab];
+  const groups = report.data.groups.filter((group) => (group.kind === "income") === (tab === "income"));
   const total = tab === "outflow" ? report.data.outflow_total : report.data.income_total;
   const { Illustration } = COPY[tab];
-  const chosen = shares.find((share) => share.category_id === selected);
+  const active = groups.find((group) => group.category_id === selected || group.children.some((id) => id === selected));
+  const group = groups.find((each) => each.category_id === selected);
+  const child = shares.find((share) => share.category_id === selected);
+  const chosen: Chosen | undefined = group
+    ? { ...group, ids: [group.category_id, ...group.children] }
+    : child && { ...child, ids: [child.category_id] };
   const toggle = (id: string) => setSelected((current) => (current === id ? undefined : id));
+  const fold = (id: string) =>
+    setOpen((current) => (current.includes(id) ? current.filter((each) => each !== id) : [...current, id]));
 
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:items-start">
@@ -247,7 +378,7 @@ export const CategoryBreakdown = ({ month }: { month: string }) => {
               Entradas
             </ToggleGroupItem>
           </ToggleGroup>
-          {shares.length === 0 ? (
+          {groups.length === 0 ? (
             <div className="flex flex-col items-center gap-3 py-4">
               <div
                 aria-hidden
@@ -259,14 +390,28 @@ export const CategoryBreakdown = ({ month }: { month: string }) => {
             </div>
           ) : (
             <>
-              <Donut shares={shares} total={total} label={COPY[tab].center} selected={selected} onSelect={toggle} />
+              <Donut
+                groups={groups}
+                total={total}
+                label={COPY[tab].center}
+                active={active?.category_id}
+                onSelect={toggle}
+              />
               <ul aria-label="Categorias" className="flex flex-col gap-1">
-                {shares.map((share) => (
-                  <LegendRow
-                    key={share.category_id}
-                    share={share}
-                    pressed={share.category_id === selected}
-                    onSelect={() => toggle(share.category_id)}
+                {groups.map((each) => (
+                  <GroupRow
+                    key={each.category_id}
+                    group={each}
+                    shares={shares}
+                    of={COPY[tab].of}
+                    total={total}
+                    open={open.includes(each.category_id)}
+                    selected={selected}
+                    onOpen={() => {
+                      fold(each.category_id);
+                      if (selected && each.children.includes(selected)) setSelected(undefined);
+                    }}
+                    onSelect={toggle}
                   />
                 ))}
               </ul>
@@ -275,8 +420,8 @@ export const CategoryBreakdown = ({ month }: { month: string }) => {
         </div>
       </DashCard>
       <div className="flex flex-col gap-6">
-        {chosen && <CategoryEntries month={month} share={chosen} onClear={() => setSelected(undefined)} />}
-        {shares.length > 0 && <TopFive shares={shares} className="lg:order-first" />}
+        {chosen && <CategoryEntries month={month} chosen={chosen} onClear={() => setSelected(undefined)} />}
+        {shares.length > 0 && <TopFive shares={shares} groups={groups} className="lg:order-first" />}
       </div>
     </div>
   );

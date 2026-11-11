@@ -46,7 +46,7 @@ const card = () => screen.getByRole("region", { name: "Para onde vai" });
 
 describe("Para onde vai glance", () => {
   it("shows the four largest outflow groups with amount and share, and links the month's full screen", async () => {
-    show({ status: 200, body: { ...REPORT, groups: GROUPS } });
+    show({ status: 200, body: { ...REPORT, outflow_total: "2500.00", groups: GROUPS } });
 
     const rows = await within(card()).findAllByRole("listitem");
     expect(rows.map((row) => row.textContent?.replace(/\s/g, " "))).toEqual([
@@ -56,6 +56,12 @@ describe("Para onde vai glance", () => {
       "Comida foraR$ 200,008%",
     ]);
     expect(within(card()).getByRole("link", { name: "Ver tudo" })).toHaveAttribute("href", "/para-onde-vai?m=2026-11");
+  });
+
+  it("rounds a share half to even, as Para onde vai does: 125,00 of 1.000,00 is 12%", async () => {
+    show({ status: 200, body: { ...REPORT, outflow_total: "1000.00", groups: [group(ALUGUEL, "125.00", "12.5")] } });
+
+    expect(await within(card()).findByRole("listitem")).toHaveTextContent(/12%$/);
   });
 
   it("shows four bar skeletons while loading", () => {
