@@ -13,6 +13,22 @@ export const dueDays = (bills: Bill[]) => {
 export const nextDue = (bills: Bill[], today: string) =>
   bills.filter((bill) => !bill.paid && bill.due_date >= today).sort((a, b) => a.due_date.localeCompare(b.due_date))[0];
 
+export const whenDue = (date: string, today: string) => {
+  const days = (Date.parse(date) - Date.parse(today)) / 86_400_000;
+  return days === 1 ? "amanhã" : `em ${days} dias`;
+};
+
+export const ALL_BILLS_PAID = "Todas as contas do mês pagas";
+
+/** Spec 2026-11-10 §3.4: the next bill due, or that every bill is paid. */
+export const subtitleOf = (bills: Bill[], today: string) => {
+  if (bills.every((bill) => bill.paid)) return ALL_BILLS_PAID;
+  const next = nextDue(bills, today);
+  if (!next) return null;
+  if (next.due_date === today) return `Vence hoje: ${next.name}`;
+  return `Próxima: ${next.name} · dia ${next.due_date.slice(8)} · ${whenDue(next.due_date, today)}`;
+};
+
 /**
  * Spec 2026-11-10 §3.3: the next 3 scheduled days, today and the 6 days before it; the last 7 days of a past month.
  * Keeps the order it was given.
