@@ -7,6 +7,18 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.33.0
+
+> Headline: Economia do ano
+
+### Added
+
+- `GET /api/reports/savings?year=YYYY`: the year's income, savings and rate month by month, from the opening month to today's, computed from the entries in one grouped query (D23).
+
+### Web
+
+- Cofrinhos shows "Economia do ano": the year's total and share of income, and each month with a colored band (with its word for screen readers) that opens the month on Mês (SOL-77).
+
 ## 0.32.0
 
 > Headline: save and withdraw right from each cofrinho

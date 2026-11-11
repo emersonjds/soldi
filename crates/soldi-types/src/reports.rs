@@ -60,3 +60,33 @@ pub struct CategoryReport {
     pub income: Vec<CategoryShare>,
     pub groups: Vec<CategoryGroup>,
 }
+
+/// A month of the savings year: `income` without resgates and `saved` (Economia and its
+/// cofrinhos minus resgates), as the month view's `totals.income` and `savings.saved`.
+/// `rate_pct` is `saved` over `income` with one decimal, null when `income` is 0.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+pub struct SavingsMonth {
+    #[schema(example = "2026-11")]
+    pub month: String,
+    #[serde(serialize_with = "crate::money")]
+    pub income: Decimal,
+    #[serde(serialize_with = "crate::money")]
+    pub saved: Decimal,
+    #[schema(value_type = Option<String>, example = "11.9")]
+    pub rate_pct: Option<Decimal>,
+}
+
+/// A year's savings month by month, newest first, from the opening month (or January) to today's
+/// month (or December); totals and `rate_pct` are over the listed months.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+pub struct SavingsYear {
+    #[schema(example = 2026)]
+    pub year: i32,
+    #[serde(serialize_with = "crate::money")]
+    pub income_total: Decimal,
+    #[serde(serialize_with = "crate::money")]
+    pub saved_total: Decimal,
+    #[schema(value_type = Option<String>, example = "8.4")]
+    pub rate_pct: Option<Decimal>,
+    pub months: Vec<SavingsMonth>,
+}

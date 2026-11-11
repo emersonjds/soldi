@@ -137,3 +137,200 @@ async fn subcategories_add_up_in_their_parents_group(pool: PgPool) {
     assert_eq!(report["groups"][1]["children"], json!([]));
     assert_eq!(report["groups"].as_array().unwrap().len(), 2);
 }
+
+async fn savings(user: &TestApp, year: &str) -> (StatusCode, serde_json::Value) {
+    user.get(&format!("/api/reports/savings?year={year}")).await
+}
+
+async fn withdraw(user: &TestApp, cofrinho: &str, date: &str, amount: &str) {
+    let (status, resgate) = user
+        .post(
+            &format!("/api/cofrinhos/{cofrinho}/withdraw"),
+            json!({ "date": date, "amount": amount }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{resgate}");
+}
+
+#[sqlx::test]
+async fn the_savings_year_matches_each_month_view_and_only_the_callers_entries(pool: PgPool) {
+    let ana = TestApp::signed_in(pool, "ana@example.com").await;
+    let bia = ana.another_user("bia@example.com").await;
+    ana.open_at("0", "2025-03-01").await;
+    bia.open_at("0", "2025-01-01").await;
+    let economia = ana.category_id("Economia").await;
+    let (_, reserva) = ana
+        .post(
+            "/api/categories",
+            json!({ "name": "Reserva", "kind": "bill", "parent_id": economia }),
+        )
+        .await;
+    let reserva = reserva["id"].as_str().unwrap().to_string();
+    log(&ana, "2025-03-10", "bill", "999", "Economia").await;
+    log(&ana, "2025-03-10", "income", "999", "Salário").await;
+    ana.open_at("0", "2025-03-15").await;
+    log(&ana, "2025-03-20", "income", "5000", "Salário").await;
+    log(&ana, "2025-03-20", "bill", "300", "Reserva").await;
+    log(&ana, "2025-03-21", "bill", "100.55", "Economia").await;
+    log(&ana, "2025-03-21", "bill", "1000", "Aluguel").await;
+    log(&ana, "2025-03-22", "daily", "50", "Mercado").await;
+    withdraw(&ana, &reserva, "2025-03-25", "200").await;
+    log(&ana, "2025-06-30", "income", "1000", "Salário").await;
+    withdraw(&ana, &reserva, "2025-06-30", "100").await;
+    log(&ana, "2025-12-31", "bill", "10", "Economia").await;
+    log(&bia, "2025-03-20", "bill", "777", "Economia").await;
+    log(&bia, "2025-03-20", "income", "1", "Salário").await;
+
+    let (status, year) = savings(&ana, "2025").await;
+
+    assert_eq!(status, StatusCode::OK, "{year}");
+    let months = year["months"].as_array().unwrap();
+    let names: Vec<&str> = months
+        .iter()
+        .map(|month| month["month"].as_str().unwrap())
+        .collect();
+    assert_eq!(
+        names,
+        [
+            "2025-12", "2025-11", "2025-10", "2025-09", "2025-08", "2025-07", "2025-06", "2025-05",
+            "2025-04", "2025-03"
+        ]
+    );
+    assert_eq!(
+        months[9],
+        json!({ "month": "2025-03", "income": "5000.00", "saved": "200.55", "rate_pct": "4.0" })
+    );
+    assert_eq!(
+        months[6],
+        json!({ "month": "2025-06", "income": "1000.00", "saved": "-100.00", "rate_pct": "-10.0" })
+    );
+    assert_eq!(
+        months[0],
+        json!({ "month": "2025-12", "income": "0.00", "saved": "10.00", "rate_pct": null })
+    );
+    assert_eq!(
+        months[7],
+        json!({ "month": "2025-05", "income": "0.00", "saved": "0.00", "rate_pct": null })
+    );
+    assert_eq!(
+        (
+            &year["year"],
+            &year["income_total"],
+            &year["saved_total"],
+            &year["rate_pct"]
+        ),
+        (
+            &json!(2025),
+            &json!("6000.00"),
+            &json!("110.55"),
+            &json!("1.8")
+        )
+    );
+    for row in months {
+        let (_, view) = ana
+            .get(&format!("/api/months/{}", row["month"].as_str().unwrap()))
+            .await;
+        assert_eq!(
+            (
+                &view["totals"]["income"],
+                &view["savings"]["saved"],
+                &view["savings"]["rate_pct"]
+            ),
+            (&row["income"], &row["saved"], &row["rate_pct"]),
+            "{}",
+            row["month"]
+        );
+    }
+
+    let (_, theirs) = savings(&bia, "2025").await;
+    assert_eq!(theirs["months"].as_array().unwrap().len(), 12);
+    assert_eq!(theirs["saved_total"], "777.00");
+    assert_eq!(theirs["income_total"], "1.00");
+}
+
+#[sqlx::test]
+async fn the_current_year_stops_at_todays_month_and_counts_its_future_dated_entries(pool: PgPool) {
+    let ana = TestApp::signed_in(pool, "ana@example.com").await;
+    let today = soldi_server::today_sao_paulo();
+    let first = today.format("%Y-%m-01").to_string();
+    let last = soldi_server::months::domain::month_end(today).to_string();
+    let next = (soldi_server::months::domain::month_end(today) + chrono::Days::new(1)).to_string();
+    ana.open_at("0", &first).await;
+    log(&ana, &last, "income", "1000", "Salário").await;
+    log(&ana, &last, "bill", "100", "Economia").await;
+    log(&ana, &next, "bill", "500", "Economia").await;
+    log(&ana, &next, "income", "500", "Salário").await;
+
+    let (status, year) = savings(&ana, &today.format("%Y").to_string()).await;
+
+    assert_eq!(status, StatusCode::OK, "{year}");
+    assert_eq!(
+        year["months"],
+        json!([{ "month": today.format("%Y-%m").to_string(), "income": "1000.00", "saved": "100.00", "rate_pct": "10.0" }])
+    );
+    assert_eq!(year["saved_total"], "100.00");
+}
+
+#[sqlx::test]
+async fn a_year_before_the_opening_or_after_today_is_empty(pool: PgPool) {
+    let ana = TestApp::signed_in(pool, "ana@example.com").await;
+    ana.open_at("0", "2025-06-10").await;
+
+    for year in ["2024", "2100"] {
+        let (status, body) = savings(&ana, year).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(
+            body,
+            json!({ "year": year.parse::<i32>().unwrap(), "income_total": "0.00", "saved_total": "0.00", "rate_pct": null, "months": [] })
+        );
+    }
+}
+
+#[sqlx::test]
+async fn a_bad_year_is_422_none_is_400_and_no_session_401(pool: PgPool) {
+    let user = TestApp::signed_in(pool.clone(), "ana@example.com").await;
+
+    for bad in ["1999", "2101", "abc", "20.5"] {
+        let (status, problem) = savings(&user, bad).await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{bad}");
+        assert_eq!(problem["errors"][0]["field"], "year");
+    }
+    assert_eq!(
+        user.get("/api/reports/savings").await.0,
+        StatusCode::BAD_REQUEST
+    );
+    assert_eq!(
+        savings(&TestApp::anonymous(pool), "2026").await.0,
+        StatusCode::UNAUTHORIZED
+    );
+}
+
+/// The budget is 2 queries and p95 ≤ 50 ms (spec §8.1); the bound here only catches a per-entry
+/// or per-month loop in a debug build.
+#[sqlx::test]
+async fn ten_thousand_entries_in_a_year_come_back_in_twelve_rows(pool: PgPool) {
+    let ana = TestApp::signed_in(pool.clone(), "ana@example.com").await;
+    ana.open_at("0", "2025-01-01").await;
+    sqlx::query(
+        "INSERT INTO transactions (user_id, date, amount, kind, category_id)
+         SELECT u.id, DATE '2025-01-01' + (n % 365), 10, k.kind, c.id
+         FROM users u CROSS JOIN generate_series(0, 9999) n
+         CROSS JOIN LATERAL (SELECT (ARRAY['income', 'bill', 'daily'])[n % 3 + 1] AS kind,
+                                    (ARRAY['Salário', 'Economia', 'Mercado'])[n % 3 + 1] AS name) k
+         JOIN categories c ON c.user_id = u.id AND c.name = k.name
+         WHERE u.email = 'ana@example.com'",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let started = std::time::Instant::now();
+    let (status, year) = savings(&ana, "2025").await;
+    let elapsed = started.elapsed();
+
+    assert_eq!(status, StatusCode::OK, "{year}");
+    assert_eq!(year["months"].as_array().unwrap().len(), 12);
+    assert_eq!(year["income_total"], "33340.00");
+    assert_eq!(year["saved_total"], "33330.00");
+    assert!(elapsed < std::time::Duration::from_secs(1), "{elapsed:?}");
+}

@@ -1,10 +1,15 @@
 use std::collections::HashMap;
 
-use chrono::NaiveDate;
+use chrono::{Months, NaiveDate};
 use rust_decimal::{Decimal, RoundingStrategy};
 use soldi_types::categories::CategoryKind;
-use soldi_types::reports::{CategoryGroup, CategoryReport, CategoryShare};
+use soldi_types::reports::{
+    CategoryGroup, CategoryReport, CategoryShare, SavingsMonth, SavingsYear,
+};
 use uuid::Uuid;
+
+use crate::error::AppError;
+use crate::months::domain::{first_of, month_end};
 
 /// A category's total in one month; `month` is its first day. `group_*` describe its top-level
 /// category: its parent, or itself.
@@ -37,6 +42,71 @@ pub fn percent(part: Decimal, whole: Decimal) -> Option<Decimal> {
         .round_dp_with_strategy(1, RoundingStrategy::MidpointNearestEven);
     pct.rescale(1);
     Some(pct)
+}
+
+/// One month's income without resgates and savings net of resgates; `month` is its first day.
+pub struct MonthSaving {
+    pub month: NaiveDate,
+    pub income: Decimal,
+    pub saved: Decimal,
+}
+
+/// A year from 2000 to 2100 (SOL-30's bound).
+pub fn parse_year(text: &str) -> Result<i32, AppError> {
+    Some(text)
+        .filter(|text| text.len() == 4 && text.bytes().all(|byte| byte.is_ascii_digit()))
+        .and_then(|text| text.parse().ok())
+        .filter(|year| (2000..=2100).contains(year))
+        .ok_or_else(|| AppError::invalid("year", "must be a year from 2000 to 2100"))
+}
+
+/// The dates `year` reads: from the opening date or January 1 to the end of today's month or
+/// December 31; none when the year is outside them. Later months are a forecast (D16).
+pub fn year_range(
+    year: i32,
+    opening: NaiveDate,
+    today: NaiveDate,
+) -> Option<(NaiveDate, NaiveDate)> {
+    let from = NaiveDate::from_ymd_opt(year, 1, 1)?.max(opening);
+    let to = NaiveDate::from_ymd_opt(year, 12, 31)?.min(month_end(today));
+    (from <= to).then_some((from, to))
+}
+
+/// Every month of `range`, newest first, the ones without entries at zero.
+pub fn savings_year(
+    year: i32,
+    range: Option<(NaiveDate, NaiveDate)>,
+    sums: Vec<MonthSaving>,
+) -> SavingsYear {
+    let sums: HashMap<NaiveDate, MonthSaving> =
+        sums.into_iter().map(|sum| (sum.month, sum)).collect();
+    let mut months = Vec::new();
+    if let Some((from, to)) = range {
+        let mut month = first_of(to);
+        while month >= first_of(from) {
+            let (income, saved) = sums
+                .get(&month)
+                .map_or((Decimal::ZERO, Decimal::ZERO), |sum| {
+                    (sum.income, sum.saved)
+                });
+            months.push(SavingsMonth {
+                month: month.format("%Y-%m").to_string(),
+                income,
+                saved,
+                rate_pct: percent(saved, income),
+            });
+            month = month - Months::new(1);
+        }
+    }
+    let income_total: Decimal = months.iter().map(|month| month.income).sum();
+    let saved_total: Decimal = months.iter().map(|month| month.saved).sum();
+    SavingsYear {
+        year,
+        income_total,
+        saved_total,
+        rate_pct: percent(saved_total, income_total),
+        months,
+    }
 }
 
 /// `sums` hold `month` and the month before it; categories without spending in `month` are left out.
@@ -372,5 +442,132 @@ mod tests {
             "0.8"
         );
         assert_eq!(percent(money("1"), money("2")).unwrap().to_string(), "50.0");
+    }
+
+    fn saving(month: &str, income: &str, saved: &str) -> MonthSaving {
+        MonthSaving {
+            month: date(&format!("{month}-01")),
+            income: money(income),
+            saved: money(saved),
+        }
+    }
+
+    fn row(month: &SavingsMonth) -> (String, String, String, Option<String>) {
+        (
+            month.month.clone(),
+            month.income.to_string(),
+            month.saved.to_string(),
+            month.rate_pct.map(|pct| pct.to_string()),
+        )
+    }
+
+    #[test]
+    fn a_year_is_four_digits_from_2000_to_2100() {
+        assert_eq!(parse_year("2026").unwrap(), 2026);
+        assert_eq!(parse_year("2000").unwrap(), 2000);
+        assert_eq!(parse_year("2100").unwrap(), 2100);
+        for bad in ["1999", "2101", "abc", "", "+202", "20260", "202a"] {
+            assert!(parse_year(bad).is_err(), "{bad}");
+        }
+    }
+
+    #[test]
+    fn the_year_runs_from_the_opening_date_to_the_end_of_todays_month() {
+        let today = date("2026-11-11");
+        assert_eq!(
+            year_range(2025, date("2024-06-10"), today),
+            Some((date("2025-01-01"), date("2025-12-31")))
+        );
+        assert_eq!(
+            year_range(2026, date("2026-03-15"), today),
+            Some((date("2026-03-15"), date("2026-11-30")))
+        );
+        assert_eq!(
+            year_range(2028, date("2020-01-01"), date("2028-02-10")),
+            Some((date("2028-01-01"), date("2028-02-29")))
+        );
+        assert_eq!(year_range(2023, date("2024-06-10"), today), None);
+        assert_eq!(year_range(2027, date("2024-06-10"), today), None);
+    }
+
+    #[test]
+    fn missing_months_read_zero_newest_first_with_totals_over_the_listed_months() {
+        let year = savings_year(
+            2026,
+            Some((date("2026-03-15"), date("2026-06-30"))),
+            vec![
+                saving("2026-03", "1000", "100"),
+                saving("2026-05", "5921.20", "610"),
+            ],
+        );
+
+        assert_eq!(year.year, 2026);
+        let rows: Vec<_> = year.months.iter().map(row).collect();
+        assert_eq!(
+            rows,
+            [
+                ("2026-06".into(), "0".into(), "0".into(), None),
+                (
+                    "2026-05".into(),
+                    "5921.20".into(),
+                    "610".into(),
+                    Some("10.3".into())
+                ),
+                ("2026-04".into(), "0".into(), "0".into(), None),
+                (
+                    "2026-03".into(),
+                    "1000".into(),
+                    "100".into(),
+                    Some("10.0".into())
+                ),
+            ]
+        );
+        assert_eq!(year.income_total, money("6921.20"));
+        assert_eq!(year.saved_total, money("710"));
+        assert_eq!(year.rate_pct.unwrap().to_string(), "10.3");
+    }
+
+    #[test]
+    fn a_month_without_income_has_no_rate_and_more_resgates_than_savings_is_negative() {
+        let year = savings_year(
+            2025,
+            Some((date("2025-01-01"), date("2025-02-28"))),
+            vec![
+                saving("2025-02", "0", "100"),
+                saving("2025-01", "1000", "-50"),
+            ],
+        );
+
+        assert_eq!(year.months[0].rate_pct, None);
+        assert_eq!(year.months[1].rate_pct.unwrap().to_string(), "-5.0");
+        assert_eq!(year.saved_total, money("50"));
+        assert_eq!(year.rate_pct.unwrap().to_string(), "5.0");
+    }
+
+    #[test]
+    fn rates_round_half_to_even_with_one_decimal() {
+        let year = savings_year(
+            2025,
+            Some((date("2025-01-01"), date("2025-02-28"))),
+            vec![
+                saving("2025-02", "100", "0.25"),
+                saving("2025-01", "100", "0.35"),
+            ],
+        );
+
+        assert_eq!(year.months[0].rate_pct.unwrap().to_string(), "0.2");
+        assert_eq!(year.months[1].rate_pct.unwrap().to_string(), "0.4");
+        assert_eq!(year.rate_pct.unwrap().to_string(), "0.3");
+    }
+
+    #[test]
+    fn a_year_outside_the_opening_and_today_is_empty() {
+        let year = savings_year(2023, None, Vec::new());
+
+        assert_eq!(year.year, 2023);
+        assert!(year.months.is_empty());
+        assert_eq!(year.income_total, Decimal::ZERO);
+        assert_eq!(year.saved_total, Decimal::ZERO);
+        assert_eq!(year.rate_pct, None);
     }
 }

@@ -7,7 +7,7 @@
       "name": "AGPL-3.0-only",
       "identifier": "AGPL-3.0-only"
     },
-    "version": "0.32.0"
+    "version": "0.33.0"
   },
   "paths": {
     "/api/auth/me": {
@@ -1522,6 +1522,67 @@
         }
       }
     },
+    "/api/reports/savings": {
+      "get": {
+        "tags": [
+          "reports"
+        ],
+        "operationId": "savings_year",
+        "parameters": [
+          {
+            "name": "year",
+            "in": "query",
+            "description": "The year, `YYYY` from 2000 to 2100",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "2026"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Each month's income and savings, as the month view, from the opening month to today's month, newest first; empty outside them",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavingsYear"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "No `year`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`year` is not a year from 2000 to 2100",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/settings": {
       "get": {
         "tags": [
@@ -2881,6 +2942,70 @@
           }
         },
         "additionalProperties": false
+      },
+      "SavingsMonth": {
+        "type": "object",
+        "description": "A month of the savings year: `income` without resgates and `saved` (Economia and its\ncofrinhos minus resgates), as the month view's `totals.income` and `savings.saved`.\n`rate_pct` is `saved` over `income` with one decimal, null when `income` is 0.",
+        "required": [
+          "month",
+          "income",
+          "saved"
+        ],
+        "properties": {
+          "income": {
+            "type": "string"
+          },
+          "month": {
+            "type": "string",
+            "example": "2026-11"
+          },
+          "rate_pct": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "example": "11.9"
+          },
+          "saved": {
+            "type": "string"
+          }
+        }
+      },
+      "SavingsYear": {
+        "type": "object",
+        "description": "A year's savings month by month, newest first, from the opening month (or January) to today's\nmonth (or December); totals and `rate_pct` are over the listed months.",
+        "required": [
+          "year",
+          "income_total",
+          "saved_total",
+          "months"
+        ],
+        "properties": {
+          "income_total": {
+            "type": "string"
+          },
+          "months": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SavingsMonth"
+            }
+          },
+          "rate_pct": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "example": "8.4"
+          },
+          "saved_total": {
+            "type": "string"
+          },
+          "year": {
+            "type": "integer",
+            "format": "int32",
+            "example": 2026
+          }
+        }
       },
       "Scope": {
         "type": "string",
