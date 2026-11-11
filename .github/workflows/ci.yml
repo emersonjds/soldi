@@ -148,8 +148,18 @@ jobs:
           cache: pnpm
           cache-dependency-path: web/pnpm-lock.yaml
       - if: steps.suite.outputs.present == 'true'
-        run: pnpm install --frozen-lockfile && pnpm exec playwright install --with-deps chromium && pnpm build
+        run: pnpm install --frozen-lockfile && pnpm exec playwright install chromium && pnpm build
         working-directory: web
+      # The runner image already carries most Chromium libraries; an Ubuntu mirror outage must not fail the run.
+      - if: steps.suite.outputs.present == 'true'
+        name: Install Chromium system libraries
+        working-directory: web
+        run: |
+          for attempt in 1 2 3; do
+            sudo pnpm exec playwright install-deps chromium && exit 0
+            echo "install-deps failed (attempt $attempt), retrying"; sleep 20
+          done
+          echo "::warning::Chromium system libraries could not be installed; running with the image's own"
       - if: steps.suite.outputs.present == 'true'
         run: cargo build -p soldi-server
       - if: steps.suite.outputs.present == 'true'
