@@ -133,19 +133,19 @@ const BillForm = ({
           />
         </label>
       )}
+      {bill && (
+        <Button
+          type="button"
+          variant="ghost"
+          className="min-h-11 text-base text-destructive hover:text-destructive"
+          onClick={() => onArchive(bill)}
+        >
+          <Archive className="size-5" />
+          Arquivar
+        </Button>
+      )}
       <ResponsiveSheetFooter>
         <BrandButton type="submit">Salvar</BrandButton>
-        {bill && (
-          <Button
-            type="button"
-            variant="ghost"
-            className="min-h-11 text-base text-destructive hover:text-destructive"
-            onClick={() => onArchive(bill)}
-          >
-            <Archive className="size-5" />
-            Arquivar
-          </Button>
-        )}
       </ResponsiveSheetFooter>
     </form>
   );
