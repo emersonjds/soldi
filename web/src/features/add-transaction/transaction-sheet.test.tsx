@@ -658,6 +658,13 @@ describe("TransactionSheet", () => {
     expect(requests.filter((request) => request.url.endsWith("/api/forecast"))).toHaveLength(1);
   });
 
+  it("opens on Diário with Simular on when asked", async () => {
+    setup({ initialSimulate: true }, simulated());
+    expect(await screen.findByRole("switch", { name: "Simular" })).toBeChecked();
+    expect(screen.getByRole("radio", { name: "Diário" })).toBeChecked();
+    expect(screen.getByRole("region", { name: "Simulação" })).toHaveTextContent("Digite um valor para simular.");
+  });
+
   it("says when red days were already there", async () => {
     setup({}, simulated());
     await userEvent.click(await screen.findByRole("switch", { name: "Simular" }));

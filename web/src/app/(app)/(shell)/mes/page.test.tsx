@@ -723,6 +723,22 @@ describe("Mês", () => {
     expect(scrollTo).toHaveBeenCalledWith({ top: 0 });
   });
 
+  it("opens Lançar in Simular on Diário from Posso comprar?, and the next Lançar starts without it", async () => {
+    open({ "GET /api/months/2026-11": { status: 200, body: EMPTY } });
+
+    const strip = await screen.findByRole("region", { name: "Próximos meses" });
+    await userEvent.click(within(strip).getByRole("button", { name: "Posso comprar?" }));
+    const sheet = await screen.findByRole("dialog", { name: "Lançar" });
+    expect(within(sheet).getByRole("switch", { name: "Simular" })).toBeChecked();
+    expect(within(sheet).getByRole("radio", { name: "Diário" })).toBeChecked();
+
+    await userEvent.click(within(sheet).getByRole("button", { name: "Fechar" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Lançar entrada" }));
+    expect(
+      within(await screen.findByRole("dialog", { name: "Lançar" })).getByRole("switch", { name: "Simular" }),
+    ).not.toBeChecked();
+  });
+
   it("keeps the month on screen when Próximos meses fails", async () => {
     open({ "GET /api/forecast": { status: 500, body: problem(500, "Erro") } });
 

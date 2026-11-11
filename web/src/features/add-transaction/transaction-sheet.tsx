@@ -421,6 +421,8 @@ type TransactionSheetProps = {
   initialKind?: Draft["kind"];
   /** Preselected category when creating, of `initialKind`. */
   initialCategory?: Schemas["Category"];
+  /** Creating with Simular on: Posso comprar isso? */
+  initialSimulate?: boolean;
   /** A line above the form. */
   hint?: string;
   /** The bill sheet that Transformar em conta fixa opens; absent, the link is not offered. */
@@ -438,6 +440,7 @@ export const TransactionSheet = ({
   transaction,
   initialKind = "daily",
   initialCategory,
+  initialSimulate = false,
   hint,
   billSheet,
 }: TransactionSheetProps) => {
@@ -512,7 +515,15 @@ export const TransactionSheet = ({
         ...repeat,
         ...(total && { preset: PRESETS.includes(total) ? total : "other", custom: total }),
       }
-    : { kind: initialKind, amount: "", category: initialCategory, date: todayISO(), note: "", ...repeat };
+    : {
+        kind: initialKind,
+        amount: "",
+        category: initialCategory,
+        date: todayISO(),
+        note: "",
+        ...repeat,
+        simulate: initialSimulate,
+      };
 
   return (
     <ResponsiveSheet
@@ -523,7 +534,7 @@ export const TransactionSheet = ({
     >
       {hint && <p className="rounded-xl bg-secondary px-4 py-3 font-medium text-primary text-sm">{hint}</p>}
       <TransactionForm
-        key={transaction?.id ?? `${initialKind}-${initialCategory?.id}`}
+        key={transaction?.id ?? `${initialKind}-${initialCategory?.id}-${initialSimulate}`}
         initial={initial}
         transaction={transaction}
         onSave={save}

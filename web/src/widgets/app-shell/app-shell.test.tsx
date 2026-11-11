@@ -146,6 +146,31 @@ describe("AppShell", () => {
     ]);
   });
 
+  it("opens Lançar in Simular from Posso comprar isso?, never marked, and the next Lançar starts without it", async () => {
+    renderWithQuery(<AppShell>conteúdo</AppShell>);
+
+    const sidebar = screen.getByRole("navigation", { name: "Menu lateral" });
+    const menu = within(sidebar).getByRole("group", { name: "Menu" });
+    const simulate = within(menu).getByRole("button", { name: "Posso comprar isso?" });
+    expect(simulate).not.toHaveAttribute("aria-current");
+    expect(
+      within(menu)
+        .getAllByRole("listitem")
+        .map((item) => item.textContent),
+    ).toEqual(["Mês", "Para onde vai", "Cofrinhos", "Posso comprar isso?"]);
+    await userEvent.click(simulate);
+    const sheet = await screen.findByRole("dialog", { name: "Lançar" });
+    expect(within(sheet).getByRole("switch", { name: "Simular" })).toBeChecked();
+    expect(within(sheet).getByRole("radio", { name: "Diário" })).toBeChecked();
+
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await userEvent.click(within(screen.getByRole("banner")).getByRole("button", { name: "Lançar" }));
+    expect(
+      within(await screen.findByRole("dialog", { name: "Lançar" })).getByRole("switch", { name: "Simular" }),
+    ).not.toBeChecked();
+  });
+
   it("marks Contas Fixas, not Ajustes, in the sidebar on its screen", () => {
     setPathname("/ajustes/contas");
     renderWithQuery(<AppShell>conteúdo</AppShell>);

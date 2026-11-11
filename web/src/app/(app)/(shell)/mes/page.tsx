@@ -36,6 +36,7 @@ const MonthScreen = () => {
   const transactions = useTransactions(month);
   const [launching, setLaunching] = useState<"income" | "bill" | "daily" | null>(fromTour ? "income" : null);
   const [hint, setHint] = useState(fromTour);
+  const [simulating, setSimulating] = useState(false);
   const [highlight, setHighlight] = useState<{ date: string } | null>(null);
   const [expandedMonth, setExpandedMonth] = useState<string | null>(null);
 
@@ -119,6 +120,10 @@ const MonthScreen = () => {
       {!monthFailed && !view.data && <StripSkeleton className="xl:col-start-3 xl:row-start-1" />}
       <MonthsAhead
         viewing={month}
+        onSimulate={() => {
+          setSimulating(true);
+          setLaunching("daily");
+        }}
         onOpen={(next) => {
           router.replace(`/mes?m=${next}`, { scroll: false });
           window.scrollTo({ top: 0 });
@@ -135,8 +140,10 @@ const MonthScreen = () => {
           if (open) return;
           setLaunching(null);
           setHint(false);
+          setSimulating(false);
         }}
         initialKind={launching ?? "daily"}
+        initialSimulate={simulating}
         hint={hint ? "Comece pela sua primeira entrada do mês" : undefined}
         billSheet={(props) => <EditBillSheet open {...props} />}
       />

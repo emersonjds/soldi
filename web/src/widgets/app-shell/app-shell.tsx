@@ -5,7 +5,7 @@ import { type ReactNode, Suspense, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
-import { Calendar, PieChart, PiggyBank, Plus, ReceiptText, Settings } from "lucide-react";
+import { Calendar, PieChart, PiggyBank, Plus, ReceiptText, Settings, Sparkles } from "lucide-react";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -105,6 +105,7 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
   const isAt = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
   const me = useMe();
   const [launching, setLaunching] = useState(false);
+  const [simulating, setSimulating] = useState(false);
   const name = me.data?.name ?? "";
   const email = me.data?.email ?? "";
   const [firstName] = name.split(" ");
@@ -142,6 +143,20 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
                           </SidebarMenuItem>
                         );
                       })}
+                      {group.label === "Menu" && (
+                        <SidebarMenuItem>
+                          <SidebarMenuButton
+                            className="h-11 gap-3 px-3 text-base"
+                            onClick={() => {
+                              setSimulating(true);
+                              setLaunching(true);
+                            }}
+                          >
+                            <Sparkles className="size-5!" aria-hidden />
+                            Posso comprar isso?
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                      )}
                     </SidebarMenu>
                   </SidebarGroup>
                 ))}
@@ -227,7 +242,11 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
 
         <TransactionSheet
           open={launching}
-          onOpenChange={setLaunching}
+          onOpenChange={(open) => {
+            setLaunching(open);
+            if (!open) setSimulating(false);
+          }}
+          initialSimulate={simulating}
           billSheet={(props) => <EditBillSheet open {...props} />}
         />
       </SidebarProvider>

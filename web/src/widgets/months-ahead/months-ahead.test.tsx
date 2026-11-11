@@ -10,8 +10,9 @@ import { MonthsAhead } from "./months-ahead";
 const show = (reply: { status: number; body?: unknown }) => {
   const requests = stubApi({ "GET /api/forecast": reply });
   const onOpen = vi.fn();
-  const { client } = renderWithQuery(<MonthsAhead viewing="2026-11" onOpen={onOpen} />);
-  return { requests, onOpen, client };
+  const onSimulate = vi.fn();
+  const { client } = renderWithQuery(<MonthsAhead viewing="2026-11" onOpen={onOpen} onSimulate={onSimulate} />);
+  return { requests, onOpen, onSimulate, client };
 };
 
 const card = () => screen.getByRole("region", { name: "Próximos meses" });
@@ -35,6 +36,12 @@ describe("Próximos meses", () => {
 
     await userEvent.click(within(card()).getByRole("button", { name: /^dez 2026/ }));
     expect(onOpen).toHaveBeenCalledWith("2026-12");
+  });
+
+  it("asks Posso comprar? from the title row, even while loading", async () => {
+    const { onSimulate } = show({ status: 200, body: FORECAST });
+    await userEvent.click(within(card()).getByRole("button", { name: "Posso comprar?" }));
+    expect(onSimulate).toHaveBeenCalledOnce();
   });
 
   it("shows skeleton chips while loading", () => {
