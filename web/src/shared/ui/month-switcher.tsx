@@ -28,6 +28,7 @@ type SwitcherProps = {
   previousLabel: string;
   nextLabel: string;
   atStart: boolean;
+  atEnd?: boolean;
   onShift: (delta: number) => void;
   tone?: Tone;
   className?: string;
@@ -40,14 +41,16 @@ export const Switcher = ({
   previousLabel,
   nextLabel,
   atStart,
+  atEnd = false,
   onShift,
   tone = "hero",
   className,
 }: SwitcherProps) => {
   const previous = () => !atStart && onShift(-1);
+  const next = () => !atEnd && onShift(1);
   const onKeyDown = (event: KeyboardEvent) => {
     if (event.key === "ArrowLeft") previous();
-    if (event.key === "ArrowRight") onShift(1);
+    if (event.key === "ArrowRight") next();
   };
   const button = cn(
     "flex size-11 items-center justify-center rounded-full transition-colors focus-visible:outline-2 disabled:pointer-events-none disabled:opacity-40",
@@ -66,7 +69,7 @@ export const Switcher = ({
       <span aria-live="polite" className="min-w-36 text-center font-semibold text-base tabular-nums">
         {label}
       </span>
-      <button type="button" aria-label={nextLabel} className={button} onClick={() => onShift(1)}>
+      <button type="button" aria-label={nextLabel} className={button} disabled={atEnd} onClick={next}>
         <ChevronRight className="size-5" />
       </button>
     </fieldset>

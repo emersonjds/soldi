@@ -14,6 +14,7 @@ import {
   MOVEMENTS,
   problem,
   RESERVA,
+  SAVINGS_YEAR,
   signedIn,
   VIAGEM,
   WITH_COFRINHOS,
@@ -47,6 +48,7 @@ const open = (replies: Record<string, Reply> = {}, hanging?: string) => {
     },
     "GET /api/categories": { status: 200, body: WITH_COFRINHOS },
     [MOVES]: { status: 200, body: MOVEMENTS },
+    "GET /api/reports/savings": { status: 200, body: SAVINGS_YEAR },
     ...replies,
   });
   if (hanging) {
@@ -255,6 +257,18 @@ describe("Cofrinhos", () => {
       expect(screen.queryByRole("dialog", { name: "Lançar" })).not.toBeInTheDocument();
       await waitFor(() => expect(fetched().length).toBeGreaterThan(before));
     });
+  });
+
+  it("puts the year's savings under the cofrinhos", async () => {
+    open();
+
+    const grid = await screen.findByRole("region", { name: "Seus cofrinhos" });
+    const year = screen.getByRole("region", { name: "Economia do ano" });
+    expect(grid.compareDocumentPosition(year) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(await within(year).findByRole("link", { name: /^Novembro de 2026/ })).toHaveAttribute(
+      "href",
+      "/mes?m=2026-11",
+    );
   });
 
   it("says Sem prazo for a goal without a deadline and a minus this month", async () => {

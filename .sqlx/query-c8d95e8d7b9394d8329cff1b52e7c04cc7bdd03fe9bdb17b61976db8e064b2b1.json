@@ -1,0 +1,39 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT date_trunc('month', t.date::timestamp)::date AS \"month!\",\n                  COALESCE(SUM(t.amount) FILTER (WHERE t.kind = 'income' AND t.cofrinho_id IS NULL), 0)\n                      AS \"income!\",\n                  COALESCE(SUM(CASE WHEN t.kind = 'bill' THEN t.amount ELSE -t.amount END)\n                      FILTER (WHERE (t.kind = 'bill' AND (c.is_savings OR COALESCE(p.is_savings, false)))\n                                 OR t.cofrinho_id IS NOT NULL), 0) AS \"saved!\"\n           FROM transactions t JOIN categories c ON c.user_id = t.user_id AND c.id = t.category_id\n           LEFT JOIN categories p ON p.user_id = c.user_id AND p.id = c.parent_id\n           WHERE t.user_id = $1 AND t.date BETWEEN $2 AND $3\n           GROUP BY 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "month!",
+        "type_info": "Date",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 1,
+        "name": "income!",
+        "type_info": "Numeric",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "saved!",
+        "type_info": "Numeric",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Date",
+        "Date"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "c8d95e8d7b9394d8329cff1b52e7c04cc7bdd03fe9bdb17b61976db8e064b2b1"
+}
