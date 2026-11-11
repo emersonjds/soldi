@@ -1276,6 +1276,46 @@ async fn l6_a_failing_resize_leaves_the_series_as_it_was(pool: PgPool) {
 }
 
 #[sqlx::test]
+async fn l1_growth_after_a_deleted_member_continues_after_the_last_month(pool: PgPool) {
+    let user = opened(pool, "ana@example.com").await;
+    let first = repeat(&user, "2026-11-05", "10", 12).await;
+    let fifth = only(&user, "2027-03").await;
+    assert_eq!(user.delete(&uri(&fifth)).await.0, StatusCode::NO_CONTENT);
+
+    let (status, grown) = user
+        .patch(&uri(&first), json!({ "repeat_months": 12 }))
+        .await;
+
+    assert_eq!(status, StatusCode::OK, "{grown}");
+    assert_eq!(place(&grown), (1, 12));
+    assert_eq!(only(&user, "2027-10").await["date"], "2027-10-05");
+    assert_eq!(only(&user, "2027-11").await["date"], "2027-11-05");
+    assert_empty(&user, "2027-12", 1).await;
+}
+
+#[sqlx::test]
+async fn l1_growth_after_the_first_member_moved_back_leaves_no_month_twice(pool: PgPool) {
+    let user = opened(pool, "ana@example.com").await;
+    let first = repeat(&user, "2026-11-05", "10", 12).await;
+    let (status, moved) = user
+        .patch(&uri(&first), json!({ "date": "2026-10-05" }))
+        .await;
+    assert_eq!(status, StatusCode::OK, "{moved}");
+
+    let (status, grown) = user
+        .patch(&uri(&first), json!({ "repeat_months": 13 }))
+        .await;
+
+    assert_eq!(status, StatusCode::OK, "{grown}");
+    assert_empty(&user, "2026-11", 1).await;
+    let entries = run(&user, "2026-12", 12).await;
+    assert_eq!(entries[10]["date"], "2027-10-05");
+    assert_eq!(entries[11]["date"], "2027-11-05");
+    assert_eq!(place(&entries[11]), (13, 13));
+    assert_empty(&user, "2027-12", 1).await;
+}
+
+#[sqlx::test]
 async fn resizing_another_users_member_is_not_found(pool: PgPool) {
     let ana = opened(pool, "ana@example.com").await;
     let bia = ana.another_user("bia@example.com").await;

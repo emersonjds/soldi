@@ -273,19 +273,22 @@ pub async fn delete_following(
     Ok(())
 }
 
-/// L1: the date of the series' first member, the grid growth follows.
-pub async fn series_start(
+/// L1: the dates of the series' first and last members; growth takes the first's day and
+/// continues after the last's month.
+pub async fn series_span(
     conn: &mut PgConnection,
     user_id: Uuid,
     series_id: Uuid,
-) -> Result<Option<NaiveDate>, sqlx::Error> {
-    sqlx::query_scalar!(
-        "SELECT min(date) FROM transactions WHERE user_id = $1 AND series_id = $2",
+) -> Result<Option<(NaiveDate, NaiveDate)>, sqlx::Error> {
+    let span = sqlx::query!(
+        "SELECT min(date) AS first, max(date) AS last FROM transactions
+         WHERE user_id = $1 AND series_id = $2",
         user_id,
         series_id
     )
     .fetch_one(&mut *conn)
-    .await
+    .await?;
+    Ok(span.first.zip(span.last))
 }
 
 /// L3: deletes the series' members ranked after the first `keep` by `(date, id)`.

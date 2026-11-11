@@ -193,17 +193,16 @@ async fn resize(
     if i64::from(months) < total {
         repo::delete_beyond(conn, user.id, series_id, months.into()).await?;
     } else if i64::from(months) > total {
-        let start = repo::series_start(conn, user.id, series_id)
+        let (first, last) = repo::series_span(conn, user.id, series_id)
             .await?
             .ok_or(AppError::NotFound)?;
-        let dates = domain::repeat_dates(start, months);
-        let added = usize::try_from(total - 1)
-            .ok()
-            .and_then(|kept| dates.get(kept..))
-            .filter(|added| added.iter().all(|date| date.year() <= 2100))
-            .ok_or_else(|| AppError::invalid("date", "must leave room for every month"))?;
+        let count = u32::try_from(i64::from(months) - total).unwrap_or(0);
+        let added = domain::following_dates(first, last, count);
+        if added.iter().any(|date| date.year() > 2100) {
+            return Err(AppError::invalid("date", "must leave room for every month"));
+        }
         let amounts = vec![next.amount; added.len()];
-        repo::insert_copies(conn, user.id, next, series_id, added, &amounts).await?;
+        repo::insert_copies(conn, user.id, next, series_id, &added, &amounts).await?;
     }
     Ok(())
 }
