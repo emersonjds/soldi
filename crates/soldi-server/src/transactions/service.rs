@@ -1,3 +1,4 @@
+use chrono::Datelike;
 use soldi_types::categories::Category;
 use soldi_types::transactions::{
     CreateTransaction, Scope, Transaction, TransactionSeries, UpdateTransaction,
@@ -196,7 +197,7 @@ async fn resize(
             .await?
             .ok_or(AppError::NotFound)?;
         let count = u32::try_from(i64::from(months) - total).unwrap_or(0);
-        let added = domain::following_dates(first, last, count)?;
+        let added = domain::following_dates(first.day(), last, count)?;
         let amounts = vec![next.amount; added.len()];
         repo::insert_copies(conn, user.id, next, series_id, &added, &amounts).await?;
     }

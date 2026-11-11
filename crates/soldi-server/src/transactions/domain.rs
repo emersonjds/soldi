@@ -79,18 +79,14 @@ fn check_installments(input: &CreateTransaction, amount: Decimal) -> Result<(), 
 
 /// R1: the dates of the `months - 1` copies, each the original's day in its own month.
 pub fn repeat_dates(date: NaiveDate, months: i16) -> Result<Vec<NaiveDate>, AppError> {
-    following_dates(date, date, u32::try_from(months - 1).unwrap_or(0))
+    following_dates(date.day(), date, u32::try_from(months - 1).unwrap_or(0))
 }
 
-/// L1, L4: `count` dates in the months after `last`'s, each on `first`'s day clamped to its
-/// month; refused when one passes 2100.
-pub fn following_dates(
-    first: NaiveDate,
-    last: NaiveDate,
-    count: u32,
-) -> Result<Vec<NaiveDate>, AppError> {
+/// L1, L4: `count` dates in the months after `last`'s, each on `day` clamped to its month;
+/// refused when one passes 2100.
+pub fn following_dates(day: u32, last: NaiveDate, count: u32) -> Result<Vec<NaiveDate>, AppError> {
     let month = last.with_day(1).unwrap_or(last);
-    let day = i16::try_from(first.day()).unwrap_or(1);
+    let day = i16::try_from(day).unwrap_or(1);
     (1..=count)
         .map(|k| {
             month
@@ -100,6 +96,46 @@ pub fn following_dates(
         })
         .collect::<Option<Vec<_>>>()
         .ok_or_else(|| AppError::invalid("date", "must leave room for every month"))
+}
+
+/// M3 (D20): growth takes the last member's day, or the larger day of the member `before` it
+/// when the last sits clamped on its month's last day.
+pub fn series_day(last: NaiveDate, before: Option<NaiveDate>) -> u32 {
+    let clamped = last == crate::months::domain::month_end(last);
+    match before {
+        Some(before) if clamped => last.day().max(before.day()),
+        _ => last.day(),
+    }
+}
+
+/// M4: `following` moves the day of a series only inside the edited member's month.
+pub fn check_day_move(from: NaiveDate, to: NaiveDate) -> Result<(), AppError> {
+    if (from.year(), from.month()) != (to.year(), to.month()) {
+        return Err(AppError::invalid(
+            "date",
+            "must stay in this entry's month when the series moves",
+        ));
+    }
+    Ok(())
+}
+
+/// M2, M5: `dates` (by `date, id`) each on `day` clamped to its own month; refused when two
+/// share a month, so the order never changes.
+pub fn moved_dates(dates: &[NaiveDate], day: u32) -> Result<Vec<NaiveDate>, AppError> {
+    if dates
+        .windows(2)
+        .any(|pair| (pair[0].year(), pair[0].month()) == (pair[1].year(), pair[1].month()))
+    {
+        return Err(AppError::invalid(
+            "date",
+            "must not move a series with two entries in one month",
+        ));
+    }
+    let day = i16::try_from(day).unwrap_or(1);
+    Ok(dates
+        .iter()
+        .map(|date| crate::bills::domain::due_date(*date, day))
+        .collect())
 }
 
 /// L3, L4: a series resized to `months` keeps the member at `position` and those before it.
@@ -397,33 +433,84 @@ mod tests {
     }
 
     #[test]
-    fn l1_growth_takes_the_first_members_day_in_the_months_after_the_last_ones() {
+    fn l1_m3_growth_takes_the_given_day_in_the_months_after_the_last_ones() {
         assert_eq!(
-            following_dates(date("2027-01-31"), date("2027-04-30"), 2).unwrap(),
+            following_dates(31, date("2027-04-30"), 2).unwrap(),
             [date("2027-05-31"), date("2027-06-30")]
         );
         assert_eq!(
-            following_dates(date("2026-11-05"), date("2027-10-20"), 3).unwrap(),
+            following_dates(5, date("2027-10-20"), 3).unwrap(),
             [date("2027-11-05"), date("2027-12-05"), date("2028-01-05")]
         );
         assert_eq!(
-            following_dates(date("2026-10-05"), date("2027-10-05"), 1).unwrap(),
-            [date("2027-11-05")]
+            following_dates(10, date("2027-10-10"), 3).unwrap(),
+            [date("2027-11-10"), date("2027-12-10"), date("2028-01-10")]
         );
     }
 
     #[test]
     fn l4_r2_every_date_of_a_series_stays_up_to_2100() {
         assert_eq!(
-            following_dates(date("2100-06-05"), date("2100-11-05"), 1).unwrap(),
+            following_dates(5, date("2100-11-05"), 1).unwrap(),
             [date("2100-12-05")]
         );
         assert_eq!(repeat_dates(date("2100-01-31"), 12).unwrap().len(), 11);
-        assert_eq!(
-            field(following_dates(date("2100-06-05"), date("2100-08-05"), 5)),
-            "date"
-        );
+        assert_eq!(field(following_dates(5, date("2100-08-05"), 5)), "date");
         assert_eq!(field(repeat_dates(date("2100-06-05"), 12)), "date");
+    }
+
+    #[test]
+    fn m3_growth_day_is_the_last_members_raised_by_the_one_before_when_clamped() {
+        assert_eq!(series_day(date("2029-04-30"), Some(date("2029-03-31"))), 31);
+        assert_eq!(series_day(date("2026-11-30"), Some(date("2026-10-30"))), 30);
+        assert_eq!(series_day(date("2027-02-10"), Some(date("2026-12-05"))), 10);
+        assert_eq!(series_day(date("2027-02-28"), Some(date("2027-01-31"))), 31);
+        assert_eq!(series_day(date("2027-02-28"), Some(date("2027-01-20"))), 28);
+        assert_eq!(series_day(date("2027-04-30"), None), 30);
+        assert_eq!(series_day(date("2027-10-10"), Some(date("2027-09-05"))), 10);
+    }
+
+    #[test]
+    fn m4_a_series_moves_its_day_only_inside_the_edited_members_month() {
+        assert!(check_day_move(date("2027-03-05"), date("2027-03-10")).is_ok());
+        assert!(check_day_move(date("2027-03-05"), date("2027-03-01")).is_ok());
+        for to in ["2027-04-05", "2028-03-05", "2027-02-28"] {
+            assert_eq!(
+                field(check_day_move(date("2027-03-05"), date(to))),
+                "date",
+                "{to}"
+            );
+        }
+    }
+
+    #[test]
+    fn m2_m5_each_moved_member_takes_the_day_clamped_to_its_own_month() {
+        let dates = [
+            date("2027-01-10"),
+            date("2027-02-10"),
+            date("2027-03-10"),
+            date("2027-04-10"),
+        ];
+        assert_eq!(
+            moved_dates(&dates, 31).unwrap(),
+            [
+                date("2027-01-31"),
+                date("2027-02-28"),
+                date("2027-03-31"),
+                date("2027-04-30")
+            ]
+        );
+        assert_eq!(
+            moved_dates(&[date("2027-02-28"), date("2027-03-31")], 27).unwrap(),
+            [date("2027-02-27"), date("2027-03-27")]
+        );
+        assert_eq!(
+            moved_dates(&[date("2028-01-31"), date("2028-02-29")], 30).unwrap(),
+            [date("2028-01-30"), date("2028-02-29")]
+        );
+        let shared = [date("2027-01-05"), date("2027-02-05"), date("2027-02-20")];
+        assert_eq!(field(moved_dates(&shared, 10)), "date");
+        assert!(moved_dates(&[], 10).unwrap().is_empty());
     }
 
     #[test]
