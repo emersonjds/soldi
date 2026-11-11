@@ -77,7 +77,8 @@ const whole = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 0 });
 /** An API decimal floored to whole units, no symbol: never more than there is (`-0.40` → `-1`, `1842.99` → `1.842`). */
 export const formatWhole = (amount: string) => {
   const value = cents(amount);
-  return whole.format(value / 100n - (value % 100n < 0n ? 1n : 0n));
+  const hundred = BigInt(100);
+  return whole.format(value / hundred - BigInt(value % hundred < 0 ? 1 : 0));
 };
 
 /** `a − b` of two API decimals, exact in cents. */
