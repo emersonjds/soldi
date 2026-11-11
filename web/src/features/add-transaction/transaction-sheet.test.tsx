@@ -347,10 +347,10 @@ describe("TransactionSheet", () => {
     expect(within(months).getByRole("radio", { name: "12x" })).toBeChecked();
     expect(within(months).getByRole("radio", { name: "2x" })).toBeDisabled();
     expect(within(months).getByRole("radio", { name: "3x" })).toBeEnabled();
-    expect(screen.queryByText(/Remove|até/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Remove|· até/)).not.toBeInTheDocument();
 
     await userEvent.click(within(months).getByRole("radio", { name: "6x" }));
-    expect(screen.getByText("Remove os 6 últimos")).toBeInTheDocument();
+    expect(screen.getByText("Remove os 6 últimos · termina em mar 2027")).toBeInTheDocument();
     await userEvent.click(within(months).getByRole("radio", { name: "Outro" }));
     const custom = screen.getByLabelText("Meses");
     await userEvent.clear(custom);
@@ -374,9 +374,9 @@ describe("TransactionSheet", () => {
     const custom = screen.getByLabelText("Meses");
     await userEvent.clear(custom);
     await userEvent.type(custom, "11");
-    expect(screen.getByText("Remove o último")).toBeInTheDocument();
+    expect(screen.getByText("Remove o último · termina em ago 2027")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("radio", { name: "12x" }));
-    expect(screen.queryByText(/Remove|até/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Remove|· até/)).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
 
     expect(await sent("PATCH")).not.toHaveProperty("repeat_months");
@@ -420,10 +420,10 @@ describe("TransactionSheet", () => {
 
     const months = await screen.findByRole("radiogroup", { name: "Meses na série" });
     await userEvent.click(within(months).getByRole("radio", { name: "6x" }));
-    expect(screen.getByText("Remove os 6 últimos")).toBeInTheDocument();
+    expect(screen.getByText("Remove os 6 últimos · termina em mar 2027")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Hoje" }));
     expect(within(months).getByRole("radio", { name: "12x" })).toBeDisabled();
-    expect(screen.queryByText(/Remove|até/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Remove|· até/)).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
 
     const body = await sent("PATCH");

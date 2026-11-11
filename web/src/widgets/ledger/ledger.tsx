@@ -328,7 +328,13 @@ export const Ledger = ({
           </SheetDescription>
           {confirming && selected?.series ? (
             <>
-              <ScopeRadio legend="Excluir quais?" series={selected.series} value={scope} onChange={setScope} />
+              <ScopeRadio
+                legend="Excluir quais?"
+                series={selected.series}
+                date={selected.date}
+                value={scope}
+                onChange={setScope}
+              />
               <Button variant="destructive" className="mt-2 min-h-12 text-base" onClick={() => destroy(selected)}>
                 Excluir
               </Button>

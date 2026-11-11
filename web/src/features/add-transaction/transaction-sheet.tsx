@@ -140,8 +140,8 @@ const TransactionForm = ({
     const added = resized - series.total;
     const end = monthYear(addMonths(series.last_date.slice(0, 7), added));
     if (added > 0) return `+${added}×${amount ? ` ${formatMoney(amount, currency)}` : ""} · até ${end}`;
-    if (added === -1) return "Remove o último";
-    return `Remove os ${-added} últimos`;
+    if (added === -1) return `Remove o último · termina em ${end}`;
+    return `Remove os ${-added} últimos · termina em ${end}`;
   };
   const resizeNote = resizeHelper();
 
@@ -403,8 +403,14 @@ const TransactionForm = ({
         />
       </div>
 
-      {series && (
-        <ScopeRadio legend="Aplicar em" series={series} value={draft.scope} onChange={(scope) => set({ scope })} />
+      {series && transaction && (
+        <ScopeRadio
+          legend="Aplicar em"
+          series={series}
+          date={transaction.date}
+          value={draft.scope}
+          onChange={(scope) => set({ scope })}
+        />
       )}
 
       {draft.simulate && <Simulation rows={rows} countInvalid={Boolean(amount) && monthsChecked && !monthsValid} />}
