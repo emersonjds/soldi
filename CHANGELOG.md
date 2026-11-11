@@ -7,6 +7,15 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.27.1
+
+> Headline: fixes
+
+### Fixed
+
+- The Mês summary (Entradas, Saídas, Projetado) no longer cuts its amounts on desktop: it keeps one compact layout at every width (SOL-70).
+- Deleting a period takes the series locks first, so it can no longer deadlock with a concurrent edit of a series it cuts (SOL-67).
+
 ## 0.27.0
 
 > Headline: Para onde vai and Cofrinhos on the new cards, closing the redesign
