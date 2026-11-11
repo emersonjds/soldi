@@ -60,8 +60,8 @@ test("Economia folds two cofrinhos and lists both their entries, unclipped from 
   test.setTimeout(90_000);
   await signUp(page, "groups");
 
-  const now = new Date();
-  const today = [now.getFullYear(), now.getMonth() + 1, now.getDate()].map((part) => String(part).padStart(2, "0"));
+  // The server's São Paulo calendar, not the runner's clock.
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
   const categories: { id: string; kind: string; is_savings: boolean; parent_id: string | null }[] = await (
     await page.request.get("/api/categories")
   ).json();
@@ -70,7 +70,7 @@ test("Economia folds two cofrinhos and lists both their entries, unclipped from 
   );
   const save = async (category_id: string | undefined, amount: string, note: string) => {
     const created = await page.request.post("/api/transactions", {
-      data: { date: today.join("-"), amount, kind: "bill", category_id, note },
+      data: { date: today, amount, kind: "bill", category_id, note },
     });
     expect(created.ok()).toBe(true);
   };
