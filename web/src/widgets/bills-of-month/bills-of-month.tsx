@@ -60,7 +60,10 @@ const Caption = ({ bill, paidOn }: { bill: BillOfMonth; paidOn?: string }) => {
         )}
       </span>
       <span
-        className={cn("flex items-center gap-1 text-xs lg:hidden", late ? "text-expense" : "text-muted-foreground")}
+        className={cn(
+          "flex items-center gap-1 whitespace-nowrap text-xs lg:hidden",
+          late ? "text-expense" : "text-muted-foreground",
+        )}
       >
         {late && <Clock className="size-3.5 shrink-0" aria-hidden />}
         {late ? "Venceu" : "Vence"} dia {dayMonth(bill.due_date)}
@@ -248,7 +251,7 @@ export const BillsOfMonth = ({ view, className }: { view: Schemas["MonthView"]; 
     >
       <div className="flex flex-col gap-4">
         <div className="hidden items-center justify-between gap-4 lg:flex">
-          <p className="text-muted-foreground text-sm">{upcoming}</p>
+          <p className="shrink-0 text-muted-foreground text-sm">{upcoming}</p>
           <ToggleGroup
             type="single"
             value={day ?? ""}
