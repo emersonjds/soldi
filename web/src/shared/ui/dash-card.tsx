@@ -11,8 +11,11 @@ export const DashCard = ({
   action,
   children,
   className,
+  label,
 }: {
-  title: string;
+  title: ReactNode;
+  /** The region's name when `title` is not plain text. */
+  label?: string;
   action?: { href: string; label: string };
   children: ReactNode;
   className?: string;
@@ -21,7 +24,8 @@ export const DashCard = ({
   return (
     <Card
       role="region"
-      aria-labelledby={id}
+      aria-labelledby={label ? undefined : id}
+      aria-label={label}
       className={cn("rounded-2xl shadow-sm ring-0 lg:[--card-spacing:--spacing(6)]", className)}
     >
       <CardHeader className="items-center">

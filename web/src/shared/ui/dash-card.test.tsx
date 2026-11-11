@@ -20,6 +20,16 @@ describe("DashCard", () => {
     expect(screen.getByText("Mercado 26%")).toBeVisible();
   });
 
+  it("keeps one name when its title changes with the width", () => {
+    render(
+      <DashCard title={<span>Contas do Mês</span>} label="Contas a pagar">
+        <p>Luz</p>
+      </DashCard>,
+    );
+
+    expect(screen.getByRole("region", { name: "Contas a pagar" })).toHaveTextContent("Contas do Mês");
+  });
+
   it("has no link without an action", () => {
     render(
       <DashCard title="Termômetro">

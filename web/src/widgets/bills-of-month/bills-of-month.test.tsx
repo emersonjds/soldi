@@ -32,7 +32,7 @@ const show = (
   month = "2026-11",
 ) => {
   let server: Schemas["MonthView"] = { ...MONTH, month, bills_of_month: bills };
-  const requests = signedIn(replies);
+  const requests = signedIn({ "GET /api/transactions": { status: 200, body: [] }, ...replies });
   const stubbed = globalThis.fetch;
   vi.stubGlobal("fetch", async (request: Request) => {
     if (new URL(request.url).pathname !== `/api/months/${month}`) return stubbed(request);
@@ -77,17 +77,20 @@ describe("Contas a pagar", () => {
     vi.useRealTimers();
   });
 
-  it("heads with the next bill, the open total and the paid count; each row has a round check and a status", async () => {
+  it("heads with the count, the paid badge and the next bill; each row has a round check, a caption and a pill", async () => {
     show();
     await loaded();
 
-    expect(card()).toHaveTextContent("Próxima: Aluguel Residencial · dia 10 · em 5 dias");
-    expect(card()).toHaveTextContent(/Em aberto: R\$\s2\.543,66/);
+    expect(card()).toHaveTextContent("Contas do Mês");
+    expect(card()).toHaveTextContent("2 obrigações cadastradas");
     expect(card()).toHaveTextContent("0 de 2 pagas");
+    expect(card()).toHaveTextContent("Próxima: dia 10 · R$ 2.259,56");
     expect(within(card()).getByRole("link", { name: "Ver todas" })).toHaveAttribute("href", "/ajustes/contas");
 
     const rent = rowOf("Aluguel Residencial");
     expect(rent).toHaveTextContent("Vence dia 10/11");
+    expect(rent).toHaveTextContent("Vence dia 10");
+    expect(within(rent).getByRole("button", { name: "Pagar Aluguel Residencial" })).toHaveTextContent("Pagar");
     expect(rent).toHaveTextContent("R$ 2.259,56");
     const check = within(rent).getByRole("button", { name: "Marcar Aluguel Residencial como paga" });
     expect(check).toHaveAttribute("aria-pressed", "false");
@@ -96,6 +99,8 @@ describe("Contas a pagar", () => {
 
     const power = rowOf("Luz (Enel)");
     expect(power).toHaveTextContent("Venceu dia 02/11");
+    expect(power).toHaveTextContent("Atrasada desde 2 nov");
+    expect(within(power).getByRole("button", { name: "Marcar Luz (Enel) como paga" })).toHaveTextContent("!");
     expect(power).toHaveClass("bg-expense/10");
     expect(rows()).toEqual(["Luz (Enel)", "Aluguel Residencial"]);
   });
@@ -137,11 +142,11 @@ describe("Contas a pagar", () => {
       "dia 10, 1 conta a pagar",
     ]);
     expect(card()).toHaveTextContent("0 de 3 pagas");
-    expect(card()).toHaveTextContent(/Em aberto: R\$\s4\.803,22/);
 
     await userEvent.click(days[0]);
     expect(rows()).toEqual(["Aluguel Residencial de outubro"]);
-    expect(rowOf("Aluguel Residencial de outubro")).toHaveTextContent("Venceu em outubro");
+    expect(rowOf("Aluguel Residencial de outubro")).toHaveTextContent("Atrasada desde 10 out");
+    expect(rowOf("Aluguel Residencial de outubro")).not.toHaveTextContent("5 nov");
     expect(rowOf("Aluguel Residencial de outubro")).toHaveClass("bg-expense/10");
   });
 
@@ -171,7 +176,7 @@ describe("Contas a pagar", () => {
       "aria-checked",
       "false",
     );
-    expect(card()).toHaveTextContent("Próxima: Luz (Enel) · dia 02 · em 27 dias");
+    expect(card()).toHaveTextContent("Próxima: dia 02 · R$ 284,10");
   });
 
   it("pays from the round check, dated today, and shows Pago at once", async () => {
@@ -275,7 +280,7 @@ describe("Contas a pagar", () => {
       "2026-12",
     );
     await loaded();
-    expect(card()).toHaveTextContent("Próxima: Luz (Enel) · dia 02 · em 27 dias");
+    expect(card()).toHaveTextContent("Próxima: dia 02 · R$ 284,10");
 
     await userEvent.click(within(rowOf("Aluguel Residencial")).getByRole("button", { name: /^Marcar/ }));
 
@@ -386,38 +391,8 @@ describe("Contas a pagar", () => {
   it("names the year of a carried month from another year", async () => {
     show([{ ...CARRIED_ALUGUEL, due_date: "2025-12-10" }, ...BILLS_OF_MONTH]);
     await loaded();
-    expect(rowOf("Aluguel Residencial de dezembro de 2025")).toHaveTextContent("Venceu em dezembro de 2025");
+    expect(rowOf("Aluguel Residencial de dezembro de 2025")).toHaveTextContent("Atrasada desde 10 dez");
     expect(within(chips()).getByRole("radio", { name: "dia 10/12, 1 conta a pagar" })).toBeInTheDocument();
-  });
-
-  it("filters Pendentes and Pagas on desktop", async () => {
-    window.innerWidth = 1440;
-    show([BILLS_OF_MONTH[0], PAID_RENT]);
-    await loaded();
-
-    const filters = await within(card()).findByRole("radiogroup", { name: "Filtrar contas" });
-    await userEvent.click(within(filters).getByRole("radio", { name: "Pagas" }));
-    expect(rows()).toEqual(["Aluguel Residencial"]);
-
-    await userEvent.click(within(filters).getByRole("radio", { name: "Pendentes" }));
-    expect(rows()).toEqual(["Luz (Enel)"]);
-
-    await userEvent.click(within(filters).getByRole("radio", { name: "Pendentes" }));
-    expect(rows()).toEqual(["Luz (Enel)"]);
-  });
-
-  it("says when a filter has nothing", async () => {
-    window.innerWidth = 1440;
-    show([PAID_RENT]);
-    await loaded();
-
-    await userEvent.click(
-      within(within(card()).getByRole("radiogroup", { name: "Filtrar contas" })).getByRole("radio", {
-        name: "Pendentes",
-      }),
-    );
-
-    expect(card()).toHaveTextContent("Nenhuma conta aqui.");
   });
 
   it("celebrates when every bill is paid", async () => {
@@ -426,20 +401,67 @@ describe("Contas a pagar", () => {
 
     expect(card()).toHaveTextContent("Todas as contas do mês pagas");
     expect(card()).toHaveTextContent("1 de 1 pagas");
-    expect(card()).toHaveTextContent(/Em aberto: R\$\s0,00/);
     expect(rowOf("Aluguel Residencial")).toHaveTextContent("Pago");
   });
 
-  it("names a bill due today", async () => {
+  it("counts a single bill in the singular", async () => {
     show([{ ...BILLS_OF_MONTH[1], due_date: "2026-11-05" }]);
     await loaded();
-    expect(card()).toHaveTextContent("Vence hoje: Aluguel Residencial");
+    expect(card()).toHaveTextContent("1 obrigação cadastrada");
+    expect(card()).toHaveTextContent("Próxima: dia 05 · R$ 2.259,56");
   });
 
-  it("names a bill due tomorrow", async () => {
-    show([{ ...BILLS_OF_MONTH[1], due_date: "2026-11-06" }]);
+  it("pays from the Pagar pill like the round check, and the mobile Pago toggle undoes it", async () => {
+    const { requests, serverHas } = show(BILLS_OF_MONTH, {
+      [`POST /api/bills/${BILL_ALUGUEL.id}/pay`]: { status: 201, body: PAYMENT },
+      [`DELETE /api/bills/${BILL_ALUGUEL.id}/pay`]: { status: 204 },
+    });
     await loaded();
-    expect(card()).toHaveTextContent("Próxima: Aluguel Residencial · dia 06 · amanhã");
+    serverHas([BILLS_OF_MONTH[0], PAID_RENT]);
+
+    await userEvent.click(
+      within(rowOf("Aluguel Residencial")).getByRole("button", { name: "Pagar Aluguel Residencial" }),
+    );
+
+    const toggle = await within(rowOf("Aluguel Residencial")).findByRole("button", {
+      name: "Pago, Aluguel Residencial",
+    });
+    expect(toggle).toHaveAttribute("aria-pressed", "true");
+    const post = requests.find((request) => request.method === "POST");
+    expect(await post?.json()).toEqual({ date: "2026-11-05" });
+
+    serverHas(BILLS_OF_MONTH);
+    await waitFor(() => expect(toggle).toBeEnabled());
+    await userEvent.click(toggle);
+
+    expect(await screen.findByText("Pagamento desfeito")).toBeInTheDocument();
+    expect(requests.some((request) => request.method === "DELETE")).toBe(true);
+  });
+
+  it("tells a payment on time from a late one, and says nothing without its date", async () => {
+    const early = {
+      ...PAID_RENT,
+      bill_id: "early",
+      name: "Internet",
+      due_date: "2026-11-02",
+      transaction_id: "t-early",
+    };
+    const unknown = { ...PAID_RENT, bill_id: "unknown", name: "Água", transaction_id: "t-missing" };
+    show([early, PAID_RENT, unknown], {
+      "GET /api/transactions": {
+        status: 200,
+        body: [
+          { ...PAYMENT, date: "2026-11-12" },
+          { ...PAYMENT, id: "t-early", date: "2026-11-02" },
+        ],
+      },
+    });
+    await loaded();
+
+    await waitFor(() => expect(rowOf("Aluguel Residencial")).toHaveTextContent("Vence dia 10 · Pago com atraso"));
+    expect(rowOf("Internet")).toHaveTextContent("Venceu dia 02 · Pago no prazo");
+    expect(rowOf("Água")).not.toHaveTextContent("Pago no prazo");
+    expect(rowOf("Água")).not.toHaveTextContent("Pago com atraso");
   });
 
   it("renders nothing without a bill (D25)", () => {

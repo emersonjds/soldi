@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { type CSSProperties, lazy, Suspense } from "react";
 
 import {
   BookOpen,
@@ -119,12 +119,25 @@ export const categoryBg = (color: string) => COLORS[color] ?? "bg-muted-foregrou
 /** The same color for an SVG fill (charts); the preset's variable, since `@theme inline` emits no `--color-*`. */
 export const categoryFill = (color: string) => (COLORS[color] ? `var(--${color})` : "var(--muted-foreground)");
 
-export const CategoryIcon = ({ icon, color, className }: { icon: string; color: string; className?: string }) => (
+/** A solid circle; `tintedOnDesktop` turns it into the color at 15% with the glyph in the color from 1024 px. */
+export const CategoryIcon = ({
+  icon,
+  color,
+  tintedOnDesktop,
+  className,
+}: {
+  icon: string;
+  color: string;
+  tintedOnDesktop?: boolean;
+  className?: string;
+}) => (
   <span
     aria-hidden
+    style={tintedOnDesktop ? ({ "--cat": categoryFill(color) } as CSSProperties) : undefined}
     className={cn(
       "flex size-10 shrink-0 items-center justify-center rounded-full text-white",
       categoryBg(color),
+      tintedOnDesktop && "lg:bg-(--cat)/15 lg:text-(--cat)",
       className,
     )}
   >
