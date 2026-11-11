@@ -7,6 +7,21 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.29.0
+
+> Headline: the months ahead in reais, and Posso comprar isso? one tap away
+
+### Web
+
+- Próximos meses shows each month's lowest balance in reais, and Simular names the red day's balance and what each month had before the purchase (SOL-73).
+- "Posso comprar isso?" opens from the sidebar and from Próximos meses, straight into Simular.
+- Thermometer labels wrap instead of running into each other in narrow cards; long month lows stay inside their chip.
+
+### Fixed
+
+- Pressing Enter while Simular is on no longer saves a real entry, and "Transformar em conta fixa" is hidden while simulating (D16).
+- CI runs every end-to-end flow: 21 tests in 14 specs were silently skipped because they looked for the server on the wrong port; a missing server now fails CI.
+
 ## 0.28.0
 
 > Headline: category colors readable with color blindness
