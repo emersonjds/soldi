@@ -25,7 +25,7 @@ import { TransactionSheet } from "./transaction-sheet";
 
 const MERCADO_ROW = TRANSACTIONS[0];
 const ALUGUEL_ROW = TRANSACTIONS[1];
-const MEMBER = { ...ALUGUEL_ROW, series: { id: "s1", position: 3, total: 12 } };
+const MEMBER = { ...ALUGUEL_ROW, series: { id: "s1", position: 3, total: 12, last_date: "2027-09-04" } };
 
 type SheetProps = Parameters<typeof TransactionSheet>[0];
 
@@ -300,9 +300,103 @@ describe("TransactionSheet", () => {
   });
 
   it("reads Toda a série on the first member", async () => {
-    setup({ transaction: { ...MEMBER, series: { id: "s1", position: 1, total: 12 } } });
+    setup({ transaction: { ...MEMBER, series: { ...MEMBER.series, position: 1 } } });
 
     expect(await screen.findByRole("radio", { name: "Toda a série" })).toBeInTheDocument();
+  });
+
+  const resize = { [`PATCH /api/transactions/${MEMBER.id}`]: { status: 200, body: MEMBER } };
+
+  it("resizes a series member: Meses na série on the total, chips below the position off, helpers name the change", async () => {
+    const { sent } = setup({ transaction: MEMBER }, resize);
+
+    const months = await screen.findByRole("radiogroup", { name: "Meses na série" });
+    expect(screen.getByText("Meses na série")).toBeVisible();
+    expect(within(months).getByRole("radio", { name: "12x" })).toBeChecked();
+    expect(within(months).getByRole("radio", { name: "2x" })).toBeDisabled();
+    expect(within(months).getByRole("radio", { name: "3x" })).toBeEnabled();
+    expect(screen.queryByText(/Remove|até/)).not.toBeInTheDocument();
+
+    await userEvent.click(within(months).getByRole("radio", { name: "6x" }));
+    expect(screen.getByText("Remove os 6 últimos")).toBeInTheDocument();
+    await userEvent.click(within(months).getByRole("radio", { name: "Outro" }));
+    const custom = screen.getByLabelText("Meses");
+    await userEvent.clear(custom);
+    await userEvent.type(custom, "15");
+    expect(screen.getByText("+3× R$ 1.200,00 · até dez 2027")).toBeInTheDocument();
+    const amount = screen.getByLabelText("Valor");
+    await userEvent.clear(amount);
+    expect(screen.getByText("+3× · até dez 2027")).toBeInTheDocument();
+    await userEvent.type(amount, "9990");
+    expect(screen.getByText("+3× R$ 99,90 · até dez 2027")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
+
+    expect(await sent("PATCH")).toMatchObject({ amount: "99.90", repeat_months: 15 });
+    expect(await screen.findByText("Série ajustada para 15 meses")).toBeInTheDocument();
+  });
+
+  it("says Remove o último for one month and sends no count when it stays on the total", async () => {
+    const { sent } = setup({ transaction: MEMBER }, resize);
+
+    await userEvent.click(await screen.findByRole("radio", { name: "Outro" }));
+    const custom = screen.getByLabelText("Meses");
+    await userEvent.clear(custom);
+    await userEvent.type(custom, "11");
+    expect(screen.getByText("Remove o último")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("radio", { name: "12x" }));
+    expect(screen.queryByText(/Remove|até/)).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
+
+    expect(await sent("PATCH")).not.toHaveProperty("repeat_months");
+    expect(await screen.findByText("Lançamento atualizado")).toBeInTheDocument();
+  });
+
+  it("preselects Outro for a total off the presets and asks for at least the member's position", async () => {
+    const { requests } = setup(
+      { transaction: { ...MEMBER, series: { ...MEMBER.series, position: 5, total: 7 } } },
+      resize,
+    );
+
+    expect(await screen.findByRole("radio", { name: "Outro" })).toBeChecked();
+    const custom = screen.getByLabelText("Meses");
+    expect(custom).toHaveValue("7");
+    expect(screen.getByRole("radio", { name: "3x" })).toBeDisabled();
+    expect(screen.getByRole("radio", { name: "6x" })).toBeEnabled();
+    await userEvent.clear(custom);
+    await userEvent.type(custom, "4");
+    await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
+
+    expect(custom).toHaveAccessibleDescription("Escolha de 5 a 60 meses.");
+    expect(requests.filter((request) => request.method === "PATCH")).toHaveLength(0);
+  });
+
+  it("saves an edit to the only member left in a series without a count", async () => {
+    const { sent } = setup({ transaction: { ...MEMBER, series: { ...MEMBER.series, position: 1, total: 1 } } }, resize);
+
+    const amount = await screen.findByLabelText("Valor");
+    await userEvent.clear(amount);
+    await userEvent.type(amount, "9990");
+    await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
+
+    const body = await sent("PATCH");
+    expect(body).toMatchObject({ amount: "99.90" });
+    expect(body).not.toHaveProperty("repeat_months");
+  });
+
+  it("locks Meses na série while the member's date moves and sends no count", async () => {
+    const { sent } = setup({ transaction: MEMBER }, resize);
+
+    const months = await screen.findByRole("radiogroup", { name: "Meses na série" });
+    await userEvent.click(within(months).getByRole("radio", { name: "6x" }));
+    expect(screen.getByText("Remove os 6 últimos")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Hoje" }));
+    expect(within(months).getByRole("radio", { name: "12x" })).toBeDisabled();
+    expect(screen.queryByText(/Remove|até/)).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
+
+    const body = await sent("PATCH");
+    expect(body).toMatchObject({ date: "2026-11-05" });
+    expect(body).not.toHaveProperty("repeat_months");
   });
 
   it("offers Transformar em conta fixa only for a Saída without Repetir", async () => {

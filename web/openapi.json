@@ -7,7 +7,7 @@
       "name": "AGPL-3.0-only",
       "identifier": "AGPL-3.0-only"
     },
-    "version": "0.20.0"
+    "version": "0.21.0"
   },
   "paths": {
     "/api/auth/me": {
@@ -1928,7 +1928,7 @@
         },
         "responses": {
           "200": {
-            "description": "The entry after the change; absent fields stay as they are",
+            "description": "The entry after the change, with the series' new total; absent fields stay as they are",
             "content": {
               "application/json": {
                 "schema": {
@@ -1967,7 +1967,7 @@
             }
           },
           "422": {
-            "description": "Same rules as create, on the entry after the change, `before-opening-date` included; with `repeat_months`, `already-repeated` on a series member, `repeat-not-allowed-on-bill-payment` or `repeat-not-allowed-on-cofrinho-withdrawal`",
+            "description": "Same rules as create, on the entry after the change, `before-opening-date` included; with `repeat_months`, `repeat-not-allowed-on-bill-payment` or `repeat-not-allowed-on-cofrinho-withdrawal` on an entry outside a series, `validation` on `repeat_months` outside 2..60 or below this member's position, on `date` when the series would pass 2100; nothing is written",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -3096,12 +3096,18 @@
         "required": [
           "id",
           "position",
-          "total"
+          "total",
+          "last_date"
         ],
         "properties": {
           "id": {
             "type": "string",
             "format": "uuid"
+          },
+          "last_date": {
+            "type": "string",
+            "format": "date",
+            "description": "The date of the series' last member; growth continues in the months after it."
           },
           "position": {
             "type": "integer",
@@ -3313,7 +3319,7 @@
               "null"
             ],
             "format": "int32",
-            "description": "Turns an entry outside any series into the first of a run of 2 to 60.",
+            "description": "How many entries the series counts, 2 to 60: starts a series from an entry outside one,\nor adds or removes members at the end of this entry's series (never one dated before it).",
             "maximum": 60,
             "minimum": 2
           }

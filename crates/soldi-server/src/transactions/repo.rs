@@ -25,6 +25,7 @@ struct Row {
     series_id: Option<Uuid>,
     series_position: i64,
     series_total: i64,
+    series_last_date: Option<NaiveDate>,
 }
 
 impl From<Row> for Transaction {
@@ -37,11 +38,15 @@ impl From<Row> for Transaction {
             note: row.note,
             recurring_bill_id: row.recurring_bill_id,
             cofrinho_id: row.cofrinho_id,
-            series: row.series_id.map(|id| TransactionSeries {
-                id,
-                position: row.series_position,
-                total: row.series_total,
-            }),
+            series: row
+                .series_id
+                .zip(row.series_last_date)
+                .map(|(id, last_date)| TransactionSeries {
+                    id,
+                    position: row.series_position,
+                    total: row.series_total,
+                    last_date,
+                }),
             category: Category {
                 id: row.category_id,
                 name: row.category_name,
@@ -75,10 +80,11 @@ pub async fn list(
                   c.color AS category_color, c.parent_id AS category_parent_id,
                   c.is_savings AS category_is_savings, c.target AS category_target,
                   c.deadline AS category_deadline, t.series_id,
-                  s.position AS "series_position!", s.total AS "series_total!"
+                  s.position AS "series_position!", s.total AS "series_total!",
+                  s.last_date AS series_last_date
            FROM transactions t JOIN categories c ON c.user_id = t.user_id AND c.id = t.category_id
            LEFT JOIN LATERAL (
-               SELECT count(*) AS total, count(*) FILTER (WHERE (m.date, m.id) <= (t.date, t.id)) AS position
+               SELECT count(*) AS total, max(m.date) AS last_date, count(*) FILTER (WHERE (m.date, m.id) <= (t.date, t.id)) AS position
                FROM transactions m WHERE m.user_id = t.user_id AND m.series_id = t.series_id
            ) s ON true
            WHERE t.user_id = $1 AND t.date BETWEEN $2 AND $3
@@ -110,10 +116,11 @@ pub async fn movements(
                   c.color AS category_color, c.parent_id AS category_parent_id,
                   c.is_savings AS category_is_savings, c.target AS category_target,
                   c.deadline AS category_deadline, t.series_id,
-                  s.position AS "series_position!", s.total AS "series_total!"
+                  s.position AS "series_position!", s.total AS "series_total!",
+                  s.last_date AS series_last_date
            FROM transactions t JOIN categories c ON c.user_id = t.user_id AND c.id = t.category_id
            LEFT JOIN LATERAL (
-               SELECT count(*) AS total, count(*) FILTER (WHERE (m.date, m.id) <= (t.date, t.id)) AS position
+               SELECT count(*) AS total, max(m.date) AS last_date, count(*) FILTER (WHERE (m.date, m.id) <= (t.date, t.id)) AS position
                FROM transactions m WHERE m.user_id = t.user_id AND m.series_id = t.series_id
            ) s ON true
            WHERE t.user_id = $1 AND (t.category_id = $2 OR t.cofrinho_id = $2)
@@ -142,10 +149,11 @@ pub async fn find(
                   c.color AS category_color, c.parent_id AS category_parent_id,
                   c.is_savings AS category_is_savings, c.target AS category_target,
                   c.deadline AS category_deadline, t.series_id,
-                  s.position AS "series_position!", s.total AS "series_total!"
+                  s.position AS "series_position!", s.total AS "series_total!",
+                  s.last_date AS series_last_date
            FROM transactions t JOIN categories c ON c.user_id = t.user_id AND c.id = t.category_id
            LEFT JOIN LATERAL (
-               SELECT count(*) AS total, count(*) FILTER (WHERE (m.date, m.id) <= (t.date, t.id)) AS position
+               SELECT count(*) AS total, max(m.date) AS last_date, count(*) FILTER (WHERE (m.date, m.id) <= (t.date, t.id)) AS position
                FROM transactions m WHERE m.user_id = t.user_id AND m.series_id = t.series_id
            ) s ON true
            WHERE t.user_id = $1 AND t.id = $2"#,
@@ -267,6 +275,55 @@ pub async fn delete_following(
         user_id,
         series_id,
         from
+    )
+    .execute(&mut *conn)
+    .await?;
+    Ok(())
+}
+
+/// Serializes resizes and `following` deletions of one series until the transaction ends.
+pub async fn lock_series(conn: &mut PgConnection, series_id: Uuid) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        "SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))",
+        series_id.to_string()
+    )
+    .execute(&mut *conn)
+    .await?;
+    Ok(())
+}
+
+/// L1: the dates of the series' first and last members; growth takes the first's day and
+/// continues after the last's month.
+pub async fn series_span(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    series_id: Uuid,
+) -> Result<Option<(NaiveDate, NaiveDate)>, sqlx::Error> {
+    let span = sqlx::query!(
+        "SELECT min(date) AS first, max(date) AS last FROM transactions
+         WHERE user_id = $1 AND series_id = $2",
+        user_id,
+        series_id
+    )
+    .fetch_one(&mut *conn)
+    .await?;
+    Ok(span.first.zip(span.last))
+}
+
+/// L3: deletes the series' members ranked after the first `keep` by `(date, id)`.
+pub async fn delete_beyond(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    series_id: Uuid,
+    keep: i64,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        "DELETE FROM transactions WHERE user_id = $1 AND id IN (
+             SELECT id FROM transactions WHERE user_id = $1 AND series_id = $2
+             ORDER BY date, id OFFSET $3)",
+        user_id,
+        series_id,
+        keep
     )
     .execute(&mut *conn)
     .await?;

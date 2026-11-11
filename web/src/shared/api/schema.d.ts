@@ -858,6 +858,11 @@ export interface components {
             /** Format: uuid */
             id: string;
             /**
+             * Format: date
+             * @description The date of the series' last member; growth continues in the months after it.
+             */
+            last_date: string;
+            /**
              * Format: int64
              * @description 1-based, by date.
              */
@@ -917,7 +922,8 @@ export interface components {
             note?: string | null;
             /**
              * Format: int32
-             * @description Turns an entry outside any series into the first of a run of 2 to 60.
+             * @description How many entries the series counts, 2 to 60: starts a series from an entry outside one,
+             *     or adds or removes members at the end of this entry's series (never one dated before it).
              */
             repeat_months?: number | null;
         };
@@ -2560,7 +2566,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description The entry after the change; absent fields stay as they are */
+            /** @description The entry after the change, with the series' new total; absent fields stay as they are */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -2595,7 +2601,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Same rules as create, on the entry after the change, `before-opening-date` included; with `repeat_months`, `already-repeated` on a series member, `repeat-not-allowed-on-bill-payment` or `repeat-not-allowed-on-cofrinho-withdrawal` */
+            /** @description Same rules as create, on the entry after the change, `before-opening-date` included; with `repeat_months`, `repeat-not-allowed-on-bill-payment` or `repeat-not-allowed-on-cofrinho-withdrawal` on an entry outside a series, `validation` on `repeat_months` outside 2..60 or below this member's position, on `date` when the series would pass 2100; nothing is written */
             422: {
                 headers: {
                     [name: string]: unknown;
