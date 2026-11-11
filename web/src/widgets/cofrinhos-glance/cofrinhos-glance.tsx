@@ -35,7 +35,10 @@ export const CofrinhosGlance = ({ className }: { className?: string }) => {
     return (
       <DashCard title={TITLE} className={className}>
         <div className="flex flex-col items-center gap-3 text-center">
-          <div aria-hidden className="flex w-full justify-center">
+          <div
+            aria-hidden
+            className="pointer-events-none flex w-full select-none justify-center opacity-50 saturate-50"
+          >
             <CofrinhoIllustration />
           </div>
           <p className="max-w-xs text-muted-foreground">Nenhum cofrinho ainda. Comece pela reserva de emergência.</p>

@@ -7,6 +7,16 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.25.0
+
+> Headline: bills at a glance and a shorter ledger
+
+### Web
+
+- Contas a pagar shows the next bill, the open total and "N de M pagas", day chips with a dot per unpaid bill (tap again to clear), a round check to pay or unpay with the undo toast, and a text status badge (SOL-64).
+- Lançamentos shows the next 3 scheduled days, today and the 6 days before; "Ver o mês inteiro (N dias)" expands it in place, and the red-day jump expands it before scrolling.
+- Empty-state illustrations are faded so their sample figures never read as real data.
+
 ## 0.24.0
 
 > Headline: Mês is a dashboard

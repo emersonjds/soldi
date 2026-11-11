@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { categoriesQuery, categoryLabel } from "@/entities/category/categories-query";
 import { billKey } from "@/entities/month/forecast-alert";
+import { visibleDays } from "@/entities/month/schedule";
 import { ScopeRadio } from "@/entities/transaction/scope-radio";
 import {
   type Scope,
@@ -62,6 +63,7 @@ type Due = Schemas["BillOfMonth"];
 const groupByDay = (days: Day[], transactions: Transaction[], bills: Due[]) =>
   days
     .map((day) => ({
+      date: day.date,
       day,
       entries: transactions.filter((transaction) => transaction.date === day.date),
       due: bills.filter((bill) => bill.lands_on === day.date),
@@ -137,16 +139,24 @@ type LedgerProps = {
   highlight?: string | null;
   /** Ids (`transaction.id` or `billKey(bill)`) captioned `Motivo da queda`. */
   causes?: ReadonlySet<string>;
+  /** The whole month instead of the spec §3.3 cap; the page owns it so a jump can expand before it scrolls. */
+  expanded: boolean;
+  onExpandedChange: (expanded: boolean) => void;
   className?: string;
 };
 
-/** `Lançamentos`: entries grouped by day; a row opens Editar / Excluir, and Excluir can be undone for 5 s. */
+/**
+ * `Lançamentos`: entries grouped by day, capped to recent days until expanded in place;
+ * a row opens Editar / Excluir, and Excluir can be undone for 5 s.
+ */
 export const Ledger = ({
   view,
   transactions,
   onLaunch,
   highlight = null,
   causes = new Set<string>(),
+  expanded,
+  onExpandedChange,
   className,
 }: LedgerProps) => {
   const categories = useQuery(categoriesQuery).data;
@@ -158,7 +168,9 @@ export const Ledger = ({
   const [scope, setScope] = useState<Scope>("this");
   const create = useCreateTransaction();
   const remove = useDeleteTransaction();
-  const groups = groupByDay(view.days, transactions, view.bills_of_month);
+  const all = groupByDay(view.days, transactions, view.bills_of_month);
+  const groups = visibleDays(all, todayISO(), expanded);
+  const capped = visibleDays(all, todayISO(), false).length < all.length;
 
   const open = (transaction: Transaction) => {
     setSelected(transaction);
@@ -209,7 +221,7 @@ export const Ledger = ({
       <h2 id="ledger-title" className="font-semibold text-lg leading-6">
         Lançamentos
       </h2>
-      {groups.length === 0 ? (
+      {all.length === 0 ? (
         <div className="flex flex-col items-center gap-3 px-2 py-8 text-center">
           <span className="flex size-12 items-center justify-center rounded-full bg-secondary text-primary">
             <ReceiptText className="size-6" aria-hidden />
@@ -247,6 +259,16 @@ export const Ledger = ({
             </ul>
           </div>
         ))
+      )}
+      {capped && (
+        <Button
+          variant="ghost"
+          aria-expanded={expanded}
+          onClick={() => onExpandedChange(!expanded)}
+          className="min-h-11 self-center px-4 font-semibold text-primary text-sm"
+        >
+          {expanded ? "Mostrar menos" : `Ver o mês inteiro (${all.length} dias)`}
+        </Button>
       )}
 
       <Sheet open={acting} onOpenChange={setActing}>

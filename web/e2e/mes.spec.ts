@@ -33,7 +33,7 @@ test("a new user logs a Diário in three taps and sees it with the day balance",
   await expect(page.getByRole("region", { name: "Saldo hoje" })).toContainText("R$ 987,50");
 });
 
-test("a bill from onboarding shows under Contas do Mês, pays in one tap and moves the projection", async ({
+test("a bill from onboarding shows under Contas a pagar, pays from the round check and moves the projection", async ({
   page,
   request,
 }) => {
@@ -59,15 +59,24 @@ test("a bill from onboarding shows under Contas do Mês, pays in one tap and mov
   await page.getByRole("dialog", { name: "Lançar" }).getByRole("button", { name: "Fechar" }).click();
 
   const hero = page.getByRole("region", { name: "Saldo hoje" });
-  const bill = page.getByRole("region", { name: "Contas do Mês" }).getByRole("listitem", { name: "Aluguel" });
+  const bills = page.getByRole("region", { name: "Contas a pagar" });
+  const bill = bills.getByRole("listitem", { name: "Aluguel" });
   await expect(bill).toContainText("R$ 300,00");
+  await expect(bills).toContainText("0 de 1 pagas");
   await expect(hero).toContainText(/Projetado fim do mês\s*R\$\s700,00/);
 
-  await bill.getByRole("button", { name: /^Pagar Aluguel/ }).click();
-  await expect(bill.getByRole("button", { name: "Pago: desfazer Aluguel" })).toBeVisible();
+  const chip = bills.getByRole("radio", { name: "dia 28, 1 conta a pagar" });
+  await chip.click();
+  await expect(chip).toHaveAttribute("aria-checked", "true");
+  await chip.click();
+  await expect(chip).toHaveAttribute("aria-checked", "false");
+
+  await bill.getByRole("button", { name: "Marcar Aluguel como paga" }).click();
+  await expect(bill.getByRole("button", { name: "Desmarcar Aluguel" })).toHaveAttribute("aria-pressed", "true");
+  await expect(bills).toContainText("1 de 1 pagas");
   await expect(hero).toContainText("R$ 700,00");
 
-  await bill.getByRole("button", { name: "Pago: desfazer Aluguel" }).click();
+  await bill.getByRole("button", { name: "Desmarcar Aluguel" }).click();
   await expect(page.getByText("Pagamento desfeito")).toBeVisible();
   await expect(hero).toContainText("R$ 1.000,00");
 
@@ -76,7 +85,7 @@ test("a bill from onboarding shows under Contas do Mês, pays in one tap and mov
   await sheet.getByLabel("Valor").fill("350,00");
   await sheet.getByRole("button", { name: "Confirmar" }).click();
 
-  await expect(bill.getByRole("button", { name: "Pago: desfazer Aluguel" })).toBeVisible();
+  await expect(bill.getByRole("button", { name: "Desmarcar Aluguel" })).toHaveAttribute("aria-pressed", "true");
   await expect(hero).toContainText(/Projetado fim do mês\s*R\$\s650,00/);
 });
 

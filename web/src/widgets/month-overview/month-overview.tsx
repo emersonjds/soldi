@@ -94,7 +94,10 @@ export const MonthHero = ({
           </>
         ) : (
           <div className="flex flex-col items-center gap-3 text-center">
-            <div aria-hidden className="flex w-full justify-center">
+            <div
+              aria-hidden
+              className="pointer-events-none flex w-full select-none justify-center opacity-50 saturate-50"
+            >
               <IncomeIllustration />
             </div>
             <p className="text-muted-foreground">Nenhuma entrada neste mês</p>
