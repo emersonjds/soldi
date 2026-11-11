@@ -7,6 +7,17 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.38.0
+
+> Headline: Lançamentos, Próximos meses and the glances as in the Stitch design
+
+### Web
+
+- Lançamentos has the Stitch title row, with Todos / Diário / Contas and "Ver o mês inteiro". Each day gets a muted band with "Saldo ao final" (or "Projeção" on future days) and its tier. Amounts are signed (+ in, - out), and each series shows a pill such as "↻ Saída · 3/12" (SOL-83).
+- Próximos meses is always a 4-column grid of twelve months. Each month shows its lowest balance and its tier word, so color is never the only signal. The horizon toggle is gone.
+- The Cofrinhos glance shows the total saved and the two largest goals, each with its share, bar and target. Para Onde Vai shows each group's share with one decimal, taken from the report.
+- Red words on the soft red fill use a darker text color to reach 4.5:1.
+
 ## 0.37.0
 
 > Headline: Contas a pagar as in the Stitch design
