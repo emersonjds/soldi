@@ -6,12 +6,17 @@ import { describe, expect, it, vi } from "vitest";
 
 import { AmountKeypad, KEYPAD_QUERY, useKeypad } from "./amount-keypad";
 
-const Harness = ({ initial = "" }) => {
+const Harness = ({ initial = "", outside }: { initial?: string; outside?: string }) => {
   const [value, setValue] = useState(initial);
   return (
     <>
       <output aria-label="Valor">{value}</output>
       <AmountKeypad value={value} onValueChange={setValue} />
+      {outside !== undefined && (
+        <button type="button" onClick={() => setValue(outside)}>
+          Fora
+        </button>
+      )}
     </>
   );
 };
@@ -44,33 +49,56 @@ describe("AmountKeypad", () => {
     for (const key of keys) expect(key).toHaveClass("h-14");
   });
 
-  it("fills the cents from the right, bank-style, as the amount field does", async () => {
+  it("enters like a calculator: reais until the comma, then up to two cents padded with zero", async () => {
     render(<Harness />);
 
-    await tap("1", "2", "3", "4", "5");
-    expect(value()).toBe("123.45");
-  });
-
-  it("sends the comma through the mask, so it never moves the cents", async () => {
-    render(<Harness initial="1.25" />);
-
-    await tap(",");
-    expect(value()).toBe("1.25");
-    await tap("0");
+    await tap("1", "2", ",", "5");
     expect(value()).toBe("12.50");
+    await tap("Apagar", "Apagar", "Apagar", "Apagar");
+    expect(value()).toBe("");
+    await tap("3", "5");
+    expect(value()).toBe("35.00");
   });
 
-  it("drops the last digit with Apagar and empties the field once only zeros are left", async () => {
-    render(<Harness initial="1234.56" />);
+  it("ignores a second comma, a third cent and an eleventh real digit", async () => {
+    render(<Harness />);
 
-    await tap("Apagar");
-    expect(value()).toBe("123.45");
-    await tap("Apagar", "Apagar", "Apagar", "Apagar");
-    expect(value()).toBe("0.01");
-    await tap("Apagar");
-    expect(value()).toBe("");
-    await tap("Apagar");
-    expect(value()).toBe("");
+    await tap("1", "2", "3", "4", "5", ",", "6", ",", "7", "8");
+    expect(value()).toBe("12345.67");
+    await tap("Apagar", "Apagar", "Apagar", "Apagar", "Apagar", "Apagar", "Apagar", "Apagar");
+    await tap(..."12345678901".split(""));
+    expect(value()).toBe("1234567890.00");
+  });
+
+  it("removes the last typed key with Apagar: 12,5 → 12, → 12 → 1 → empty", async () => {
+    render(<Harness />);
+
+    await tap("1", "2", ",", "5");
+    const seen: (string | null)[] = [];
+    for (let step = 0; step < 4; step += 1) {
+      await tap("Apagar");
+      seen.push(value());
+    }
+    expect(seen).toEqual(["12.00", "12.00", "1.00", ""]);
+    await tap("Apagar", "7");
+    expect(value()).toBe("7.00");
+  });
+
+  it("starts from a value set outside the keypad: its reais, then its cents without trailing zeros", async () => {
+    render(<Harness initial="12.50" outside="" />);
+
+    await tap("Apagar", "3");
+    expect(value()).toBe("12.30");
+    await userEvent.click(screen.getByRole("button", { name: "Fora" }));
+    await tap("5");
+    expect(value()).toBe("5.00");
+  });
+
+  it("continues a whole value from outside in reais", async () => {
+    render(<Harness initial="35.00" />);
+
+    await tap("1");
+    expect(value()).toBe("351.00");
   });
 });
 
