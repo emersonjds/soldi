@@ -1,7 +1,7 @@
-import { CalendarDays, Check } from "lucide-react";
+import { Check } from "lucide-react";
 
-import { cn } from "@/lib/utils";
 import { todayISO, yesterdayISO } from "@/shared/lib/date";
+import { DateField } from "@/shared/ui/date-field";
 
 const chip =
   "inline-flex min-h-11 items-center gap-1.5 rounded-full bg-muted px-4 font-medium text-base transition-colors aria-pressed:bg-secondary aria-pressed:text-primary focus-visible:outline-2 focus-visible:outline-ring";
@@ -37,19 +37,14 @@ export const DateChips = ({
       <div className="flex flex-wrap gap-2">
         {pick(today, "Hoje")}
         {pick(yesterday, "Ontem")}
-        <label className={cn(chip, "has-focus-visible:outline-2 has-focus-visible:outline-ring")}>
-          <CalendarDays className="size-4 shrink-0" aria-hidden />
-          <span className="sr-only">Outra data</span>
-          <input
-            type="date"
-            value={value}
-            min={min}
-            max={max}
-            onChange={(event) => event.target.value && onChange(event.target.value)}
-            onClick={(event) => event.currentTarget.showPicker?.()}
-            className="w-34 bg-transparent text-base outline-none"
-          />
-        </label>
+        <DateField
+          label="Outra data"
+          value={value}
+          onChange={onChange}
+          min={min}
+          max={max}
+          className="w-auto rounded-full border-0 bg-muted px-4 font-medium"
+        />
       </div>
     </fieldset>
   );

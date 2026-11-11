@@ -111,3 +111,5 @@ Rejected:
 - delivering dark mode now (doubles tokens and review for a layout epic).
 
 Detail: `docs/specs/2026-11-10-dashboard-redesign.md`, plan `docs/specs/plans/SOL-61.md`.
+
+Update (2026-11-11, owner, SOL-69): C1 went back to the 0.23.0 hero, today's balance with its tier and the Entradas / Saídas / Projetado summary; the split bar "Para onde foi a entrada" is dropped from Mês. The rest of the grid stays.
