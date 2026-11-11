@@ -83,19 +83,19 @@ describe("Mês", () => {
     vi.useRealTimers();
   });
 
-  it("shows today's balance, the projection, where the outflow went and the thermometer from the server", async () => {
+  it("shows today's balance and tier, the month summary and the thermometer from the server", async () => {
     open();
 
     const hero = await screen.findByRole("region", { name: "Saldo hoje" });
-    expect(hero).toHaveTextContent(/Saldo hojeR\$\s957,79.*Apertado.*Projetado fim do mêsR\$\s957,79.*Apertado/);
-    expect(within(hero).getByRole("img", { name: /^Saídas R\$\s1\.384,31: contas 87%, diário 13%$/ })).toBeVisible();
-    expect(
-      within(hero)
-        .getAllByRole("listitem")
-        .map((row) => row.textContent?.replace(/\s/g, " ")),
-    ).toEqual(["ContasR$ 1.200,00 · 87%", "DiárioR$ 184,31 · 13%"]);
-    expect(within(hero).getByText("Saídas passaram as entradas em R$ 884,31")).toHaveClass("text-expense");
-    expect(hero).toHaveTextContent(/Para onde foi a entradaSaídas R\$\s1\.384,31Contas/);
+    expect(within(hero).getByText("R$ 957,79")).toBeInTheDocument();
+    expect(within(hero).getByText("Apertado")).toBeInTheDocument();
+    expect(within(hero).queryByRole("img")).not.toBeInTheDocument();
+
+    const summary = screen.getByRole("region", { name: "Resumo do mês" });
+    expect(within(summary).getByText("R$ 500,00")).toHaveClass("text-income-text");
+    expect(within(summary).getByText("R$ 1.384,31")).toBeInTheDocument();
+    expect(within(summary).getByText("R$ 957,79")).toBeInTheDocument();
+    expect(within(summary).getByText("Apertado")).toBeInTheDocument();
 
     const thermometer = screen.getByRole("region", { name: "Termômetro do Mês" });
     expect(within(thermometer).getByRole("meter")).toHaveAttribute("aria-valuetext", "Apertado");
@@ -230,40 +230,12 @@ describe("Mês", () => {
     expect(screen.queryByText("Nenhum lançamento ainda")).not.toBeInTheDocument();
   });
 
-  it("says what is left of the income, or that it is even", async () => {
-    open(
-      withTotals({ income: "6000.00", bills: "1800.00", saved: "480.00", daily: "2580.00", performance: "1620.00" }),
-    );
-    const hero = await screen.findByRole("region", { name: "Saldo hoje" });
-    expect(within(hero).getByText("Sobram 27% das entradas")).toHaveClass("text-income-text");
-    expect(hero).toHaveTextContent(/Para onde foi a entradaEntradas R\$\s6\.000,00Contas/);
-    expect(
-      within(hero)
-        .getAllByRole("listitem")
-        .map((row) => row.textContent?.replace(/\s/g, " ")),
-    ).toEqual([
-      "ContasR$ 1.320,00 · 22%",
-      "GuardadoR$ 480,00 · 8%",
-      "DiárioR$ 2.580,00 · 43%",
-      "LivreR$ 1.620,00 · 27%",
-    ]);
-  });
-
-  it("rounds the committed share half to even, so it and what is left never pass 100%", async () => {
+  it("rounds the committed share half to even", async () => {
     open(withTotals({ income: "1040.00", bills: "130.00", daily: "0.00", outflow: "130.00", performance: "910.00" }));
 
-    const hero = await screen.findByRole("region", { name: "Saldo hoje" });
-    expect(within(hero).getByText("Sobram 88% das entradas")).toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "Termômetro do Mês" })).toHaveTextContent(
+    expect(await screen.findByRole("region", { name: "Termômetro do Mês" })).toHaveTextContent(
       "Você comprometeu 12% da renda.",
     );
-  });
-
-  it("calls a month whose outflow matches its income even", async () => {
-    open(withTotals({ income: "1384.31", performance: "0.00" }));
-    expect(
-      within(await screen.findByRole("region", { name: "Saldo hoje" })).getByText("Entradas e saídas empatadas"),
-    ).toBeInTheDocument();
   });
 
   it("invites the first entry when the month is empty and has no income yet", async () => {
@@ -272,9 +244,6 @@ describe("Mês", () => {
       "GET /api/transactions": { status: 200, body: [] },
     });
 
-    const hero = await screen.findByRole("region", { name: "Saldo hoje" });
-    expect(within(hero).getByText("Nenhuma entrada neste mês")).toBeInTheDocument();
-    expect(within(hero).queryByRole("img")).not.toBeInTheDocument();
     expect(await screen.findByText("Nenhum lançamento ainda")).toBeInTheDocument();
     expect(screen.getByRole("region", { name: "Termômetro do Mês" })).toHaveTextContent(
       "Nenhuma entrada ainda este mês. Com as contas em aberto",
@@ -283,7 +252,7 @@ describe("Mês", () => {
     expect(await screen.findByRole("dialog", { name: "Lançar" })).toBeInTheDocument();
   });
 
-  it("opens Lançar on Entrada from the empty hero", async () => {
+  it("opens Lançar on Entrada from the Entradas card", async () => {
     open({ "GET /api/months/2026-11": { status: 200, body: EMPTY } });
     await userEvent.click(await screen.findByRole("button", { name: "Lançar entrada" }));
     expect(await screen.findByRole("dialog", { name: "Lançar" })).toBeInTheDocument();
@@ -306,7 +275,7 @@ describe("Mês", () => {
     expect(screen.queryByText("Comece pela sua primeira entrada do mês")).not.toBeInTheDocument();
   });
 
-  it("orders the cards for one column, and names a negative projection in the hero", async () => {
+  it("orders the cards for one column, and shows a negative projection in red in the summary", async () => {
     open({
       "GET /api/months/2026-11": {
         status: 200,
@@ -329,7 +298,9 @@ describe("Mês", () => {
       expect(order[index].compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     });
     expect(within(bills).getByRole("listitem", { name: "Luz (Enel)" })).toHaveTextContent("Venceu dia 02/11");
-    expect(order[0]).toHaveTextContent(/Projetado fim do mês-R\$\s312,40.*Atenção/);
+    const summary = screen.getByRole("region", { name: "Resumo do mês" });
+    expect(summary).toHaveTextContent(/Projetado-R\$\s312,40Atenção/);
+    expect(within(summary).getByText("-R$ 312,40")).toHaveClass("text-expense");
     expect(within(order[3]).getByText("-R$ 312,40")).toHaveClass("text-expense");
   });
 

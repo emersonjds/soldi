@@ -59,11 +59,12 @@ test("a bill from onboarding shows under Contas a pagar, pays from the round che
   await page.getByRole("dialog", { name: "Lançar" }).getByRole("button", { name: "Fechar" }).click();
 
   const hero = page.getByRole("region", { name: "Saldo hoje" });
+  const summary = page.getByRole("region", { name: "Resumo do mês" });
   const bills = page.getByRole("region", { name: "Contas a pagar" });
   const bill = bills.getByRole("listitem", { name: "Aluguel" });
   await expect(bill).toContainText("R$ 300,00");
   await expect(bills).toContainText("0 de 1 pagas");
-  await expect(hero).toContainText(/Projetado fim do mês\s*R\$\s700,00/);
+  await expect(summary).toContainText(/Projetado\s*R\$\s700,00/);
 
   const chip = bills.getByRole("radio", { name: "dia 28, 1 conta a pagar" });
   await chip.click();
@@ -86,7 +87,7 @@ test("a bill from onboarding shows under Contas a pagar, pays from the round che
   await sheet.getByRole("button", { name: "Confirmar" }).click();
 
   await expect(bill.getByRole("button", { name: "Desmarcar Aluguel" })).toHaveAttribute("aria-pressed", "true");
-  await expect(hero).toContainText(/Projetado fim do mês\s*R\$\s650,00/);
+  await expect(summary).toContainText(/Projetado\s*R\$\s650,00/);
 });
 
 test("Lançar fills the cents from the right and a category created from the picker comes selected", async ({
@@ -136,7 +137,10 @@ test("Lançar fills the cents from the right and a category created from the pic
   await expect(page.getByRole("combobox", { name: "Categoria" })).toHaveText(/Feira/);
 });
 
-test("the hero splits the income, and the glance cards open their screens", async ({ page, request }) => {
+test("the hero shows the balance and the summary, and the glance cards open their screens", async ({
+  page,
+  request,
+}) => {
   const health = await request.get(`${API}/api/health`).catch(() => null);
   test.skip(!health?.ok(), `Soldi server unreachable at ${API}/api/health; start it to run this flow.`);
 
@@ -155,8 +159,8 @@ test("the hero splits the income, and the glance cards open their screens", asyn
   await page.getByRole("dialog", { name: "Lançar" }).getByRole("button", { name: "Fechar" }).click();
 
   const hero = page.getByRole("region", { name: "Saldo hoje" });
-  await expect(hero).toContainText("Nenhuma entrada neste mês");
-  await hero.getByRole("button", { name: "Lançar entrada" }).click();
+  const monthSummary = page.getByRole("region", { name: "Resumo do mês" });
+  await monthSummary.getByRole("button", { name: "Lançar entrada" }).click();
   await expect(page.getByRole("radio", { name: "Entrada" })).toBeChecked();
   await page.keyboard.type("200000");
   await page.getByRole("button", { name: "Salvar" }).click();
@@ -166,9 +170,8 @@ test("the hero splits the income, and the glance cards open their screens", asyn
   await page.keyboard.type("1250");
   await page.getByRole("button", { name: "Salvar" }).click();
 
-  await expect(hero.getByRole("img", { name: /^Entradas R\$\s2\.000,00: diário 1%, livre 99%$/ })).toBeVisible();
-  await expect(hero.getByRole("listitem")).toHaveText([/^Diário\s*R\$\s12,50 · 1%$/, /^Livre\s*R\$\s1\.987,50 · 99%$/]);
-  await expect(hero).toContainText("Sobram 99% das entradas");
+  await expect(monthSummary).toContainText(/Entradas\s*R\$\s2\.000,00/);
+  await expect(monthSummary).toContainText(/Saídas\s*R\$\s12,50/);
   await expect(hero).toContainText(/Saldo hoje\s*R\$\s2\.987,50/);
 
   const spending = page.getByRole("region", { name: "Para onde vai" });
