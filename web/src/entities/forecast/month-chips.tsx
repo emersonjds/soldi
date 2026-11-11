@@ -62,7 +62,14 @@ export const MonthChips = ({ months, neutral = false, current, onOpen, before }:
             {lowest === null && <span className="text-xs">Antes do início</span>}
             {lowest !== null && !neutral && (
               <>
-                <span className="font-bold text-sm tabular-nums">{formatWhole(low)}</span>
+                <span
+                  className={cn(
+                    "break-all font-bold tabular-nums",
+                    formatWhole(low).replace(/\D/g, "").length >= 7 ? "text-xs" : "text-sm",
+                  )}
+                >
+                  {formatWhole(low)}
+                </span>
                 {prior !== null && (
                   <span className="text-muted-foreground text-xs tabular-nums">antes {formatWhole(prior)}</span>
                 )}

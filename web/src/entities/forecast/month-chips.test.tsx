@@ -49,6 +49,20 @@ describe("MonthChips", () => {
     expect(november).not.toHaveTextContent("12.346");
   });
 
+  it("steps a low of 7 digits or more down a size and lets it break, so the chip never spills", () => {
+    render(
+      <MonthChips
+        months={[
+          { month: "2026-11", lowest: "red", low: "-1234567.89", redDays: 30 },
+          { month: "2026-12", lowest: "red", low: "-123456.00", redDays: 31 },
+        ]}
+        onOpen={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("-1.234.568")).toHaveClass("text-xs", "break-all");
+    expect(screen.getByText("-123.456")).toHaveClass("text-sm", "break-all");
+  });
+
   it("says one red day in the singular", () => {
     render(<MonthChips months={[{ month: "2026-11", lowest: "red", low: "-600.00", redDays: 1 }]} onOpen={vi.fn()} />);
     expect(
