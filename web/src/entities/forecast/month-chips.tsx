@@ -36,6 +36,13 @@ type MonthChipsProps = {
 };
 
 /** A 4-column month grid: each month's lowest balance in whole units, its tier dot and its tier word (D22), a red month on `expense-soft`. */
+/** Five-digit lows shrink and six-digit ones shrink again so they fit a 4-column cell at 375 and in the 1440 rail. */
+const digitSize = (amount: string) => {
+  const digits = amount.replace(/\D/g, "").length;
+  if (digits >= 6) return "text-[10px]";
+  return digits === 5 ? "text-[11px]" : "text-sm";
+};
+
 export const MonthChips = ({ months, neutral = false, current, onOpen, before }: MonthChipsProps) => {
   const currency = useCurrency();
   return (
@@ -59,8 +66,8 @@ export const MonthChips = ({ months, neutral = false, current, onOpen, before }:
                   <span aria-hidden className={cn("size-2 shrink-0 rounded-full", TIER_STYLE[lowest].dot)} />
                   <span
                     className={cn(
-                      "min-w-0 break-all font-bold tabular-nums",
-                      formatWhole(low).replace(/\D/g, "").length >= 5 ? "text-xs" : "text-sm",
+                      "min-w-0 whitespace-nowrap font-bold tabular-nums tracking-tight",
+                      digitSize(formatWhole(low)),
                     )}
                   >
                     {formatWhole(low)}

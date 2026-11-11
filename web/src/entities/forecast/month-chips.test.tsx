@@ -52,18 +52,20 @@ describe("MonthChips", () => {
     expect(november).not.toHaveTextContent("12.346");
   });
 
-  it("steps a low of 5 digits or more down a size and lets it break, so the chip never spills", () => {
+  it("steps a low of 5 and 6 digits down a size on one line, so the chip never spills", () => {
     render(
       <MonthChips
         months={[
           { month: "2026-11", lowest: "red", low: "-12345.00", redDays: 30 },
           { month: "2026-12", lowest: "red", low: "-1234.00", redDays: 31 },
+          { month: "2027-01", lowest: "red", low: "-123456.00", redDays: 31 },
         ]}
         onOpen={vi.fn()}
       />,
     );
-    expect(screen.getByText("-12.345")).toHaveClass("text-xs", "break-all");
-    expect(screen.getByText("-1.234")).toHaveClass("text-sm", "break-all");
+    expect(screen.getByText("-12.345")).toHaveClass("text-[11px]", "whitespace-nowrap");
+    expect(screen.getByText("-1.234")).toHaveClass("text-sm", "whitespace-nowrap");
+    expect(screen.getByText("-123.456")).toHaveClass("text-[10px]", "whitespace-nowrap");
   });
 
   it("shows the low before the draft only where it moved, matched by month", () => {
