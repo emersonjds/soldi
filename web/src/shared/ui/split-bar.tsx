@@ -1,6 +1,7 @@
 import { cn } from "@/lib/utils";
 import { useCurrency } from "@/shared/lib/currency";
 import { formatMoney } from "@/shared/lib/money";
+import { wholeShare } from "@/shared/lib/percent";
 import { cents, fromCents } from "@/shared/lib/tier";
 
 import { Money } from "./money";
@@ -14,13 +15,6 @@ const TONE = {
 };
 
 export type SplitSegment = { label: string; amount: string; tone: keyof typeof TONE };
-
-/** Whole percent of `base`, half to even, in integer cents. */
-const share = (part: number, base: number) => {
-  const whole = Math.floor((part * 100) / base);
-  const twice = 2 * (part * 100 - whole * base);
-  return whole + (twice > base || (twice === base && whole % 2 === 1) ? 1 : 0);
-};
 
 /**
  * A 12 px bar of the segments above zero, sized by their cents, with a legend of amounts and shares.
@@ -41,7 +35,7 @@ export const SplitBar = ({
     .map((segment) => ({ ...segment, value: cents(segment.amount) }))
     .filter(({ value }) => value > 0);
   const base = shown.reduce((sum, { value }) => sum + value, 0);
-  const rows = shown.map((segment) => ({ ...segment, share: `${share(segment.value, base)}%` }));
+  const rows = shown.map((segment) => ({ ...segment, share: `${wholeShare(segment.value, base)}%` }));
   const summary = `${label} ${formatMoney(fromCents(base), currency)}: ${rows
     .map((row) => `${row.label.toLowerCase()} ${row.share}`)
     .join(", ")}`;
