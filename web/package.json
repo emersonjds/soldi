@@ -10,6 +10,7 @@
     "format": "biome check --write",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
+    "test:tz": "TZ=Pacific/Kiritimati vitest run src/shared/ui/date-",
     "gen:api": "openapi-typescript openapi.json -o src/shared/api/schema.d.ts",
     "e2e": "playwright test"
   },
