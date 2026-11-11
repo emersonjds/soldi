@@ -1,15 +1,12 @@
-import { expect, test } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 
+import { expectNoClipped } from "./clipped";
 import { requireServer } from "./server";
 
-test("an entry shows up in Para onde vai and Cofrinhos starts empty", async ({ page, request }) => {
-  await requireServer(request);
-  // The dev server compiles both report screens on first visit.
-  test.setTimeout(90_000);
-
+const signUp = async (page: Page, who: string) => {
   await page.setViewportSize({ width: 375, height: 812 });
   await page.goto("/criar-conta");
-  await page.getByLabel("E-mail").fill(`e2e-reports-${Date.now()}@example.com`);
+  await page.getByLabel("E-mail").fill(`e2e-${who}-${Date.now()}@example.com`);
   await page.getByLabel("Senha").fill("uma-senha-bem-longa");
   await page.getByRole("button", { name: "Criar conta" }).click();
   await page.getByRole("button", { name: "Continuar" }).click();
@@ -19,6 +16,14 @@ test("an entry shows up in Para onde vai and Cofrinhos starts empty", async ({ p
   await page.getByRole("button", { name: "Ver meu mês" }).click();
   await page.getByRole("button", { name: "Pular" }).click();
   await page.getByRole("dialog", { name: "Lançar" }).getByRole("button", { name: "Fechar" }).click();
+};
+
+test("an entry shows up in Para onde vai and Cofrinhos starts empty", async ({ page, request }) => {
+  await requireServer(request);
+  // The dev server compiles both report screens on first visit.
+  test.setTimeout(90_000);
+
+  await signUp(page, "reports");
 
   const nav = page.getByRole("navigation", { name: "Navegação principal" });
   await nav.getByRole("button", { name: "Lançar" }).click();
@@ -45,4 +50,60 @@ test("an entry shows up in Para onde vai and Cofrinhos starts empty", async ({ p
   await expect(page.getByRole("heading", { level: 1, name: "Cofrinhos" })).toBeVisible();
   await expect(page.getByRole("region", { name: "Guardado" })).toContainText("R$ 0,00");
   await expect(page.getByText("Nenhum cofrinho ainda. Comece pela reserva de emergência.")).toBeVisible();
+});
+
+test("Economia folds two cofrinhos and lists both their entries, unclipped from 375 to 1440", async ({
+  page,
+  request,
+}) => {
+  await requireServer(request);
+  test.setTimeout(90_000);
+  await signUp(page, "groups");
+
+  const now = new Date();
+  const today = [now.getFullYear(), now.getMonth() + 1, now.getDate()].map((part) => String(part).padStart(2, "0"));
+  const categories: { id: string; kind: string; is_savings: boolean; parent_id: string | null }[] = await (
+    await page.request.get("/api/categories")
+  ).json();
+  const economia = categories.find(
+    (category) => category.is_savings && !category.parent_id && category.kind === "bill",
+  );
+  const save = async (category_id: string | undefined, amount: string, note: string) => {
+    const created = await page.request.post("/api/transactions", {
+      data: { date: today.join("-"), amount, kind: "bill", category_id, note },
+    });
+    expect(created.ok()).toBe(true);
+  };
+  for (const [name, amount] of [
+    ["Reserva", "12345.67"],
+    ["Viagem", "2345.10"],
+  ]) {
+    const created = await page.request.post("/api/categories", {
+      data: { name, kind: "bill", parent_id: economia?.id, target: "50000.00" },
+    });
+    expect(created.ok()).toBe(true);
+    await save((await created.json()).id, amount, `Aporte ${name}`);
+  }
+  await save(economia?.id, "150.00", "Guardado solto");
+
+  await page
+    .getByRole("navigation", { name: "Navegação principal" })
+    .getByRole("link", { name: "Para onde vai" })
+    .click();
+  const legend = page.getByRole("list", { name: "Categorias" });
+  await expect(legend.getByRole("button", { name: /^Economia/ })).toContainText("R$ 14.840,77");
+  await legend.getByRole("button", { name: "Mostrar subcategorias de Economia" }).click();
+  await expect(legend).toContainText("Economia (sem subcategoria)R$ 150,00");
+  await legend.getByRole("button", { name: /^Economia/ }).click();
+
+  const entries = page.getByRole("region", { name: "Lançamentos de Economia" });
+  await expect(entries).toContainText("Aporte Reserva");
+  await expect(entries).toContainText("Aporte Viagem");
+  await expect(entries).toContainText("3 lançamentos");
+  await expect(entries).toContainText("Total: R$ 14.840,77");
+
+  for (const width of [375, 1024, 1280, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expectNoClipped(page);
+  }
 });
