@@ -34,7 +34,7 @@ const MonthScreen = () => {
   const fromTour = search.get("lancar") === "1";
   const view = useMonth(month);
   const transactions = useTransactions(month);
-  const [launching, setLaunching] = useState<"income" | "daily" | null>(fromTour ? "income" : null);
+  const [launching, setLaunching] = useState<"income" | "bill" | "daily" | null>(fromTour ? "income" : null);
   const [hint, setHint] = useState(fromTour);
   const [highlight, setHighlight] = useState<{ date: string } | null>(null);
   const [expandedMonth, setExpandedMonth] = useState<string | null>(null);
@@ -91,11 +91,7 @@ const MonthScreen = () => {
       )}
       {view.data && (
         <>
-          <MonthHero
-            view={view.data}
-            onLaunchIncome={() => setLaunching("income")}
-            className={`${wide} xl:row-start-1`}
-          >
+          <MonthHero view={view.data} onLaunch={setLaunching} className={`${wide} xl:row-start-1`}>
             {alert && <RedDayAlert alert={alert} onJump={jump} />}
           </MonthHero>
           <BillsOfMonth view={view.data} className={`${wide} xl:row-start-2`} />
