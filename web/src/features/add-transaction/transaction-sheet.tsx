@@ -160,13 +160,19 @@ const TransactionForm = ({
     };
   };
 
-  const submit = (event: FormEvent) => {
-    event.preventDefault();
+  const save = () => {
     const valid = fields();
     if (valid) onSave(valid, series ? draft.scope : undefined, moving);
   };
 
-  const convertible = onConvert && (transaction?.kind ?? draft.kind) === "bill" && !draft.repeat && !installments;
+  // D16: while simulating, only Lançar de verdade writes; Enter must not.
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    if (!draft.simulate) save();
+  };
+
+  const convertible =
+    onConvert && (transaction?.kind ?? draft.kind) === "bill" && !draft.repeat && !installments && !draft.simulate;
 
   // Editar converts the stored entry; its unsaved edits stay out.
   const convert = () => {
@@ -399,7 +405,9 @@ const TransactionForm = ({
       <ResponsiveSheetFooter>
         {draft.simulate ? (
           <>
-            <BrandButton type="submit">Lançar de verdade</BrandButton>
+            <BrandButton type="button" onClick={save}>
+              Lançar de verdade
+            </BrandButton>
             <Button type="button" variant="ghost" className="h-12 w-full text-base" onClick={onDiscard}>
               Descartar
             </Button>
