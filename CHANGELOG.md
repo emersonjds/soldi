@@ -7,6 +7,15 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.27.0
+
+> Headline: Para onde vai and Cofrinhos on the new cards, closing the redesign
+
+### Web
+
+- Para onde vai shows the donut and legend in a "Por categoria" card and the Top 5 beside it on desktop, with the total in the figure size and an illustrated empty state (SOL-66).
+- Cofrinhos opens with the Guardado total in the hero size and shows each cofrinho as a card, two per row on desktop, with an illustrated empty state.
+
 ## 0.26.0
 
 > Headline: mobile polish, and the Saldo hoje hero is back
