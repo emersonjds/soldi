@@ -1,4 +1,4 @@
-import { screen, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -165,7 +165,7 @@ describe("CategoryBreakdown by group", () => {
 
     await userEvent.click(chevron);
     expect(chevron).toHaveAttribute("aria-expanded", "false");
-    expect(screen.queryByText("Economia (sem subcategoria)")).not.toBeInTheDocument();
+    expect(within(legend()).queryByText("Economia (sem subcategoria)")).not.toBeInTheDocument();
   });
 
   it("shows no sem subcategoria row when a group's children add up to it", async () => {
@@ -322,6 +322,43 @@ describe("CategoryBreakdown by group", () => {
     expect(pick("Economia")).toHaveAttribute("aria-pressed", "false");
   });
 
+  it("clears the selection when its group folds away the selected subcategory", async () => {
+    show();
+    await userEvent.click(await screen.findByRole("button", { name: "Mostrar subcategorias de Economia" }));
+    await userEvent.click(pick("Reserva"));
+    expect(panel("Economia › Reserva")).toBeInTheDocument();
+
+    await userEvent.click(fold("Economia"));
+
+    expect(screen.queryByRole("region", { name: /^Lançamentos de/ })).not.toBeInTheDocument();
+  });
+
+  it("keeps a group selected when it folds", async () => {
+    show();
+    await userEvent.click(await screen.findByRole("button", { name: "Mostrar subcategorias de Economia" }));
+    await userEvent.click(pick("Economia"));
+
+    await userEvent.click(fold("Economia"));
+
+    expect(panel("Economia")).toBeInTheDocument();
+  });
+
+  it("selects a group from its donut slice", async () => {
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 0, 224, 224));
+    show();
+    await screen.findByText("Saídas do mês");
+
+    const slices = await waitFor(() => {
+      const found = document.querySelectorAll<HTMLElement>(".recharts-pie-sector");
+      expect(found).toHaveLength(3);
+      return found;
+    });
+    await userEvent.click(slices[1]);
+
+    expect(pick("Economia")).toHaveAttribute("aria-pressed", "true");
+    expect(panel("Economia")).toBeInTheDocument();
+  });
+
   it("shows each Top 5 line with its amount and flat share", async () => {
     show();
 
@@ -336,7 +373,7 @@ describe("CategoryBreakdown by group", () => {
       "Economia › ReservaR$ 1.000,10 (7,4%)",
       "Economia › ViagemR$ 250,20 (1,8%)",
       "MercadoR$ 184,31 (1,4%)",
-      "EconomiaR$ 149,70 (1,1%)",
+      "Economia (sem subcategoria)R$ 149,70 (1,1%)",
     ]);
   });
 });

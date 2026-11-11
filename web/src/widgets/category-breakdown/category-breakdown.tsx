@@ -202,15 +202,21 @@ const GroupRow = ({ group, shares, of, total, open, selected, onOpen, onSelect }
   );
 };
 
-const TopFive = ({ shares, className }: { shares: CategoryShare[]; className?: string }) => {
+type TopFiveProps = { shares: CategoryShare[]; groups: Group[]; className?: string };
+
+const TopFive = ({ shares, groups, className }: TopFiveProps) => {
   const label = useCategoryLabel();
+  const parents = new Set(groups.filter((group) => group.children.length > 0).map((group) => group.category_id));
   return (
     <DashCard title="Top 5" className={className}>
       <ol className="flex flex-col gap-4">
         {shares.slice(0, 5).map((share) => (
           <li key={share.category_id} className="flex flex-col gap-1.5">
             <span className="flex items-baseline justify-between gap-3 text-sm">
-              <span className="truncate">{label(share)}</span>
+              <span className="truncate">
+                {label(share)}
+                {parents.has(share.category_id) && " (sem subcategoria)"}
+              </span>
               <span className="shrink-0 tabular-nums">
                 <Money amount={share.amount} className="font-semibold" />{" "}
                 <span className="text-muted-foreground">({formatPct(share.pct)})</span>
@@ -401,7 +407,10 @@ export const CategoryBreakdown = ({ month }: { month: string }) => {
                     total={total}
                     open={open.includes(each.category_id)}
                     selected={selected}
-                    onOpen={() => fold(each.category_id)}
+                    onOpen={() => {
+                      fold(each.category_id);
+                      if (selected && each.children.includes(selected)) setSelected(undefined);
+                    }}
                     onSelect={toggle}
                   />
                 ))}
@@ -412,7 +421,7 @@ export const CategoryBreakdown = ({ month }: { month: string }) => {
       </DashCard>
       <div className="flex flex-col gap-6">
         {chosen && <CategoryEntries month={month} chosen={chosen} onClear={() => setSelected(undefined)} />}
-        {shares.length > 0 && <TopFive shares={shares} className="lg:order-first" />}
+        {shares.length > 0 && <TopFive shares={shares} groups={groups} className="lg:order-first" />}
       </div>
     </div>
   );
