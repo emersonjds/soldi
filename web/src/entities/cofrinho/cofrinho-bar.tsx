@@ -7,7 +7,7 @@ import type { Cofrinho } from "./cofrinho-queries";
 
 /** The template's Progress in the cofrinho's color; it keeps `value` off the root, so the meter reads aria-valuenow. */
 export const CofrinhoBar = ({ cofrinho }: { cofrinho: Cofrinho }) => {
-  const pct = Number(cofrinho.progress_pct ?? 0);
+  const pct = Math.max(0, Number(cofrinho.progress_pct ?? 0));
   const color: CSSProperties & { "--bar": string } = { "--bar": categoryFill(cofrinho.color) };
   return (
     <Progress

@@ -78,34 +78,50 @@ const Status = ({ cofrinho }: { cofrinho: Cofrinho }) => {
   return <span className="text-muted-foreground text-sm tabular-nums">{formatPct(cofrinho.progress_pct, 0)}</span>;
 };
 
-type CardProps = { cofrinho: Cofrinho; onOpen: () => void; onSave: () => void; onWithdraw: () => void };
+type CardProps = {
+  cofrinho: Cofrinho;
+  disabled: boolean;
+  onOpen: () => void;
+  onSave: () => void;
+  onWithdraw: () => void;
+};
 
-/** Guardar and Resgatar sit above the open button's overlay; an empty cofrinho only takes its first deposit. */
-const CardActions = ({ cofrinho, onSave, onWithdraw }: Omit<CardProps, "onOpen">) => {
-  if (cents(cofrinho.balance) <= 0)
+/** Guardar and Resgatar sit above the open button's overlay, which still takes taps beside them; an empty cofrinho only takes its first deposit. */
+const CardActions = ({ cofrinho, disabled, onSave, onWithdraw }: Omit<CardProps, "onOpen">) => {
+  if (cents(cofrinho.balance) === 0)
     return (
       <div className="relative z-10 mt-4">
-        <Button variant="secondary" className="min-h-11 w-full text-base" onClick={onSave}>
+        <Button variant="secondary" className="min-h-11 w-full text-base" disabled={disabled} onClick={onSave}>
           <Plus className="size-5" />
-          Guardar primeiro valor
+          Guardar primeiro valor <span className="sr-only">em {cofrinho.name}</span>
         </Button>
       </div>
     );
   return (
-    <div className="relative z-10 mt-4 flex gap-2">
-      <Button variant="secondary" className="min-h-11 px-4 text-base" onClick={onSave}>
+    <div className="pointer-events-none relative z-10 mt-4 flex gap-2">
+      <Button
+        variant="secondary"
+        className="pointer-events-auto min-h-11 px-4 text-base"
+        disabled={disabled}
+        onClick={onSave}
+      >
         <Plus className="size-5" />
-        Guardar
+        Guardar <span className="sr-only">em {cofrinho.name}</span>
       </Button>
-      <Button variant="ghost" className="min-h-11 px-4 text-base" onClick={onWithdraw}>
-        Resgatar
+      <Button
+        variant="ghost"
+        className="pointer-events-auto min-h-11 px-4 text-base"
+        disabled={disabled}
+        onClick={onWithdraw}
+      >
+        Resgatar <span className="sr-only">de {cofrinho.name}</span>
       </Button>
     </div>
   );
 };
 
 /** The button stretches over the whole DashCard, so a tap anywhere on the card opens the cofrinho. */
-const CofrinhoCard = ({ cofrinho, onOpen, onSave, onWithdraw }: CardProps) => (
+const CofrinhoCard = ({ cofrinho, disabled, onOpen, onSave, onWithdraw }: CardProps) => (
   <li className="min-w-0">
     <DashCard
       title={cofrinho.name}
@@ -126,7 +142,7 @@ const CofrinhoCard = ({ cofrinho, onOpen, onSave, onWithdraw }: CardProps) => (
         </span>
         <Balance cofrinho={cofrinho} />
       </button>
-      <CardActions cofrinho={cofrinho} onSave={onSave} onWithdraw={onWithdraw} />
+      <CardActions cofrinho={cofrinho} disabled={disabled} onSave={onSave} onWithdraw={onWithdraw} />
     </DashCard>
   </li>
 );
@@ -177,6 +193,7 @@ const Movements = ({ categoryId }: { categoryId: string }) => {
 
 type DetailProps = {
   cofrinho?: Cofrinho;
+  saveDisabled: boolean;
   withdrawing: boolean;
   onWithdrawingChange: (withdrawing: boolean) => void;
   onOpenChange: (open: boolean) => void;
@@ -190,6 +207,7 @@ const action = "min-h-12 justify-start gap-3 text-base";
 /** The cofrinho's sheet: Guardar, Resgatar, its movements, Editar and Excluir; `Sem objetivo` is only Economia. */
 const CofrinhoDetail = ({
   cofrinho,
+  saveDisabled,
   withdrawing,
   onWithdrawingChange: setWithdrawing,
   onOpenChange,
@@ -199,10 +217,7 @@ const CofrinhoDetail = ({
 }: DetailProps) => (
   <ResponsiveSheet
     open={Boolean(cofrinho)}
-    onOpenChange={(open) => {
-      setWithdrawing(false);
-      onOpenChange(open);
-    }}
+    onOpenChange={onOpenChange}
     title={cofrinho?.name ?? ""}
     description="Guardar, resgatar e ver os movimentos do cofrinho."
   >
@@ -218,7 +233,7 @@ const CofrinhoDetail = ({
         ) : (
           <>
             <div className="grid grid-cols-2 gap-2">
-              <BrandButton onClick={() => onSave(cofrinho)}>
+              <BrandButton disabled={saveDisabled} onClick={() => onSave(cofrinho)}>
                 <ArrowDownToLine className="size-5" />
                 Guardar
               </BrandButton>
@@ -326,6 +341,10 @@ export const CofrinhosView = () => {
     setSelectedId(id);
   };
   const save = (id: string) => {
+    if (categories.isError) {
+      categories.refetch();
+      return toast.error("Não foi possível carregar as categorias.");
+    }
     setSelectedId(undefined);
     setSaving(categoryOf(id));
   };
@@ -375,7 +394,31 @@ export const CofrinhosView = () => {
     return (
       <>
         <Total data={cofrinhos.data} />
-        {items.length === 0 ? (
+        {items.length > 0 && (
+          <section aria-labelledby="cofrinhos-grid-title" className="flex flex-col gap-3">
+            <h2 className="flex items-baseline gap-2 font-semibold text-lg leading-6">
+              <span id="cofrinhos-grid-title">Seus cofrinhos</span>{" "}
+              {active > 0 && (
+                <span className="font-normal text-muted-foreground text-sm">
+                  {active} {active === 1 ? "ativo" : "ativos"}
+                </span>
+              )}
+            </h2>
+            <ul aria-label="Cofrinhos" className="grid gap-4 lg:grid-cols-2">
+              {items.map((item) => (
+                <CofrinhoCard
+                  key={item.category_id}
+                  cofrinho={item}
+                  disabled={categories.isPending}
+                  onOpen={() => openCofrinho(item.category_id, false)}
+                  onSave={() => save(item.category_id)}
+                  onWithdraw={() => openCofrinho(item.category_id, true)}
+                />
+              ))}
+            </ul>
+          </section>
+        )}
+        {active === 0 && (
           <div className={cn(card, "items-center gap-3 px-6 py-10")}>
             <div
               aria-hidden
@@ -390,26 +433,6 @@ export const CofrinhosView = () => {
               Criar cofrinho
             </BrandButton>
           </div>
-        ) : (
-          <section aria-labelledby="cofrinhos-grid-title" className="flex flex-col gap-3">
-            <h2 className="flex items-baseline gap-2 font-semibold text-lg leading-6">
-              <span id="cofrinhos-grid-title">Seus cofrinhos</span>
-              <span className="font-normal text-muted-foreground text-sm">
-                {active} {active === 1 ? "ativo" : "ativos"}
-              </span>
-            </h2>
-            <ul aria-label="Cofrinhos" className="grid gap-4 lg:grid-cols-2">
-              {items.map((item) => (
-                <CofrinhoCard
-                  key={item.category_id}
-                  cofrinho={item}
-                  onOpen={() => openCofrinho(item.category_id, false)}
-                  onSave={() => save(item.category_id)}
-                  onWithdraw={() => openCofrinho(item.category_id, true)}
-                />
-              ))}
-            </ul>
-          </section>
         )}
       </>
     );
@@ -427,6 +450,7 @@ export const CofrinhosView = () => {
       {body()}
       <CofrinhoDetail
         cofrinho={selected}
+        saveDisabled={categories.isPending}
         withdrawing={withdrawing}
         onWithdrawingChange={setWithdrawing}
         onOpenChange={(open) => !open && setSelectedId(undefined)}
