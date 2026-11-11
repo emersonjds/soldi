@@ -6,14 +6,14 @@ import { useSearchParams } from "next/navigation";
 
 import { monthParam } from "@/shared/lib/date";
 import { BreakdownSkeleton, CategoryBreakdown } from "@/widgets/category-breakdown/category-breakdown";
-import { MonthHeader } from "@/widgets/month-header/month-header";
+import { PageHero } from "@/widgets/month-header/month-header";
 
 const ParaOndeVaiScreen = () => {
   const month = monthParam(useSearchParams().get("m"));
 
   return (
     <div className="flex flex-col gap-6">
-      <MonthHeader title="Para onde vai" />
+      <PageHero title="Para onde vai" className="lg:sr-only" />
       <CategoryBreakdown key={month} month={month} />
     </div>
   );
