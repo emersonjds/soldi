@@ -1,11 +1,11 @@
 use chrono::Months;
-use soldi_types::reports::CategoryReport;
+use soldi_types::reports::{CategoryReport, SavingsYear};
 use sqlx::PgPool;
 
 use super::{domain, repo};
 use crate::error::AppError;
 use crate::extract::CurrentUser;
-use crate::months;
+use crate::{months, settings};
 
 pub async fn categories(
     pool: &PgPool,
@@ -18,4 +18,21 @@ pub async fn categories(
     let sums =
         repo::category_sums(&mut conn, user.id, from, months::domain::month_end(month)).await?;
     Ok(domain::report(month, sums))
+}
+
+/// 2 queries: the opening date, then one row per month with entries.
+pub async fn savings(
+    pool: &PgPool,
+    user: &CurrentUser,
+    year: &str,
+) -> Result<SavingsYear, AppError> {
+    let year = domain::parse_year(year)?;
+    let mut conn = pool.acquire().await?;
+    let opening = settings::repo::find(&mut conn, user.id).await?.opening_date;
+    let range = domain::year_range(year, opening, crate::today_sao_paulo());
+    let sums = match range {
+        Some((from, to)) => repo::savings_by_month(&mut conn, user.id, from, to).await?,
+        None => Vec::new(),
+    };
+    Ok(domain::savings_year(year, range, sums))
 }
