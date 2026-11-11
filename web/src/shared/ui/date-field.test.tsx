@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DateField } from "./date-field";
+import { ResponsiveSheet } from "./responsive-sheet";
 
 const NativeFormat = Intl.DateTimeFormat;
 
@@ -79,6 +80,39 @@ describe("DateField", () => {
     expect(await screen.findByRole("button", { name: "segunda-feira, 2 de novembro de 2026" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "quarta-feira, 11 de novembro de 2026" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "terça-feira, 3 de novembro de 2026" })).toBeEnabled();
+  });
+
+  it("names its calendar by the label and scrolls it inside the room left on a short screen", async () => {
+    render(<DateField label="Data" value="2026-11-05" onChange={vi.fn()} />);
+
+    await userEvent.click(screen.getByRole("button", { name: "Data, 05/11/2026" }));
+
+    expect(await screen.findByRole("dialog", { name: "Data" })).toHaveClass(
+      "max-h-(--radix-popover-content-available-height)",
+      "overflow-y-auto",
+    );
+  });
+
+  it("inside a sheet, holds focus in the calendar and hands it back to the trigger after Esc and after a pick", async () => {
+    const onChange = vi.fn();
+    render(
+      <ResponsiveSheet open onOpenChange={vi.fn()} title="Lançar" description="Entrada, conta ou gasto do dia.">
+        <DateField label="Outra data" value="2026-11-05" onChange={onChange} />
+      </ResponsiveSheet>,
+    );
+    const trigger = screen.getByRole("button", { name: "Outra data, 05/11/2026" });
+
+    await userEvent.click(trigger);
+    await screen.findByRole("dialog", { name: "Outra data" });
+    expect(screen.queryByRole("dialog", { name: "Lançar" })).not.toBeInTheDocument();
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => expect(trigger).toHaveFocus());
+    expect(screen.getByRole("dialog", { name: "Lançar" })).toBeInTheDocument();
+
+    await userEvent.click(trigger);
+    await userEvent.click(await screen.findByRole("button", { name: "sexta-feira, 20 de novembro de 2026" }));
+    expect(onChange).toHaveBeenCalledWith("2026-11-20");
+    await waitFor(() => expect(trigger).toHaveFocus());
   });
 
   it("stops at January 2000 by default, Soldi's first month", async () => {

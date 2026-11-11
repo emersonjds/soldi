@@ -38,7 +38,7 @@ export const DateField = ({
   const shown = selected && new Intl.DateTimeFormat("pt-BR").format(selected);
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover modal open={open} onOpenChange={setOpen}>
       <PopoverTrigger
         id={id}
         aria-label={shown ? `${label}, ${shown}` : label}
@@ -50,7 +50,12 @@ export const DateField = ({
         <CalendarDays className="size-5 shrink-0 text-muted-foreground" aria-hidden />
         {shown ?? <span className="text-muted-foreground">Escolher data</span>}
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-auto p-0">
+      <PopoverContent
+        align="start"
+        collisionPadding={8}
+        aria-label={label}
+        className="max-h-(--radix-popover-content-available-height) w-auto overflow-y-auto p-0"
+      >
         <Calendar
           mode="single"
           required
@@ -66,7 +71,7 @@ export const DateField = ({
             onChange(todayISO(date));
             setOpen(false);
           }}
-          className="[--cell-size:--spacing(11)]"
+          className="[--cell-size:min(--spacing(11),calc((100vw_-_32px)/7))]"
         />
       </PopoverContent>
     </Popover>
