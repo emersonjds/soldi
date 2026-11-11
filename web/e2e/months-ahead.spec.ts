@@ -50,6 +50,10 @@ test("Próximos meses paints the first two months the rent is owed Crítico and 
   // Rent with nothing coming in: the last months fall below -R$ 10.000.
   await expect(chips.nth(11)).toContainText(/-\d{2}\.\d{3}/);
   await expectNoClipped(page);
+  // A 1280 laptop squeezes the Termômetro card between the sidebar and the other columns.
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await expectNoClipped(page);
+  await page.setViewportSize({ width: 375, height: 812 });
 
   await chips.nth(first + 1).click();
   await expect(page).toHaveURL(new RegExp(`m=${monthFromNow(first + 1)}`));
