@@ -57,32 +57,31 @@ describe("splitOf", () => {
     });
   });
 
-  it("counts a resgate back into Guardado, so Guardado is what went into the cofrinhos", () => {
+  it("nets a resgate out of Guardado and back into Livre restante", () => {
     expect(splitOf(totals("5000.00", "2500.00", "500.00", "700.00", "2000.00", "300.00"))).toEqual({
       base: "income",
       segments: [
         { label: "Contas fixas", amount: "1500.00", tone: "bills" },
-        { label: "Guardado", amount: "1000.00", tone: "saved" },
+        { label: "Guardado", amount: "700.00", tone: "saved" },
         { label: "Gastos diários", amount: "500.00", tone: "daily" },
-        { label: "Livre restante", amount: "2000.00", tone: "free" },
+        { label: "Livre restante", amount: "2300.00", tone: "free" },
       ],
     });
   });
 
-  it("keeps the deposit in Guardado and Contas whole when the month withdrew more than it saved", () => {
-    expect(splitOf(totals("3000.00", "1100.00", "400.00", "-400.00", "1500.00", "500.00"))?.segments).toEqual([
-      { label: "Contas fixas", amount: "1000.00", tone: "bills" },
-      { label: "Guardado", amount: "100.00", tone: "saved" },
-      { label: "Gastos diários", amount: "400.00", tone: "daily" },
-      { label: "Livre restante", amount: "1500.00", tone: "free" },
+  it("shows no Guardado once the month's deposit was all resgatado", () => {
+    expect(splitOf(totals("24624.12", "3000.00", "15514.38", "0.00", "6109.74", "3000.00"))?.segments).toEqual([
+      { label: "Contas fixas", amount: "0.00", tone: "bills" },
+      { label: "Gastos diários", amount: "15514.38", tone: "daily" },
+      { label: "Livre restante", amount: "9109.74", tone: "free" },
     ]);
   });
 
-  it("hides Guardado when a resgate is the month's only cofrinho movement", () => {
-    expect(splitOf(totals("2000.00", "1000.00", "500.00", "-300.00", "500.00", "300.00"))?.segments).toEqual([
+  it("shows no Guardado and frees the resgate when the month withdrew more than it saved", () => {
+    expect(splitOf(totals("3000.00", "1100.00", "400.00", "-400.00", "1500.00", "500.00"))?.segments).toEqual([
       { label: "Contas fixas", amount: "1000.00", tone: "bills" },
-      { label: "Gastos diários", amount: "500.00", tone: "daily" },
-      { label: "Livre restante", amount: "500.00", tone: "free" },
+      { label: "Gastos diários", amount: "400.00", tone: "daily" },
+      { label: "Livre restante", amount: "2000.00", tone: "free" },
     ]);
   });
 
