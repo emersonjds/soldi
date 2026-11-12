@@ -7,6 +7,19 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.45.0
+
+> Headline: a category changes between Diário and Saída
+
+### Server
+
+- `PATCH /api/categories/{id}` takes `kind` (`daily` or `bill`): the category and its own entries, series included, move to the new kind in one transaction; its subcategories keep theirs (D27). The balance never changes.
+- Refused with 422 `kind-locked` (Economia, cofrinhos, Resgate, income), 409 `duplicate-name`, 422 `category-has-bills` (an unarchived conta fixa, active or paused) and 422 `palette-full`; a conta fixa whose category is no longer a Saída can be neither paid nor resumed.
+
+### Web
+
+- Editar categoria shows `Tipo` (Diário / Saída) with a confirmation: `Mudar para Saída?` — `Todos os lançamentos de {nome} passam a ser Saída. O saldo não muda.`
+
 ## 0.44.0
 
 > Headline: a group holds Diário and Saída together
