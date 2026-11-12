@@ -9,23 +9,22 @@ export type Split = {
 };
 
 /**
- * Spec 2026-11-10 §2.1 in whole cents: the deposits (`saved + withdrawn`) are inside `bills`,
- * `performance = income − bills − daily`. Null without an entrada (SOL-79 §2.4).
+ * Spec 2026-11-10 §2.1 in whole cents: the deposits (`saved + withdrawn`) are inside `bills`.
+ * Guardado is the month's net saving; a resgate is money back, so it joins Livre restante.
+ * Null without an entrada (SOL-79 §2.4).
  */
 export const splitOf = (totals: Schemas["MonthView"]["totals"]): Split | null => {
   const income = cents(totals.income);
-  const bills = cents(totals.bills);
-  const deposits = cents(totals.saved) + cents(totals.withdrawn);
-  const performance = cents(totals.performance);
+  const saved = cents(totals.saved);
+  const withdrawn = cents(totals.withdrawn);
+  const free = cents(totals.performance) + withdrawn;
   if (income === 0) return null;
 
   const segments: SplitSegment[] = [
-    { label: "Contas fixas", amount: fromCents(bills - deposits), tone: "bills" },
-    ...(deposits > 0 ? [{ label: "Guardado", amount: fromCents(deposits), tone: "saved" } satisfies SplitSegment] : []),
+    { label: "Contas fixas", amount: fromCents(cents(totals.bills) - saved - withdrawn), tone: "bills" },
+    ...(saved > 0 ? [{ label: "Guardado", amount: totals.saved, tone: "saved" } satisfies SplitSegment] : []),
     { label: "Gastos diários", amount: totals.daily, tone: "daily" },
-    ...(performance > 0
-      ? [{ label: "Livre restante", amount: totals.performance, tone: "free" } satisfies SplitSegment]
-      : []),
+    ...(free > 0 ? [{ label: "Livre restante", amount: fromCents(free), tone: "free" } satisfies SplitSegment] : []),
   ];
-  return { base: performance < 0 ? "outflow" : "income", segments };
+  return { base: free < 0 ? "outflow" : "income", segments };
 };
