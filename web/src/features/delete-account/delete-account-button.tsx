@@ -2,6 +2,7 @@
 
 import { type FormEvent, useEffect, useRef, useState } from "react";
 
+import { Ban } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -60,66 +61,67 @@ export const DeleteAccountButton = () => {
   };
 
   return (
-    <div className="flex flex-col gap-4 rounded-2xl bg-card p-4 shadow-sm lg:p-6">
-      <p className="text-muted-foreground text-sm">{WARNING}</p>
-      <AlertDialog open={open} onOpenChange={change}>
-        <AlertDialogTrigger asChild>
-          <Button variant="destructive" className="h-11 lg:w-auto lg:self-start lg:px-8">
-            Excluir minha conta
-          </Button>
-        </AlertDialogTrigger>
-        <AlertDialogContent>
-          <form noValidate onSubmit={submit} className="grid gap-4">
-            <AlertDialogHeader>
-              <AlertDialogTitle>Excluir sua conta?</AlertDialogTitle>
-              <AlertDialogDescription>{WARNING}</AlertDialogDescription>
-            </AlertDialogHeader>
-            <Field className="gap-1.5" data-invalid={wrongPassword}>
-              <FieldLabel htmlFor="delete-password">Senha</FieldLabel>
-              <Input
-                id="delete-password"
-                ref={passwordField}
-                type="password"
-                autoComplete="current-password"
-                value={password}
-                onChange={(event) => {
-                  setPassword(event.target.value);
-                  remove.reset();
-                }}
-                className="h-12 text-base md:text-base"
-                aria-invalid={wrongPassword}
-                aria-describedby={wrongPassword ? "delete-password-error" : undefined}
-              />
-              {wrongPassword && <FieldError id="delete-password-error">Senha incorreta</FieldError>}
-            </Field>
-            <Field className="gap-1.5">
-              <FieldLabel htmlFor="delete-confirmation">Digite EXCLUIR para confirmar</FieldLabel>
-              <Input
-                id="delete-confirmation"
-                autoComplete="off"
-                autoCapitalize="characters"
-                spellCheck={false}
-                value={confirmation}
-                onChange={(event) => setConfirmation(event.target.value)}
-                className="h-12 text-base md:text-base"
-              />
-            </Field>
-            {remove.isError && !wrongPassword && (
-              <p role="alert" className="text-destructive text-sm">
-                {failure}
-              </p>
-            )}
-            <AlertDialogFooter>
-              <AlertDialogCancel type="button" className="h-11" disabled={remove.isPending}>
-                Cancelar
-              </AlertDialogCancel>
-              <Button type="submit" variant="destructive" className="h-11" disabled={!ready}>
-                Excluir para sempre
-              </Button>
-            </AlertDialogFooter>
-          </form>
-        </AlertDialogContent>
-      </AlertDialog>
-    </div>
+    <AlertDialog open={open} onOpenChange={change}>
+      <AlertDialogTrigger asChild>
+        <Button
+          variant="ghost"
+          className="h-11 gap-2 px-2 font-semibold text-base text-destructive hover:text-destructive"
+        >
+          <Ban aria-hidden className="size-5" />
+          Excluir conta definitivamente
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <form noValidate onSubmit={submit} className="grid gap-4">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir sua conta?</AlertDialogTitle>
+            <AlertDialogDescription>{WARNING}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <Field className="gap-1.5" data-invalid={wrongPassword}>
+            <FieldLabel htmlFor="delete-password">Senha</FieldLabel>
+            <Input
+              id="delete-password"
+              ref={passwordField}
+              type="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(event) => {
+                setPassword(event.target.value);
+                remove.reset();
+              }}
+              className="h-12 text-base md:text-base"
+              aria-invalid={wrongPassword}
+              aria-describedby={wrongPassword ? "delete-password-error" : undefined}
+            />
+            {wrongPassword && <FieldError id="delete-password-error">Senha incorreta</FieldError>}
+          </Field>
+          <Field className="gap-1.5">
+            <FieldLabel htmlFor="delete-confirmation">Digite EXCLUIR para confirmar</FieldLabel>
+            <Input
+              id="delete-confirmation"
+              autoComplete="off"
+              autoCapitalize="characters"
+              spellCheck={false}
+              value={confirmation}
+              onChange={(event) => setConfirmation(event.target.value)}
+              className="h-12 text-base md:text-base"
+            />
+          </Field>
+          {remove.isError && !wrongPassword && (
+            <p role="alert" className="text-destructive text-sm">
+              {failure}
+            </p>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogCancel type="button" className="h-11" disabled={remove.isPending}>
+              Cancelar
+            </AlertDialogCancel>
+            <Button type="submit" variant="destructive" className="h-11" disabled={!ready}>
+              Excluir para sempre
+            </Button>
+          </AlertDialogFooter>
+        </form>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 };

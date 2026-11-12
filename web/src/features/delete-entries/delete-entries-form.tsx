@@ -1,216 +1,177 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 
+import { TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { Field, FieldError, FieldLabel, FieldTitle } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { PERIOD, useDeletePeriod, useTransactionCount } from "@/entities/transaction/transaction-queries";
+import { useDeletePeriod, useTransactionCount } from "@/entities/transaction/transaction-queries";
 import { todayISO } from "@/shared/lib/date";
 
-type Mode = "month" | "year" | "all";
+type Scope = "month" | "year" | "all";
 
-const MODES: { value: Mode; label: string }[] = [
-  { value: "month", label: "Mês" },
-  { value: "year", label: "Ano" },
-  { value: "all", label: "Tudo" },
-];
-
-const chip =
-  "h-11 rounded-xl! font-semibold text-base text-muted-foreground data-[state=on]:bg-brand data-[state=on]:text-brand-foreground data-[state=on]:shadow-sm";
-
-const WORD = "APAGAR";
-
-const YEAR_RANGE = "Informe um ano entre 2000 e 2100.";
+const WORD = "CONFIRMAR";
 
 const entries = (count: number) => (count === 1 ? "1 lançamento" : `${count} lançamentos`);
 
-/** `2026-11` → `novembro de 2026`, `2026` → `2026`, `all` → `todo o período`. */
-const periodName = (period: string) => {
-  if (period === "all") return "todo o período";
-  if (period.length === 4) return period;
-  return new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(new Date(`${period}-01T12:00`));
+const records = (count: number) => (count === 1 ? "1 registro" : `${count} registros`);
+
+/** `2026-11` → `Novembro 2026`. */
+const monthName = (month: string) => {
+  const name = new Intl.DateTimeFormat("pt-BR", { month: "long" }).format(new Date(`${month}-01T12:00`));
+  return `${name[0].toUpperCase()}${name.slice(1)} ${month.slice(0, 4)}`;
 };
 
-const summary = (count: number, period: string) =>
-  `${count === 1 ? "Será apagado" : "Serão apagados"} ${entries(count)} de ${periodName(period)}.`;
+const months = (count: number) => (count === 1 ? "1 mês" : `${count} meses`);
 
-const Preview = ({ count, period }: { count: ReturnType<typeof useTransactionCount>; period: string }) => {
-  if (count.isError)
-    return (
-      <p className="text-destructive">
-        Não foi possível contar os lançamentos.{" "}
-        <Button variant="link" className="min-h-11 px-0 text-base" onClick={() => count.refetch()}>
-          Tentar de novo
-        </Button>
-      </p>
-    );
-  if (count.data === 0) return <p className="text-muted-foreground">Nada para apagar neste período.</p>;
-  if (count.data !== undefined) return <p className="font-medium">{summary(count.data, period)}</p>;
-  return count.isFetching && <p className="animate-pulse text-muted-foreground">Contando…</p>;
+/** `2026-11…` → a month count since year 0. */
+const monthIndex = (date: string) => Number(date.slice(0, 4)) * 12 + Number(date.slice(5, 7));
+
+/** Months of `year` from the opening month up to today's month; 0 for a year outside them. */
+const monthsOf = (year: string, opening: string, today: string) => {
+  const first = Math.max(monthIndex(opening), monthIndex(`${year}-01`));
+  const last = Math.min(monthIndex(today), monthIndex(`${year}-12`));
+  return Math.max(last - first + 1, 0);
 };
 
-/** Deletes the entries of a month, a year or every period, after a typed confirmation. */
-export const DeleteEntriesForm = () => {
+/** Deletes the entries of the viewed month, its year or every period, once CONFIRMAR is typed. */
+export const DeleteEntriesForm = ({ month, opening }: { month: string; opening: string }) => {
   const today = todayISO();
-  const [mode, setMode] = useState<Mode>("month");
-  const [month, setMonth] = useState(today.slice(0, 7));
-  const [year, setYear] = useState(today.slice(0, 4));
-  const [open, setOpen] = useState(false);
+  const year = month.slice(0, 4);
+  const [scope, setScope] = useState<Scope>("month");
   const [typed, setTyped] = useState("");
-  const period = { month, year, all: "all" }[mode];
-  const count = useTransactionCount(period);
+  const scopesRef = useRef<HTMLDivElement>(null);
+  const counts = {
+    month: useTransactionCount(month),
+    year: useTransactionCount(year),
+    all: useTransactionCount("all"),
+  };
   const remove = useDeletePeriod();
-  const invalid = !PERIOD.test(period);
-  const total = count.data;
+  const period = { month, year, all: "all" }[scope];
+  const yearMonths = months(monthsOf(year, opening, today));
+  const failed = Object.values(counts).filter((count) => count.isError);
 
-  const toggle = (next: boolean) => {
-    setOpen(next);
+  const scopes: { value: Scope; title: string; caption: string }[] = [
+    {
+      value: "month",
+      title: month === today.slice(0, 7) ? "Mês atual" : "Mês selecionado",
+      caption:
+        counts.month.data === undefined ? monthName(month) : `${monthName(month)} (${records(counts.month.data)})`,
+    },
+    {
+      value: "year",
+      title: `Ano de ${year}`,
+      caption: counts.year.data === undefined ? yearMonths : `${records(counts.year.data)} em ${yearMonths}`,
+    },
+    {
+      value: "all",
+      title: "Zerar tudo",
+      caption:
+        counts.all.data === undefined
+          ? "Limpa toda a base da conta"
+          : `Limpa toda a base da conta (${records(counts.all.data)})`,
+    },
+  ];
+
+  const choose = (next: Scope) => {
+    setScope(next);
     setTyped("");
     remove.reset();
   };
 
-  const confirm = (event: { preventDefault: () => void }) => {
-    event.preventDefault();
+  const confirm = () =>
     remove.mutate(period, {
       onSuccess: ({ deleted }) => {
         toast.success(`${entries(deleted)} ${deleted === 1 ? "apagado" : "apagados"}`);
-        toggle(false);
+        setTyped("");
+        scopesRef.current?.focus();
       },
     });
-  };
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-4 rounded-2xl bg-card p-4 shadow-sm lg:p-6">
-        <FieldTitle id="delete-period">Período</FieldTitle>
-        <ToggleGroup
-          type="single"
-          spacing={0}
-          value={mode}
-          onValueChange={(next: Mode | "") => next && setMode(next)}
-          aria-labelledby="delete-period"
-          className="grid w-full grid-cols-3 rounded-2xl bg-muted p-1"
-        >
-          {MODES.map(({ value, label }) => (
-            <ToggleGroupItem key={value} value={value} className={chip}>
-              {label}
-            </ToggleGroupItem>
-          ))}
-        </ToggleGroup>
-        {mode === "month" && (
-          <Field className="gap-1.5" data-invalid={invalid}>
-            <FieldLabel htmlFor="delete-month">Mês</FieldLabel>
-            <Input
-              id="delete-month"
-              type="month"
-              min="2000-01"
-              max="2100-12"
-              value={month}
-              onChange={(event) => event.target.value && setMonth(event.target.value)}
-              aria-invalid={invalid}
-              aria-describedby={invalid ? "delete-period-error" : undefined}
-              className="h-12 text-base md:text-base"
-            />
-            {invalid && <FieldError id="delete-period-error">{YEAR_RANGE}</FieldError>}
-          </Field>
-        )}
-        {mode === "year" && (
-          <Field className="gap-1.5" data-invalid={invalid}>
-            <FieldLabel htmlFor="delete-year">Ano</FieldLabel>
-            <Input
-              id="delete-year"
-              type="number"
-              inputMode="numeric"
-              min={2000}
-              max={2100}
-              value={year}
-              onChange={(event) => setYear(event.target.value)}
-              aria-invalid={invalid}
-              aria-describedby={invalid ? "delete-period-error" : undefined}
-              className="h-12 text-base tabular-nums md:text-base"
-            />
-            {invalid && <FieldError id="delete-period-error">{YEAR_RANGE}</FieldError>}
-          </Field>
-        )}
-      </div>
-
-      <div className="flex flex-col gap-2">
-        <div aria-live="polite" className="rounded-2xl bg-card p-4 shadow-sm lg:p-6">
-          <Preview count={count} period={period} />
-        </div>
-        <p className="px-1 text-muted-foreground text-sm">
-          Categorias, contas fixas e cofrinhos continuam, sem os lançamentos.
-        </p>
-      </div>
-
-      <AlertDialog open={open} onOpenChange={(next) => !remove.isPending && toggle(next)}>
-        <AlertDialogTrigger asChild>
-          <Button
-            variant="destructive"
-            disabled={!total || count.isError}
-            className="h-12 w-full text-base lg:w-auto lg:self-start lg:px-8"
+    <div className="flex flex-col gap-4">
+      <p id="delete-scope" className="font-semibold text-sm">
+        Selecione o escopo para exclusão:
+      </p>
+      <div
+        ref={scopesRef}
+        tabIndex={-1}
+        role="radiogroup"
+        aria-labelledby="delete-scope"
+        className="grid grid-cols-1 gap-2 outline-none sm:grid-cols-3"
+      >
+        {scopes.map(({ value, title, caption }) => (
+          <label
+            key={value}
+            className="flex min-h-14 cursor-pointer items-start justify-between gap-2 rounded-xl bg-muted p-3 has-checked:ring-2 has-checked:ring-brand has-focus-visible:ring-3 has-focus-visible:ring-ring/50"
           >
-            {total === undefined ? "Apagar lançamentos" : `Apagar ${entries(total)}`}
-          </Button>
-        </AlertDialogTrigger>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Apagar {entries(total ?? 0)}?</AlertDialogTitle>
-            <AlertDialogDescription>
-              {summary(total ?? 0, period)} Isso não pode ser desfeito. O saldo dos meses seguintes muda.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <Field className="gap-1.5">
-            <FieldLabel htmlFor="delete-confirm">Digite {WORD} para confirmar</FieldLabel>
-            <Input
-              id="delete-confirm"
-              autoFocus
-              autoCapitalize="characters"
-              autoComplete="off"
-              autoCorrect="off"
-              spellCheck={false}
-              placeholder={WORD}
-              value={typed}
-              onChange={(event) => setTyped(event.target.value)}
-              className="h-11 text-base md:text-base"
+            <span className="flex min-w-0 flex-col">
+              <span className="font-semibold text-sm">{title}</span>
+              <span className="text-muted-foreground text-xs">{caption}</span>
+            </span>
+            <input
+              type="radio"
+              name="delete-scope"
+              value={value}
+              aria-label={title}
+              checked={scope === value}
+              onChange={() => choose(value)}
+              className="size-5 shrink-0 accent-brand"
             />
-          </Field>
-          {remove.isError && (
-            <Alert variant="destructive">
-              <AlertDescription>Não foi possível apagar. Tente de novo.</AlertDescription>
-            </Alert>
-          )}
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={remove.isPending} className="h-11">
-              Cancelar
-            </AlertDialogCancel>
-            <AlertDialogAction
-              variant="destructive"
-              disabled={typed !== WORD || remove.isPending}
-              onClick={confirm}
-              className="h-11"
-            >
-              {remove.isPending ? "Apagando…" : "Apagar"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+          </label>
+        ))}
+      </div>
+      {failed.length > 0 && (
+        <p className="text-destructive text-sm">
+          Não foi possível contar os lançamentos.{" "}
+          <Button
+            variant="link"
+            className="min-h-11 px-0 text-sm"
+            onClick={() => {
+              for (const count of failed) count.refetch();
+            }}
+          >
+            Tentar de novo
+          </Button>
+        </p>
+      )}
+      <div className="flex flex-col gap-3 rounded-2xl bg-destructive/10 p-4 lg:flex-row lg:items-center">
+        <TriangleAlert aria-hidden className="size-6 shrink-0 text-destructive" />
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <p className="font-semibold text-sm">Ação destrutiva sem retorno</p>
+          <p id="delete-word" className="text-muted-foreground text-xs">
+            Para confirmar exclusão em massa, digite <code className="font-bold text-destructive">{WORD}</code> no
+            campo:
+          </p>
+        </div>
+        <Input
+          aria-labelledby="delete-word"
+          autoCapitalize="characters"
+          autoComplete="off"
+          autoCorrect="off"
+          spellCheck={false}
+          placeholder={WORD}
+          value={typed}
+          onChange={(event) => setTyped(event.target.value)}
+          className="h-12 bg-card text-base md:text-base lg:w-40"
+        />
+        <Button
+          variant="destructive"
+          disabled={typed !== WORD || counts[scope].data === 0 || remove.isPending}
+          onClick={confirm}
+          className="h-12 text-base"
+        >
+          {remove.isPending ? "Excluindo…" : "Excluir Lançamentos"}
+        </Button>
+      </div>
+      {remove.isError && (
+        <Alert variant="destructive">
+          <AlertDescription>Não foi possível apagar. Tente de novo.</AlertDescription>
+        </Alert>
+      )}
     </div>
   );
 };

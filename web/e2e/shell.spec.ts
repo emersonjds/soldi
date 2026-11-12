@@ -149,7 +149,7 @@ test("the shell follows Stitch from 375 to 1440: app bar and tab bar on mobile, 
     await expect(pill).toBeVisible();
     const tier = await pill.getAttribute("aria-label");
     await expect(bar.getByRole("button", { name: "Lançar" })).toBeVisible();
-    await expect(bar.getByRole("link", { name: "Minha conta", exact: true })).toHaveAttribute("href", "/ajustes/conta");
+    await expect(bar.getByRole("link", { name: "Minha conta", exact: true })).toHaveAttribute("href", "/ajustes#conta");
     await expect(tabs).toBeHidden();
     await expectNoClipped(page);
 

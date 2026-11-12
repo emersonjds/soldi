@@ -1,12 +1,8 @@
-import { createRequire } from "node:module";
-
 const isProduction = process.env.NODE_ENV === "production";
-const { version } = createRequire(import.meta.url)("./package.json");
 
 /** @type {import('next').NextConfig} */
 
 const nextConfig = {
-  env: { NEXT_PUBLIC_APP_VERSION: version },
   output: isProduction ? "export" : undefined,
   images: { unoptimized: true },
   trailingSlash: false,

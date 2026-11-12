@@ -66,11 +66,6 @@ const SIDEBAR = [
 const PAGE_NAMES = [
   ["/ajustes/contas", "Contas Fixas"],
   ["/ajustes/categorias", "Categorias"],
-  ["/ajustes/conta", "Minha Conta"],
-  ["/ajustes/moeda", "Moeda"],
-  ["/ajustes/termometro", "Termômetro"],
-  ["/ajustes/saldo-inicial", "Saldo Inicial"],
-  ["/ajustes/apagar", "Apagar Lançamentos"],
   ["/ajustes", "Ajustes"],
   ["/economia", "Economia"],
   ["/para-onde-vai", "Para Onde Vai"],
@@ -78,7 +73,7 @@ const PAGE_NAMES = [
 ] as const;
 
 /** The pages that read `?m=`; the switcher shows only there. */
-const MONTH_PAGES = ["/mes", "/para-onde-vai", "/economia", "/ajustes/contas", "/ajustes/categorias"];
+const MONTH_PAGES = ["/mes", "/para-onde-vai", "/economia", "/ajustes", "/ajustes/contas", "/ajustes/categorias"];
 
 /** Month pages whose own hero carries the switcher below 1024 px; the rest get it in a card under the app bar. */
 const HERO_SWITCHER_PAGES = ["/mes", "/para-onde-vai"];
@@ -207,7 +202,7 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
             </SidebarContent>
             <SidebarFooter className="p-3">
               <Link
-                href="/ajustes/conta"
+                href="/ajustes#conta"
                 aria-label={`Minha conta, ${name}`}
                 className="flex min-w-0 items-center gap-3 rounded-2xl bg-muted p-3 transition-colors hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring"
               >
@@ -221,9 +216,6 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
                   </span>
                 </div>
               </Link>
-              <p className="px-3 text-[11px] text-muted-foreground tabular-nums">
-                v{process.env.NEXT_PUBLIC_APP_VERSION}
-              </p>
             </SidebarFooter>
           </Sidebar>
         </aside>
@@ -248,7 +240,7 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
               Lançar
             </Button>
             <Link
-              href="/ajustes/conta"
+              href="/ajustes#conta"
               aria-label="Minha conta"
               className="flex size-11 shrink-0 items-center justify-center justify-self-end rounded-full focus-visible:outline-2 focus-visible:outline-ring"
             >

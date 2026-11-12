@@ -32,7 +32,7 @@ test("a user deletes the account, cannot sign in with it and can sign up again w
     .click();
 
   await page.getByRole("link", { name: "Minha conta", exact: true }).click();
-  await page.getByRole("button", { name: "Excluir minha conta" }).click();
+  await page.getByRole("button", { name: "Excluir conta definitivamente" }).click();
   const dialog = page.getByRole("alertdialog", { name: "Excluir sua conta?" });
   await dialog.getByLabel("Senha", { exact: true }).fill(PASSWORD);
   await dialog.getByLabel("Digite EXCLUIR para confirmar").fill("EXCLUIR");
