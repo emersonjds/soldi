@@ -75,7 +75,8 @@ const Rows = ({
   );
 };
 
-const NextDue = ({ rows, today }: { rows: Schemas["BillOfMonth"][]; today: string }) => {
+const NextDue = ({ rows: month, today }: { rows: Schemas["BillOfMonth"][]; today: string }) => {
+  const rows = month.filter((row) => !row.is_card);
   const next = nextDue(rows, today);
   return (
     <DashCard title="Próximo vencimento">

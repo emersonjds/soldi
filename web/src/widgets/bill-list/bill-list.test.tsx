@@ -203,6 +203,14 @@ describe("Contas fixas", () => {
       expect(within(await nextDue()).getByText("Todas as contas do mês pagas")).toBeInTheDocument();
     });
 
+    it("leaves a card's fatura out of the next due", async () => {
+      withRows([{ ...aluguel, name: "Porto", is_card: true, due_date: "2026-11-06" }, aluguel]);
+
+      const card = await nextDue();
+      expect(within(card).getByText("Aluguel Residencial")).toBeInTheDocument();
+      expect(within(card).queryByText("Porto")).not.toBeInTheDocument();
+    });
+
     it("says nothing is ahead when only an overdue bill is unpaid", async () => {
       withRows([luz, { ...aluguel, paid: true }]);
 
