@@ -4,7 +4,7 @@ import { requireServer } from "./server";
 
 const SHOTS = process.env.E2E_SHOTS;
 
-test("a subcategory is created under Pets from the header +, renamed, and deleted with its parent until Desfazer", async ({
+test("a subcategory is created under Gasto from the header +, renamed, and deleted with its parent until Desfazer", async ({
   page,
   request,
 }) => {
@@ -54,11 +54,11 @@ test("a subcategory is created under Pets from the header +, renamed, and delete
   await edit.getByRole("button", { name: "Salvar" }).click();
   await expect(children.getByRole("button", { name: "Editar Pet shop e banho" })).toBeVisible();
 
-  await page.getByRole("button", { name: "Mais ações de Pets" }).click();
+  await page.getByRole("button", { name: "Mais ações de Gasto" }).click();
   await page.getByRole("menuitem", { name: "Excluir" }).click();
   await expect(page.getByText("Categoria excluída")).toBeVisible();
   await expect(page.getByText("1 subcategoria também; lançamentos continuam com a categoria.")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Editar Pets" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Editar Gasto" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Editar Pet shop e banho" })).toHaveCount(0);
   await page.getByRole("button", { name: "Desfazer" }).click();
   await expect(children.getByRole("button", { name: "Editar Pet shop e banho" })).toBeVisible();

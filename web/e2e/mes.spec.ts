@@ -238,7 +238,7 @@ test("Lançamentos shows only bills under Contas, and Lançar picks from a row o
   await tabs.getByRole("button", { name: "Lançar" }).click();
   await expect(row.getByRole("radio").first()).toHaveText("Lazer");
   await launch.getByRole("radio", { name: "Conta" }).click();
-  await expect(row.getByRole("radio", { name: "Casa" })).toHaveAttribute("aria-checked", "true");
+  await expect(row.getByRole("radio", { name: "Casa", exact: true })).toHaveAttribute("aria-checked", "true");
   await launch.getByLabel("Valor").fill("23.456,78");
   await launch.getByRole("button", { name: "Salvar" }).click();
 
