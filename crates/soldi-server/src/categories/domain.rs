@@ -178,8 +178,9 @@ pub fn check_color(color: &str) -> Result<(), AppError> {
     Ok(())
 }
 
-/// `parent` may hold the category `id` (none when creating) of `kind`: a top-level category of the
-/// same kind, not itself, and only when `id` has no subcategories of its own.
+/// `parent` may hold the category `id` (none when creating) of `kind`: a top-level category on the
+/// same side (income or outflow, D26), `Economia` only for bills, not itself, and only when `id`
+/// has no subcategories of its own.
 pub fn check_parent(
     id: Option<Uuid>,
     kind: CategoryKind,
@@ -189,8 +190,13 @@ pub fn check_parent(
     if parent.is_savings && parent.kind == CategoryKind::Income {
         return Err(savings_category());
     }
-    if parent.kind != kind {
-        return Err(AppError::invalid("parent_id", "must be of the same kind"));
+    let same_side = (parent.kind == CategoryKind::Income) == (kind == CategoryKind::Income);
+    let cofrinho_ok = !parent.is_savings || kind == CategoryKind::Bill;
+    if !same_side || !cofrinho_ok {
+        return Err(AppError::invalid(
+            "parent_id",
+            "must be on the same side (income or outflow), and only a Saída goes under Economia",
+        ));
     }
     if id == Some(parent.id) {
         return Err(AppError::invalid("parent_id", "must be another category"));
@@ -224,8 +230,8 @@ pub fn is_cofrinho_parent(parent: Option<&Category>) -> bool {
     parent.is_some_and(|parent| parent.is_savings && parent.kind == CategoryKind::Bill)
 }
 
-/// Only a top-level category moves between `daily` and `bill`; `Economia`, its cofrinhos and the
-/// income categories, `Resgate` included, keep their kind. `parent` is the category's parent.
+/// A category, top-level or subcategory, moves between `daily` and `bill`; `Economia`, its
+/// cofrinhos and the income categories, `Resgate` included, keep their kind. `parent` is the category's parent.
 pub fn check_kind_change(
     category: &Category,
     parent: Option<&Category>,
@@ -239,12 +245,6 @@ pub fn check_kind_change(
         return Err(AppError::rule(
             "kind-locked",
             "Economia, its cofrinhos, Resgate and income categories keep their kind.",
-        ));
-    }
-    if category.parent_id.is_some() {
-        return Err(AppError::rule(
-            "kind-of-subcategory",
-            "A subcategory keeps its parent's kind; change the parent's.",
         ));
     }
     Ok(())
@@ -263,7 +263,7 @@ pub fn duplicate_name(kind: CategoryKind, name: &str) -> AppError {
 pub fn category_has_bills() -> AppError {
     AppError::rule(
         "category-has-bills",
-        "An active conta fixa uses this category or a subcategory; it cannot become daily.",
+        "An active conta fixa uses this category; it cannot become daily.",
     )
 }
 
@@ -485,15 +485,11 @@ mod tests {
     }
 
     #[test]
-    fn a_parent_is_a_top_level_category_of_the_same_kind() {
+    fn a_parent_is_another_top_level_category() {
         let casa = category(1, CategoryKind::Daily, None);
 
         assert!(check_parent(None, CategoryKind::Daily, false, &casa).is_ok());
         assert!(check_parent(Some(Uuid::from_u128(2)), CategoryKind::Daily, false, &casa).is_ok());
-        assert_eq!(
-            field(check_parent(None, CategoryKind::Bill, false, &casa)),
-            "parent_id"
-        );
         assert_eq!(
             field(check_parent(
                 Some(Uuid::from_u128(1)),
@@ -503,6 +499,29 @@ mod tests {
             )),
             "parent_id"
         );
+    }
+
+    #[test]
+    fn a_group_holds_both_outflow_kinds_but_never_income_and_economia_only_bills() {
+        let veiculo = category(1, CategoryKind::Bill, None);
+        assert!(check_parent(None, CategoryKind::Daily, false, &veiculo).is_ok());
+        assert!(check_parent(None, CategoryKind::Bill, false, &veiculo).is_ok());
+        assert_eq!(
+            field(check_parent(None, CategoryKind::Income, false, &veiculo)),
+            "parent_id"
+        );
+        let salario = category(2, CategoryKind::Income, None);
+        assert_eq!(
+            field(check_parent(None, CategoryKind::Daily, false, &salario)),
+            "parent_id"
+        );
+        let mut economia = category(3, CategoryKind::Bill, None);
+        economia.is_savings = true;
+        assert_eq!(
+            field(check_parent(None, CategoryKind::Daily, false, &economia)),
+            "parent_id"
+        );
+        assert!(check_parent(None, CategoryKind::Bill, false, &economia).is_ok());
     }
 
     #[test]
@@ -536,14 +555,15 @@ mod tests {
     }
 
     #[test]
-    fn only_a_top_level_daily_or_bill_category_changes_kind() {
+    fn a_daily_or_bill_category_changes_kind_top_level_or_not() {
         let casa = category(1, CategoryKind::Daily, None);
         assert!(check_kind_change(&casa, None, CategoryKind::Bill).is_ok());
+        let feira = category(5, CategoryKind::Daily, Some(1));
+        assert!(check_kind_change(&feira, Some(&casa), CategoryKind::Bill).is_ok());
         let mut economia = category(2, CategoryKind::Bill, None);
         economia.is_savings = true;
         let cofrinho = category(3, CategoryKind::Bill, Some(2));
         let salario = category(4, CategoryKind::Income, None);
-        let feira = category(5, CategoryKind::Daily, Some(1));
         for (category, parent, kind, expected) in [
             (&economia, None, CategoryKind::Daily, "kind-locked"),
             (
@@ -554,12 +574,6 @@ mod tests {
             ),
             (&salario, None, CategoryKind::Bill, "kind-locked"),
             (&casa, None, CategoryKind::Income, "kind-locked"),
-            (
-                &feira,
-                Some(&casa),
-                CategoryKind::Bill,
-                "kind-of-subcategory",
-            ),
         ] {
             assert_eq!(slug(check_kind_change(category, parent, kind)), expected);
         }

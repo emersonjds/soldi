@@ -28,7 +28,8 @@ pub struct CategoryShare {
 
 /// A top-level category with its subcategories' amounts rolled in: `amount` and `previous_amount`
 /// add its own entries and its subcategories'; `pct` is its share of the outflow or income total.
-/// `children` are the subcategories with entries in the month, largest first.
+/// `children` are the subcategories with entries in the month, largest first; `kind` is the
+/// top-level category's own, whatever its subcategories' kinds.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct CategoryGroup {
     pub category_id: Uuid,

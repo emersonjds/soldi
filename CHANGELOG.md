@@ -7,6 +7,27 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.44.0
+
+> Headline: a group holds Diário and Saída together
+
+### Server
+
+- A category group can hold both Diário and Saída subcategories (Carro › Combustível daily, Carro › Parcela as a conta fixa); income never mixes with outflow and Economia still takes only Saídas (D26).
+- A group's color is unique in every kind it shows in; a group that starts showing in a new kind moves to a color free in all of them.
+
+### Web
+
+- Each kind's picker and Ajustes › Categorias tab shows the groups that hold that kind, with a parent of another kind as a header only.
+
+## 0.43.2
+
+> Headline: a family icon
+
+### Web
+
+- The category icon picker offers a family icon (`users`) among its quick icons, drawn without waiting for the full icon set.
+
 ## 0.43.1
 
 > Headline: a deleted cofrinho's money stays put

@@ -32,7 +32,8 @@ pub async fn seed(
 }
 
 /// Active categories: income, then bills, then daily; within a kind by parent name, each parent
-/// followed by its subcategories by name. `Resgate` only with `include_system`.
+/// followed by its subcategories by name. A subcategory of another kind than its parent sits in
+/// its own kind's section. `Resgate` only with `include_system`.
 pub async fn list(
     conn: &mut PgConnection,
     user_id: Uuid,
@@ -72,8 +73,9 @@ pub async fn find_active(
     .await
 }
 
-/// `find_active` holding a share lock: a concurrent recolor of this parent waits or is seen.
-pub async fn find_active_shared(
+/// `find_active` locking the row against other writers: a concurrent child create, move or
+/// recolor of this parent waits, and a later recolor of it cannot deadlock on a share lock.
+pub async fn find_active_locked(
     conn: &mut PgConnection,
     user_id: Uuid,
     id: Uuid,
@@ -83,7 +85,7 @@ pub async fn find_active_shared(
         r#"SELECT id, name, kind AS "kind: CategoryKind", icon, color, parent_id, is_savings,
                   target, deadline
            FROM categories WHERE user_id = $1 AND id = $2 AND archived_at IS NULL
-           FOR SHARE"#,
+           FOR NO KEY UPDATE"#,
         user_id,
         id
     )
@@ -124,23 +126,62 @@ pub async fn has_children(
     .await
 }
 
-/// The colors of the user's active top-level categories of `kind`, but `except`.
+/// D26: colors of the user's active top-levels that show in any of `kinds` (own kind or an
+/// active subcategory's), `except` left out both as a top-level and as a subcategory.
 pub async fn top_colors(
     conn: &mut PgConnection,
     user_id: Uuid,
-    kind: CategoryKind,
+    kinds: &[CategoryKind],
     except: Option<Uuid>,
 ) -> Result<Vec<String>, sqlx::Error> {
+    let kinds: Vec<&str> = kinds.iter().map(|kind| kind.as_str()).collect();
     sqlx::query_scalar!(
-        "SELECT color FROM categories
-         WHERE user_id = $1 AND kind = $2 AND parent_id IS NULL AND archived_at IS NULL
-           AND id IS DISTINCT FROM $3",
+        "SELECT c.color FROM categories c
+         WHERE c.user_id = $1 AND c.parent_id IS NULL AND c.archived_at IS NULL
+           AND c.id IS DISTINCT FROM $3
+           AND (c.kind = ANY($2) OR EXISTS (
+                SELECT 1 FROM categories s
+                WHERE s.user_id = $1 AND s.parent_id = c.id AND s.archived_at IS NULL
+                  AND s.id IS DISTINCT FROM $3 AND s.kind = ANY($2)))",
         user_id,
-        kind.as_str(),
+        &kinds as &[&str],
         except
     )
     .fetch_all(&mut *conn)
     .await
+}
+
+/// The category's own kind and its active subcategories' kinds.
+pub async fn group_kinds(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    id: Uuid,
+) -> Result<Vec<CategoryKind>, sqlx::Error> {
+    sqlx::query_scalar!(
+        r#"SELECT DISTINCT kind AS "kind!: CategoryKind" FROM categories
+           WHERE user_id = $1 AND (id = $2 OR (parent_id = $2 AND archived_at IS NULL))"#,
+        user_id,
+        id
+    )
+    .fetch_all(&mut *conn)
+    .await
+}
+
+pub async fn set_color(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    id: Uuid,
+    color: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        "UPDATE categories SET color = $3, updated_at = now() WHERE user_id = $1 AND id = $2",
+        user_id,
+        id,
+        color
+    )
+    .execute(&mut *conn)
+    .await?;
+    Ok(())
 }
 
 /// Archived subcategories included.
@@ -280,42 +321,35 @@ pub async fn archive(
     .await
 }
 
-/// The name of the first active member of the category's family, it or a subcategory, that an
-/// active category of `kind` already has.
-pub async fn family_name_taken(
+/// Whether an active category of `kind` other than `id` already has the category's name.
+pub async fn name_taken(
     conn: &mut PgConnection,
     user_id: Uuid,
     id: Uuid,
     kind: CategoryKind,
-) -> Result<Option<String>, sqlx::Error> {
+) -> Result<bool, sqlx::Error> {
     sqlx::query_scalar!(
-        "SELECT family.name FROM categories family
-         WHERE family.user_id = $1 AND (family.id = $2 OR family.parent_id = $2)
-           AND family.archived_at IS NULL
-           AND EXISTS (SELECT 1 FROM categories other
-                       WHERE other.user_id = $1 AND other.kind = $3
-                         AND lower(other.name) = lower(family.name) AND other.archived_at IS NULL)
-         ORDER BY family.parent_id IS NOT NULL, lower(family.name)
-         LIMIT 1",
+        r#"SELECT EXISTS (SELECT 1 FROM categories other, categories this
+           WHERE this.user_id = $1 AND this.id = $2
+             AND other.user_id = $1 AND other.id <> $2 AND other.kind = $3
+             AND lower(other.name) = lower(this.name) AND other.archived_at IS NULL) AS "exists!""#,
         user_id,
         id,
         kind.as_str()
     )
-    .fetch_optional(&mut *conn)
+    .fetch_one(&mut *conn)
     .await
 }
 
-/// Whether an active, unarchived conta fixa points at the category or a subcategory.
-pub async fn family_has_active_bills(
+/// Whether an active, unarchived conta fixa points at the category itself.
+pub async fn has_active_bills(
     conn: &mut PgConnection,
     user_id: Uuid,
     id: Uuid,
 ) -> Result<bool, sqlx::Error> {
     sqlx::query_scalar!(
         r#"SELECT EXISTS (SELECT 1 FROM recurring_bills
-           WHERE user_id = $1 AND active AND archived_at IS NULL
-             AND category_id IN (SELECT id FROM categories
-                                 WHERE user_id = $1 AND (id = $2 OR parent_id = $2))) AS "exists!""#,
+           WHERE user_id = $1 AND category_id = $2 AND active AND archived_at IS NULL) AS "exists!""#,
         user_id,
         id
     )
@@ -323,22 +357,23 @@ pub async fn family_has_active_bills(
     .await
 }
 
-/// Moves the category, its subcategories (archived ones included) and every entry of theirs to
-/// `kind`, all wearing `color`.
+/// Moves the category and every entry of its own to `kind`, wearing `color` when given; its
+/// subcategories keep theirs. Kind and color change in one row write so the per-kind color index
+/// never sees the old color in the new kind.
 pub async fn change_kind(
     conn: &mut PgConnection,
     user_id: Uuid,
     id: Uuid,
     kind: CategoryKind,
-    color: &str,
+    color: Option<&str>,
 ) -> Result<(), sqlx::Error> {
     sqlx::query!(
-        "WITH family AS (
-             UPDATE categories SET kind = $3, color = $4, updated_at = now()
-             WHERE user_id = $1 AND (id = $2 OR parent_id = $2)
+        "WITH moved AS (
+             UPDATE categories SET kind = $3, color = COALESCE($4, color), updated_at = now()
+             WHERE user_id = $1 AND id = $2
              RETURNING id)
          UPDATE transactions SET kind = $3, updated_at = now()
-         WHERE user_id = $1 AND category_id IN (SELECT id FROM family)",
+         WHERE user_id = $1 AND category_id IN (SELECT id FROM moved)",
         user_id,
         id,
         kind.as_str(),

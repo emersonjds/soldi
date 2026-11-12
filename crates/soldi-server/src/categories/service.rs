@@ -44,7 +44,7 @@ pub async fn create(
     let conn = &mut *tx;
     let parent = match input.parent_id {
         Some(parent_id) => Some(
-            repo::find_active_shared(conn, user.id, parent_id)
+            repo::find_active_locked(conn, user.id, parent_id)
                 .await?
                 .ok_or(AppError::NotFound)?,
         ),
@@ -61,7 +61,7 @@ pub async fn create(
     let color = match &parent {
         Some(parent) => parent.color.clone(),
         None => {
-            let taken = repo::top_colors(conn, user.id, input.kind, None).await?;
+            let taken = repo::top_colors(conn, user.id, &[input.kind], None).await?;
             domain::pick_color(input.color.as_deref(), &taken)?
         }
     };
@@ -74,7 +74,11 @@ pub async fn create(
         target: input.target,
         deadline: input.deadline,
     };
-    let created = repo::insert(conn, user.id, new).await?;
+    let mut created = repo::insert(conn, user.id, new).await?;
+    if let Some(parent_id) = input.parent_id {
+        fit_group_color(conn, user, parent_id).await?;
+        created = active(conn, user, created.id).await?;
+    }
     tx.commit().await?;
     Ok(created)
 }
@@ -108,13 +112,14 @@ pub async fn update(
     }
     let parent_id = input.parent_id.unwrap_or(category.parent_id);
     let parent = match parent_id {
-        Some(parent_id) => repo::find_active_shared(conn, user.id, parent_id).await?,
+        Some(parent_id) => repo::find_active_locked(conn, user.id, parent_id).await?,
         None => None,
     };
     let color = match (&parent, parent_id) {
         (Some(parent), _) => Some(parent.color.clone()),
         (None, None) if input.color.is_some() || category.parent_id.is_some() => {
-            let taken = repo::top_colors(conn, user.id, category.kind, Some(id)).await?;
+            let kinds = repo::group_kinds(conn, user.id, id).await?;
+            let taken = repo::top_colors(conn, user.id, &kinds, Some(id)).await?;
             Some(domain::pick_color(input.color.as_deref(), &taken)?)
         }
         (None, _) => None,
@@ -133,18 +138,25 @@ pub async fn update(
         target,
         deadline,
     };
-    let updated = repo::update(conn, user.id, id, change)
+    let mut updated = repo::update(conn, user.id, id, change)
         .await?
         .ok_or(AppError::NotFound)?;
     if updated.parent_id.is_none() && color.is_some() {
         repo::recolor_children(conn, user.id, id, &updated.color).await?;
     }
+    if let Some(Some(parent_id)) = input.parent_id {
+        fit_group_color(conn, user, parent_id).await?;
+        updated = active(conn, user, id).await?;
+    }
     tx.commit().await?;
     Ok(updated)
 }
 
-// ponytail: checked then written without a lock; an entry or a bill landing in between keeps the
-// old kind or blocks nothing. Lock the family rows if it ever bites.
+/// D27: one category changes kind on its own; its subcategories keep theirs. A subcategory
+/// wears its parent's color and the parent applies D26; a top-level keeps its color when free
+/// in every kind it now shows in, else takes the lowest free one.
+// ponytail: checked then written without a lock on the entries; an entry or a bill landing in
+// between keeps the old kind or blocks nothing. Lock the category's rows if it ever bites.
 async fn change_kind(
     conn: &mut PgConnection,
     user: &CurrentUser,
@@ -152,21 +164,60 @@ async fn change_kind(
     kind: CategoryKind,
 ) -> Result<(), AppError> {
     let parent = match category.parent_id {
-        Some(parent_id) => repo::find_active(conn, user.id, parent_id).await?,
+        Some(parent_id) => repo::find_active_locked(conn, user.id, parent_id).await?,
         None => None,
     };
     domain::check_kind_change(category, parent.as_ref(), kind)?;
-    if let Some(name) = repo::family_name_taken(conn, user.id, category.id, kind).await? {
-        return Err(domain::duplicate_name(kind, &name));
+    if repo::name_taken(conn, user.id, category.id, kind).await? {
+        return Err(domain::duplicate_name(kind, &category.name));
     }
-    if kind == CategoryKind::Daily
-        && repo::family_has_active_bills(conn, user.id, category.id).await?
-    {
+    if kind == CategoryKind::Daily && repo::has_active_bills(conn, user.id, category.id).await? {
         return Err(domain::category_has_bills());
     }
-    let taken = repo::top_colors(conn, user.id, kind, None).await?;
-    let color = domain::pick_color(None, &taken)?;
-    repo::change_kind(conn, user.id, category.id, kind, &color).await?;
+    if let Some(parent_id) = category.parent_id {
+        repo::change_kind(conn, user.id, category.id, kind, None).await?;
+        return fit_group_color(conn, user, parent_id).await;
+    }
+    let taken = repo::top_colors(conn, user.id, &[kind], Some(category.id)).await?;
+    // ponytail: the old kind stays in `kinds` even when no subcategory holds it, so the pick can
+    // skip a token free after the change; exact needs the subcategories' kinds apart.
+    let color = match taken.contains(&category.color) {
+        true => {
+            let mut kinds = repo::group_kinds(conn, user.id, category.id).await?;
+            kinds.push(kind);
+            let taken = repo::top_colors(conn, user.id, &kinds, Some(category.id)).await?;
+            Some(domain::pick_color(None, &taken)?)
+        }
+        false => None,
+    };
+    repo::change_kind(conn, user.id, category.id, kind, color.as_deref()).await?;
+    if let Some(color) = color {
+        repo::recolor_children(conn, user.id, category.id, &color).await?;
+    }
+    Ok(())
+}
+
+/// D26: a group that shows in a kind where its color is taken moves to the lowest token free
+/// in every kind it shows in, or keeps its color when none is.
+// ponytail: cross-kind uniqueness lives here only (`categories_top_color_idx` is per kind); two
+// concurrent writes in different kinds can share a color. Upgrade: a per-user advisory lock.
+pub async fn fit_group_color(
+    conn: &mut PgConnection,
+    user: &CurrentUser,
+    parent_id: Uuid,
+) -> Result<(), AppError> {
+    let parent = repo::find_active_locked(conn, user.id, parent_id)
+        .await?
+        .ok_or(AppError::NotFound)?;
+    let kinds = repo::group_kinds(conn, user.id, parent_id).await?;
+    let taken = repo::top_colors(conn, user.id, &kinds, Some(parent_id)).await?;
+    if !taken.contains(&parent.color) {
+        return Ok(());
+    }
+    if let Ok(color) = domain::pick_color(None, &taken) {
+        repo::set_color(conn, user.id, parent_id, &color).await?;
+        repo::recolor_children(conn, user.id, parent_id, &color).await?;
+    }
     Ok(())
 }
 
