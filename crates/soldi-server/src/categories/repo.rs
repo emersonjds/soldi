@@ -279,3 +279,72 @@ pub async fn archive(
     .fetch_one(&mut *conn)
     .await
 }
+
+/// The name of the first active member of the category's family, it or a subcategory, that an
+/// active category of `kind` already has.
+pub async fn family_name_taken(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    id: Uuid,
+    kind: CategoryKind,
+) -> Result<Option<String>, sqlx::Error> {
+    sqlx::query_scalar!(
+        "SELECT family.name FROM categories family
+         WHERE family.user_id = $1 AND (family.id = $2 OR family.parent_id = $2)
+           AND family.archived_at IS NULL
+           AND EXISTS (SELECT 1 FROM categories other
+                       WHERE other.user_id = $1 AND other.kind = $3
+                         AND lower(other.name) = lower(family.name) AND other.archived_at IS NULL)
+         ORDER BY family.parent_id IS NOT NULL, lower(family.name)
+         LIMIT 1",
+        user_id,
+        id,
+        kind.as_str()
+    )
+    .fetch_optional(&mut *conn)
+    .await
+}
+
+/// Whether an active, unarchived conta fixa points at the category or a subcategory.
+pub async fn family_has_active_bills(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    id: Uuid,
+) -> Result<bool, sqlx::Error> {
+    sqlx::query_scalar!(
+        r#"SELECT EXISTS (SELECT 1 FROM recurring_bills
+           WHERE user_id = $1 AND active AND archived_at IS NULL
+             AND category_id IN (SELECT id FROM categories
+                                 WHERE user_id = $1 AND (id = $2 OR parent_id = $2))) AS "exists!""#,
+        user_id,
+        id
+    )
+    .fetch_one(&mut *conn)
+    .await
+}
+
+/// Moves the category, its subcategories (archived ones included) and every entry of theirs to
+/// `kind`, all wearing `color`.
+pub async fn change_kind(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    id: Uuid,
+    kind: CategoryKind,
+    color: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        "WITH family AS (
+             UPDATE categories SET kind = $3, color = $4, updated_at = now()
+             WHERE user_id = $1 AND (id = $2 OR parent_id = $2)
+             RETURNING id)
+         UPDATE transactions SET kind = $3, updated_at = now()
+         WHERE user_id = $1 AND category_id IN (SELECT id FROM family)",
+        user_id,
+        id,
+        kind.as_str(),
+        color
+    )
+    .execute(&mut *conn)
+    .await?;
+    Ok(())
+}

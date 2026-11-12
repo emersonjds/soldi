@@ -1,4 +1,4 @@
-use soldi_types::categories::{Category, CreateCategory, UpdateCategory};
+use soldi_types::categories::{Category, CategoryKind, CreateCategory, UpdateCategory};
 use sqlx::{PgConnection, PgPool};
 use uuid::Uuid;
 
@@ -94,7 +94,11 @@ pub async fn update(
         .transpose()?;
     let mut tx = pool.begin().await?;
     let conn = &mut *tx;
-    let category = active(conn, user, id).await?;
+    let mut category = active(conn, user, id).await?;
+    if let Some(kind) = input.kind.filter(|&kind| kind != category.kind) {
+        change_kind(conn, user, &category, kind).await?;
+        category = active(conn, user, id).await?;
+    }
     // ponytail: checked then written without a lock; two concurrent moves could nest two levels.
     if let Some(Some(parent_id)) = input.parent_id {
         domain::check_not_savings(&category)?;
@@ -137,6 +141,33 @@ pub async fn update(
     }
     tx.commit().await?;
     Ok(updated)
+}
+
+// ponytail: checked then written without a lock; an entry or a bill landing in between keeps the
+// old kind or blocks nothing. Lock the family rows if it ever bites.
+async fn change_kind(
+    conn: &mut PgConnection,
+    user: &CurrentUser,
+    category: &Category,
+    kind: CategoryKind,
+) -> Result<(), AppError> {
+    let parent = match category.parent_id {
+        Some(parent_id) => repo::find_active(conn, user.id, parent_id).await?,
+        None => None,
+    };
+    domain::check_kind_change(category, parent.as_ref(), kind)?;
+    if let Some(name) = repo::family_name_taken(conn, user.id, category.id, kind).await? {
+        return Err(domain::duplicate_name(kind, &name));
+    }
+    if kind == CategoryKind::Daily
+        && repo::family_has_active_bills(conn, user.id, category.id).await?
+    {
+        return Err(domain::category_has_bills());
+    }
+    let taken = repo::top_colors(conn, user.id, kind, None).await?;
+    let color = domain::pick_color(None, &taken)?;
+    repo::change_kind(conn, user.id, category.id, kind, &color).await?;
+    Ok(())
 }
 
 pub async fn archive(pool: &PgPool, user: &CurrentUser, id: Uuid) -> Result<(), AppError> {

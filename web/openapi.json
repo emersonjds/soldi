@@ -894,7 +894,7 @@
         },
         "responses": {
           "200": {
-            "description": "The category after the change; absent fields stay as they are",
+            "description": "The category after the change; absent fields stay as they are; a new `kind` reaches its subcategories and all their entries",
             "content": {
               "application/json": {
                 "schema": {
@@ -923,6 +923,7 @@
             }
           },
           "409": {
+            "description": "An active category of the same kind has this name; `duplicate-name` when the new `kind` already holds the name of the category or a subcategory, named in the detail",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -932,7 +933,7 @@
             }
           },
           "422": {
-            "description": "A bad field, a parent of another kind or itself, `nested-subcategory` when the parent is a subcategory or this category has subcategories, `savings-category` when moving `Economia` or `Resgate` or under `Resgate`, `not-a-cofrinho` for a target or deadline outside `Economia`, `color-taken` when another active top-level category of the kind has the color, or `palette-full` when moving to top-level without a color and all 24 are taken in the kind",
+            "description": "A bad field, `kind-of-subcategory` for a `kind` on a subcategory, `kind-locked` for a `kind` on `Economia`, a cofrinho, `Resgate` or an income category or a `kind` of `income`, `category-has-bills` when moving to `daily` a category an active conta fixa uses, a parent of another kind or itself, `nested-subcategory` when the parent is a subcategory or this category has subcategories, `savings-category` when moving `Economia` or `Resgate` or under `Resgate`, `not-a-cofrinho` for a target or deadline outside `Economia`, `color-taken` when another active top-level category of the kind has the color, or `palette-full` when moving to top-level without a color and all 24 are taken in the kind",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -3354,7 +3355,7 @@
       },
       "UpdateCategory": {
         "type": "object",
-        "description": "Absent fields stay as they are; the kind never changes; `\"parent_id\": null` makes it top-level,\nwith `color` or the lowest token free in the kind. For a subcategory `color` is validated, then\nignored: it wears its parent's; a parent's new color reaches its subcategories. `null` clears `target` or\n`deadline`, which only a subcategory of `Economia` may set. Leaving `Economia` clears both.",
+        "description": "Absent fields stay as they are; `kind`, `daily` or `bill`, moves a top-level category with its\nsubcategories and all their entries to that kind, taking the lowest token free there; the\nsavings categories, cofrinhos and income ones never change kind. `\"parent_id\": null` makes it\ntop-level, with `color` or the lowest token free in the kind. For a subcategory `color` is validated, then\nignored: it wears its parent's; a parent's new color reaches its subcategories. `null` clears `target` or\n`deadline`, which only a subcategory of `Economia` may set. Leaving `Economia` clears both.",
         "properties": {
           "color": {
             "type": [
@@ -3373,6 +3374,16 @@
             "type": [
               "string",
               "null"
+            ]
+          },
+          "kind": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/CategoryKind"
+              },
+              {
+                "type": "null"
+              }
             ]
           },
           "name": {

@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT family.name FROM categories family\n         WHERE family.user_id = $1 AND (family.id = $2 OR family.parent_id = $2)\n           AND family.archived_at IS NULL\n           AND EXISTS (SELECT 1 FROM categories other\n                       WHERE other.user_id = $1 AND other.kind = $3\n                         AND lower(other.name) = lower(family.name) AND other.archived_at IS NULL)\n         ORDER BY family.parent_id IS NOT NULL, lower(family.name)\n         LIMIT 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "categories",
+            "name": "name"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "66bda4afb113e63360c515989882c678dab51d9087b6c08a17702926776642b4"
+}

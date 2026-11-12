@@ -747,3 +747,156 @@ async fn moving_out_into_a_full_kind_has_no_free_color(pool: PgPool) {
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
     assert_eq!(slug(&problem), "palette-full");
 }
+
+async fn change_kind(user: &TestApp, id: &str, kind: &str) -> (StatusCode, Value) {
+    user.patch(&format!("/api/categories/{id}"), json!({ "kind": kind }))
+        .await
+}
+
+async fn log(user: &TestApp, body: Value) {
+    let (status, created) = user.post("/api/transactions", body).await;
+    assert_eq!(status, StatusCode::CREATED, "{created}");
+}
+
+fn id_of(category: &Value) -> String {
+    category["id"].as_str().unwrap().to_string()
+}
+
+#[sqlx::test]
+async fn a_daily_category_becomes_bill_with_its_subcategories_and_entries(pool: PgPool) {
+    let user = TestApp::signed_in(pool, "ana@example.com").await;
+    user.open_at("1000", "2026-11-01").await;
+    let (_, moradia) = create(&user, json!({ "name": "Moradia", "kind": "daily" })).await;
+    let moradia = id_of(&moradia);
+    let (_, fies) = create_child(&user, "Fies", "daily", &moradia).await;
+    log(
+        &user,
+        json!({ "date": "2026-11-03", "amount": "100", "kind": "daily", "category_id": moradia }),
+    )
+    .await;
+    log(
+        &user,
+        json!({ "date": "2026-11-03", "amount": "50", "kind": "daily", "category_id": id_of(&fies), "repeat_months": 2 }),
+    )
+    .await;
+    let (_, before) = user.get("/api/months/2026-11").await;
+    assert_eq!(before["totals"]["daily"], "150.00");
+    let (_, probe) = create(&user, json!({ "name": "Sonda", "kind": "bill" })).await;
+    user.delete(&format!("/api/categories/{}", id_of(&probe)))
+        .await;
+
+    let (status, moved) = change_kind(&user, &moradia, "bill").await;
+
+    assert_eq!(status, StatusCode::OK, "{moved}");
+    assert_eq!(moved["kind"], "bill");
+    assert_eq!(moved["color"], probe["color"]);
+    let (_, categories) = user.get("/api/categories").await;
+    assert_eq!(find(&categories, "Fies")["kind"], "bill");
+    assert_eq!(find(&categories, "Fies")["color"], probe["color"]);
+    let (_, november) = user.get("/api/months/2026-11").await;
+    assert_eq!(november["totals"]["daily"], "0.00");
+    assert_eq!(november["totals"]["bills"], "150.00");
+    assert_eq!(november["days"][2]["balance"], before["days"][2]["balance"]);
+    assert_eq!(november["projected_balance"], before["projected_balance"]);
+    let (_, december) = user.get("/api/months/2026-12").await;
+    assert_eq!(december["totals"]["daily"], "0.00");
+    assert_eq!(december["totals"]["bills"], "50.00");
+}
+
+#[sqlx::test]
+async fn an_active_conta_fixa_keeps_its_category_from_becoming_daily(pool: PgPool) {
+    let user = TestApp::signed_in(pool, "ana@example.com").await;
+    let (_, fies) = create(&user, json!({ "name": "Fies", "kind": "bill" })).await;
+    let fies = id_of(&fies);
+    let (_, parcela) = create_child(&user, "Parcela", "bill", &fies).await;
+    let (status, bill) = user
+        .post(
+            "/api/bills",
+            json!({ "name": "Fies", "amount": "300", "due_day": 5, "category_id": id_of(&parcela) }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{bill}");
+
+    let (status, problem) = change_kind(&user, &fies, "daily").await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(slug(&problem), "category-has-bills");
+
+    let bill = format!("/api/bills/{}", id_of(&bill));
+    user.patch(&bill, json!({ "active": false })).await;
+    let (status, moved) = change_kind(&user, &fies, "daily").await;
+    assert_eq!(status, StatusCode::OK, "{moved}");
+    assert_eq!(moved["kind"], "daily");
+    let (status, moved) = change_kind(&user, &user.category_id("Luz").await, "daily").await;
+    assert_eq!(status, StatusCode::OK, "{moved}");
+}
+
+#[sqlx::test]
+async fn savings_income_and_subcategories_keep_their_kind(pool: PgPool) {
+    let user = TestApp::signed_in(pool, "ana@example.com").await;
+    let economia = user.category_id("Economia").await;
+    let (_, viagem) = create_child(&user, "Viagem", "bill", &economia).await;
+    let (_, all) = user.get("/api/categories?include_system=true").await;
+    let resgate = id_of(find(&all, "Resgate"));
+    let mercado = user.category_id("Mercado").await;
+    let (_, feira) = create_child(&user, "Feira", "daily", &mercado).await;
+
+    for (id, kind, expected) in [
+        (economia, "daily", "kind-locked"),
+        (id_of(&viagem), "daily", "kind-locked"),
+        (resgate, "bill", "kind-locked"),
+        (user.category_id("Salário").await, "bill", "kind-locked"),
+        (mercado.clone(), "income", "kind-locked"),
+        (id_of(&feira), "bill", "kind-of-subcategory"),
+    ] {
+        let (status, problem) = change_kind(&user, &id, kind).await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+        assert_eq!(slug(&problem), expected);
+    }
+    let before = find(&user.get("/api/categories").await.1, "Mercado").clone();
+    let (status, same) = change_kind(&user, &mercado, "daily").await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(same, before);
+}
+
+#[sqlx::test]
+async fn a_name_already_in_the_new_kind_is_a_conflict_naming_it(pool: PgPool) {
+    let user = TestApp::signed_in(pool, "ana@example.com").await;
+    let (_, aluguel) = create(&user, json!({ "name": "aluguel", "kind": "daily" })).await;
+    let (_, moradia) = create(&user, json!({ "name": "Moradia", "kind": "daily" })).await;
+    let moradia = id_of(&moradia);
+    create_child(&user, "Luz", "daily", &moradia).await;
+
+    for (id, name) in [(id_of(&aluguel), "aluguel"), (moradia, "Luz")] {
+        let (status, problem) = change_kind(&user, &id, "bill").await;
+        assert_eq!(status, StatusCode::CONFLICT, "{problem}");
+        assert_eq!(slug(&problem), "duplicate-name");
+        assert!(
+            problem["detail"].as_str().unwrap().contains(name),
+            "{problem}"
+        );
+    }
+}
+
+#[sqlx::test]
+async fn another_users_category_keeps_its_kind_and_entries(pool: PgPool) {
+    let ana = TestApp::signed_in(pool, "ana@example.com").await;
+    ana.open_at("1000", "2026-11-01").await;
+    let (_, moradia) = create(&ana, json!({ "name": "Moradia", "kind": "daily" })).await;
+    let moradia = id_of(&moradia);
+    log(
+        &ana,
+        json!({ "date": "2026-11-03", "amount": "100", "kind": "daily", "category_id": moradia }),
+    )
+    .await;
+    let bia = ana.another_user("bia@example.com").await;
+
+    let (status, _) = change_kind(&bia, &moradia, "bill").await;
+
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let (_, november) = ana.get("/api/months/2026-11").await;
+    assert_eq!(november["totals"]["daily"], "100.00");
+    assert_eq!(
+        find(&ana.get("/api/categories").await.1, "Moradia")["kind"],
+        "daily"
+    );
+}

@@ -71,8 +71,10 @@ pub struct CreateCategory {
     pub deadline: Option<NaiveDate>,
 }
 
-/// Absent fields stay as they are; the kind never changes; `"parent_id": null` makes it top-level,
-/// with `color` or the lowest token free in the kind. For a subcategory `color` is validated, then
+/// Absent fields stay as they are; `kind`, `daily` or `bill`, moves a top-level category with its
+/// subcategories and all their entries to that kind, taking the lowest token free there; the
+/// savings categories, cofrinhos and income ones never change kind. `"parent_id": null` makes it
+/// top-level, with `color` or the lowest token free in the kind. For a subcategory `color` is validated, then
 /// ignored: it wears its parent's; a parent's new color reaches its subcategories. `null` clears `target` or
 /// `deadline`, which only a subcategory of `Economia` may set. Leaving `Economia` clears both.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, ToSchema)]
@@ -80,6 +82,8 @@ pub struct CreateCategory {
 pub struct UpdateCategory {
     #[serde(default)]
     pub name: Option<String>,
+    #[serde(default)]
+    pub kind: Option<CategoryKind>,
     #[serde(default)]
     pub icon: Option<String>,
     #[serde(default)]

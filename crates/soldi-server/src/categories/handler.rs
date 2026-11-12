@@ -60,11 +60,11 @@ pub async fn create_category(
 #[utoipa::path(patch, path = "/api/categories/{id}", tag = "categories", request_body = UpdateCategory,
     params(("id" = Uuid, Path, description = "Category id")),
     responses(
-        (status = 200, body = Category, description = "The category after the change; absent fields stay as they are"),
+        (status = 200, body = Category, description = "The category after the change; absent fields stay as they are; a new `kind` reaches its subcategories and all their entries"),
         (status = 401, body = Problem, content_type = "application/problem+json"),
         (status = 404, body = Problem, content_type = "application/problem+json", description = "The category or `parent_id` is missing, archived or another user's"),
-        (status = 409, body = Problem, content_type = "application/problem+json"),
-        (status = 422, body = Problem, content_type = "application/problem+json", description = "A bad field, a parent of another kind or itself, `nested-subcategory` when the parent is a subcategory or this category has subcategories, `savings-category` when moving `Economia` or `Resgate` or under `Resgate`, `not-a-cofrinho` for a target or deadline outside `Economia`, `color-taken` when another active top-level category of the kind has the color, or `palette-full` when moving to top-level without a color and all 24 are taken in the kind")))]
+        (status = 409, body = Problem, content_type = "application/problem+json", description = "An active category of the same kind has this name; `duplicate-name` when the new `kind` already holds the name of the category or a subcategory, named in the detail"),
+        (status = 422, body = Problem, content_type = "application/problem+json", description = "A bad field, `kind-of-subcategory` for a `kind` on a subcategory, `kind-locked` for a `kind` on `Economia`, a cofrinho, `Resgate` or an income category or a `kind` of `income`, `category-has-bills` when moving to `daily` a category an active conta fixa uses, a parent of another kind or itself, `nested-subcategory` when the parent is a subcategory or this category has subcategories, `savings-category` when moving `Economia` or `Resgate` or under `Resgate`, `not-a-cofrinho` for a target or deadline outside `Economia`, `color-taken` when another active top-level category of the kind has the color, or `palette-full` when moving to top-level without a color and all 24 are taken in the kind")))]
 pub async fn update_category(
     State(state): State<AppState>,
     user: CurrentUser,

@@ -224,6 +224,49 @@ pub fn is_cofrinho_parent(parent: Option<&Category>) -> bool {
     parent.is_some_and(|parent| parent.is_savings && parent.kind == CategoryKind::Bill)
 }
 
+/// Only a top-level category moves between `daily` and `bill`; `Economia`, its cofrinhos and the
+/// income categories, `Resgate` included, keep their kind. `parent` is the category's parent.
+pub fn check_kind_change(
+    category: &Category,
+    parent: Option<&Category>,
+    kind: CategoryKind,
+) -> Result<(), AppError> {
+    if category.is_savings
+        || is_cofrinho_parent(parent)
+        || category.kind == CategoryKind::Income
+        || kind == CategoryKind::Income
+    {
+        return Err(AppError::rule(
+            "kind-locked",
+            "Economia, its cofrinhos, Resgate and income categories keep their kind.",
+        ));
+    }
+    if category.parent_id.is_some() {
+        return Err(AppError::rule(
+            "kind-of-subcategory",
+            "A subcategory keeps its parent's kind; change the parent's.",
+        ));
+    }
+    Ok(())
+}
+
+pub fn duplicate_name(kind: CategoryKind, name: &str) -> AppError {
+    AppError::conflict(
+        "duplicate-name",
+        &format!(
+            "An active {} category named {name} already exists.",
+            kind.as_str()
+        ),
+    )
+}
+
+pub fn category_has_bills() -> AppError {
+    AppError::rule(
+        "category-has-bills",
+        "An active conta fixa uses this category or a subcategory; it cannot become daily.",
+    )
+}
+
 /// `target` and `deadline` are set only on a cofrinho; a target is money greater than zero.
 pub fn check_goal(
     cofrinho: bool,
@@ -489,6 +532,36 @@ mod tests {
         }
         for color in ["cat-0", "cat-25", "cat-01", "#ff0000", "cat-", "cat-x"] {
             assert_eq!(field(check_color(color)), "color", "{color}");
+        }
+    }
+
+    #[test]
+    fn only_a_top_level_daily_or_bill_category_changes_kind() {
+        let casa = category(1, CategoryKind::Daily, None);
+        assert!(check_kind_change(&casa, None, CategoryKind::Bill).is_ok());
+        let mut economia = category(2, CategoryKind::Bill, None);
+        economia.is_savings = true;
+        let cofrinho = category(3, CategoryKind::Bill, Some(2));
+        let salario = category(4, CategoryKind::Income, None);
+        let feira = category(5, CategoryKind::Daily, Some(1));
+        for (category, parent, kind, expected) in [
+            (&economia, None, CategoryKind::Daily, "kind-locked"),
+            (
+                &cofrinho,
+                Some(&economia),
+                CategoryKind::Daily,
+                "kind-locked",
+            ),
+            (&salario, None, CategoryKind::Bill, "kind-locked"),
+            (&casa, None, CategoryKind::Income, "kind-locked"),
+            (
+                &feira,
+                Some(&casa),
+                CategoryKind::Bill,
+                "kind-of-subcategory",
+            ),
+        ] {
+            assert_eq!(slug(check_kind_change(category, parent, kind)), expected);
         }
     }
 }
