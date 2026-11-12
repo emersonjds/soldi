@@ -32,11 +32,14 @@ pub struct TransactionSeries {
     pub id: Uuid,
     /// 1-based, by date; counts the parcelas paid before the first written one.
     pub position: i64,
-    /// The members, the parcelas paid before the first written one included.
+    /// The members, the parcelas paid before the first written one included; on an open series,
+    /// the members written so far.
     pub total: i64,
     /// The date of the series' last member; growth continues after it, by `every`.
     pub last_date: NaiveDate,
     pub every: RepeatEvery,
+    /// Grows with no end: members are written ahead as months are read (D36).
+    pub open_ended: bool,
 }
 
 /// The step between a series' entries (D32); a running series never changes it.
@@ -110,6 +113,10 @@ pub struct CreateTransaction {
     #[serde(default)]
     #[schema(minimum = 1, maximum = 60)]
     pub first_installment: Option<i16>,
+    /// Repeats every `repeat_every` with no end; members are written ahead as months are read
+    /// (D36). `income` or `daily`, no `card_id`, not with `repeat_months` or `installments`.
+    #[serde(default)]
+    pub open_ended: bool,
     /// One of the caller's unarchived cards; only on a `daily` entry.
     #[serde(default)]
     pub card_id: Option<Uuid>,

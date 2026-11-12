@@ -2489,3 +2489,106 @@ async fn sol118_a_resize_counts_the_parcelas_paid_before(pool: PgPool) {
     assert_eq!(place(&only(&user, "2027-05").await), (10, 10));
     assert_empty(&user, "2027-06", 1).await;
 }
+
+fn today() -> chrono::NaiveDate {
+    soldi_server::today_sao_paulo()
+}
+
+/// The last day of the forecast horizon: the month eleven months after today's.
+fn horizon_end() -> chrono::NaiveDate {
+    use chrono::Datelike;
+    let first = today().with_day(1).unwrap();
+    (first + chrono::Months::new(12)).pred_opt().unwrap()
+}
+
+fn this_month() -> String {
+    today().format("%Y-%m").to_string()
+}
+
+/// A Fixo entry with no end dated today; `extra` overrides or adds fields.
+fn fixo_body(kind: &str, category_id: &str, extra: Value) -> Value {
+    let mut body = json!({ "date": today().to_string(), "amount": "30", "kind": kind,
+                           "category_id": category_id, "open_ended": true });
+    body.as_object_mut()
+        .unwrap()
+        .extend(extra.as_object().unwrap().clone());
+    body
+}
+
+async fn fixo(user: &TestApp, kind: &str, category: &str, extra: Value) -> Value {
+    let category_id = user.category_id(category).await;
+    let (status, created) = user
+        .post("/api/transactions", fixo_body(kind, &category_id, extra))
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{created}");
+    created
+}
+
+#[sqlx::test]
+async fn d36_a_fixo_salario_is_written_through_the_horizon(pool: PgPool) {
+    let ana = opened(pool.clone(), "ana@example.com").await;
+    let bia = opened(pool, "bia@example.com").await;
+    spend(&bia, &today().to_string(), "10", "Mercado").await;
+
+    let created = fixo(&ana, "income", "Salário", json!({ "amount": "5305" })).await;
+
+    assert_eq!(created["series"]["open_ended"], true);
+    assert_eq!(created["series"]["every"], "month");
+    assert_eq!(place(&created), (1, 12));
+    let entries = run(&ana, &this_month(), 12).await;
+    assert_eq!(field_of(&entries, "amount"), ["5305.00"; 12]);
+    assert!(
+        entries
+            .iter()
+            .all(|entry| entry["series"]["open_ended"] == true)
+    );
+    assert_eq!(place(&entries[11]), (12, 12));
+    assert_eq!(entries[11]["date"], created["series"]["last_date"]);
+    assert_eq!(only(&bia, &this_month()).await["series"], Value::Null);
+}
+
+#[sqlx::test]
+async fn d36_open_ended_is_for_entradas_and_diario_off_card_alone(pool: PgPool) {
+    let user = opened(pool, "ana@example.com").await;
+    let market = user.category_id("Mercado").await;
+    let rent = user.category_id("Aluguel").await;
+    let porto = card(&user, "Porto").await;
+
+    for (extra, field) in [
+        (json!({ "kind": "bill", "category_id": rent }), "open_ended"),
+        (json!({ "card_id": porto }), "open_ended"),
+        (json!({ "repeat_months": 6 }), "open_ended"),
+        (json!({ "installments": 6 }), "open_ended"),
+        (
+            json!({ "installments": 6, "first_installment": 2 }),
+            "open_ended",
+        ),
+        (json!({ "first_installment": 2 }), "first_installment"),
+    ] {
+        let (status, problem) = user
+            .post("/api/transactions", fixo_body("daily", &market, extra))
+            .await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+        assert_eq!(problem["errors"][0]["field"], field, "{problem}");
+    }
+    assert!(month(&user, &this_month()).await.is_empty());
+
+    let weekly = fixo(&user, "daily", "Mercado", json!({ "repeat_every": "week" })).await;
+
+    assert_eq!(weekly["series"]["every"], "week");
+    let entries = entries_from(&user, &this_month(), 12).await;
+    let dates: Vec<chrono::NaiveDate> = entries
+        .iter()
+        .map(|entry| entry["date"].as_str().unwrap().parse().unwrap())
+        .collect();
+    assert_eq!(dates[0], today());
+    assert!(
+        dates
+            .windows(2)
+            .all(|pair| (pair[1] - pair[0]).num_days() == 7)
+    );
+    let last = *dates.last().unwrap();
+    assert!(last <= horizon_end() && horizon_end() < last + chrono::Days::new(7));
+    let total = i64::try_from(dates.len()).unwrap();
+    assert_eq!(place(entries.last().unwrap()), (total, total));
+}

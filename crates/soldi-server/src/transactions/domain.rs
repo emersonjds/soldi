@@ -19,8 +19,9 @@ pub fn check(input: CreateTransaction) -> Result<CreateTransaction, AppError> {
     let note = input.note.as_deref().map(check_note).transpose()?.flatten();
     input.repeat_months.map(check_repeat).transpose()?;
     check_installments(&input, amount)?;
+    check_open_ended(&input)?;
     match (input.repeat_every, input.repeat_months, input.installments) {
-        (Some(_), None, None) => {
+        (Some(_), None, None) if !input.open_ended => {
             return Err(AppError::invalid("repeat_every", "needs repeat_months"));
         }
         (Some(every), None, Some(_)) if every != RepeatEvery::Month => {
@@ -98,6 +99,29 @@ fn check_installments(input: &CreateTransaction, amount: Decimal) -> Result<(), 
             "installments",
             "must leave every installment above zero",
         ));
+    }
+    Ok(())
+}
+
+/// D36: a Fixo with no end is an Entrada or a Diário off a card; a Saída with no end is a conta fixa.
+fn check_open_ended(input: &CreateTransaction) -> Result<(), AppError> {
+    if !input.open_ended {
+        return Ok(());
+    }
+    if input.repeat_months.is_some() || input.installments.is_some() {
+        return Err(AppError::invalid(
+            "open_ended",
+            "cannot be combined with repeat_months or installments",
+        ));
+    }
+    if input.kind == CategoryKind::Bill {
+        return Err(AppError::invalid(
+            "open_ended",
+            "a Saída with no end is a conta fixa",
+        ));
+    }
+    if input.card_id.is_some() {
+        return Err(AppError::invalid("open_ended", "not on a card yet"));
     }
     Ok(())
 }
@@ -433,6 +457,7 @@ mod tests {
             repeat_every: None,
             installments: None,
             first_installment: None,
+            open_ended: false,
             card_id: None,
         }
     }
@@ -481,6 +506,7 @@ mod tests {
             total: 2,
             last_date: date("2026-12-05"),
             every: RepeatEvery::Month,
+            open_ended: false,
         })
     }
 

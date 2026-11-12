@@ -27,6 +27,7 @@ struct Row {
     series_total: i64,
     series_last_date: Option<NaiveDate>,
     series_every: Option<RepeatEvery>,
+    series_open: bool,
     card_id: Option<Uuid>,
 }
 
@@ -50,6 +51,7 @@ impl From<Row> for Transaction {
                     total: row.series_total,
                     last_date,
                     every: row.series_every.unwrap_or_default(),
+                    open_ended: row.series_open,
                 }),
             category: Category {
                 id: row.category_id,
@@ -86,7 +88,8 @@ pub async fn list(
                   c.deadline AS category_deadline, t.series_id,
                   s.position + t.series_offset AS "series_position!",
                   s.total + t.series_offset AS "series_total!",
-                  s.last_date AS series_last_date, t.series_every AS "series_every: RepeatEvery"
+                  s.last_date AS series_last_date, t.series_every AS "series_every: RepeatEvery",
+                  t.series_open
            FROM transactions t JOIN categories c ON c.user_id = t.user_id AND c.id = t.category_id
            LEFT JOIN LATERAL (
                SELECT count(*) AS total, max(m.date) AS last_date, count(*) FILTER (WHERE (m.date, m.id) <= (t.date, t.id)) AS position
@@ -124,7 +127,8 @@ pub async fn movements(
                   c.deadline AS category_deadline, t.series_id,
                   s.position + t.series_offset AS "series_position!",
                   s.total + t.series_offset AS "series_total!",
-                  s.last_date AS series_last_date, t.series_every AS "series_every: RepeatEvery"
+                  s.last_date AS series_last_date, t.series_every AS "series_every: RepeatEvery",
+                  t.series_open
            FROM transactions t JOIN categories c ON c.user_id = t.user_id AND c.id = t.category_id
            LEFT JOIN LATERAL (
                SELECT count(*) AS total, max(m.date) AS last_date, count(*) FILTER (WHERE (m.date, m.id) <= (t.date, t.id)) AS position
@@ -163,7 +167,8 @@ pub async fn find(
                   c.deadline AS category_deadline, t.series_id,
                   s.position + t.series_offset AS "series_position!",
                   s.total + t.series_offset AS "series_total!",
-                  s.last_date AS series_last_date, t.series_every AS "series_every: RepeatEvery"
+                  s.last_date AS series_last_date, t.series_every AS "series_every: RepeatEvery",
+                  t.series_open
            FROM transactions t JOIN categories c ON c.user_id = t.user_id AND c.id = t.category_id
            LEFT JOIN LATERAL (
                SELECT count(*) AS total, max(m.date) AS last_date, count(*) FILTER (WHERE (m.date, m.id) <= (t.date, t.id)) AS position
@@ -190,8 +195,8 @@ pub async fn insert(
     sqlx::query_scalar!(
         "INSERT INTO transactions
              (user_id, date, amount, kind, category_id, note, recurring_bill_id, cofrinho_id,
-              series_id, card_id, series_every, series_offset)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING id",
+              series_id, card_id, series_every, series_offset, series_open)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id",
         user_id,
         input.date,
         input.amount,
@@ -203,7 +208,8 @@ pub async fn insert(
         series_id,
         input.card_id,
         every.map(RepeatEvery::as_str),
-        input.first_installment.map_or(0, |first| first - 1)
+        input.first_installment.map_or(0, |first| first - 1),
+        input.open_ended
     )
     .fetch_one(&mut *conn)
     .await
@@ -619,6 +625,7 @@ mod tests {
             repeat_every: None,
             installments: None,
             first_installment: None,
+            open_ended: false,
             card_id: None,
         };
         let member = insert(

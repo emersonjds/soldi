@@ -275,6 +275,7 @@ pub async fn pay(
         repeat_every: None,
         installments: None,
         first_installment: None,
+        open_ended: false,
         card_id: None,
     })?;
     if month.is_some_and(|first| !(first..=month_end(first)).contains(&entry.date)) {

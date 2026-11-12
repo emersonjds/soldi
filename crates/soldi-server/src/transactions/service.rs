@@ -183,6 +183,13 @@ pub async fn create(
     let every = input.repeat_every.unwrap_or_default();
     let copies = match count {
         Some(count) => domain::repeat_dates(input.date, count, every)?,
+        None if input.open_ended => {
+            let until = domain::open_until(
+                crate::today_sao_paulo(),
+                months::domain::month_end(input.date),
+            );
+            domain::open_dates(every, &[input.date], until)?
+        }
         None => vec![],
     };
     let dates = [&[input.date], copies.as_slice()].concat();
@@ -191,13 +198,13 @@ pub async fn create(
         Some(parcelas) => domain::installment_amounts(input.amount, parcelas)
             [usize::try_from(skip).unwrap_or(0)..]
             .to_vec(),
-        None => vec![input.amount; usize::try_from(count.unwrap_or(1)).unwrap_or(1)],
+        None => vec![input.amount; dates.len()],
     };
     let first = CreateTransaction {
         amount: amounts[0],
         ..input
     };
-    let series_id = count.map(|_| Uuid::new_v4());
+    let series_id = (count.is_some() || first.open_ended).then(Uuid::new_v4);
     let id = repo::insert(
         &mut tx,
         user.id,
@@ -209,7 +216,7 @@ pub async fn create(
     )
     .await?;
     let mut series = None;
-    if let (Some(count), Some(series_id)) = (count, series_id) {
+    if let Some(series_id) = series_id {
         repo::insert_copies(
             &mut tx,
             user.id,
@@ -223,9 +230,10 @@ pub async fn create(
         series = Some(TransactionSeries {
             id: series_id,
             position: i64::from(1 + skip),
-            total: i64::from(count + skip),
+            total: i64::try_from(dates.len()).unwrap_or(0) + i64::from(skip),
             last_date: copies.last().copied().unwrap_or(first.date),
             every,
+            open_ended: first.open_ended,
         });
     }
     tx.commit().await?;
@@ -286,6 +294,7 @@ pub async fn update(
         repeat_every: patch.repeat_every.filter(|_| current.series.is_none()),
         installments: None,
         first_installment: None,
+        open_ended: false,
         card_id: patch.card_id.unwrap_or(current.card_id),
     })?;
     domain::check_kind(next.kind, &category)?;

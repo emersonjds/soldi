@@ -2047,7 +2047,7 @@
         },
         "responses": {
           "201": {
-            "description": "The entry; with `repeat_months` or `installments`, the first of its series (parcela `first_installment`, 1 when absent), the rest written in the same database transaction",
+            "description": "The entry; with `repeat_months` or `installments`, the first of its series (parcela `first_installment`, 1 when absent), the rest written in the same database transaction; with `open_ended`, the members through the forecast horizon (or the entry's month, when later), more as months are read (D36)",
             "content": {
               "application/json": {
                 "schema": {
@@ -2076,7 +2076,7 @@
             }
           },
           "422": {
-            "description": "Amount not above zero or with more than two places, note over 500 characters, `card_id` on a non-`daily` entry or not one of the caller's unarchived cards, a kind other than the category's (`category_id`), `repeat_months` not 2 to 60, `installments` not 2 to 60, with `repeat_months`, or leaving a parcela at zero, `first_installment` without `installments` (`needs installments`) or outside 1 to `installments`, `repeat_every` without `repeat_months` (`needs repeat_months`) or other than `month` with `installments` (`installments are monthly`), a date outside 2000 to 2100 or a series passing 2100 (`must keep every entry up to 2100`), a date before the opening date (`before-opening-date`), or `fatura-paid` when a spend on a card lands in an already paid fatura (D30b)",
+            "description": "Amount not above zero or with more than two places, note over 500 characters, `card_id` on a non-`daily` entry or not one of the caller's unarchived cards, a kind other than the category's (`category_id`), `repeat_months` not 2 to 60, `installments` not 2 to 60, with `repeat_months`, or leaving a parcela at zero, `first_installment` without `installments` (`needs installments`) or outside 1 to `installments`, `open_ended` with `repeat_months` or `installments`, on a `bill` entry or with `card_id`, `repeat_every` without `repeat_months` or `open_ended` (`needs repeat_months`) or other than `month` with `installments` (`installments are monthly`), a date outside 2000 to 2100 or a series passing 2100 (`must keep every entry up to 2100`), a date before the opening date (`before-opening-date`), or `fatura-paid` when a spend on a card lands in an already paid fatura (D30b)",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -3058,6 +3058,10 @@
             ],
             "description": "Up to 500 characters; blank means none."
           },
+          "open_ended": {
+            "type": "boolean",
+            "description": "Repeats every `repeat_every` with no end; members are written ahead as months are read\n(D36). `income` or `daily`, no `card_id`, not with `repeat_months` or `installments`."
+          },
           "repeat_every": {
             "oneOf": [
               {
@@ -3817,7 +3821,8 @@
           "position",
           "total",
           "last_date",
-          "every"
+          "every",
+          "open_ended"
         ],
         "properties": {
           "every": {
@@ -3832,6 +3837,10 @@
             "format": "date",
             "description": "The date of the series' last member; growth continues after it, by `every`."
           },
+          "open_ended": {
+            "type": "boolean",
+            "description": "Grows with no end: members are written ahead as months are read (D36)."
+          },
           "position": {
             "type": "integer",
             "format": "int64",
@@ -3840,7 +3849,7 @@
           "total": {
             "type": "integer",
             "format": "int64",
-            "description": "The members, the parcelas paid before the first written one included."
+            "description": "The members, the parcelas paid before the first written one included; on an open series,\nthe members written so far."
           }
         }
       },
