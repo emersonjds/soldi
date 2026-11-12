@@ -447,3 +447,66 @@ pub async fn change_kind(
     .await?;
     Ok(())
 }
+
+/// The caller's active top-level pins by rank; archived or re-parented ones keep a stale rank
+/// until the next `set_pins`.
+pub async fn pins(conn: &mut PgConnection, user_id: Uuid) -> Result<Vec<Uuid>, sqlx::Error> {
+    sqlx::query_scalar!(
+        "SELECT id FROM categories
+         WHERE user_id = $1 AND pin_rank IS NOT NULL AND parent_id IS NULL AND archived_at IS NULL
+         ORDER BY pin_rank",
+        user_id
+    )
+    .fetch_all(&mut *conn)
+    .await
+}
+
+/// Serializes one user's pin writes until the transaction ends.
+pub async fn lock_pins(conn: &mut PgConnection, user_id: Uuid) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        "SELECT pg_advisory_xact_lock(hashtextextended('pins:' || $1::text, 0))",
+        user_id.to_string()
+    )
+    .execute(&mut *conn)
+    .await?;
+    Ok(())
+}
+
+pub async fn count_pinnable(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    ids: &[Uuid],
+) -> Result<i64, sqlx::Error> {
+    sqlx::query_scalar!(
+        r#"SELECT count(*) AS "count!" FROM categories
+           WHERE user_id = $1 AND id = ANY($2) AND parent_id IS NULL AND archived_at IS NULL
+             AND NOT (kind = 'income' AND is_savings)"#,
+        user_id,
+        ids
+    )
+    .fetch_one(&mut *conn)
+    .await
+}
+
+pub async fn set_pins(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    ids: &[Uuid],
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        "UPDATE categories SET pin_rank = NULL WHERE user_id = $1 AND pin_rank IS NOT NULL",
+        user_id
+    )
+    .execute(&mut *conn)
+    .await?;
+    sqlx::query!(
+        "UPDATE categories c SET pin_rank = p.rank::smallint
+         FROM UNNEST($2::uuid[]) WITH ORDINALITY AS p (id, rank)
+         WHERE c.user_id = $1 AND c.id = p.id",
+        user_id,
+        ids
+    )
+    .execute(&mut *conn)
+    .await?;
+    Ok(())
+}

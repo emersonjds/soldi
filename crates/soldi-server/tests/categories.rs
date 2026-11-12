@@ -1390,3 +1390,173 @@ async fn p4_a_cofrinho_keeps_a_note_and_loses_it_outside_economia(pool: PgPool) 
     let (status, _) = bia.patch(&uri, json!({ "note": "dela" })).await;
     assert_eq!(status, StatusCode::NOT_FOUND);
 }
+
+async fn pins(user: &TestApp) -> Value {
+    let (status, body) = user.get("/api/categories/pins").await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    body["category_ids"].clone()
+}
+
+#[sqlx::test]
+async fn p9_pins_round_trip_in_order(pool: PgPool) {
+    let user = TestApp::signed_in(pool, "ana@example.com").await;
+    assert_eq!(pins(&user).await, json!([]));
+    let ids = [
+        user.category_id("Saúde").await,
+        user.category_id("Alimentação").await,
+        user.category_id("Salário").await,
+    ];
+
+    let (status, body) = user
+        .put("/api/categories/pins", json!({ "category_ids": ids }))
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body, json!({ "category_ids": ids }));
+    assert_eq!(pins(&user).await, json!(ids));
+
+    let reordered = [ids[2].clone(), ids[0].clone()];
+    user.put("/api/categories/pins", json!({ "category_ids": reordered }))
+        .await;
+    assert_eq!(pins(&user).await, json!(reordered));
+    let (status, _) = user
+        .put("/api/categories/pins", json!({ "category_ids": [] }))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(pins(&user).await, json!([]));
+}
+
+#[sqlx::test]
+async fn p9_put_refuses_bad_lists(pool: PgPool) {
+    let user = TestApp::signed_in(pool, "ana@example.com").await;
+    let bia = user.another_user("bia@example.com").await;
+    let lazer = user.category_id("Lazer").await;
+    let saude = user.category_id("Saúde").await;
+    user.put("/api/categories/pins", json!({ "category_ids": [saude] }))
+        .await;
+    let (_, everything) = user.get("/api/categories?include_system=true").await;
+    let resgate = find(&everything, "Resgate")["id"].clone();
+    let (_, archived) = create(&user, json!({ "name": "Moto", "kind": "bill" })).await;
+    user.delete(&format!(
+        "/api/categories/{}",
+        archived["id"].as_str().unwrap()
+    ))
+    .await;
+    let many: Vec<String> = (0..25).map(|_| uuid::Uuid::new_v4().to_string()).collect();
+
+    for (ids, message) in [
+        (json!(many), "must have at most 24 ids"),
+        (json!([lazer, lazer]), "must not repeat an id"),
+        (
+            json!([lazer, user.category_id("Mercado").await]),
+            "must be your active top-level categories",
+        ),
+        (
+            json!([lazer, archived["id"]]),
+            "must be your active top-level categories",
+        ),
+        (
+            json!([lazer, resgate]),
+            "must be your active top-level categories",
+        ),
+        (
+            json!([lazer, bia.category_id("Casa").await]),
+            "must be your active top-level categories",
+        ),
+    ] {
+        let (status, problem) = user
+            .put("/api/categories/pins", json!({ "category_ids": ids }))
+            .await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{ids}");
+        assert_eq!(problem["errors"][0]["field"], "category_ids");
+        assert_eq!(problem["errors"][0]["message"], message);
+    }
+    assert_eq!(pins(&user).await, json!([saude]));
+}
+
+#[sqlx::test]
+async fn p9_pins_are_per_user(pool: PgPool) {
+    let ana = TestApp::signed_in(pool, "ana@example.com").await;
+    let bia = ana.another_user("bia@example.com").await;
+    let ana_casa = ana.category_id("Casa").await;
+    let bia_lazer = bia.category_id("Lazer").await;
+
+    ana.put(
+        "/api/categories/pins",
+        json!({ "category_ids": [ana_casa] }),
+    )
+    .await;
+    bia.put(
+        "/api/categories/pins",
+        json!({ "category_ids": [bia_lazer] }),
+    )
+    .await;
+    bia.put("/api/categories/pins", json!({ "category_ids": [] }))
+        .await;
+
+    assert_eq!(pins(&ana).await, json!([ana_casa]));
+    assert_eq!(pins(&bia).await, json!([]));
+}
+
+#[sqlx::test]
+async fn p9_an_archived_pin_drops_out_and_a_new_order_still_saves(pool: PgPool) {
+    let user = TestApp::signed_in(pool, "ana@example.com").await;
+    let (_, moto) = create(&user, json!({ "name": "Moto", "kind": "bill" })).await;
+    let moto = id_of(&moto);
+    let casa = user.category_id("Casa").await;
+    let lazer = user.category_id("Lazer").await;
+    user.put(
+        "/api/categories/pins",
+        json!({ "category_ids": [moto, casa] }),
+    )
+    .await;
+
+    user.delete(&format!("/api/categories/{moto}")).await;
+    assert_eq!(pins(&user).await, json!([casa]));
+
+    let (status, body) = user
+        .put(
+            "/api/categories/pins",
+            json!({ "category_ids": [lazer, casa] }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(pins(&user).await, json!([lazer, casa]));
+}
+
+#[sqlx::test]
+async fn p9_a_pin_moved_under_a_parent_drops_out(pool: PgPool) {
+    let user = TestApp::signed_in(pool, "ana@example.com").await;
+    let (_, moto) = create(&user, json!({ "name": "Moto", "kind": "bill" })).await;
+    let moto = id_of(&moto);
+    let casa = user.category_id("Casa").await;
+    user.put(
+        "/api/categories/pins",
+        json!({ "category_ids": [moto, casa] }),
+    )
+    .await;
+
+    let (status, body) = user
+        .patch(
+            &format!("/api/categories/{moto}"),
+            json!({ "parent_id": casa }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(pins(&user).await, json!([casa]));
+}
+
+#[sqlx::test]
+async fn p9_pins_need_a_session(pool: PgPool) {
+    let anonymous = TestApp::anonymous(pool);
+    assert_eq!(
+        anonymous.get("/api/categories/pins").await.0,
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        anonymous
+            .put("/api/categories/pins", json!({ "category_ids": [] }))
+            .await
+            .0,
+        StatusCode::UNAUTHORIZED
+    );
+}

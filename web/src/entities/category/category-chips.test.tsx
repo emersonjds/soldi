@@ -1,5 +1,6 @@
 import { useState } from "react";
 
+import { onlineManager } from "@tanstack/react-query";
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Toaster } from "sonner";
@@ -7,7 +8,17 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import type { Schemas } from "@/shared/api/client";
 import { renderHookWithQuery, renderWithQuery } from "@/test/render";
-import { CATEGORIES, COMIDA, MERCADO, problem, RESGATE, SALARIO, stubApi, WITH_MIXED_GROUP } from "@/test/stub-api";
+import {
+  ALUGUEL,
+  CATEGORIES,
+  COMIDA,
+  MERCADO,
+  problem,
+  RESGATE,
+  SALARIO,
+  stubApi,
+  WITH_MIXED_GROUP,
+} from "@/test/stub-api";
 
 import { CategoryChips, useCategoryChips } from "./category-chips";
 
@@ -154,6 +165,48 @@ describe("CategoryChips", () => {
     await screen.findByRole("radiogroup", { name: "Categoria" });
     expect(chips()).toEqual(["Pets", "Comida fora", "Mercado", "Carro", "Lazer"]);
     expect(screen.queryByRole("radio", { name: "Pets › Ração" })).not.toBeInTheDocument();
+  });
+
+  it("leads with the pinned parents in their order, a pin unused this month too, then the month's ranking", async () => {
+    setup(
+      { "GET /api/categories/pins": { status: 200, body: { category_ids: [LAZER.id, ALUGUEL.id, MERCADO.id] } } },
+      NINE_DAILY,
+      ENTRIES,
+    );
+
+    await screen.findByRole("radiogroup", { name: "Categoria" });
+    expect(chips()).toEqual(["Lazer", "Mercado", "Comida fora", "Carro", "Pets", "Gasto", "Saúde", "Casa"]);
+  });
+
+  it("keeps the month's ranking when the pins fail to load", async () => {
+    setup({ "GET /api/categories/pins": { status: 500, body: problem(500, "Erro") } }, SIX_DAILY, ENTRIES);
+
+    await screen.findByRole("radiogroup", { name: "Categoria" });
+    expect(chips()).toEqual(["Comida fora", "Carro", "Pets", "Mercado", "Lazer"]);
+    expect(screen.getByRole("button", { name: "Personalizar" })).toBeEnabled();
+  });
+
+  it("shows the month's ranking offline, while the pins wait for the network", async () => {
+    stubApi({});
+    onlineManager.setOnline(false);
+    try {
+      const { client } = renderWithQuery(<Picker entries={ENTRIES} />);
+      client.setQueryData(["categories"], SIX_DAILY);
+
+      await screen.findByRole("radiogroup", { name: "Categoria" });
+      expect(chips()).toEqual(["Comida fora", "Carro", "Pets", "Mercado", "Lazer"]);
+    } finally {
+      onlineManager.setOnline(true);
+    }
+  });
+
+  it("asks for the pins together with the categories", async () => {
+    const requests = stubApi({ "GET /api/categories": { status: 200, body: CATEGORIES } });
+    renderHookWithQuery(() => useCategoryChips("daily"));
+
+    await waitFor(() =>
+      expect(requests.map((request) => new URL(request.url).pathname)).toContain("/api/categories/pins"),
+    );
   });
 
   it("shows fewer chips when the kind has fewer categories", async () => {

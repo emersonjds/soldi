@@ -290,6 +290,26 @@ pub fn check_goal(
     Ok(())
 }
 
+pub const MAX_PINS: usize = 24;
+
+pub fn check_pins(ids: &[Uuid]) -> Result<(), AppError> {
+    if ids.len() > MAX_PINS {
+        return Err(AppError::invalid(
+            "category_ids",
+            "must have at most 24 ids",
+        ));
+    }
+    let unique: std::collections::HashSet<&Uuid> = ids.iter().collect();
+    if unique.len() < ids.len() {
+        return Err(AppError::invalid("category_ids", "must not repeat an id"));
+    }
+    Ok(())
+}
+
+pub fn not_pinnable() -> AppError {
+    AppError::invalid("category_ids", "must be your active top-level categories")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
