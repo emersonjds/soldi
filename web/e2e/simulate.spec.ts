@@ -69,6 +69,10 @@ test("Posso comprar isso? from the sidebar: 6× R$ 12.000,00 names the red month
     .getByRole("link", { name: "Posso comprar isso?" })
     .click();
   await expect(page).toHaveURL(/\/posso-comprar/);
+  const writes: string[] = [];
+  page.on("request", (sent) => {
+    if (sent.method() !== "GET" && sent.url().includes("/api/")) writes.push(`${sent.method()} ${sent.url()}`);
+  });
   await expect(page.getByRole("heading", { level: 1, name: "Posso comprar isso?" })).toBeVisible();
 
   await page.getByLabel("Valor total estimado").fill("72.000,00");
@@ -94,5 +98,5 @@ test("Posso comprar isso? from the sidebar: 6× R$ 12.000,00 names the red month
 
   await page.setViewportSize({ width: 375, height: 812 });
   await expectNoClipped(page);
-  await expect(page.getByRole("region", { name: "Lançamentos" })).toHaveCount(0);
+  expect(writes).toEqual([]);
 });
