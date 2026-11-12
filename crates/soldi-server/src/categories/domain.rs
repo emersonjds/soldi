@@ -6,47 +6,63 @@ use uuid::Uuid;
 use crate::error::{AppError, reject_nul};
 use crate::settings::domain::check_money;
 
-/// The market analysis list (docs/specs/market-analysis.md): name, kind, lucide icon.
-const DEFAULTS: [(&str, CategoryKind, &str); 30] = {
+/// D29: the owner's standard; top-levels with a fixed color, unique across all outflow.
+const TOPS: [(&str, CategoryKind, &str, &str); 14] = {
     use CategoryKind::{Bill, Daily, Income};
     [
-        ("Salário", Income, "briefcase"),
-        ("Extra", Income, "sparkles"),
-        ("Reembolso", Income, "undo-2"),
-        ("Aluguel", Bill, "home"),
-        ("Condomínio", Bill, "building-2"),
-        ("Luz", Bill, "zap"),
-        ("Água", Bill, "droplets"),
-        ("Internet", Bill, "wifi"),
-        ("Celular", Bill, "smartphone"),
-        ("Cartão", Bill, "credit-card"),
-        ("Assinaturas", Bill, "repeat"),
-        ("Escola", Bill, "graduation-cap"),
-        ("Seguro", Bill, "shield"),
-        ("Financiamento", Bill, "landmark"),
-        ("Impostos", Bill, "receipt"),
-        ("Mercado", Daily, "shopping-cart"),
-        ("Comida fora", Daily, "utensils"),
-        ("Transporte", Daily, "car"),
-        ("Combustível", Daily, "fuel"),
-        ("Saúde", Daily, "heart-pulse"),
-        ("Farmácia", Daily, "pill"),
-        ("Lazer", Daily, "gamepad-2"),
-        ("Roupas", Daily, "shirt"),
-        ("Casa", Daily, "sofa"),
-        ("Pets", Daily, "paw-print"),
-        ("Presentes", Daily, "gift"),
-        ("Beleza", Daily, "scissors"),
-        ("Educação", Daily, "book-open"),
-        ("Viagem", Daily, "plane"),
-        ("Outros", Daily, "circle-dashed"),
+        ("Salário", Income, "briefcase", "cat-11"),
+        ("Extra", Income, "sparkles", "cat-12"),
+        ("Reembolso", Income, "undo-2", "cat-1"),
+        ("Alimentação", Daily, "utensils", "cat-1"),
+        ("Gasto", Daily, "wallet", "cat-2"),
+        ("Transporte", Daily, "bus", "cat-3"),
+        ("Saúde", Bill, "heart-pulse", "cat-4"),
+        ("Lazer", Daily, "gamepad-2", "cat-5"),
+        ("Casa", Bill, "home", "cat-6"),
+        ("Educação", Bill, "graduation-cap", "cat-7"),
+        ("Veículo", Bill, "car", "cat-8"),
+        ("Cartão", Bill, "credit-card", "cat-9"),
+        ("Assinaturas", Bill, "repeat", "cat-10"),
+        ("Família", Daily, "users", "cat-12"),
     ]
 };
 
-/// The savings categories (SOL-20), seeded after the defaults.
-const SAVINGS: [(&str, CategoryKind); 2] = [
-    ("Economia", CategoryKind::Bill),
-    ("Resgate", CategoryKind::Income),
+/// Subcategories by parent name; they wear the parent's color.
+const CHILDREN: [(&str, &str, CategoryKind, &str); 25] = {
+    use CategoryKind::{Bill, Daily};
+    [
+        ("Alimentação", "Mercado", Daily, "shopping-cart"),
+        ("Alimentação", "Comer fora", Daily, "utensils-crossed"),
+        ("Alimentação", "iFood", Daily, "bike"),
+        ("Transporte", "Uber", Daily, "car-taxi-front"),
+        ("Transporte", "Combustível", Daily, "fuel"),
+        ("Saúde", "Plano de saúde", Bill, "shield-plus"),
+        ("Saúde", "Farmácia", Daily, "pill"),
+        ("Saúde", "Consultas", Daily, "stethoscope"),
+        ("Lazer", "Viagem", Daily, "plane"),
+        ("Casa", "Aluguel", Bill, "key-round"),
+        ("Casa", "Financiamento", Bill, "landmark"),
+        ("Casa", "Condomínio", Bill, "building-2"),
+        ("Casa", "Luz", Bill, "zap"),
+        ("Casa", "Água", Bill, "droplets"),
+        ("Casa", "Internet", Bill, "wifi"),
+        ("Casa", "Gás", Bill, "flame"),
+        ("Educação", "Escola", Bill, "school"),
+        ("Educação", "Cursos", Bill, "book-open"),
+        ("Educação", "Material", Daily, "pencil"),
+        ("Veículo", "Parcela", Bill, "receipt"),
+        ("Veículo", "Seguro", Bill, "shield"),
+        ("Veículo", "IPVA", Bill, "file-text"),
+        ("Família", "Pets", Daily, "paw-print"),
+        ("Família", "Presentes", Daily, "gift"),
+        ("Família", "Mesada", Bill, "hand-coins"),
+    ]
+};
+
+/// The savings categories (SOL-20), seeded after the top-levels.
+const SAVINGS: [(&str, CategoryKind, &str); 2] = [
+    ("Economia", CategoryKind::Bill, "cat-13"),
+    ("Resgate", CategoryKind::Income, "cat-2"),
 ];
 
 pub const DEFAULT_ICON: &str = "circle-dashed";
@@ -57,63 +73,41 @@ pub struct Seed {
     pub icon: &'static str,
     pub color: String,
     pub is_savings: bool,
+    pub parent: Option<&'static str>,
 }
-
-/// The owners of `cat-1..cat-12`, in order (docs/design/tokens.md).
-const PALETTE: [&str; 12] = [
-    "Mercado",
-    "Comida fora",
-    "Transporte",
-    "Saúde",
-    "Lazer",
-    "Aluguel",
-    "Luz",
-    "Internet",
-    "Cartão",
-    "Assinaturas",
-    "Salário",
-    "Extra",
-];
 
 const TOKENS: u8 = 24;
 
-/// The defaults then the savings ones: the palette's twelve take their own token, every other
-/// takes the lowest token not yet used in its kind, in list order.
+/// The top-levels, the savings ones, then the subcategories in their parent's color.
 pub fn defaults() -> Vec<Seed> {
-    let owned = |name: &str| {
-        PALETTE
-            .iter()
-            .position(|&owner| owner == name)
-            .map(|index| format!("cat-{}", index + 1))
+    let top = |name, kind, icon, color: &str, is_savings| Seed {
+        name,
+        kind,
+        icon,
+        color: color.to_string(),
+        is_savings,
+        parent: None,
     };
-    let mut taken: Vec<(CategoryKind, String)> = DEFAULTS
+    let tops = TOPS
         .iter()
-        .filter_map(|&(name, kind, _)| Some((kind, owned(name)?)))
-        .collect();
-    DEFAULTS
-        .iter()
-        .map(|&(name, kind, icon)| (name, kind, icon, false))
-        .chain(SAVINGS.map(|(name, kind)| (name, kind, "piggy-bank", true)))
-        .map(|(name, kind, icon, is_savings)| {
-            let color = owned(name).unwrap_or_else(|| {
-                let colors: Vec<String> = taken
-                    .iter()
-                    .filter(|(each, _)| *each == kind)
-                    .map(|(_, color)| color.clone())
-                    .collect();
-                let color = pick_color(None, &colors).expect("24 tokens cover the seeds");
-                taken.push((kind, color.clone()));
-                color
-            });
-            Seed {
-                name,
-                kind,
-                icon,
-                color,
-                is_savings,
-            }
-        })
-        .collect()
+        .map(|&(name, kind, icon, color)| top(name, kind, icon, color, false))
+        .chain(
+            SAVINGS
+                .iter()
+                .map(|&(name, kind, color)| top(name, kind, "piggy-bank", color, true)),
+        );
+    let children = CHILDREN.iter().map(|&(parent, name, kind, icon)| Seed {
+        name,
+        kind,
+        icon,
+        color: TOPS
+            .iter()
+            .find(|top| top.0 == parent)
+            .map_or_else(String::new, |top| top.3.to_string()),
+        is_savings: false,
+        parent: Some(parent),
+    });
+    tops.chain(children).collect()
 }
 
 /// The color of a top-level category given the colors other active top-levels of its kind hold:
@@ -300,26 +294,46 @@ mod tests {
     }
 
     #[test]
-    fn the_defaults_are_the_market_analysis_list() {
+    fn the_defaults_are_the_owners_standard() {
         let seeds = defaults();
-        let count = |kind| seeds.iter().filter(|seed| seed.kind == kind).count();
-
-        assert_eq!(seeds.len(), 32);
-        assert_eq!(count(CategoryKind::Income), 4);
-        assert_eq!(count(CategoryKind::Bill), 13);
-        assert_eq!(count(CategoryKind::Daily), 15);
+        assert_eq!(seeds.len(), 41);
+        assert_eq!(
+            seeds.iter().filter(|seed| seed.parent.is_none()).count(),
+            16
+        );
+        let outflow: Vec<&str> = seeds
+            .iter()
+            .filter(|seed| seed.parent.is_none() && seed.kind != CategoryKind::Income)
+            .map(|seed| seed.color.as_str())
+            .collect();
+        let unique: std::collections::HashSet<_> = outflow.iter().collect();
+        assert_eq!(
+            unique.len(),
+            outflow.len(),
+            "outflow top-levels share a color"
+        );
+        assert!(!outflow.contains(&"cat-11"));
+        for seed in &seeds {
+            assert!(check_icon(seed.icon).is_ok(), "{}", seed.icon);
+            if let Some(parent) = seed.parent {
+                let top = seeds
+                    .iter()
+                    .find(|each| each.name == parent && each.parent.is_none())
+                    .unwrap();
+                assert_eq!(seed.color, top.color, "{}", seed.name);
+                assert!(!top.is_savings);
+            }
+        }
+        let veiculo: Vec<_> = seeds
+            .iter()
+            .filter(|seed| seed.parent == Some("Veículo"))
+            .map(|seed| seed.name)
+            .collect();
+        assert_eq!(veiculo, ["Parcela", "Seguro", "IPVA"]);
         assert_eq!(
             (seeds[0].name, seeds[0].icon, seeds[0].color.as_str()),
             ("Salário", "briefcase", "cat-11")
         );
-        let outros = seeds.iter().find(|seed| seed.name == "Outros").unwrap();
-        assert_eq!(
-            (outros.icon, outros.kind),
-            ("circle-dashed", CategoryKind::Daily)
-        );
-        for seed in &seeds {
-            assert!(check_icon(seed.icon).is_ok(), "{}", seed.icon);
-        }
         let savings: Vec<_> = seeds
             .iter()
             .filter(|seed| seed.is_savings)
@@ -365,60 +379,6 @@ mod tests {
             "savings-category"
         );
         assert!(check_not_savings(&category(3, CategoryKind::Daily, None)).is_ok());
-    }
-
-    #[test]
-    fn the_twelve_named_defaults_own_the_palette_and_the_rest_take_the_lowest_free_token() {
-        let seeds = defaults();
-        let color = |name: &str| {
-            seeds
-                .iter()
-                .find(|seed| seed.name == name)
-                .unwrap()
-                .color
-                .clone()
-        };
-
-        for (name, token) in [
-            ("Mercado", "cat-1"),
-            ("Comida fora", "cat-2"),
-            ("Transporte", "cat-3"),
-            ("Saúde", "cat-4"),
-            ("Lazer", "cat-5"),
-            ("Aluguel", "cat-6"),
-            ("Luz", "cat-7"),
-            ("Internet", "cat-8"),
-            ("Cartão", "cat-9"),
-            ("Assinaturas", "cat-10"),
-            ("Salário", "cat-11"),
-            ("Extra", "cat-12"),
-            ("Reembolso", "cat-1"),
-            ("Resgate", "cat-2"),
-            ("Condomínio", "cat-1"),
-            ("Celular", "cat-3"),
-            ("Impostos", "cat-12"),
-            ("Economia", "cat-13"),
-            ("Combustível", "cat-6"),
-            ("Casa", "cat-9"),
-            ("Outros", "cat-15"),
-        ] {
-            assert_eq!(color(name), token, "{name}");
-        }
-        for kind in [
-            CategoryKind::Income,
-            CategoryKind::Bill,
-            CategoryKind::Daily,
-        ] {
-            let mut colors: Vec<_> = seeds
-                .iter()
-                .filter(|seed| seed.kind == kind)
-                .map(|seed| seed.color.as_str())
-                .collect();
-            let count = colors.len();
-            colors.sort_unstable();
-            colors.dedup();
-            assert_eq!(colors.len(), count, "{kind:?}");
-        }
     }
 
     #[test]

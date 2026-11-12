@@ -32,9 +32,7 @@ test("an entry shows up in Para onde vai and Cofrinhos starts empty", async ({ p
   await nav.getByRole("button", { name: "Lançar" }).click();
   await page.keyboard.type("80,00");
   await page.getByRole("button", { name: "Salvar" }).click();
-  await expect(
-    page.getByRole("region", { name: "Lançamentos" }).getByRole("button", { name: /Mercado/ }),
-  ).toBeVisible();
+  await expect(page.getByRole("region", { name: "Lançamentos" }).getByRole("button", { name: /Gasto/ })).toBeVisible();
 
   await nav.getByRole("button", { name: "Lançar" }).click();
   await page.getByRole("radio", { name: "Entrada" }).click();
@@ -43,12 +41,12 @@ test("an entry shows up in Para onde vai and Cofrinhos starts empty", async ({ p
   await expect(page.getByRole("region", { name: "Resumo do mês" })).toContainText("R$ 2.000,00");
 
   await nav.getByRole("link", { name: "Para onde vai" }).click();
-  const mercado = page.getByRole("list", { name: "Categorias" }).getByRole("button", { name: /^Mercado/ });
-  await expect(mercado).toContainText("100,0% das despesas");
-  await expect(mercado).toContainText("R$ 80,00");
+  const gasto = page.getByRole("list", { name: "Categorias" }).getByRole("button", { name: /^Gasto/ });
+  await expect(gasto).toContainText("100,0% das despesas");
+  await expect(gasto).toContainText("R$ 80,00");
   await expect(page.getByRole("radio", { name: "Entradas" })).toHaveCount(0);
-  await mercado.click();
-  await expect(page.getByRole("region", { name: "Lançamentos: Mercado" })).toContainText("- R$ 80,00");
+  await gasto.click();
+  await expect(page.getByRole("region", { name: "Lançamentos: Gasto" })).toContainText("- R$ 80,00");
   await page.setViewportSize({ width: 1440, height: 900 });
   await expect(page.getByText("Total Saídas:")).toContainText("Total Saídas: R$ 80,00");
   await page.setViewportSize({ width: 375, height: 812 });

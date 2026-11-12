@@ -234,7 +234,7 @@ async fn rule_1_end_to_end_unpaid_then_paid_then_unpaid(pool: PgPool) {
     assert_eq!(
         unpaid["bills_of_month"],
         json!([{
-            "bill_id": bill["id"], "name": "Aluguel", "icon": "home", "color": "cat-6",
+            "bill_id": bill["id"], "name": "Aluguel", "icon": "key-round", "color": "cat-6",
             "amount": "2259.56", "due_date": "2026-11-05", "paid": false,
             "transaction_id": null, "overdue": overdue, "lands_on": lands_on
         }])

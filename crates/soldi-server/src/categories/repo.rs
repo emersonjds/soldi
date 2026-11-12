@@ -6,16 +6,19 @@ use uuid::Uuid;
 
 use super::domain::Seed;
 
+/// Top-levels first, then the subcategories joined on their parent's name.
 pub async fn seed(
     conn: &mut PgConnection,
     user_id: Uuid,
     seeds: &[Seed],
 ) -> Result<(), sqlx::Error> {
-    let names: Vec<&str> = seeds.iter().map(|seed| seed.name).collect();
-    let kinds: Vec<&str> = seeds.iter().map(|seed| seed.kind.as_str()).collect();
-    let icons: Vec<&str> = seeds.iter().map(|seed| seed.icon).collect();
-    let colors: Vec<&str> = seeds.iter().map(|seed| seed.color.as_str()).collect();
-    let savings: Vec<bool> = seeds.iter().map(|seed| seed.is_savings).collect();
+    let (tops, children): (Vec<&Seed>, Vec<&Seed>) =
+        seeds.iter().partition(|seed| seed.parent.is_none());
+    let names: Vec<&str> = tops.iter().map(|seed| seed.name).collect();
+    let kinds: Vec<&str> = tops.iter().map(|seed| seed.kind.as_str()).collect();
+    let icons: Vec<&str> = tops.iter().map(|seed| seed.icon).collect();
+    let colors: Vec<&str> = tops.iter().map(|seed| seed.color.as_str()).collect();
+    let savings: Vec<bool> = tops.iter().map(|seed| seed.is_savings).collect();
     sqlx::query!(
         "INSERT INTO categories (user_id, name, kind, icon, color, is_savings)
          SELECT $1, * FROM UNNEST($2::text[], $3::text[], $4::text[], $5::text[], $6::bool[])",
@@ -25,6 +28,23 @@ pub async fn seed(
         &icons as &[&str],
         &colors as &[&str],
         &savings
+    )
+    .execute(&mut *conn)
+    .await?;
+    let parents: Vec<&str> = children.iter().filter_map(|seed| seed.parent).collect();
+    let names: Vec<&str> = children.iter().map(|seed| seed.name).collect();
+    let kinds: Vec<&str> = children.iter().map(|seed| seed.kind.as_str()).collect();
+    let icons: Vec<&str> = children.iter().map(|seed| seed.icon).collect();
+    sqlx::query!(
+        "INSERT INTO categories (user_id, name, kind, icon, color, parent_id)
+         SELECT $1, s.name, s.kind, s.icon, p.color, p.id
+         FROM UNNEST($2::text[], $3::text[], $4::text[], $5::text[]) AS s (parent, name, kind, icon)
+         JOIN categories p ON p.user_id = $1 AND p.parent_id IS NULL AND p.name = s.parent",
+        user_id,
+        &parents as &[&str],
+        &names as &[&str],
+        &kinds as &[&str],
+        &icons as &[&str]
     )
     .execute(&mut *conn)
     .await?;

@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { categoriesQuery } from "@/entities/category/categories-query";
+import { categoriesQuery, categoryLabel } from "@/entities/category/categories-query";
 import type { Schemas } from "@/shared/api/client";
 import { parseBRL } from "@/shared/lib/money";
 import { AmountInput } from "@/shared/ui/amount-input";
@@ -85,7 +85,7 @@ const CategoryChips = ({ index, register }: { index: number; register: UseFormRe
           className="inline-flex min-h-11 cursor-pointer items-center rounded-full border border-input px-4 font-medium text-sm transition-colors has-checked:border-primary has-checked:bg-primary has-checked:text-primary-foreground has-focus-visible:outline-2 has-focus-visible:outline-ring"
         >
           <input type="radio" value={category.id} className="sr-only" {...register(`rows.${index}.category_id`)} />
-          {category.name}
+          {categoryLabel(category, categories.data)}
         </label>
       ))}
     </div>

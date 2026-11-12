@@ -296,7 +296,7 @@ async fn the_list_filters_by_category_and_a_foreign_category_lists_nothing(pool:
     let ana = opened(pool.clone(), "ana@example.com").await;
     let bia = opened(pool, "bia@example.com").await;
     let market = spend(&ana, "2026-11-05", "12", "Mercado").await;
-    spend(&ana, "2026-11-06", "30", "Comida fora").await;
+    spend(&ana, "2026-11-06", "30", "Comer fora").await;
     spend(&ana, "2026-10-06", "9", "Mercado").await;
     spend(&bia, "2026-11-05", "40", "Mercado").await;
     let category = market["category"]["id"].as_str().unwrap();
@@ -681,7 +681,7 @@ async fn r6_m1_this_keeps_the_series_and_following_rewrites_later_members_and_th
     assert_eq!(place(&alone), (3, 4));
     assert_eq!(only(&user, "2027-02").await["amount"], "99.90");
 
-    let food = user.category_id("Comida fora").await;
+    let food = user.category_id("Comer fora").await;
     let (status, edited) = user
         .patch(
             &format!("{}?scope=following", uri(&second)),
@@ -698,7 +698,7 @@ async fn r6_m1_this_keeps_the_series_and_following_rewrites_later_members_and_th
         assert_eq!(later["date"], date);
         assert_eq!(later["amount"], "109.90");
         assert_eq!(later["note"], "nova");
-        assert_eq!(later["category"]["name"], "Comida fora");
+        assert_eq!(later["category"]["name"], "Comer fora");
     }
     let first = only(&user, "2026-11").await;
     assert_eq!(first["amount"], "99.90");

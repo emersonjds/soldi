@@ -21,58 +21,98 @@ async fn sign_up_seeds_the_default_categories(pool: PgPool) {
     let (status, categories) = user.get("/api/categories").await;
 
     assert_eq!(status, StatusCode::OK);
-    let list = categories.as_array().unwrap();
-    assert_eq!(list.len(), 31);
-    let kinds: Vec<&str> = list.iter().map(|c| c["kind"].as_str().unwrap()).collect();
-    assert_eq!(kinds.iter().filter(|kind| **kind == "income").count(), 3);
-    assert_eq!(kinds.iter().filter(|kind| **kind == "bill").count(), 13);
-    assert_eq!(kinds.iter().filter(|kind| **kind == "daily").count(), 15);
-    assert_eq!(kinds[0], "income");
-    assert_eq!(kinds[30], "daily");
-    let salary = find(&categories, "Salário");
-    assert_eq!(salary["icon"], "briefcase");
-    assert_eq!(salary["color"], "cat-11");
-    assert_eq!(salary["is_savings"], false);
-    let economia = find(&categories, "Economia");
+    assert_eq!(categories.as_array().unwrap().len(), 40);
+    assert!(!names(&categories).contains(&"Resgate"));
+    let (_, everything) = user.get("/api/categories?include_system=true").await;
+    let list = everything.as_array().unwrap();
+    let name_of = |id: &Value| {
+        list.iter()
+            .find(|category| &category["id"] == id)
+            .map_or("", |parent| parent["name"].as_str().unwrap())
+    };
+    let mut tree: Vec<(&str, &str, &str, &str)> = list
+        .iter()
+        .map(|category| {
+            (
+                name_of(&category["parent_id"]),
+                category["name"].as_str().unwrap(),
+                category["kind"].as_str().unwrap(),
+                category["color"].as_str().unwrap(),
+            )
+        })
+        .collect();
+    tree.sort_unstable();
+    let mut expected = vec![
+        ("", "Salário", "income", "cat-11"),
+        ("", "Extra", "income", "cat-12"),
+        ("", "Reembolso", "income", "cat-1"),
+        ("", "Resgate", "income", "cat-2"),
+        ("", "Alimentação", "daily", "cat-1"),
+        ("", "Gasto", "daily", "cat-2"),
+        ("", "Transporte", "daily", "cat-3"),
+        ("", "Saúde", "bill", "cat-4"),
+        ("", "Lazer", "daily", "cat-5"),
+        ("", "Casa", "bill", "cat-6"),
+        ("", "Educação", "bill", "cat-7"),
+        ("", "Veículo", "bill", "cat-8"),
+        ("", "Cartão", "bill", "cat-9"),
+        ("", "Assinaturas", "bill", "cat-10"),
+        ("", "Família", "daily", "cat-12"),
+        ("", "Economia", "bill", "cat-13"),
+        ("Alimentação", "Mercado", "daily", "cat-1"),
+        ("Alimentação", "Comer fora", "daily", "cat-1"),
+        ("Alimentação", "iFood", "daily", "cat-1"),
+        ("Transporte", "Uber", "daily", "cat-3"),
+        ("Transporte", "Combustível", "daily", "cat-3"),
+        ("Saúde", "Plano de saúde", "bill", "cat-4"),
+        ("Saúde", "Farmácia", "daily", "cat-4"),
+        ("Saúde", "Consultas", "daily", "cat-4"),
+        ("Lazer", "Viagem", "daily", "cat-5"),
+        ("Casa", "Aluguel", "bill", "cat-6"),
+        ("Casa", "Financiamento", "bill", "cat-6"),
+        ("Casa", "Condomínio", "bill", "cat-6"),
+        ("Casa", "Luz", "bill", "cat-6"),
+        ("Casa", "Água", "bill", "cat-6"),
+        ("Casa", "Internet", "bill", "cat-6"),
+        ("Casa", "Gás", "bill", "cat-6"),
+        ("Educação", "Escola", "bill", "cat-7"),
+        ("Educação", "Cursos", "bill", "cat-7"),
+        ("Educação", "Material", "daily", "cat-7"),
+        ("Veículo", "Parcela", "bill", "cat-8"),
+        ("Veículo", "Seguro", "bill", "cat-8"),
+        ("Veículo", "IPVA", "bill", "cat-8"),
+        ("Família", "Pets", "daily", "cat-12"),
+        ("Família", "Presentes", "daily", "cat-12"),
+        ("Família", "Mesada", "bill", "cat-12"),
+    ];
+    expected.sort_unstable();
+    assert_eq!(tree, expected);
+    let salary = find(&everything, "Salário");
+    assert_eq!(
+        (&salary["icon"], &salary["is_savings"]),
+        (&json!("briefcase"), &json!(false))
+    );
+    let economia = find(&everything, "Economia");
     assert_eq!(
         (
-            &economia["kind"],
             &economia["icon"],
-            &economia["color"],
             &economia["is_savings"],
             &economia["target"],
             &economia["deadline"]
         ),
         (
-            &json!("bill"),
             &json!("piggy-bank"),
-            &json!("cat-13"),
             &json!(true),
             &Value::Null,
             &Value::Null
         )
     );
-    assert!(!names(&categories).contains(&"Resgate"));
-    let (_, everything) = user.get("/api/categories?include_system=true").await;
-    assert_eq!(everything.as_array().unwrap().len(), 32);
-    for kind in ["income", "bill", "daily"] {
-        let mut colors: Vec<&str> = everything
-            .as_array()
-            .unwrap()
-            .iter()
-            .filter(|category| category["kind"] == kind)
-            .map(|category| category["color"].as_str().unwrap())
-            .collect();
-        let count = colors.len();
-        colors.sort_unstable();
-        colors.dedup();
-        assert_eq!(colors.len(), count, "{kind}");
-    }
     let resgate = find(&everything, "Resgate");
     assert_eq!(
-        (&resgate["kind"], &resgate["icon"], &resgate["is_savings"]),
-        (&json!("income"), &json!("piggy-bank"), &json!(true))
+        (&resgate["icon"], &resgate["is_savings"]),
+        (&json!("piggy-bank"), &json!(true))
     );
+    assert_eq!(find(&everything, "Combustível")["icon"], "fuel");
 }
 
 #[sqlx::test]
@@ -160,17 +200,17 @@ async fn a_cofrinho_is_a_child_of_economia_with_a_target_and_a_deadline(pool: Pg
 async fn a_target_or_a_deadline_outside_economia_is_not_a_cofrinho(pool: PgPool) {
     let user = TestApp::signed_in(pool, "ana@example.com").await;
     let economia = user.category_id("Economia").await;
-    let aluguel = user.category_id("Aluguel").await;
+    let cartao = user.category_id("Cartão").await;
 
     for body in [
         json!({ "name": "Viagem", "kind": "bill", "target": "100" }),
-        json!({ "name": "Viagem", "kind": "bill", "parent_id": aluguel, "deadline": "2027-01-31" }),
+        json!({ "name": "Viagem", "kind": "bill", "parent_id": cartao, "deadline": "2027-01-31" }),
     ] {
         let (status, problem) = user.post("/api/categories", body).await;
         assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
         assert_eq!(problem["type"], "urn:soldi:error:not-a-cofrinho");
     }
-    for id in [&aluguel, &economia] {
+    for id in [&cartao, &economia] {
         let (status, problem) = user
             .patch(&format!("/api/categories/{id}"), json!({ "target": "100" }))
             .await;
@@ -179,7 +219,7 @@ async fn a_target_or_a_deadline_outside_economia_is_not_a_cofrinho(pool: PgPool)
     }
     let (status, moved) = user
         .patch(
-            &format!("/api/categories/{aluguel}"),
+            &format!("/api/categories/{cartao}"),
             json!({ "parent_id": economia, "target": "100" }),
         )
         .await;
@@ -187,7 +227,7 @@ async fn a_target_or_a_deadline_outside_economia_is_not_a_cofrinho(pool: PgPool)
     assert_eq!(moved["target"], "100.00");
     let (_, out) = user
         .patch(
-            &format!("/api/categories/{aluguel}"),
+            &format!("/api/categories/{cartao}"),
             json!({ "parent_id": null }),
         )
         .await;
@@ -229,7 +269,7 @@ async fn create_defaults_icon_and_takes_the_next_color(pool: PgPool) {
             .as_array()
             .unwrap()
             .len(),
-        33
+        42
     );
 }
 
@@ -314,7 +354,7 @@ async fn delete_archives_the_category(pool: PgPool) {
     assert_eq!(user.delete(&uri).await.0, StatusCode::NO_CONTENT);
 
     let (_, after) = user.get("/api/categories").await;
-    assert_eq!(after.as_array().unwrap().len(), 30);
+    assert_eq!(after.as_array().unwrap().len(), 39);
     assert_eq!(user.delete(&uri).await.0, StatusCode::NOT_FOUND);
     assert_eq!(
         user.patch(&uri, json!({ "name": "Bichos" })).await.0,
@@ -398,22 +438,22 @@ async fn create_child(
 #[sqlx::test]
 async fn a_subcategory_is_listed_under_its_parent(pool: PgPool) {
     let user = TestApp::signed_in(pool, "ana@example.com").await;
-    let casa = user.category_id("Casa").await;
+    let gasto = user.category_id("Gasto").await;
 
-    let (status, moveis) = create_child(&user, "Móveis", "daily", &casa).await;
-    create_child(&user, "Decoração", "daily", &casa).await;
+    let (status, moveis) = create_child(&user, "Móveis", "daily", &gasto).await;
+    create_child(&user, "Decoração", "daily", &gasto).await;
 
     assert_eq!(status, StatusCode::CREATED, "{moveis}");
-    assert_eq!(moveis["parent_id"], casa.as_str());
+    assert_eq!(moveis["parent_id"], gasto.as_str());
     let (_, categories) = user.get("/api/categories").await;
     let list = names(&categories);
-    let at = list.iter().position(|name| *name == "Casa").unwrap();
+    let at = list.iter().position(|name| *name == "Gasto").unwrap();
     assert_eq!(
         list[at - 1..at + 4],
-        ["Beleza", "Casa", "Decoração", "Móveis", "Combustível"]
+        ["Presentes", "Gasto", "Decoração", "Móveis", "Lazer"]
     );
-    assert_eq!(find(&categories, "Casa")["parent_id"], Value::Null);
-    assert_eq!(find(&categories, "Decoração")["parent_id"], casa.as_str());
+    assert_eq!(find(&categories, "Gasto")["parent_id"], Value::Null);
+    assert_eq!(find(&categories, "Decoração")["parent_id"], gasto.as_str());
 }
 
 #[sqlx::test]
@@ -519,7 +559,7 @@ async fn archiving_a_parent_archives_its_subcategories(pool: PgPool) {
     );
 
     let (_, categories) = user.get("/api/categories").await;
-    assert_eq!(categories.as_array().unwrap().len(), 30);
+    assert_eq!(categories.as_array().unwrap().len(), 32);
     assert!(!names(&categories).contains(&"Móveis"));
     assert_eq!(
         user.delete(&format!("/api/categories/{moveis}")).await.0,
@@ -563,7 +603,7 @@ async fn a_top_level_color_is_unique_in_its_kind(pool: PgPool) {
         assert_eq!(status, StatusCode::CREATED, "{created}");
     }
     let (_, next) = create(&user, json!({ "name": "Bar", "kind": "daily" })).await;
-    assert_eq!(next["color"], "cat-17");
+    assert_eq!(next["color"], "cat-6");
     let (status, same) = user
         .patch(&lazer, json!({ "name": "Diversão", "color": "cat-5" }))
         .await;
@@ -571,11 +611,11 @@ async fn a_top_level_color_is_unique_in_its_kind(pool: PgPool) {
     let (status, problem) = user.patch(&lazer, json!({ "color": "cat-1" })).await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
     assert_eq!(slug(&problem), "color-taken");
-    let pets = user.category_id("Pets").await;
-    user.delete(&format!("/api/categories/{pets}")).await;
+    let gasto = user.category_id("Gasto").await;
+    user.delete(&format!("/api/categories/{gasto}")).await;
     let (status, reused) = create(
         &user,
-        json!({ "name": "Bichos", "kind": "daily", "color": "cat-10" }),
+        json!({ "name": "Bichos", "kind": "daily", "color": "cat-2" }),
     )
     .await;
     assert_eq!(status, StatusCode::CREATED, "{reused}");
@@ -584,7 +624,7 @@ async fn a_top_level_color_is_unique_in_its_kind(pool: PgPool) {
 #[sqlx::test]
 async fn a_kind_with_all_24_colors_taken_has_no_free_one(pool: PgPool) {
     let user = TestApp::signed_in(pool, "ana@example.com").await;
-    for n in 16..=24 {
+    for n in [6, 8, 9, 10, 11].into_iter().chain(13..=24) {
         let (status, created) = create(
             &user,
             json!({ "name": format!("Nova {n}"), "kind": "daily" }),
@@ -608,7 +648,7 @@ async fn a_kind_with_all_24_colors_taken_has_no_free_one(pool: PgPool) {
         StatusCode::CREATED
     );
     let (_, bill) = create(&user, json!({ "name": "Mais", "kind": "bill" })).await;
-    assert_eq!(bill["color"], "cat-14");
+    assert_eq!(bill["color"], "cat-1");
 }
 
 #[sqlx::test]
@@ -630,11 +670,11 @@ async fn a_subcategory_wears_its_parents_color(pool: PgPool) {
     .await;
     let (_, sofa) = create_child(&user, "Sofá", "daily", &casa).await;
 
-    assert_eq!(moveis["color"], "cat-9");
+    assert_eq!(moveis["color"], "cat-6");
     assert_eq!(reserva["color"], "cat-13");
     let moveis = format!("/api/categories/{}", moveis["id"].as_str().unwrap());
     let (status, kept) = user.patch(&moveis, json!({ "color": "cat-20" })).await;
-    assert_eq!((status, &kept["color"]), (StatusCode::OK, &json!("cat-9")));
+    assert_eq!((status, &kept["color"]), (StatusCode::OK, &json!("cat-6")));
     let (_, spent) = user
         .post(
             "/api/transactions",
@@ -674,7 +714,7 @@ async fn moving_takes_the_parents_color_in_and_a_free_one_out(pool: PgPool) {
     let (status, inside) = user.patch(&pets, json!({ "parent_id": casa })).await;
     assert_eq!(
         (status, &inside["color"]),
-        (StatusCode::OK, &json!("cat-9"))
+        (StatusCode::OK, &json!("cat-6"))
     );
     let (status, problem) = user
         .patch(&pets, json!({ "parent_id": null, "color": "cat-1" }))
@@ -682,7 +722,7 @@ async fn moving_takes_the_parents_color_in_and_a_free_one_out(pool: PgPool) {
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
     assert_eq!(slug(&problem), "color-taken");
     let (status, out) = user.patch(&pets, json!({ "parent_id": null })).await;
-    assert_eq!((status, &out["color"]), (StatusCode::OK, &json!("cat-10")));
+    assert_eq!((status, &out["color"]), (StatusCode::OK, &json!("cat-6")));
     user.patch(&pets, json!({ "parent_id": casa })).await;
     let (_, chosen) = user
         .patch(&pets, json!({ "parent_id": null, "color": "cat-22" }))
@@ -740,9 +780,9 @@ async fn a_category_moved_under_a_parent_while_it_is_recolored_wears_the_new_col
 #[sqlx::test]
 async fn moving_out_into_a_full_kind_has_no_free_color(pool: PgPool) {
     let user = TestApp::signed_in(pool, "ana@example.com").await;
-    let casa = user.category_id("Casa").await;
-    let (_, moveis) = create_child(&user, "Móveis", "daily", &casa).await;
-    for n in 16..=24 {
+    let gasto = user.category_id("Gasto").await;
+    let (_, moveis) = create_child(&user, "Móveis", "daily", &gasto).await;
+    for n in 1..=17 {
         create(
             &user,
             json!({ "name": format!("Nova {n}"), "kind": "daily" }),
@@ -833,8 +873,8 @@ async fn a_daily_subcategory_becomes_bill_alone_and_its_group_takes_a_color_free
 async fn a_bill_group_becomes_daily_alone_keeping_a_color_free_in_both(pool: PgPool) {
     let user = TestApp::signed_in(pool, "ana@example.com").await;
     user.open_at("1000", "2026-11-01").await;
-    let veiculo = veiculo(&user, "cat-16").await;
-    let (_, parcela) = create_child(&user, "Parcela", "bill", &veiculo).await;
+    let moto = moto(&user, "cat-16").await;
+    let (_, parcela) = create_child(&user, "Prestação", "bill", &moto).await;
     log(
         &user,
         json!({ "date": "2026-11-03", "amount": "300", "kind": "bill", "category_id": id_of(&parcela) }),
@@ -842,18 +882,18 @@ async fn a_bill_group_becomes_daily_alone_keeping_a_color_free_in_both(pool: PgP
     .await;
     log(
         &user,
-        json!({ "date": "2026-11-04", "amount": "80", "kind": "bill", "category_id": veiculo }),
+        json!({ "date": "2026-11-04", "amount": "80", "kind": "bill", "category_id": moto }),
     )
     .await;
 
-    let (status, moved) = change_kind(&user, &veiculo, "daily").await;
+    let (status, moved) = change_kind(&user, &moto, "daily").await;
 
     assert_eq!(status, StatusCode::OK, "{moved}");
     assert_eq!(moved["kind"], "daily");
     assert_eq!(moved["color"], "cat-16");
     let (_, categories) = user.get("/api/categories").await;
-    assert_eq!(find(&categories, "Parcela")["kind"], "bill");
-    assert_eq!(find(&categories, "Parcela")["color"], "cat-16");
+    assert_eq!(find(&categories, "Prestação")["kind"], "bill");
+    assert_eq!(find(&categories, "Prestação")["color"], "cat-16");
     let (_, november) = user.get("/api/months/2026-11").await;
     assert_eq!(november["totals"]["bills"], "300.00");
     assert_eq!(november["totals"]["daily"], "80.00");
@@ -863,10 +903,10 @@ async fn a_bill_group_becomes_daily_alone_keeping_a_color_free_in_both(pool: PgP
 async fn a_top_level_with_no_free_color_in_the_new_kind_keeps_its_kind_and_entries(pool: PgPool) {
     let user = TestApp::signed_in(pool, "ana@example.com").await;
     user.open_at("1000", "2026-11-01").await;
-    let mercado = user.category_id("Mercado").await;
+    let gasto = user.category_id("Gasto").await;
     log(
         &user,
-        json!({ "date": "2026-11-03", "amount": "100", "kind": "daily", "category_id": mercado }),
+        json!({ "date": "2026-11-03", "amount": "100", "kind": "daily", "category_id": gasto }),
     )
     .await;
     for n in 1..=24 {
@@ -881,12 +921,12 @@ async fn a_top_level_with_no_free_color_in_the_new_kind_keeps_its_kind_and_entri
         }
     }
 
-    let (status, problem) = change_kind(&user, &mercado, "bill").await;
+    let (status, problem) = change_kind(&user, &gasto, "bill").await;
 
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
     assert_eq!(slug(&problem), "palette-full");
     let (_, categories) = user.get("/api/categories").await;
-    assert_eq!(find(&categories, "Mercado")["kind"], "daily");
+    assert_eq!(find(&categories, "Gasto")["kind"], "daily");
     let (_, november) = user.get("/api/months/2026-11").await;
     assert_eq!(november["totals"]["daily"], "100.00");
     assert_eq!(november["totals"]["bills"], "0.00");
@@ -909,7 +949,7 @@ async fn a_top_level_alone_takes_the_lowest_color_free_in_its_new_kind_only(pool
     let (status, moved) = change_kind(&user, &id_of(&academia), "bill").await;
 
     assert_eq!(status, StatusCode::OK, "{moved}");
-    assert_eq!(moved["color"], "cat-14");
+    assert_eq!(moved["color"], "cat-1");
 }
 
 #[sqlx::test]
@@ -926,10 +966,10 @@ async fn an_archived_category_keeps_its_kind(pool: PgPool) {
 #[sqlx::test]
 async fn a_kind_and_a_color_change_together(pool: PgPool) {
     let user = TestApp::signed_in(pool, "ana@example.com").await;
-    let pets = format!("/api/categories/{}", user.category_id("Pets").await);
+    let gasto = format!("/api/categories/{}", user.category_id("Gasto").await);
 
     let (status, moved) = user
-        .patch(&pets, json!({ "kind": "bill", "color": "cat-22" }))
+        .patch(&gasto, json!({ "kind": "bill", "color": "cat-22" }))
         .await;
 
     assert_eq!(status, StatusCode::OK, "{moved}");
@@ -1012,7 +1052,7 @@ async fn only_a_conta_fixa_on_the_category_keeps_it_from_becoming_daily(pool: Pg
     let user = TestApp::signed_in(pool, "ana@example.com").await;
     let (_, fies) = create(&user, json!({ "name": "Fies", "kind": "bill" })).await;
     let fies = id_of(&fies);
-    let (_, parcela) = create_child(&user, "Parcela", "bill", &fies).await;
+    let (_, parcela) = create_child(&user, "Prestação", "bill", &fies).await;
     let parcela = id_of(&parcela);
     let (status, bill) = user
         .post(
@@ -1044,15 +1084,15 @@ async fn savings_and_income_keep_their_kind_and_a_subcategory_changes_its_own(po
     let (_, viagem) = create_child(&user, "Viagem", "bill", &economia).await;
     let (_, all) = user.get("/api/categories?include_system=true").await;
     let resgate = id_of(find(&all, "Resgate"));
-    let mercado = user.category_id("Mercado").await;
-    let (_, feira) = create_child(&user, "Feira", "daily", &mercado).await;
+    let alimentacao = user.category_id("Alimentação").await;
+    let (_, feira) = create_child(&user, "Feira", "daily", &alimentacao).await;
 
     for (id, kind) in [
         (economia, "daily"),
         (id_of(&viagem), "daily"),
         (resgate, "bill"),
         (user.category_id("Salário").await, "bill"),
-        (mercado.clone(), "income"),
+        (alimentacao.clone(), "income"),
     ] {
         let (status, problem) = change_kind(&user, &id, kind).await;
         assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
@@ -1061,8 +1101,8 @@ async fn savings_and_income_keep_their_kind_and_a_subcategory_changes_its_own(po
     let (status, moved) = change_kind(&user, &id_of(&feira), "bill").await;
     assert_eq!(status, StatusCode::OK, "{moved}");
     assert_eq!(moved["kind"], "bill");
-    let before = find(&user.get("/api/categories").await.1, "Mercado").clone();
-    let (status, same) = change_kind(&user, &mercado, "daily").await;
+    let before = find(&user.get("/api/categories").await.1, "Alimentação").clone();
+    let (status, same) = change_kind(&user, &alimentacao, "daily").await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(same, before);
 }
@@ -1117,10 +1157,10 @@ async fn color_of(user: &TestApp, name: &str) -> Value {
     find(&categories, name)["color"].clone()
 }
 
-async fn veiculo(user: &TestApp, color: &str) -> String {
+async fn moto(user: &TestApp, color: &str) -> String {
     let (status, created) = create(
         user,
-        json!({ "name": "Veículo", "kind": "bill", "color": color }),
+        json!({ "name": "Moto", "kind": "bill", "color": color }),
     )
     .await;
     assert_eq!(status, StatusCode::CREATED, "{created}");
@@ -1131,19 +1171,19 @@ async fn veiculo(user: &TestApp, color: &str) -> String {
 async fn a_bill_group_takes_a_daily_child_and_moves_to_a_color_free_in_both_kinds(pool: PgPool) {
     let user = TestApp::signed_in(pool, "ana@example.com").await;
     user.open_at("0", "2026-10-01").await;
-    let veiculo = veiculo(&user, "cat-15").await;
-    let (status, parcela) = create_child(&user, "Parcela", "bill", &veiculo).await;
+    let moto = moto(&user, "cat-1").await;
+    let (status, parcela) = create_child(&user, "Prestação", "bill", &moto).await;
     assert_eq!(
         (status, &parcela["color"]),
-        (StatusCode::CREATED, &json!("cat-15"))
+        (StatusCode::CREATED, &json!("cat-1"))
     );
 
-    let (status, gasolina) = create_child(&user, "Gasolina", "daily", &veiculo).await;
+    let (status, gasolina) = create_child(&user, "Gasolina", "daily", &moto).await;
 
     assert_eq!(status, StatusCode::CREATED, "{gasolina}");
-    assert_eq!(gasolina["color"], "cat-16");
-    assert_eq!(color_of(&user, "Veículo").await, "cat-16");
-    assert_eq!(color_of(&user, "Parcela").await, "cat-16");
+    assert_eq!(gasolina["color"], "cat-11");
+    assert_eq!(color_of(&user, "Moto").await, "cat-11");
+    assert_eq!(color_of(&user, "Prestação").await, "cat-11");
     let (status, problem) = user
         .post(
             "/api/transactions",
@@ -1158,38 +1198,40 @@ async fn a_bill_group_takes_a_daily_child_and_moves_to_a_color_free_in_both_kind
 #[sqlx::test]
 async fn a_mixed_group_keeps_its_color_when_no_token_is_free_in_both_kinds(pool: PgPool) {
     let user = TestApp::signed_in(pool, "ana@example.com").await;
-    for n in 16..=24 {
+    for n in 1..=17 {
         create(
             &user,
             json!({ "name": format!("Nova {n}"), "kind": "daily" }),
         )
         .await;
     }
-    let veiculo = veiculo(&user, "cat-14").await;
+    let moto = moto(&user, "cat-14").await;
 
-    let (status, gasolina) = create_child(&user, "Gasolina", "daily", &veiculo).await;
+    let (status, gasolina) = create_child(&user, "Gasolina", "daily", &moto).await;
 
     assert_eq!(status, StatusCode::CREATED, "{gasolina}");
     assert_eq!(gasolina["color"], "cat-14");
-    assert_eq!(color_of(&user, "Veículo").await, "cat-14");
+    assert_eq!(color_of(&user, "Moto").await, "cat-14");
 }
 
 #[sqlx::test]
 async fn a_mixed_groups_color_is_taken_in_every_kind_it_shows_in(pool: PgPool) {
     let user = TestApp::signed_in(pool, "ana@example.com").await;
-    let veiculo = veiculo(&user, "cat-16").await;
-    let (_, gasolina) = create_child(&user, "Gasolina", "daily", &veiculo).await;
+    let moto = moto(&user, "cat-16").await;
+    let (_, gasolina) = create_child(&user, "Gasolina", "daily", &moto).await;
     assert_eq!(gasolina["color"], "cat-16");
 
-    let (status, feira) = create(&user, json!({ "name": "Feira", "kind": "daily" })).await;
-    assert_eq!(
-        (status, &feira["color"]),
-        (StatusCode::CREATED, &json!("cat-17"))
-    );
+    let (status, problem) = create(
+        &user,
+        json!({ "name": "Feira", "kind": "daily", "color": "cat-16" }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(slug(&problem), "color-taken");
     let (status, problem) = user
         .patch(
-            &format!("/api/categories/{veiculo}"),
-            json!({ "color": "cat-15" }),
+            &format!("/api/categories/{moto}"),
+            json!({ "color": "cat-1" }),
         )
         .await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
@@ -1199,22 +1241,22 @@ async fn a_mixed_groups_color_is_taken_in_every_kind_it_shows_in(pool: PgPool) {
 #[sqlx::test]
 async fn a_daily_category_moves_under_a_bill_group_which_takes_a_color_free_in_both(pool: PgPool) {
     let user = TestApp::signed_in(pool, "ana@example.com").await;
-    let veiculo = veiculo(&user, "cat-15").await;
-    create_child(&user, "Parcela", "bill", &veiculo).await;
+    let moto = moto(&user, "cat-1").await;
+    create_child(&user, "Prestação", "bill", &moto).await;
     let combustivel = user.category_id("Combustível").await;
 
     let (status, moved) = user
         .patch(
             &format!("/api/categories/{combustivel}"),
-            json!({ "parent_id": veiculo }),
+            json!({ "parent_id": moto }),
         )
         .await;
 
     assert_eq!(status, StatusCode::OK, "{moved}");
-    assert_eq!(moved["parent_id"], veiculo.as_str());
-    assert_eq!(moved["color"], "cat-16");
-    assert_eq!(color_of(&user, "Veículo").await, "cat-16");
-    assert_eq!(color_of(&user, "Parcela").await, "cat-16");
+    assert_eq!(moved["parent_id"], moto.as_str());
+    assert_eq!(moved["color"], "cat-11");
+    assert_eq!(color_of(&user, "Moto").await, "cat-11");
+    assert_eq!(color_of(&user, "Prestação").await, "cat-11");
 }
 
 #[sqlx::test]
@@ -1240,8 +1282,8 @@ async fn a_move_stays_on_its_side_and_only_a_bill_goes_under_economia(pool: PgPo
 #[sqlx::test]
 async fn a_subcategory_moving_out_no_longer_shows_its_old_group_in_its_kind(pool: PgPool) {
     let user = TestApp::signed_in(pool, "ana@example.com").await;
-    let veiculo = veiculo(&user, "cat-16").await;
-    let (_, gasolina) = create_child(&user, "Gasolina", "daily", &veiculo).await;
+    let moto = moto(&user, "cat-16").await;
+    let (_, gasolina) = create_child(&user, "Gasolina", "daily", &moto).await;
 
     let (status, moved) = user
         .patch(
@@ -1252,14 +1294,14 @@ async fn a_subcategory_moving_out_no_longer_shows_its_old_group_in_its_kind(pool
 
     assert_eq!(status, StatusCode::OK, "{moved}");
     assert_eq!(moved["color"], "cat-16");
-    assert_eq!(color_of(&user, "Veículo").await, "cat-16");
+    assert_eq!(color_of(&user, "Moto").await, "cat-16");
 }
 
 #[sqlx::test]
 async fn an_archived_daily_subcategory_does_not_keep_its_bill_group_in_daily(pool: PgPool) {
     let user = TestApp::signed_in(pool, "ana@example.com").await;
-    let veiculo = veiculo(&user, "cat-16").await;
-    let (_, gasolina) = create_child(&user, "Gasolina", "daily", &veiculo).await;
+    let moto = moto(&user, "cat-16").await;
+    let (_, gasolina) = create_child(&user, "Gasolina", "daily", &moto).await;
     let uri = format!("/api/categories/{}", gasolina["id"].as_str().unwrap());
     assert_eq!(user.delete(&uri).await.0, StatusCode::NO_CONTENT);
 

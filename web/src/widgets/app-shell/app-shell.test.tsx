@@ -128,7 +128,7 @@ describe("AppShell", () => {
 
     const tabs = screen.getByRole("navigation", { name: "Navegação principal" });
     await userEvent.click(within(tabs).getByRole("button", { name: "Lançar" }));
-    expect(await screen.findByRole("radio", { name: "Mercado" })).toHaveAttribute("aria-checked", "true");
+    expect(await screen.findByRole("radio", { name: "Comida fora" })).toHaveAttribute("aria-checked", "true");
     await userEvent.keyboard("12");
     await userEvent.click(screen.getByRole("button", { name: "Salvar Lançamento" }));
 
