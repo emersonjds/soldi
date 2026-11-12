@@ -1425,6 +1425,60 @@
         }
       }
     },
+    "/api/months/{month}/note": {
+      "put": {
+        "tags": [
+          "months"
+        ],
+        "operationId": "put_month_note",
+        "parameters": [
+          {
+            "name": "month",
+            "in": "path",
+            "description": "The month, `YYYY-MM`",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "2026-06"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateMonthNote"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "The month's note is stored or replaced; a blank note deletes it"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`month` is not `YYYY-MM` from 2000 to 2100, or `note` has more than 140 characters (`validation`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/onboarding": {
       "post": {
         "tags": [
@@ -3141,7 +3195,7 @@
       },
       "SavingsMonth": {
         "type": "object",
-        "description": "A month of the savings year: `income` without resgates, `deposited` (bills under Economia and\nits cofrinhos), `withdrawn` (resgates) and `saved`, `deposited` minus `withdrawn`, as the month\nview's `totals.income` and `savings.saved`.\n`rate_pct` is `saved` over `income` with one decimal, null when `income` is 0. `forecast`\nmarks a month after today's: only the entries already dated there, out of the year's totals.",
+        "description": "A month of the savings year: `income` without resgates, `deposited` (bills under Economia and\nits cofrinhos), `withdrawn` (resgates) and `saved`, `deposited` minus `withdrawn`, as the month\nview's `totals.income` and `savings.saved`.\n`rate_pct` is `saved` over `income` with one decimal, null when `income` is 0. `forecast`\nmarks a month after today's: only the entries already dated there, out of the year's totals.\n`note` is the month's note (`PUT /api/months/{month}/note`), null without one.",
         "required": [
           "month",
           "income",
@@ -3164,6 +3218,12 @@
           "month": {
             "type": "string",
             "example": "2026-11"
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "rate_pct": {
             "type": [
@@ -3645,6 +3705,20 @@
           "name": {
             "type": "string",
             "description": "Trimmed; 1 to 60 characters."
+          }
+        },
+        "additionalProperties": false
+      },
+      "UpdateMonthNote": {
+        "type": "object",
+        "description": "A month's free note (P6): up to 140 characters, trimmed; blank deletes it.",
+        "required": [
+          "note"
+        ],
+        "properties": {
+          "note": {
+            "type": "string",
+            "example": "1ª parcela do 13º salário"
           }
         },
         "additionalProperties": false

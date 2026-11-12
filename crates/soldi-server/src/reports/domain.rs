@@ -138,6 +138,7 @@ pub fn savings_year(
                 saved,
                 rate_pct: percent(saved, income),
                 forecast: month > first_of(today),
+                note: None,
             });
             month = month - Months::new(1);
         }

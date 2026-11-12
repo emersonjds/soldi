@@ -90,3 +90,35 @@ pub async fn payments(
     .fetch_all(&mut *conn)
     .await
 }
+
+/// Stores the user's note for `month` (its first day), or deletes it when `None`.
+pub async fn set_note(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    month: NaiveDate,
+    note: Option<&str>,
+) -> Result<(), sqlx::Error> {
+    match note {
+        Some(note) => {
+            sqlx::query!(
+                "INSERT INTO month_notes (user_id, month, note) VALUES ($1, $2, $3)
+             ON CONFLICT (user_id, month) DO UPDATE SET note = EXCLUDED.note, updated_at = now()",
+                user_id,
+                month,
+                note
+            )
+            .execute(&mut *conn)
+            .await?
+        }
+        None => {
+            sqlx::query!(
+                "DELETE FROM month_notes WHERE user_id = $1 AND month = $2",
+                user_id,
+                month
+            )
+            .execute(&mut *conn)
+            .await?
+        }
+    };
+    Ok(())
+}

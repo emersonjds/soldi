@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM month_notes WHERE user_id = $1 AND month = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Date"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b27e3df9bc700a9ad1fcf29f3a92952b104938c6d65726f9af6b86c10ca553e3"
+}

@@ -67,6 +67,7 @@ pub struct CategoryReport {
 /// view's `totals.income` and `savings.saved`.
 /// `rate_pct` is `saved` over `income` with one decimal, null when `income` is 0. `forecast`
 /// marks a month after today's: only the entries already dated there, out of the year's totals.
+/// `note` is the month's note (`PUT /api/months/{month}/note`), null without one.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct SavingsMonth {
     #[schema(example = "2026-11")]
@@ -83,6 +84,7 @@ pub struct SavingsMonth {
     pub rate_pct: Option<Decimal>,
     #[schema(example = false)]
     pub forecast: bool,
+    pub note: Option<String>,
 }
 
 /// A year's savings month by month, newest first, from the opening month (or January) to

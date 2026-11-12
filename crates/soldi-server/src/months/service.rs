@@ -1,12 +1,12 @@
 use chrono::Datelike;
-use soldi_types::months::{Forecast, MonthView};
+use soldi_types::months::{Forecast, MonthView, UpdateMonthNote};
 use sqlx::PgPool;
 
 use super::domain::{self, MonthInput};
 use super::repo;
 use crate::error::AppError;
 use crate::extract::CurrentUser;
-use crate::settings;
+use crate::{categories, settings};
 
 pub async fn get(pool: &PgPool, user: &CurrentUser, month: &str) -> Result<MonthView, AppError> {
     let month = domain::parse_month(month)?;
@@ -59,4 +59,17 @@ pub async fn forecast(pool: &PgPool, user: &CurrentUser) -> Result<Forecast, App
         payments,
         today,
     }))
+}
+
+/// N5: any month from 2000 to 2100; a blank note deletes the month's.
+pub async fn set_note(
+    pool: &PgPool,
+    user: &CurrentUser,
+    month: &str,
+    input: UpdateMonthNote,
+) -> Result<(), AppError> {
+    let month = domain::parse_month(month)?;
+    let note = categories::domain::check_note(&input.note)?;
+    let mut conn = pool.acquire().await?;
+    Ok(repo::set_note(&mut conn, user.id, month, note.as_deref()).await?)
 }

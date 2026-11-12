@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use chrono::Months;
 use soldi_types::reports::{CategoryReport, SavingsYear, YearReport};
 use sqlx::{Connection, PgPool};
@@ -20,7 +22,8 @@ pub async fn categories(
     Ok(domain::report(month, sums))
 }
 
-/// 2 queries: the settings (opening date and target), then one row per month with entries.
+/// 3 queries: the settings (opening date and target), one row per month with entries and the
+/// month notes of the range.
 pub async fn savings(
     pool: &PgPool,
     user: &CurrentUser,
@@ -31,11 +34,21 @@ pub async fn savings(
     let settings = settings::repo::find(&mut conn, user.id).await?;
     let today = crate::today_sao_paulo();
     let range = domain::year_range(year, settings.opening_date, today);
-    let sums = match range {
-        Some((from, to)) => repo::savings_by_month(&mut conn, user.id, from, to).await?,
-        None => Vec::new(),
+    let (sums, notes) = match range {
+        Some((from, to)) => (
+            repo::savings_by_month(&mut conn, user.id, from, to).await?,
+            repo::month_notes(&mut conn, user.id, months::domain::first_of(from), to).await?,
+        ),
+        None => (Vec::new(), Vec::new()),
     };
+    let mut notes: HashMap<String, String> = notes
+        .into_iter()
+        .map(|(month, note)| (month.format("%Y-%m").to_string(), note))
+        .collect();
     let mut year = domain::savings_year(year, range, today, sums);
+    for month in &mut year.months {
+        month.note = notes.remove(&month.month);
+    }
     year.target = settings
         .savings_target_pct
         .map(|pct| domain::savings_target(pct, year.income_total, year.saved_total));
