@@ -1,9 +1,9 @@
 "use client";
 
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
-import { Trash2 } from "lucide-react";
+import { Check, Palette, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -24,10 +24,12 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
 import { hasProblem, hasStatus, problemMessage, type Schemas } from "@/shared/api/client";
 import { positiveAmount } from "@/shared/lib/money";
+import { plain } from "@/shared/lib/text";
 import { AmountInput } from "@/shared/ui/amount-input";
 import { BrandButton } from "@/shared/ui/brand-button";
 import { CategoryIcon, categoryBg } from "@/shared/ui/category-icon";
 import { DateField } from "@/shared/ui/date-field";
+import { PageError, PageLoading } from "@/shared/ui/page-state";
 import { ResponsiveSheet } from "@/shared/ui/responsive-sheet";
 
 import {
@@ -35,11 +37,10 @@ import {
   kindsOf,
   ofKind,
   systemCategoriesQuery,
-  useCategories,
   useCreateCategory,
   useUpdateCategory,
 } from "./categories-query";
-import { ChooseKind, ChooseParent, sameSide } from "./category-chooser";
+import { sameSide } from "./category-chooser";
 import { IconPicker } from "./icon-picker";
 
 type Kind = Schemas["CategoryKind"];
@@ -108,10 +109,13 @@ const problemOf = (error: Error | null, editing: boolean) => {
 
 const OUTFLOW_KINDS: [kind: Kind, label: string][] = [
   ["daily", "Diário"],
-  ["bill", "Saída"],
+  ["bill", "Fixa"],
 ];
 
-const kindLabel = (kind: Kind) => OUTFLOW_KINDS.find(([each]) => each === kind)?.[1];
+const FLOW_KINDS: [kind: Kind, label: string][] = [...OUTFLOW_KINDS, ["income", "Entrada"]];
+
+/** D27: the confirmation keeps the word Saída while `Tipo de Fluxo` reads Fixa. */
+const CONFIRM_KINDS: Record<Kind, string> = { daily: "Diário", bill: "Saída", income: "Entrada" };
 
 const kindProblemOf = (error: Error) => {
   const message = problemMessage(error);
@@ -125,28 +129,31 @@ const kindProblemOf = (error: Error) => {
 const kindChip =
   "h-11 rounded-xl! font-semibold text-base text-muted-foreground data-[state=on]:bg-brand data-[state=on]:text-brand-foreground data-[state=on]:shadow-sm";
 
+const segment =
+  "h-11 rounded-xl! font-semibold text-base text-muted-foreground data-[state=on]:bg-card data-[state=on]:text-primary data-[state=on]:shadow-sm";
+
 type FormProps = {
   kind: Kind;
   /** Given: the form edits it and offers `Excluir`. */
   category?: Category;
-  /** The parent preselected when creating. */
+  /** The parent preselected when creating: the form opens in Subcategoria mode. */
   parentId?: string;
-  /** Given: creating under a parent offers `Trocar`, which calls it. */
-  onChangeParent?: () => void;
   onSaved: (category: Category) => void;
   onArchive: (category: Category) => void;
-  /** Called with the new kind once the API moved the category. */
+  /** Called with the new kind once the API moved or created the category there; given, creating offers `Tipo de Fluxo`. */
   onKindChange?: (kind: Kind) => void;
+  /** Told the parent the form links to, which makes it a cofrinho under Economia. */
+  onParentChange?: (parentId: string) => void;
 };
 
 const CategoryForm = ({
   kind,
   category,
   parentId: presetParent,
-  onChangeParent,
   onSaved,
   onArchive,
   onKindChange,
+  onParentChange,
 }: FormProps) => {
   const [name, setName] = useState(category?.name ?? "");
   const [ownKind, setOwnKind] = useState(category?.kind);
@@ -154,11 +161,20 @@ const CategoryForm = ({
   const [nextKind, setNextKind] = useState<Kind>("bill");
   const [icon, setIcon] = useState(category?.icon);
   const [movedTo, setParentId] = useState(category?.parent_id ?? "");
-  const parentId = category ? movedTo : (presetParent ?? "");
+  const [sub, setSub] = useState(Boolean(presetParent));
+  const [picked, setPicked] = useState(presetParent ?? "");
+  const [flow, setFlow] = useState(kind);
   const [submitted, setSubmitted] = useState(false);
+  const [parentSearch, setParentSearch] = useState("");
   // Edited from another kind's list (D26), a category keeps its own kind.
-  const formKind = ownKind ?? kind;
+  const formKind = ownKind ?? flow;
   const list = useQuery(categoriesQuery).data ?? [];
+  const parents = list.filter((each) => !each.parent_id && each.id !== category?.id && sameSide(each, formKind));
+  const offered = parents.some((each) => each.id === picked);
+  const linked = sub && offered ? picked : "";
+  const parentId = category ? movedTo : linked;
+  useEffect(() => onParentChange?.(parentId), [onParentChange, parentId]);
+  const shownParents = parents.filter((each) => plain(each.name).includes(plain(parentSearch.trim())));
   const system = useQuery(systemCategoriesQuery).data ?? list;
   const holders = (category ? kindsOf({ ...category, kind: formKind }, system) : [formKind]).flatMap((each) =>
     ofKind(system, each),
@@ -172,8 +188,9 @@ const CategoryForm = ({
   const free = freeColor(holders, category?.id);
   const ownColor = color && !holderOf(holders, color, category?.id) ? color : free;
   const chosenColor = parentId ? parent?.color : ownColor;
-  const full = !parentId && !free;
-  const parents = list.filter((each) => !each.parent_id && each.id !== category?.id && sameSide(each, formKind));
+  const pickingParent = sub && !category;
+  const needsColor = !parentId && !pickingParent;
+  const full = needsColor && !free;
   const hasChildren = Boolean(category) && list.some((each) => each.parent_id === category?.id);
   // Economia cannot get a parent, and a cofrinho made from Cofrinhos stays under it.
   const fixedParent = category?.is_savings || list.find((each) => each.id === presetParent)?.is_savings;
@@ -210,6 +227,13 @@ const CategoryForm = ({
   };
   const trimmed = name.trim();
   const nameError = submitted && !trimmed ? "Informe o nome." : undefined;
+  const parentError = submitted && !category && sub && !parentId ? "Escolha a categoria pai." : undefined;
+  const swatches = [
+    ...COLOR_NAMES.filter(([token]) => token === chosenColor),
+    ...COLOR_NAMES.filter(([token]) => token !== chosenColor && !holderOf(holders, token, category?.id)),
+  ];
+  const creatingFlow = !category && onKindChange && !fixedParent;
+  const action = category ? "Salvar" : "Criar";
   const problem = problemOf(mutation.error, Boolean(category));
 
   const submit = (event: FormEvent) => {
@@ -217,7 +241,7 @@ const CategoryForm = ({
     // React bubbles the submit through the portal to the Lançar form around the picker.
     event.stopPropagation();
     setSubmitted(true);
-    if (!trimmed) return;
+    if (!trimmed || (!category && sub && !parentId)) return;
     // Outside Economia the API refuses a goal, so only a cofrinho sends one.
     const goal = cofrinho ? { target: positiveAmount(target), deadline: deadline || null } : {};
     if (category)
@@ -235,35 +259,46 @@ const CategoryForm = ({
     create.mutate(
       {
         name: trimmed,
-        kind,
+        kind: formKind,
         icon: chosenIcon,
         ...(parentId ? { parent_id: parentId } : { color: chosenColor }),
         ...goal,
       },
-      { onSuccess: onSaved },
+      {
+        onSuccess: (created) => {
+          onSaved(created);
+          if (formKind !== kind) onKindChange?.(formKind);
+        },
+      },
     );
   };
 
   return (
     <form noValidate onSubmit={submit} className="flex flex-col gap-5">
-      {!category && parent && (
-        <div className="flex items-center gap-3">
-          <CategoryIcon icon={parent.icon} color={parent.color} className="size-8" />
-          <span className="flex-1 font-medium">Em {parent.name}</span>
-          {onChangeParent && (
-            <Button type="button" variant="ghost" className="min-h-11 text-base text-primary" onClick={onChangeParent}>
-              Trocar
-            </Button>
-          )}
-        </div>
+      {!category && !fixedParent && (
+        <ToggleGroup
+          type="single"
+          spacing={0}
+          value={sub ? "sub" : "top"}
+          onValueChange={(value) => value && setSub(value === "sub")}
+          aria-label="Categoria Pai ou Subcategoria"
+          className="grid w-full grid-cols-2 rounded-2xl bg-muted p-1"
+        >
+          <ToggleGroupItem value="top" className={segment}>
+            Categoria Pai
+          </ToggleGroupItem>
+          <ToggleGroupItem value="sub" className={segment}>
+            Subcategoria
+          </ToggleGroupItem>
+        </ToggleGroup>
       )}
       <Field className="gap-1.5" data-invalid={Boolean(nameError)}>
-        <FieldLabel htmlFor="category-name">Nome</FieldLabel>
+        <FieldLabel htmlFor="category-name">Nome do agrupador</FieldLabel>
         <Input
           id="category-name"
           value={name}
           onChange={(event) => setName(event.target.value)}
-          placeholder={cofrinho ? "Ex.: Viagem" : "Ex.: Academia"}
+          placeholder={cofrinho ? "Ex.: Viagem" : "Ex: Educação & Cursos"}
           maxLength={40}
           autoComplete="off"
           className={field}
@@ -271,9 +306,28 @@ const CategoryForm = ({
         />
         {nameError && <FieldError>{nameError}</FieldError>}
       </Field>
+      {creatingFlow && (
+        <div className="flex flex-col gap-1.5">
+          <FieldTitle id="category-flow">Tipo de Fluxo</FieldTitle>
+          <ToggleGroup
+            type="single"
+            spacing={0}
+            value={flow}
+            onValueChange={(value: Kind | "") => value && setFlow(value)}
+            aria-labelledby="category-flow"
+            className="grid w-full grid-cols-3 gap-2"
+          >
+            {FLOW_KINDS.map(([value, label]) => (
+              <ToggleGroupItem key={value} value={value} className={cn(kindChip, "bg-muted")}>
+                {label}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+        </div>
+      )}
       {kindChangeable && (
         <div className="flex flex-col gap-1.5">
-          <FieldTitle id="category-kind">Tipo</FieldTitle>
+          <FieldTitle id="category-kind">Tipo de Fluxo</FieldTitle>
           <ToggleGroup
             type="single"
             spacing={0}
@@ -291,9 +345,9 @@ const CategoryForm = ({
           <AlertDialog open={asking} onOpenChange={setAsking}>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>{`Mudar para ${kindLabel(nextKind)}?`}</AlertDialogTitle>
+                <AlertDialogTitle>{`Mudar para ${CONFIRM_KINDS[nextKind]}?`}</AlertDialogTitle>
                 <AlertDialogDescription>
-                  {`Todos os lançamentos de ${category.name} passam a ser ${kindLabel(nextKind)}. O saldo não muda.`}
+                  {`Todos os lançamentos de ${category.name} passam a ser ${CONFIRM_KINDS[nextKind]}. O saldo não muda.`}
                 </AlertDialogDescription>
               </AlertDialogHeader>
               {move.error && (
@@ -377,40 +431,76 @@ const CategoryForm = ({
           </NativeSelect>
         </Field>
       )}
-      <IconPicker value={chosenIcon} color={chosenColor ?? ""} onChange={setIcon} />
+      {!category && sub && !fixedParent && (
+        <div className="flex flex-col gap-2">
+          <span id="category-parents" className="font-semibold text-sm">
+            Vincular à Categoria Pai
+          </span>
+          {parents.length > 8 && (
+            <Input
+              type="search"
+              aria-label="Buscar categoria"
+              placeholder="Buscar categoria..."
+              value={parentSearch}
+              onChange={(event) => setParentSearch(event.target.value)}
+              className={field}
+            />
+          )}
+          <div role="radiogroup" aria-labelledby="category-parents" className="flex flex-col gap-1">
+            {shownParents.map((each) => (
+              <label
+                key={each.id}
+                className="flex min-h-11 cursor-pointer items-center gap-3 rounded-xl px-2 has-checked:bg-secondary has-focus-visible:outline-2 has-focus-visible:outline-ring"
+              >
+                <input
+                  type="radio"
+                  name="category-parent"
+                  className="sr-only"
+                  checked={picked === each.id}
+                  onChange={() => setPicked(each.id)}
+                />
+                <CategoryIcon icon={each.icon} color={each.color} className="size-8" />
+                <span className="text-base">{each.name}</span>
+              </label>
+            ))}
+            {parents.length === 0 && <p className="text-muted-foreground text-sm">Nenhuma categoria pai deste tipo.</p>}
+          </div>
+          {parentError && (
+            <p role="alert" className="text-destructive text-sm">
+              {parentError}
+            </p>
+          )}
+        </div>
+      )}
       {parent && (
         <p className="flex items-center gap-2 text-muted-foreground text-sm">
           <span aria-hidden className={cn("size-4 rounded-full", categoryBg(parent.color))} />
           Usa a cor de {parent.name}
         </p>
       )}
-      {full && (
-        <div className="flex flex-col items-start gap-2">
-          <p className="text-muted-foreground text-sm">{allTaken(Boolean(category))}</p>
-          {onChangeParent && !category && (
-            <Button type="button" variant="link" className="min-h-11 px-0 text-base" onClick={onChangeParent}>
-              Criar subcategoria
-            </Button>
-          )}
-        </div>
-      )}
-      {!parentId && !full && (
-        <fieldset className="flex flex-col gap-2">
-          <legend className="mb-2 font-semibold text-sm">Cor</legend>
+      {full && <p className="text-muted-foreground text-sm">{allTaken(Boolean(category))}</p>}
+      {needsColor && !full && (
+        <fieldset aria-labelledby="category-color" className="flex flex-col gap-2">
+          <div className="flex items-center justify-between gap-2">
+            <span id="category-color" className="font-semibold text-sm">
+              Cor de Destaque
+            </span>
+            <span className="font-semibold text-primary text-sm">
+              {COLOR_NAMES.find(([token]) => token === chosenColor)?.[1]}
+            </span>
+          </div>
           <div className="flex flex-wrap gap-2">
-            {COLOR_NAMES.map(([token, label]) => {
-              const holder = holderOf(holders, token, category?.id);
+            {swatches.map(([token, label]) => {
               return (
                 <label
                   key={token}
-                  className="group flex size-11 cursor-pointer items-center justify-center rounded-full has-disabled:cursor-not-allowed has-disabled:opacity-40 has-focus-visible:outline-2 has-focus-visible:outline-ring"
+                  className="group flex size-11 cursor-pointer items-center justify-center rounded-full has-focus-visible:outline-2 has-focus-visible:outline-ring"
                 >
                   <input
                     type="radio"
                     name="category-color"
-                    aria-label={holder ? `Cor ${label}, usada por ${holder.name}` : `Cor ${label}`}
+                    aria-label={`Cor ${label}`}
                     className="sr-only"
-                    disabled={Boolean(holder)}
                     checked={chosenColor === token}
                     onChange={() => setColor(token)}
                   />
@@ -432,8 +522,20 @@ const CategoryForm = ({
           {problem}
         </p>
       )}
+      <IconPicker value={chosenIcon} color={chosenColor ?? ""} onChange={setIcon} />
+      <div className="flex items-center gap-3 rounded-2xl border border-border bg-muted/50 p-3">
+        <CategoryIcon icon={chosenIcon} color={chosenColor ?? ""} />
+        <div className="flex min-w-0 flex-1 flex-col">
+          <span className="truncate font-semibold text-base">{trimmed}</span>
+          <span className="text-muted-foreground text-xs">Prévia em tempo real</span>
+        </div>
+        {!category && (
+          <span className="rounded-full bg-income-soft px-2.5 py-0.5 font-semibold text-income-text text-xs">Novo</span>
+        )}
+      </div>
       <BrandButton type="submit" disabled={mutation.isPending || full}>
-        {category ? "Salvar" : "Criar"}
+        {!cofrinho && <Check />}
+        {cofrinho ? action : `${action} Categoria`}
       </BrandButton>
       {category && !category.is_savings && (
         <Button
@@ -458,9 +560,38 @@ type CategorySheetProps = Omit<FormProps, "onSaved" | "onArchive"> & {
   onCloseAutoFocus?: (event: Event) => void;
 };
 
+/** The title and the saved toast: a category's, or a cofrinho's under Economia. */
+const useHeading = (category: Category | undefined, parentId: string | null | undefined) => {
+  const list = useQuery(categoriesQuery).data;
+  const cofrinho = Boolean(list?.find((each) => each.id === parentId)?.is_savings);
+  const done = category ? "salv" : "criad";
+  return {
+    title: cofrinho ? `${category ? "Editar" : "Novo"} cofrinho` : `${category ? "Editar" : "Nova"} Categoria`,
+    saved: cofrinho ? `Cofrinho ${done}o` : `Categoria ${done}a`,
+  };
+};
+
+const formKey = ({ category, parentId }: Pick<FormProps, "category" | "parentId">) =>
+  category?.id ?? `new-${parentId ?? ""}`;
+
+/** The heading follows the parent the form links to, starting from the given one. */
+const useLinked = ({ category, parentId }: Pick<FormProps, "category" | "parentId">) =>
+  useState(category?.parent_id ?? parentId);
+
+/** The form once the categories arrived; a failure offers to retry. */
+const LoadedForm = (props: FormProps) => {
+  const categories = useQuery(categoriesQuery);
+  if (categories.data) return <CategoryForm {...props} />;
+  if (categories.isError)
+    return <PageError message="Não foi possível carregar as categorias." onRetry={() => categories.refetch()} />;
+  return <PageLoading />;
+};
+
+const pill = "rounded-full bg-muted px-2.5 py-0.5 font-medium text-muted-foreground text-xs";
+
 /**
- * `Nova categoria` or `Editar categoria`: name, optional parent, any lucide icon and a palette color.
- * Editing a Diário or Saída category offers `Tipo`, which moves it and its entries after a confirmation.
+ * `Nova Categoria` or `Editar Categoria`: Categoria Pai or Subcategoria, name, kind, icon and a free palette color.
+ * Editing a Diário or Fixa category offers `Tipo de Fluxo`, which moves it and its entries after a confirmation.
  * Under Economia it is a cofrinho: `Novo cofrinho` or `Editar cofrinho`, with an optional goal and deadline.
  */
 export const CategorySheet = ({
@@ -471,68 +602,57 @@ export const CategorySheet = ({
   onCloseAutoFocus,
   ...form
 }: CategorySheetProps) => {
-  const categories = useCategories(form.kind);
-  const start = form.category || form.parentId ? "form" : "kind";
-  const [step, setStep] = useState<"kind" | "parent" | "form">(start);
-  const [chosen, setChosen] = useState(form.parentId);
-  const [opened, setOpened] = useState(open);
-  const [preset, setPreset] = useState(form.parentId);
-  if (open !== opened || form.parentId !== preset) {
-    const late = open === opened && step === "kind";
-    setOpened(open);
-    setPreset(form.parentId);
-    if ((open && open !== opened) || (late && form.parentId)) {
-      setStep(start);
-      setChosen(form.parentId);
-    }
-  }
-  const find = (id?: string) => categories.data?.find((each) => each.id === id);
-  const cofrinho = Boolean(find(form.category?.parent_id ?? chosen)?.is_savings);
-  // A cofrinho started from Cofrinhos stays under Economia.
-  const fixed = form.category || find(form.parentId)?.is_savings;
-  const pick = (parentId?: string) => {
-    setChosen(parentId);
-    setStep("form");
-  };
-  const done = form.category ? "salv" : "criad";
-  const saved = cofrinho ? `Cofrinho ${done}o` : `Categoria ${done}a`;
-  const title = cofrinho
-    ? `${form.category ? "Editar" : "Novo"} cofrinho`
-    : `${form.category ? "Editar" : "Nova"} categoria`;
-  const heading = {
-    kind: ["Nova", "Categoria nova ou dentro de uma que já existe?"],
-    parent: ["Subcategoria de qual categoria?", "Busque e escolha a categoria que vai agrupar a nova."],
-    form: [title, "Nome, ícone e cor; subcategoria se quiser agrupar."],
-  }[step];
-
+  const [linked, setLinked] = useLinked(form);
+  const { title, saved } = useHeading(form.category, linked);
   return (
     <ResponsiveSheet
       open={open}
       onOpenChange={onOpenChange}
-      title={heading[0]}
-      description={heading[1]}
-      onBack={step === "parent" ? () => setStep("kind") : undefined}
+      title={title}
+      eyebrow={<span className={cn(pill, "self-start")}>Configuração</span>}
+      description="Nome, ícone e cor; subcategoria se quiser agrupar."
       onCloseAutoFocus={onCloseAutoFocus}
     >
-      {step === "kind" && <ChooseKind onCategory={() => pick()} onSubcategory={() => setStep("parent")} />}
-      {step === "parent" && <ChooseParent kind={form.kind} onPick={pick} />}
-      <div hidden={step !== "form"}>
-        <CategoryForm
-          key={form.category?.id ?? "new"}
-          {...form}
-          parentId={chosen}
-          onChangeParent={fixed ? undefined : () => setStep("parent")}
-          onSaved={(category) => {
-            onOpenChange(false);
-            toast.success(saved);
-            onSaved?.(category);
-          }}
-          onArchive={(category) => {
-            onOpenChange(false);
-            onArchive?.(category);
-          }}
-        />
-      </div>
+      <LoadedForm
+        key={formKey(form)}
+        {...form}
+        onParentChange={setLinked}
+        onSaved={(category) => {
+          onOpenChange(false);
+          toast.success(saved);
+          onSaved?.(category);
+        }}
+        onArchive={(category) => {
+          onOpenChange(false);
+          onArchive?.(category);
+        }}
+      />
     </ResponsiveSheet>
+  );
+};
+
+/** The same form as a side panel, from 1280 px on Categorias. */
+export const CategoryPanel = ({ onSaved, ...form }: FormProps) => {
+  const [linked, setLinked] = useLinked(form);
+  const { title, saved } = useHeading(form.category, linked);
+  return (
+    <aside aria-labelledby="category-panel-title" className="flex flex-col gap-5 rounded-2xl bg-card p-5 shadow-sm">
+      <div className="flex items-center gap-2">
+        <Palette aria-hidden className="size-5 text-primary" />
+        <h2 id="category-panel-title" className="font-bold text-lg">
+          {title}
+        </h2>
+        <span className={pill}>Configuração</span>
+      </div>
+      <LoadedForm
+        key={formKey(form)}
+        {...form}
+        onParentChange={setLinked}
+        onSaved={(category) => {
+          toast.success(saved);
+          onSaved(category);
+        }}
+      />
+    </aside>
   );
 };

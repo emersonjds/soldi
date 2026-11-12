@@ -78,7 +78,7 @@ const PAGE_NAMES = [
 ] as const;
 
 /** The pages that read `?m=`; the switcher shows only there. */
-const MONTH_PAGES = ["/mes", "/para-onde-vai", "/economia", "/ajustes/contas"];
+const MONTH_PAGES = ["/mes", "/para-onde-vai", "/economia", "/ajustes/contas", "/ajustes/categorias"];
 
 /** Month pages whose own hero carries the switcher below 1024 px; the rest get it in a card under the app bar. */
 const HERO_SWITCHER_PAGES = ["/mes", "/para-onde-vai"];
@@ -86,14 +86,20 @@ const HERO_SWITCHER_PAGES = ["/mes", "/para-onde-vai"];
 /** The month of `?m=`, moved in place; `hero` on Mês's indigo hero. */
 export const ShellMonthSwitcher = ({ pathname, tone = "surface" }: { pathname: string; tone?: "hero" | "surface" }) => {
   const router = useRouter();
-  const month = monthParam(useSearchParams().get("m"));
+  const search = useSearchParams();
+  const month = monthParam(search.get("m"));
   const settings = useSettings();
+  const moveTo = (next: string) => {
+    const params = new URLSearchParams(search.toString());
+    params.set("m", next);
+    router.replace(`${pathname}?${params}`, { scroll: false });
+  };
   return (
     <MonthSwitcher
       tone={tone}
       month={month}
       minMonth={settings.data?.opening_date.slice(0, 7)}
-      onMonthChange={(next) => router.replace(`${pathname}?m=${next}`, { scroll: false })}
+      onMonthChange={moveTo}
     />
   );
 };

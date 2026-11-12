@@ -85,7 +85,7 @@ export const IconPicker = ({
 
   return (
     <fieldset className="flex flex-col gap-2">
-      <legend className="mb-2 font-semibold text-sm">Ícone</legend>
+      <legend className="mb-2 font-semibold text-sm">Ícone Representativo</legend>
       <Input
         type="search"
         aria-label="Buscar ícone"

@@ -7,6 +7,16 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.50.0
+
+> Headline: Categorias looks like Stitch
+
+### Web
+
+- Categorias & Subcategorias: breadcrumb, search, `Nova Categoria`, tiles `ESTRUTURA ATIVA` and `MAIOR CONCENTRAÇÃO`, tabs Gastos Diários / Contas Fixas / Entradas & Receitas with counts, and a card per group with `Total no mês`, its subcategories with entries and amounts, and `+ Adicionar subcategoria`.
+- One form (side panel from 1280 px, sheet below): Categoria Pai / Subcategoria, `Tipo de Fluxo` Diário / Fixa / Entrada, `Vincular à Categoria Pai` (with search past 8), `Cor de Destaque` with only free colors, `Ícone Representativo`, live preview. Changing a category's kind still asks `Mudar para Saída?`.
+- Errors loading the list or the month's totals show Tentar de novo; the month switcher keeps the chosen tab.
+
 ## 0.49.0
 
 > Headline: Contas fixas looks like Stitch

@@ -106,22 +106,18 @@ const setup = (replies = {}, categories = CATEGORIES, entries?: Schemas["Transac
   return { requests, posted };
 };
 
-/** Through the chooser: a top-level category, or a subcategory of `parent`. */
+/** Through the segment: a top-level category, or a subcategory of `parent`. */
 const openCreate = async (parent?: string) => {
   await userEvent.click(await screen.findByRole("button", { name: "Ver todas" }));
   await userEvent.click(
     within(await screen.findByRole("dialog", { name: "Categoria" })).getByRole("button", { name: "Nova categoria" }),
   );
-  const chooser = await screen.findByRole("dialog", { name: "Nova" });
-  await userEvent.click(within(chooser).getByRole("button", { name: parent ? /^Subcategoria/ : /^Categoria/ }));
-  if (parent)
-    await userEvent.click(
-      await within(await screen.findByRole("dialog", { name: "Subcategoria de qual categoria?" })).findByRole(
-        "option",
-        { name: parent },
-      ),
-    );
-  return screen.findByRole("dialog", { name: "Nova categoria" });
+  const sheet = await screen.findByRole("dialog", { name: "Nova Categoria" });
+  if (parent) {
+    await userEvent.click(within(sheet).getByRole("radio", { name: "Subcategoria" }));
+    await userEvent.click(await within(sheet).findByRole("radio", { name: parent }));
+  }
+  return sheet;
 };
 
 describe("CategoryChips", () => {
@@ -220,7 +216,7 @@ describe("CategoryChips", () => {
     await userEvent.click(
       within(await screen.findByRole("dialog", { name: "Categoria" })).getByRole("button", { name: "Nova categoria" }),
     );
-    await screen.findByRole("dialog", { name: "Nova" });
+    await screen.findByRole("dialog", { name: "Nova Categoria" });
     await userEvent.keyboard("{Escape}");
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     await waitFor(() => expect(more).toHaveFocus());
@@ -351,17 +347,17 @@ describe("CategoryChips", () => {
     setup();
 
     const sheet = await openCreate();
-    expect(within(sheet).getByLabelText("Nome")).toHaveAttribute("maxlength", "40");
+    expect(within(sheet).getByLabelText("Nome do agrupador")).toHaveAttribute("maxlength", "40");
     expect(within(sheet).getByRole("radio", { name: "Ícone circle-dashed" })).toBeChecked();
     expect(within(sheet).getAllByRole("radio", { name: /^Ícone / })).toHaveLength(24);
     expect(within(sheet).getByRole("radio", { name: "Cor Azul" })).toBeChecked();
-    await userEvent.type(within(sheet).getByLabelText("Nome"), "  Carro ");
+    await userEvent.type(within(sheet).getByLabelText("Nome do agrupador"), "  Carro ");
     await userEvent.click(within(sheet).getByRole("radio", { name: "Ícone car" }));
     const requests = stubApi({
       "GET /api/categories": { status: 200, body: [...CATEGORIES, CARRO] },
       "POST /api/categories": { status: 201, body: CARRO },
     });
-    await userEvent.click(within(sheet).getByRole("button", { name: "Criar" }));
+    await userEvent.click(within(sheet).getByRole("button", { name: "Criar Categoria" }));
 
     await waitFor(() => expect(requests.some((request) => request.method === "POST")).toBe(true));
     expect(await requests.find((request) => request.method === "POST")?.json()).toEqual({
@@ -390,11 +386,11 @@ describe("CategoryChips", () => {
     expect(
       within(sheet).queryByText("Todas as 24 cores estão em uso. Crie como subcategoria ou arquive uma categoria."),
     ).not.toBeInTheDocument();
-    await userEvent.click(within(sheet).getByRole("button", { name: "Criar" }));
+    await userEvent.click(within(sheet).getByRole("button", { name: "Criar Categoria" }));
     expect(within(sheet).getByText("Informe o nome.")).toBeInTheDocument();
     expect(requests.some((request) => request.method === "POST")).toBe(false);
 
-    await userEvent.type(within(sheet).getByLabelText("Nome"), "Feira{Enter}");
+    await userEvent.type(within(sheet).getByLabelText("Nome do agrupador"), "Feira{Enter}");
     expect(await posted()).toEqual({ name: "Feira", kind: "daily", icon: MERCADO.icon, parent_id: full[0].id });
   });
 
@@ -402,7 +398,7 @@ describe("CategoryChips", () => {
     setup({}, WITH_CHILDREN);
     const sheet = await openCreate("Pets");
 
-    await userEvent.type(within(sheet).getByLabelText("Nome"), "Pet shop");
+    await userEvent.type(within(sheet).getByLabelText("Nome do agrupador"), "Pet shop");
     await userEvent.type(within(sheet).getByLabelText("Buscar ícone"), "dog");
     await userEvent.click(await within(sheet).findByRole("radio", { name: "Ícone dog" }));
     expect(within(sheet).getByText("Usa a cor de Pets")).toBeInTheDocument();
@@ -418,7 +414,7 @@ describe("CategoryChips", () => {
       "GET /api/categories": { status: 200, body: [...WITH_CHILDREN, created] },
       "POST /api/categories": { status: 201, body: created },
     });
-    await userEvent.click(within(sheet).getByRole("button", { name: "Criar" }));
+    await userEvent.click(within(sheet).getByRole("button", { name: "Criar Categoria" }));
 
     await waitFor(() => expect(requests.some((request) => request.method === "POST")).toBe(true));
     expect(await requests.find((request) => request.method === "POST")?.json()).toEqual({
@@ -434,7 +430,7 @@ describe("CategoryChips", () => {
     setup({ "POST /api/categories": { status: 409, body: problem(409, "already-exists") } });
 
     const sheet = await openCreate();
-    await userEvent.type(within(sheet).getByLabelText("Nome"), "Mercado{Enter}");
+    await userEvent.type(within(sheet).getByLabelText("Nome do agrupador"), "Mercado{Enter}");
 
     expect(await within(sheet).findByText("Já existe uma categoria com esse nome")).toBeInTheDocument();
   });
@@ -443,7 +439,7 @@ describe("CategoryChips", () => {
     setup({ "POST /api/categories": { status: 422, body: problem(422, "name") } });
 
     const sheet = await openCreate();
-    await userEvent.type(within(sheet).getByLabelText("Nome"), "Feira{Enter}");
+    await userEvent.type(within(sheet).getByLabelText("Nome do agrupador"), "Feira{Enter}");
 
     expect(await within(sheet).findByText("Não foi possível criar a categoria.")).toBeInTheDocument();
   });
