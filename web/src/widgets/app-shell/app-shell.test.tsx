@@ -168,6 +168,7 @@ describe("AppShell", () => {
       ["Mês", "/mes"],
       ["Para onde vai", "/para-onde-vai"],
       ["Cofrinhos", "/economia"],
+      ["Posso comprar isso?", "/posso-comprar"],
     ]);
     expect(links("Configurações")).toEqual([
       ["Contas Fixas", "/ajustes/contas"],
@@ -175,45 +176,20 @@ describe("AppShell", () => {
     ]);
   });
 
-  it("opens Lançar in Simular from Posso comprar isso?, never marked, and the next Lançar starts without it", async () => {
+  it("links Posso comprar isso? in the sidebar Menu and marks it on its page", () => {
+    setPathname("/posso-comprar");
     renderWithQuery(<AppShell>conteúdo</AppShell>);
 
     const sidebar = screen.getByRole("navigation", { name: "Menu lateral" });
     const menu = within(sidebar).getByRole("group", { name: "Menu" });
-    const simulate = within(menu).getByRole("button", { name: "Posso comprar isso?" });
-    expect(simulate).not.toHaveAttribute("aria-current");
+    const link = within(menu).getByRole("link", { name: "Posso comprar isso?" });
+    expect(link).toHaveAttribute("href", "/posso-comprar");
+    expect(link).toHaveAttribute("aria-current", "page");
     expect(
       within(menu)
         .getAllByRole("listitem")
         .map((item) => item.textContent),
     ).toEqual(["Mês", "Para onde vai", "Cofrinhos", "Posso comprar isso?"]);
-    await userEvent.click(simulate);
-    const sheet = await screen.findByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ });
-    expect(within(sheet).getByRole("switch", { name: "Simular" })).toBeChecked();
-    expect(within(sheet).getByRole("radio", { name: "Diário" })).toBeChecked();
-
-    await userEvent.keyboard("{Escape}");
-    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-    await userEvent.click(within(screen.getByRole("banner")).getByRole("button", { name: "Lançar" }));
-    expect(
-      within(await screen.findByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ })).getByRole("switch", {
-        name: "Simular",
-      }),
-    ).not.toBeChecked();
-
-    await userEvent.keyboard("{Escape}");
-    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-    await userEvent.click(simulate);
-    await screen.findByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ });
-    await userEvent.keyboard("{Escape}");
-    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-    const tabs = screen.getByRole("navigation", { name: "Navegação principal" });
-    await userEvent.click(within(tabs).getByRole("button", { name: "Lançar" }));
-    expect(
-      within(await screen.findByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ })).getByRole("switch", {
-        name: "Simular",
-      }),
-    ).not.toBeChecked();
   });
 
   it("marks Contas Fixas, not Ajustes, in the sidebar on its screen", () => {

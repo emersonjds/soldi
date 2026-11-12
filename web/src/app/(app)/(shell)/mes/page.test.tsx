@@ -1046,25 +1046,14 @@ describe("Mês", () => {
     expect(scrollTo).toHaveBeenCalledWith({ top: 0 });
   });
 
-  it("opens Lançar in Simular on Diário from Posso comprar?, and the next Lançar starts without it", async () => {
+  it("links Posso comprar? in Próximos meses to its page", async () => {
     open({
       "GET /api/months/2026-11": { status: 200, body: EMPTY },
       "GET /api/forecast": { status: 200, body: FORECAST },
     });
 
     const strip = await screen.findByRole("region", { name: "Próximos meses" });
-    await userEvent.click(within(strip).getByRole("button", { name: "Posso comprar?" }));
-    const sheet = await screen.findByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ });
-    expect(within(sheet).getByRole("switch", { name: "Simular" })).toBeChecked();
-    expect(within(sheet).getByRole("radio", { name: "Diário" })).toBeChecked();
-
-    await userEvent.click(within(sheet).getByRole("button", { name: "Fechar" }));
-    await userEvent.click(await screen.findByRole("button", { name: "Lançar entrada" }));
-    expect(
-      within(await screen.findByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ })).getByRole("switch", {
-        name: "Simular",
-      }),
-    ).not.toBeChecked();
+    expect(within(strip).getByRole("link", { name: "Posso comprar?" })).toHaveAttribute("href", "/posso-comprar");
   });
 
   it("keeps the month on screen when Próximos meses fails", async () => {

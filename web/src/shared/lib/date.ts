@@ -72,7 +72,8 @@ export const addMonths = (month: string, count: number) => {
   return `${Math.floor(index / 12)}-${pad((index % 12) + 1)}`;
 };
 
-const lastDay = (month: string) =>
+/** `2027-02` → `28`. */
+export const lastDay = (month: string) =>
   new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0)).getUTCDate();
 
 /** The server's `repeat_dates`: `date`'s day in each of the next `count - 1` months, clamped to the month's last day. */

@@ -66,6 +66,7 @@ export const CategoryChips = ({
   onChoose,
   entries,
   error,
+  label = "Categoria",
 }: {
   kind: Kind;
   chosen: Category | undefined;
@@ -74,6 +75,7 @@ export const CategoryChips = ({
   entries: Entry[] | undefined;
   /** Shown under the row and tied to it. */
   error?: string;
+  label?: string;
 }) => {
   const categories = useCategoryChips(kind);
   const [creating, setCreating] = useState(false);
@@ -121,7 +123,7 @@ export const CategoryChips = ({
       <div className="flex items-center justify-between gap-2">
         <span id={labelId} className="flex items-center gap-2 font-semibold text-sm">
           <span aria-hidden className="size-1.5 rounded-full bg-primary" />
-          Categoria
+          {label}
         </span>
         <CategorySelect
           ref={more}
