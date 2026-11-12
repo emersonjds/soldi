@@ -1,7 +1,9 @@
-use chrono::Datelike;
+use std::collections::BTreeMap;
+
+use chrono::NaiveDate;
 use soldi_types::categories::Category;
 use soldi_types::transactions::{
-    CreateTransaction, Scope, Transaction, TransactionSeries, UpdateTransaction,
+    CreateTransaction, RepeatEvery, Scope, Transaction, TransactionSeries, UpdateTransaction,
 };
 use sqlx::{PgConnection, PgPool};
 use uuid::Uuid;
@@ -10,7 +12,6 @@ use super::{domain, repo};
 use crate::bills::service::check_fatura_open;
 use crate::error::AppError;
 use crate::extract::CurrentUser;
-use crate::months::domain::first_of;
 use crate::{categories, months, settings};
 
 pub async fn list(
@@ -83,24 +84,68 @@ pub async fn check_opening(
     Ok(())
 }
 
-/// SOL-102: a deleted cofrinho's deposits and resgates are read-only; with `following`, any
-/// later series member in one refuses the whole call.
+/// Before any member: PostgreSQL refuses `NaiveDate::MIN`.
+const SERIES_FLOOR: NaiveDate = NaiveDate::from_ymd_opt(1, 1, 1).unwrap();
+
+/// D33: the series a change or a deletion reaches and the first date it reaches: `this` reaches
+/// none, `following` this entry's date on, `all` every member.
+fn reach(scope: Scope, current: &Transaction) -> Option<(Uuid, NaiveDate)> {
+    let series = current.series.as_ref()?;
+    match scope {
+        Scope::This => None,
+        Scope::Following => Some((series.id, current.date)),
+        Scope::All => Some((series.id, SERIES_FLOOR)),
+    }
+}
+
+/// Where a guard or a move fetches the reached members from.
+fn fetch_from(scope: Scope, every: RepeatEvery, date: NaiveDate) -> NaiveDate {
+    match scope {
+        Scope::All => SERIES_FLOOR,
+        Scope::This | Scope::Following => domain::period_start(every, date),
+    }
+}
+
+/// SOL-102: a deleted cofrinho's deposits and resgates are read-only; any other series member the
+/// scope reaches in one refuses the whole call.
 async fn check_cofrinho_active(
     conn: &mut PgConnection,
     user: &CurrentUser,
     current: &Transaction,
     scope: Scope,
 ) -> Result<(), AppError> {
-    let series_id = current
-        .series
-        .as_ref()
-        .filter(|_| scope == Scope::Following)
-        .map(|series| series.id);
-    if repo::moves_archived_cofrinho(conn, user.id, current.id, series_id, current.date).await? {
+    let reach = reach(scope, current);
+    if repo::moves_archived_cofrinho(
+        conn,
+        user.id,
+        current.id,
+        reach.map(|(id, _)| id),
+        reach.map_or(current.date, |(_, from)| from),
+    )
+    .await?
+    {
         return Err(AppError::rule(
             "archived-cofrinho",
             "This cofrinho was deleted; its deposits and resgates can no longer change.",
         ));
+    }
+    Ok(())
+}
+
+/// D30b: refuses when the fatura of any `(card, date)` is paid; one check per card.
+async fn check_faturas_open(
+    conn: &mut PgConnection,
+    user: &CurrentUser,
+    spends: impl IntoIterator<Item = (Option<Uuid>, NaiveDate)>,
+) -> Result<(), AppError> {
+    let mut by_card: BTreeMap<Uuid, Vec<NaiveDate>> = BTreeMap::new();
+    for (card_id, date) in spends {
+        if let Some(card_id) = card_id {
+            by_card.entry(card_id).or_default().push(date);
+        }
+    }
+    for (card_id, dates) in by_card {
+        check_fatura_open(conn, user, Some(card_id), &dates).await?;
     }
     Ok(())
 }
@@ -132,8 +177,9 @@ pub async fn create(
     }
     check_opening(&mut tx, user, input.date).await?;
     let count = input.repeat_months.or(input.installments);
+    let every = input.repeat_every.unwrap_or_default();
     let copies = match count {
-        Some(count) => domain::repeat_dates(input.date, count)?,
+        Some(count) => domain::repeat_dates(input.date, count, every)?,
         None => vec![],
     };
     let dates = [&[input.date], copies.as_slice()].concat();
@@ -147,15 +193,34 @@ pub async fn create(
         ..input
     };
     let series_id = count.map(|_| Uuid::new_v4());
-    let id = repo::insert(&mut tx, user.id, &first, None, None, series_id).await?;
+    let id = repo::insert(
+        &mut tx,
+        user.id,
+        &first,
+        None,
+        None,
+        series_id,
+        series_id.map(|_| every),
+    )
+    .await?;
     let mut series = None;
     if let (Some(count), Some(series_id)) = (count, series_id) {
-        repo::insert_copies(&mut tx, user.id, &first, series_id, &copies, &amounts[1..]).await?;
+        repo::insert_copies(
+            &mut tx,
+            user.id,
+            &first,
+            series_id,
+            every,
+            &copies,
+            &amounts[1..],
+        )
+        .await?;
         series = Some(TransactionSeries {
             id: series_id,
             position: 1,
             total: count.into(),
             last_date: copies.last().copied().unwrap_or(first.date),
+            every,
         });
     }
     tx.commit().await?;
@@ -165,8 +230,8 @@ pub async fn create(
     })
 }
 
-/// R6, M1 (D20): `following` also rewrites the series' later members and moves their day;
-/// `repeat_months` starts a series or resizes it (D19). A member locks its series first.
+/// R6, M1 (D20, D33): `following` also rewrites the series' later members and moves their day,
+/// `all` every member; `repeat_months` starts a series or resizes it (D19). A member locks its series first.
 pub async fn update(
     pool: &PgPool,
     user: &CurrentUser,
@@ -185,6 +250,15 @@ pub async fn update(
             .ok_or(AppError::NotFound)?;
     }
     check_cofrinho_active(&mut tx, user, &current, scope).await?;
+    if let (Some(series), Some(every)) = (&current.series, patch.repeat_every)
+        && every != series.every
+    {
+        return Err(AppError::invalid("repeat_every", "a series keeps its step"));
+    }
+    let every = current
+        .series
+        .as_ref()
+        .map_or(RepeatEvery::Month, |series| series.every);
     if patch.repeat_months.is_some() {
         domain::check_repeatable(&current)?;
     }
@@ -194,6 +268,7 @@ pub async fn update(
             "a conta fixa payment stays a Saída",
         ));
     }
+    let reach = reach(scope, &current);
     let category_id = patch.category_id.unwrap_or(current.category.id);
     let category = category(&mut tx, user, category_id, patch.category_id.is_some()).await?;
     let next = domain::check(CreateTransaction {
@@ -203,56 +278,81 @@ pub async fn update(
         category_id: category.id,
         note: patch.note.unwrap_or(current.note),
         repeat_months: patch.repeat_months,
+        repeat_every: patch.repeat_every.filter(|_| current.series.is_none()),
         installments: None,
         card_id: patch.card_id.unwrap_or(current.card_id),
     })?;
     domain::check_kind(next.kind, &category)?;
+    // D28: a kind change also rewrites the card on every reached member.
+    let writes_card = next.card_id != current.card_id || next.kind != current.kind;
     // An entry keeps a since-archived card; a new card, or one written on later members, must be live.
-    let spreads = scope == Scope::Following && current.series.is_some();
+    let spreads = reach.is_some();
     if let Some(card_id) = next
         .card_id
-        .filter(|id| spreads || Some(*id) != current.card_id)
+        .filter(|id| writes_card && (spreads || Some(*id) != current.card_id))
     {
         check_card(&mut tx, user, card_id).await?;
     }
-    let moves = scope == Scope::Following && current.series.is_some() && next.date != current.date;
+    let moves = spreads && next.date != current.date;
     if moves {
-        domain::check_day_move(current.date, next.date)?;
+        domain::check_move(every, current.date, next.date)?;
     }
     check_opening(&mut tx, user, next.date).await?;
-    if next.amount != current.amount || next.date != current.date || next.card_id != current.card_id
-    {
-        let mut dates = vec![current.date];
-        if let Some(series) = current.series.as_ref().filter(|_| spreads) {
-            dates = repo::members_from(&mut tx, user.id, series.id, first_of(current.date))
-                .await?
-                .into_iter()
-                .map(|(_, date)| date)
-                .collect();
-        }
-        check_fatura_open(&mut tx, user, current.card_id, &dates).await?;
-        if let Some(first) = dates.first_mut() {
-            *first = next.date;
-        }
-        check_fatura_open(&mut tx, user, next.card_id, &dates).await?;
+    let mut members = vec![(id, current.date, current.card_id)];
+    if let Some((series_id, from)) = reach {
+        let from = if moves {
+            fetch_from(scope, every, current.date)
+        } else {
+            from
+        };
+        members = repo::members_from(&mut tx, user.id, series_id, from).await?;
     }
+    let dates: Vec<_> = members.iter().map(|(_, date, _)| *date).collect();
+    let dates = if moves {
+        domain::moved(every, &dates, next.date)?
+    } else {
+        members
+            .iter()
+            .map(|(member, date, _)| if *member == id { next.date } else { *date })
+            .collect()
+    };
+    if let Some(first) = dates.first().filter(|_| moves) {
+        check_opening(&mut tx, user, *first).await?;
+    }
+    // D30b: each member whose amount, date or card changes, against its own card and the one it ends on.
+    let ends_on = |card_id: Option<Uuid>| if writes_card { next.card_id } else { card_id };
+    let changed = members
+        .iter()
+        .zip(&dates)
+        .filter(|((_, date, card_id), to)| {
+            next.amount != current.amount || ends_on(*card_id) != *card_id || *to != date
+        });
+    check_faturas_open(
+        &mut tx,
+        user,
+        changed.flat_map(|((_, date, card_id), to)| [(*card_id, *date), (ends_on(*card_id), *to)]),
+    )
+    .await?;
     if !repo::update(&mut tx, user.id, id, &next)
         .await
         .map_err(paid_once)?
     {
         return Err(AppError::NotFound);
     }
-    if let (Scope::Following, Some(series)) = (scope, &current.series) {
+    if let Some((series_id, from)) = reach {
         let amount = (next.amount != current.amount).then_some(next.amount);
-        repo::update_following(&mut tx, user.id, series.id, current.date, &next, amount).await?;
+        repo::update_following(
+            &mut tx,
+            user.id,
+            series_id,
+            from,
+            &next,
+            amount,
+            writes_card,
+        )
+        .await?;
         if moves {
-            let month = next.date.with_day(1).unwrap_or(next.date);
-            let (ids, dates): (Vec<_>, Vec<_>) =
-                repo::members_from(&mut tx, user.id, series.id, month)
-                    .await?
-                    .into_iter()
-                    .unzip();
-            let dates = domain::moved_dates(&dates, next.date.day())?;
+            let ids: Vec<_> = members.iter().map(|(member, _, _)| *member).collect();
             repo::set_dates(&mut tx, user.id, &ids, &dates).await?;
         }
     }
@@ -263,13 +363,15 @@ pub async fn update(
                 check_card(&mut tx, user, card_id).await?;
             }
             let series_id = Uuid::new_v4();
-            if !repo::set_series(&mut tx, user.id, id, series_id).await? {
+            let every = next.repeat_every.unwrap_or_default();
+            if !repo::set_series(&mut tx, user.id, id, series_id, every).await? {
                 return Err(domain::already_repeated());
             }
-            let dates = domain::repeat_dates(next.date, months)?;
+            let dates = domain::repeat_dates(next.date, months, every)?;
             check_fatura_open(&mut tx, user, next.card_id, &dates).await?;
             let amounts = vec![next.amount; dates.len()];
-            repo::insert_copies(&mut tx, user.id, &next, series_id, &dates, &amounts).await?;
+            repo::insert_copies(&mut tx, user.id, &next, series_id, every, &dates, &amounts)
+                .await?;
         }
         (None, _) => {}
     }
@@ -303,18 +405,28 @@ async fn resize(
             check_card(conn, user, card_id).await?;
         }
         let end = repo::series_end(conn, user.id, series_id).await?;
-        let last = *end.first().ok_or(AppError::NotFound)?;
-        let day = domain::series_day(last, end.get(1).copied());
+        if end.is_empty() {
+            return Err(AppError::NotFound);
+        }
         let count = u32::try_from(i64::from(months) - total).unwrap_or(0);
-        let added = domain::following_dates(day, last, count)?;
+        let added = domain::growth_dates(edited.every, &end, count)?;
         check_fatura_open(conn, user, next.card_id, &added).await?;
         let amounts = vec![next.amount; added.len()];
-        repo::insert_copies(conn, user.id, next, series_id, &added, &amounts).await?;
+        repo::insert_copies(
+            conn,
+            user.id,
+            next,
+            series_id,
+            edited.every,
+            &added,
+            &amounts,
+        )
+        .await?;
     }
     Ok(())
 }
 
-/// `following` on a series member also deletes the members dated after it.
+/// `following` on a series member also deletes the members dated after it, `all` every member (D33).
 /// A member locks its series first, whatever the scope.
 pub async fn delete(
     pool: &PgPool,
@@ -333,20 +445,20 @@ pub async fn delete(
             .ok_or(AppError::NotFound)?;
     }
     check_cofrinho_active(&mut tx, user, &current, scope).await?;
-    let mut dates = vec![current.date];
-    if let (Scope::Following, Some(series)) = (scope, &current.series) {
-        dates = repo::members_from(&mut tx, user.id, series.id, first_of(current.date))
-            .await?
-            .into_iter()
-            .map(|(_, date)| date)
-            .collect();
+    let reach = reach(scope, &current);
+    let mut members = vec![(id, current.date, current.card_id)];
+    if let Some((series_id, from)) = reach {
+        members = repo::members_from(&mut tx, user.id, series_id, from).await?;
     }
-    check_fatura_open(&mut tx, user, current.card_id, &dates).await?;
-    match (scope, current.series) {
-        (Scope::Following, Some(series)) => {
-            repo::delete_following(&mut tx, user.id, series.id, current.date).await?;
+    let spends = members
+        .into_iter()
+        .map(|(_, date, card_id)| (card_id, date));
+    check_faturas_open(&mut tx, user, spends).await?;
+    match reach {
+        Some((series_id, from)) => {
+            repo::delete_following(&mut tx, user.id, series_id, from).await?;
         }
-        _ => {
+        None => {
             repo::delete(&mut tx, user.id, id).await?;
         }
     }

@@ -82,6 +82,7 @@ const ENTRIES = [
     position: 3,
     total: 12,
     last_date: "2027-08-20",
+    every: "month",
   }),
   entry("t3", ECONOMIA, "149.70", null),
   entry("t4", ALUGUEL, "12000.00", "Aluguel de novembro"),

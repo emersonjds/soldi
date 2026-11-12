@@ -36,6 +36,8 @@ Rejected: a `series` table (D14, a migration for a value the rows can carry); in
 
 `installments` stay monthly: `repeat_every` other than `month` with `installments` is refused.
 
+Yearly growth reads the last four members, so a 29 Feb series returns to 29 Feb in a leap year even when a later member was moved to the 28th by `this` (accepted: the series' grid wins over one moved member).
+
 ### 3. `Toda a série` from any member (P2)
 
 Votes:
@@ -58,11 +60,11 @@ Rejected: keeping D20 (Stitch draws the option, owner chose fidelity); no confir
 - **R-P1-3.** Every member of a series carries `series_every`; `set_series`, `insert`, `insert_copies` write it with `series_id`. `TransactionSeries.every` reads it.
 - **R-P1-4.** Growth, move and fetch follow the table in §2; monthly behavior is byte-for-byte the shipped one (all existing tests stay green unchanged).
 - **R-P2-1.** `?scope=all` on PATCH and DELETE reaches every member of the entry's series. On an entry outside a series it behaves as `this`.
-- **R-P2-2.** PATCH `all`: the edited row as `this`; then every other member takes kind, category, note and card, and the amount when it changed (`update_following` with `from = NaiveDate::MIN`). A date change moves every member per §2 (the edited date must stay in its month / ISO week). `repeat_months` resizes as today (D19; never below the edited member's position).
+- **R-P2-2.** PATCH `all`: the edited row as `this`; then every other member takes kind, category and note, the card only when the patch changes the card or the kind (otherwise each member keeps its own), and the amount when it changed (`update_following` with `from = NaiveDate::MIN`). A date change moves every member per §2 (the edited date must stay in its month / ISO week). `repeat_months` resizes as today (D19; never below the edited member's position).
 - **R-P2-3.** DELETE `all`: deletes every member.
 - **R-P2-4.** Frozen rows refuse the whole call, nothing written:
   - any member in an archived cofrinho (SOL-102) → 422 `archived-cofrinho` (checked with `from = MIN`);
-  - when amount, date or card changes, or on delete, any member whose fatura is paid (D30b) → 422 `fatura-paid` (dates fetched with `from = MIN`).
+  - every reached member whose amount, date or card changes is checked against its **own** card: its old fatura must be open there, and its new date (the moved date on a move) must land in an open fatura of the card it ends on; on delete, every deleted member's fatura on its own card must be open (D30b) → 422 `fatura-paid`.
   - Category or note changes on a paid-fatura member stay allowed (D30b freezes amount, date and card only).
 - **R-P2-5.** Bill payments (SOL-113) and resgates are never series members (R3, R8), so `all` cannot reach one. A test pins it: linking a member to a bill stays refused.
 - **R-P2-6.** A move under `all` checks the earliest moved date against the opening date: before it → 422 `before-opening-date`, nothing moves. Members already before a later-moved opening date are still rewritten by a non-date change.
@@ -83,7 +85,9 @@ Rejected: keeping D20 (Stitch draws the option, owner chose fidelity); no confir
 // DELETE /api/transactions/{id}?scope=all
 ```
 
-422 messages (field `date`), new for weekly: `"must stay in this entry's week when the series moves"`, `"must not move a series with two entries in one week"`. Monthly and yearly keep the shipped month messages.
+422 messages (field `date`), new for weekly: `"must stay in this entry's week when the series moves"`, `"must not move a series with two entries in one week"`. Monthly and yearly keep the shipped month messages. A series or move passing 2100 answers `"must keep every entry up to 2100"` for every step.
+
+`Cofrinho.next_contribution` gains `every` (`RepeatEvery`), the step of the series it comes from.
 
 OpenAPI: `RepeatEvery` schema, `Scope` gains `all`, `TransactionSeries.every` required. Snapshot refreshed.
 

@@ -27,7 +27,10 @@ import { TransactionSheet } from "./transaction-sheet";
 
 const MERCADO_ROW = TRANSACTIONS[0];
 const ALUGUEL_ROW = TRANSACTIONS[1];
-const MEMBER = { ...ALUGUEL_ROW, series: { id: "s1", position: 3, total: 12, last_date: "2027-09-04" } };
+const MEMBER = {
+  ...ALUGUEL_ROW,
+  series: { id: "s1", position: 3, total: 12, last_date: "2027-09-04", every: "month" as const },
+};
 
 const PETS: Schemas["Category"] = {
   id: "c1000000-0000-4000-8000-000000000010",
@@ -592,7 +595,7 @@ describe("TransactionSheet", () => {
     const first = {
       ...MEMBER,
       date: "2026-03-04",
-      series: { id: "s1", position: 1, total: 12, last_date: "2027-02-04" },
+      series: { id: "s1", position: 1, total: 12, last_date: "2027-02-04", every: "month" as const },
     };
     setup({ transaction: first }, { [`PATCH /api/transactions/${MEMBER.id}`]: { status: 200, body: first } });
 
@@ -1056,5 +1059,145 @@ describe("TransactionSheet", () => {
     await userEvent.click(screen.getByRole("switch", { name: "Repetir lançamento (Série)" }));
 
     expect(screen.getByText("12× de R$ 39,90 · repete todo dia 10 até out 2027")).toBeInTheDocument();
+  });
+
+  describe("series step", () => {
+    const WEEKLY = {
+      ...MEMBER,
+      series: { id: "s1", position: 3, total: 8, last_date: "2026-12-10", every: "week" as const },
+    };
+    const weekly = { [`PATCH /api/transactions/${WEEKLY.id}`]: { status: 200, body: WEEKLY } };
+
+    it("picks Mensal, Semanal or Anual under Repetir: the summary follows and the POST carries the step", async () => {
+      const { sent } = setup();
+
+      await userEvent.type(await screen.findByLabelText(/^Valor d/), "15000");
+      expect(screen.queryByRole("group", { name: "Frequência" })).not.toBeInTheDocument();
+      await userEvent.click(screen.getByRole("switch", { name: "Repetir lançamento (Série)" }));
+      expect(screen.getByRole("radio", { name: "Mensal" })).toBeChecked();
+      await userEvent.click(screen.getByRole("radio", { name: "Semanal" }));
+      expect(screen.getByText("12× de R$ 150,00 · repete toda semana até 21 jan 2027")).toBeInTheDocument();
+      await userEvent.click(screen.getByRole("radio", { name: "Anual" }));
+      expect(screen.getByText("12× de R$ 150,00 · repete todo ano em 5 nov até 2037")).toBeInTheDocument();
+      await userEvent.click(screen.getByRole("radio", { name: "Semanal" }));
+      await userEvent.click(screen.getByRole("radio", { name: "3×" }));
+      expect(screen.getByText("3× de R$ 150,00 · repete toda semana até 19 nov 2026")).toBeInTheDocument();
+      await userEvent.click(screen.getByRole("button", { name: "Salvar Lançamento" }));
+
+      expect(await sent("POST")).toMatchObject({ repeat_months: 3, repeat_every: "week" });
+      expect(await screen.findByText("3 lançamentos criados")).toBeInTheDocument();
+    });
+
+    it("words the custom count in the step's unit", async () => {
+      setup();
+
+      await userEvent.click(await screen.findByRole("switch", { name: "Repetir lançamento (Série)" }));
+      await userEvent.click(screen.getByRole("radio", { name: "Anual" }));
+      await userEvent.click(screen.getByRole("radio", { name: "Outro" }));
+      await userEvent.type(screen.getByLabelText("Anos"), "61");
+      await userEvent.click(screen.getByRole("button", { name: "Salvar Lançamento" }));
+
+      expect(screen.getByLabelText("Anos")).toHaveAccessibleDescription("Escolha de 2 a 60 anos.");
+    });
+
+    it("hides the segment for Parcelar compra and resets it to Mensal when Repetir turns off", async () => {
+      setup();
+
+      const repeat = await screen.findByRole("switch", { name: "Repetir lançamento (Série)" });
+      await userEvent.click(repeat);
+      await userEvent.click(screen.getByRole("radio", { name: "Anual" }));
+      await userEvent.click(repeat);
+      await userEvent.click(repeat);
+      expect(screen.getByRole("radio", { name: "Mensal" })).toBeChecked();
+      await userEvent.click(screen.getByRole("switch", { name: "Parcelar compra" }));
+
+      expect(screen.queryByRole("group", { name: "Frequência" })).not.toBeInTheDocument();
+    });
+
+    it("edits a weekly series in weeks: eyebrow, chips, resize line and toast", async () => {
+      const { sent } = setup({ transaction: WEEKLY }, weekly);
+
+      expect(await screen.findByText("Parte de uma série de 8 semanas")).toBeInTheDocument();
+      expect(screen.queryByRole("group", { name: "Frequência" })).not.toBeInTheDocument();
+      expect(screen.getByRole("radio", { name: "3 semanas" })).toBeEnabled();
+      await userEvent.click(screen.getByRole("radio", { name: "6 semanas" }));
+      expect(
+        screen.getByText("Série encurtada: Remove as 2 últimas semanas. Termina em 26/11/2026."),
+      ).toBeInTheDocument();
+      await userEvent.click(screen.getByRole("radio", { name: "Customizado" }));
+      const custom = screen.getByLabelText("Semanas");
+      await userEvent.clear(custom);
+      await userEvent.type(custom, "10");
+      expect(screen.getByText("Série estendida: Adiciona 2 semanas. Termina em 24/12/2026.")).toBeInTheDocument();
+      await userEvent.click(screen.getByRole("button", { name: "Salvar Alterações na Série" }));
+
+      expect(await sent("PATCH")).toMatchObject({ repeat_months: 10 });
+      expect(await screen.findByText("Série ajustada com sucesso para 10 semanas futuras.")).toBeInTheDocument();
+    });
+
+    it("moves a weekly series inside its week only, naming the weekday", async () => {
+      const { requests } = setup({ transaction: WEEKLY }, weekly);
+
+      await userEvent.click(await screen.findByRole("radio", { name: "Este e os próximos" }));
+      await pickDate("Outra data", "2026-11-10");
+      expect(screen.getByRole("alert")).toHaveTextContent("Para mudar a semana, use Só este.");
+      await userEvent.click(screen.getByRole("button", { name: "Salvar Alterações na Série" }));
+      expect(requests.filter((request) => request.method === "PATCH")).toHaveLength(0);
+
+      await pickDate("Outra data", "2026-11-02");
+      expect(
+        screen.getByText("Os próximos lançamentos também serão movidos automaticamente para segunda-feira."),
+      ).toBeInTheDocument();
+      await userEvent.click(screen.getByRole("button", { name: "Salvar Alterações na Série" }));
+
+      expect(await screen.findByText("Série movida para segunda-feira")).toBeInTheDocument();
+    });
+
+    it("tells a shared week apart", async () => {
+      setup({ transaction: WEEKLY }, dateRefused("must not move a series with two entries in one week"));
+
+      await userEvent.click(await screen.findByRole("radio", { name: "Este e os próximos" }));
+      await pickDate("Outra data", "2026-11-02");
+      await userEvent.click(screen.getByRole("button", { name: "Salvar Alterações na Série" }));
+
+      expect(
+        await screen.findByText("Outro lançamento da série está na mesma semana. Mova-o com Só este antes."),
+      ).toBeInTheDocument();
+    });
+  });
+
+  describe("Toda a série from a middle member", () => {
+    it("asks first: Cancelar saves nothing, confirming sends scope=all", async () => {
+      const { requests } = setup({ transaction: MEMBER }, resize);
+
+      await userEvent.click(await screen.findByRole("radio", { name: "Toda a série (12 lançamentos)" }));
+      const amount = screen.getByLabelText("Valor por parcela");
+      await userEvent.clear(amount);
+      await userEvent.type(amount, "9990");
+      await userEvent.click(screen.getByRole("button", { name: "Salvar Alterações na Série" }));
+      const ask = await screen.findByRole("alertdialog", { name: "Alterar toda a série?" });
+      expect(ask).toHaveTextContent("2 lançamentos anteriores a este também mudam, inclusive em meses já fechados.");
+      await userEvent.click(within(ask).getByRole("button", { name: "Cancelar" }));
+      expect(requests.filter((request) => request.method === "PATCH")).toHaveLength(0);
+
+      await userEvent.click(screen.getByRole("button", { name: "Salvar Alterações na Série" }));
+      await userEvent.click(
+        within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Alterar toda a série" }),
+      );
+
+      await waitFor(() => expect(requests.some((request) => request.method === "PATCH")).toBe(true));
+      const patch = requests.find((request) => request.method === "PATCH");
+      expect(new URL(patch?.url ?? "").searchParams.get("scope")).toBe("all");
+      expect(await screen.findByText("Série atualizada")).toBeInTheDocument();
+    });
+
+    it("says the whole series moves under Toda a série", async () => {
+      setup({ transaction: MEMBER });
+
+      await userEvent.click(await screen.findByRole("radio", { name: "Toda a série (12 lançamentos)" }));
+      await pickDate("Outra data", "2026-11-10");
+
+      expect(screen.getByText("Toda a série vai para o dia 10.")).toBeInTheDocument();
+    });
   });
 });

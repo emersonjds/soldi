@@ -827,3 +827,33 @@ async fn d28_the_forecast_drops_a_card_spend_on_its_fatura_due_date(pool: PgPool
         }
     }
 }
+
+#[sqlx::test]
+async fn d32_a_weekly_series_on_a_card_lands_each_member_in_its_own_fatura(pool: PgPool) {
+    let ana = TestApp::signed_in(pool.clone(), "ana@example.com").await;
+    open_at(&ana, "1000", "2026-11-01").await;
+    let porto = card(&ana, "Porto").await;
+    let category_id = ana.category_id("Mercado").await;
+    let (status, created) = ana
+        .post(
+            "/api/transactions",
+            json!({ "date": "2026-11-02", "amount": "50", "kind": "daily",
+                    "category_id": category_id, "card_id": porto,
+                    "repeat_months": 4, "repeat_every": "week" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{created}");
+    owing_since(&pool, "2026-12-01").await;
+
+    let (_, november) = ana.get("/api/months/2026-11").await;
+    let (_, december) = ana.get("/api/months/2026-12").await;
+
+    assert_eq!(
+        faturas(&november),
+        [row("Porto", "50.00", "2026-11-10", false)]
+    );
+    assert_eq!(
+        faturas(&december),
+        [row("Porto", "150.00", "2026-12-10", false)]
+    );
+}

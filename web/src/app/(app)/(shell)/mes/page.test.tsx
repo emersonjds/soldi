@@ -598,7 +598,9 @@ describe("Mês", () => {
     open({
       "GET /api/transactions": {
         status: 200,
-        body: [{ ...TRANSACTIONS[1], series: { id: "s1", position: 3, total: 12, last_date: "2027-08-04" } }],
+        body: [
+          { ...TRANSACTIONS[1], series: { id: "s1", position: 3, total: 12, last_date: "2027-08-04", every: "month" } },
+        ],
       },
     });
 
@@ -612,7 +614,10 @@ describe("Mês", () => {
   });
 
   it("asks how much of a series to delete, then deletes without Desfazer", async () => {
-    const member = { ...TRANSACTIONS[1], series: { id: "s1", position: 3, total: 12, last_date: "2027-08-04" } };
+    const member = {
+      ...TRANSACTIONS[1],
+      series: { id: "s1", position: 3, total: 12, last_date: "2027-08-04", every: "month" },
+    };
     const requests = open({
       "GET /api/transactions": { status: 200, body: [member] },
       [`DELETE /api/transactions/${member.id}`]: { status: 204 },
@@ -643,8 +648,40 @@ describe("Mês", () => {
     expect(screen.queryByRole("button", { name: "Desfazer" })).not.toBeInTheDocument();
   });
 
+  it("deletes the whole series from member 2 after asking", async () => {
+    const member = {
+      ...TRANSACTIONS[1],
+      series: { id: "s1", position: 2, total: 12, last_date: "2027-09-04", every: "month" },
+    };
+    const requests = open({
+      "GET /api/transactions": { status: 200, body: [member] },
+      [`DELETE /api/transactions/${member.id}`]: { status: 204 },
+    });
+
+    await userEvent.click(
+      await within(await screen.findByRole("region", { name: "Lançamentos" })).findByRole("button", {
+        name: /Aluguel/,
+      }),
+    );
+    const actions = await screen.findByRole("dialog", { name: "Aluguel" });
+    await userEvent.click(within(actions).getByRole("button", { name: "Excluir" }));
+    await userEvent.click(within(actions).getByRole("radio", { name: "Toda a série (12 lançamentos)" }));
+    await userEvent.click(within(actions).getByRole("button", { name: "Excluir" }));
+    const ask = await screen.findByRole("alertdialog", { name: "Excluir toda a série?" });
+    expect(ask).toHaveTextContent("Os 12 lançamentos serão excluídos, inclusive o anterior a este.");
+    expect(requests.some((request) => request.method === "DELETE")).toBe(false);
+    await userEvent.click(within(ask).getByRole("button", { name: "Excluir toda a série" }));
+
+    expect(await screen.findByText("Série excluída")).toBeInTheDocument();
+    const deleted = requests.find((request) => request.method === "DELETE");
+    expect(new URL(deleted?.url ?? "").searchParams.get("scope")).toBe("all");
+  });
+
   it("deletes only this member by default", async () => {
-    const member = { ...TRANSACTIONS[1], series: { id: "s1", position: 1, total: 2, last_date: "2026-12-04" } };
+    const member = {
+      ...TRANSACTIONS[1],
+      series: { id: "s1", position: 1, total: 2, last_date: "2026-12-04", every: "month" },
+    };
     open({
       "GET /api/transactions": { status: 200, body: [member] },
       [`DELETE /api/transactions/${member.id}`]: { status: 204 },
@@ -665,7 +702,10 @@ describe("Mês", () => {
   });
 
   it("opens the delete scope from Excluir da Série... in the series sheet", async () => {
-    const member = { ...TRANSACTIONS[1], series: { id: "s1", position: 3, total: 12, last_date: "2027-08-04" } };
+    const member = {
+      ...TRANSACTIONS[1],
+      series: { id: "s1", position: 3, total: 12, last_date: "2027-08-04", every: "month" },
+    };
     open({ "GET /api/transactions": { status: 200, body: [member] } });
 
     await userEvent.click(

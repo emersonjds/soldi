@@ -1,5 +1,6 @@
-import { expect, test } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 
+import { expectNoClipped } from "./clipped";
 import { pickDate } from "./pick-date";
 import { requireServer } from "./server";
 
@@ -10,6 +11,117 @@ const monthFrom = (offset: number) => {
   date.setMonth(date.getMonth() + offset);
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 };
+
+/** `YYYY-MM-DD` of the day `offset` days from today. */
+const dayFrom = (offset: number) => {
+  const date = new Date();
+  date.setDate(date.getDate() + offset);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+};
+
+const signUp = async (page: Page, name: string) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto("/criar-conta");
+  await page.getByLabel("E-mail").fill(`e2e-${name}-${Date.now()}@example.com`);
+  await page.getByLabel("Senha").fill("uma-senha-bem-longa");
+  await page.getByRole("button", { name: "Criar conta" }).click();
+  await page.getByRole("button", { name: "Continuar" }).click();
+  await page.getByLabel("Saldo de hoje").fill("1.000,00");
+  await page.getByRole("button", { name: "Continuar" }).click();
+  await page.getByRole("button", { name: "Pular por agora" }).click();
+  await page.getByRole("button", { name: "Ver meu mês" }).click();
+  await page.getByRole("button", { name: "Pular" }).click();
+  await page
+    .getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ })
+    .getByRole("button", { name: "Fechar" })
+    .click();
+};
+
+test("a weekly 4x entry lands four rows a week apart", async ({ page, request }) => {
+  await requireServer(request);
+  test.setTimeout(90_000);
+  await signUp(page, "weekly");
+  expect((await page.request.patch("/api/settings", { data: { opening_date: `${monthFrom(0)}-01` } })).ok()).toBe(true);
+
+  await page.getByRole("navigation", { name: "Navegação principal" }).getByRole("button", { name: "Lançar" }).click();
+  const launch = page.getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ });
+  await launch.getByRole("radio", { name: "Conta" }).click();
+  await launch.getByLabel("Valor").fill("100,00");
+  await launch.getByLabel("Observação").fill("Diarista");
+  await launch.getByRole("switch", { name: "Repetir lançamento (Série)" }).click();
+  await launch.getByRole("radio", { name: "Semanal" }).click();
+  await launch.getByRole("radio", { name: "Outro" }).click();
+  await launch.getByLabel("Semanas").fill("4");
+  await expect(launch.getByText(/repete toda semana até/)).toBeVisible();
+  await expectNoClipped(page);
+  await launch.getByRole("button", { name: "Salvar" }).click();
+  await expect(page.getByText("4 lançamentos criados")).toBeVisible();
+
+  for (const [index, offset] of [0, 7, 14, 21].entries()) {
+    const date = dayFrom(offset);
+    await page.goto(`/mes?m=${date.slice(0, 7)}`);
+    await expect(page.locator(`#dia-${date}`).getByRole("button", { name: /^Diarista/ })).toContainText(
+      `Saída · ${index + 1}/4${index + 1} de 4`,
+    );
+  }
+});
+
+test("Toda a série from the second entry rewrites and deletes the first too, after asking", async ({
+  page,
+  request,
+}) => {
+  await requireServer(request);
+  test.setTimeout(90_000);
+  await signUp(page, "all");
+  const [first, second] = [monthFrom(-2), monthFrom(-1)];
+  expect((await page.request.patch("/api/settings", { data: { opening_date: `${first}-01` } })).ok()).toBe(true);
+
+  const internet = page.getByRole("region", { name: "Lançamentos" }).getByRole("button", { name: /^Internet/ });
+  const visit = async (month: string) => {
+    await page.goto(`/mes?m=${month}`);
+    await expect(page.getByRole("region", { name: "Saldo hoje" })).toBeVisible();
+    await page.waitForLoadState("networkidle");
+  };
+
+  await page.getByRole("navigation", { name: "Navegação principal" }).getByRole("button", { name: "Lançar" }).click();
+  const launch = page.getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ });
+  await launch.getByRole("radio", { name: "Conta" }).click();
+  await launch.getByLabel("Valor").fill("100,00");
+  await pickDate(launch, "Outra data", `${first}-01`);
+  await launch.getByLabel("Observação").fill("Internet");
+  await launch.getByRole("switch", { name: "Repetir lançamento (Série)" }).click();
+  await launch.getByRole("radio", { name: "3×" }).click();
+  await launch.getByRole("button", { name: "Salvar" }).click();
+  await expect(page.getByText("3 lançamentos criados")).toBeVisible();
+
+  await visit(second);
+  await internet.click();
+  await page.getByRole("dialog", { name: "Internet" }).getByRole("button", { name: "Editar" }).click();
+  const edit = page.getByRole("dialog", { name: "Editar Lançamento Recorrente" });
+  await edit.getByLabel("Valor").fill("120,00");
+  await edit.getByRole("radio", { name: "Toda a série (3 lançamentos)" }).click();
+  await edit.getByRole("button", { name: "Salvar Alterações na Série" }).click();
+  const ask = page.getByRole("alertdialog", { name: "Alterar toda a série?" });
+  await expect(ask).toContainText("O lançamento anterior a este também muda, inclusive se o mês já fechou.");
+  await ask.getByRole("button", { name: "Alterar toda a série" }).click();
+  await expect(page.getByText("Série atualizada")).toBeVisible();
+  await visit(first);
+  await expect(internet).toContainText("Saída · 1/31 de 3- R$ 120,00");
+
+  await visit(second);
+  await internet.click();
+  const actions = page.getByRole("dialog", { name: "Internet" });
+  await actions.getByRole("button", { name: "Excluir" }).click();
+  await actions.getByRole("radio", { name: "Toda a série (3 lançamentos)" }).click();
+  await actions.getByRole("button", { name: "Excluir" }).click();
+  await page
+    .getByRole("alertdialog", { name: "Excluir toda a série?" })
+    .getByRole("button", { name: "Excluir toda a série" })
+    .click();
+  await expect(page.getByText("Série excluída")).toBeVisible();
+  await visit(first);
+  await expect(internet).toHaveCount(0);
+});
 
 test("an entry repeated 3x shows in three months; edit and delete reach this one and the following", async ({
   page,

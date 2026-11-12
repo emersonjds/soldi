@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { ScopeRadio } from "./scope-radio";
 
-const SERIES = { id: "s1", position: 3, total: 12, last_date: "2027-09-04" };
+const SERIES = { id: "s1", position: 3, total: 12, last_date: "2027-09-04", every: "month" as const };
 
 const renderAt = (position: number, mode: "edit" | "delete" = "edit", onChange = vi.fn()) =>
   render(
@@ -61,6 +61,28 @@ describe("ScopeRadio", () => {
     );
     expect(screen.queryByRole("radio", { name: "Este e os próximos" })).not.toBeInTheDocument();
     expect(screen.queryByText("Recomendado")).not.toBeInTheDocument();
+  });
+
+  it("adds Toda a série from a middle member, in edit and delete words", async () => {
+    const onChange = vi.fn();
+    const { unmount } = renderAt(3, "edit", onChange);
+    expect(screen.getAllByRole("radio")).toHaveLength(3);
+    expect(screen.getByRole("radio", { name: "Toda a série (12 lançamentos)" })).toHaveAccessibleDescription(
+      "Modifica todas as parcelas retroativas já registradas e todas as parcelas futuras.",
+    );
+    await userEvent.click(screen.getByRole("radio", { name: "Toda a série (12 lançamentos)" }));
+    expect(onChange).toHaveBeenCalledWith("all");
+    unmount();
+
+    renderAt(3, "delete");
+    expect(screen.getByRole("radio", { name: "Toda a série (12 lançamentos)" })).toHaveAccessibleDescription(
+      "Exclui todas as parcelas já registradas e todas as futuras.",
+    );
+  });
+
+  it("keeps two cards on the first member", () => {
+    renderAt(1);
+    expect(screen.getAllByRole("radio")).toHaveLength(2);
   });
 
   it("uses the delete lines, which never say alterada", () => {

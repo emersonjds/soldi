@@ -76,6 +76,23 @@ export const addMonths = (month: string, count: number) => {
 export const lastDay = (month: string) =>
   new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0)).getUTCDate();
 
+const utc = (date: string, days = 0) =>
+  new Date(Date.UTC(Number(date.slice(0, 4)), Number(date.slice(5, 7)) - 1, Number(date.slice(8, 10)) + days));
+
+/** `2026-12-31` plus 7 → `2027-01-07`. */
+export const addDays = (date: string, days: number) => utc(date, days).toISOString().slice(0, 10);
+
+/** `2026-12-24` → `24/12/2026`. */
+export const slashDate = (date: string) => `${date.slice(8, 10)}/${date.slice(5, 7)}/${date.slice(0, 4)}`;
+
+const WEEKDAY = new Intl.DateTimeFormat("pt-BR", { weekday: "long", timeZone: "UTC" });
+
+/** `2026-11-12` → `quinta-feira`. */
+export const weekdayName = (date: string) => WEEKDAY.format(utc(date));
+
+/** The Monday of `date`'s ISO week. */
+export const isoWeekStart = (date: string) => addDays(date, -((utc(date).getUTCDay() + 6) % 7));
+
 /** The server's `repeat_dates`: `date`'s day in each of the next `count - 1` months, clamped to the month's last day. */
 export const repeatDates = (date: string, count: number) =>
   Array.from({ length: count - 1 }, (_, index) => {

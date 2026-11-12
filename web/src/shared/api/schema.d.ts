@@ -717,9 +717,10 @@ export interface components {
             kind: components["schemas"]["CategoryKind"];
             /** @description Up to 500 characters; blank means none. */
             note?: string | null;
+            repeat_every?: components["schemas"]["RepeatEvery"] | null;
             /**
              * Format: int32
-             * @description 2 to 60 entries, this one included, on the same day of the following months (the
+             * @description 2 to 60 entries, this one included, one `repeat_every` apart (a month: the same day, the
              *     month's last day when shorter); absent means just this one.
              */
             repeat_months?: number | null;
@@ -810,11 +811,15 @@ export interface components {
             savings: components["schemas"]["MonthSavings"];
             totals: components["schemas"]["Totals"];
         };
-        /** @description A repeated entry's next deposit: its amount and the day of the month it falls on. */
+        /**
+         * @description A repeated entry's next deposit: its amount, the day of the month it falls on and its series'
+         *     step (D32).
+         */
         NextContribution: {
             amount: string;
             /** Format: int32 */
             day: number;
+            every: components["schemas"]["RepeatEvery"];
         };
         Onboarding: {
             /** @description Up to 50 recurring bills. */
@@ -840,6 +845,11 @@ export interface components {
             title: string;
             type: string;
         };
+        /**
+         * @description The step between a series' entries (D32); a running series never changes it.
+         * @enum {string}
+         */
+        RepeatEvery: "month" | "week" | "year";
         RequestPasswordReset: {
             email: string;
         };
@@ -884,7 +894,7 @@ export interface components {
          * @description Which entries of a series a change or a deletion reaches; `this` when absent.
          * @enum {string}
          */
-        Scope: "this" | "following";
+        Scope: "this" | "following" | "all";
         /**
          * @description Money is a decimal string with up to two places (`"-500.00"`). The tiers are the lower
          *     bounds of the thermometer colors and are strictly increasing:
@@ -964,11 +974,12 @@ export interface components {
         };
         /** @description Entries sharing `id` were launched together by `repeat_months`; counted at read time. */
         TransactionSeries: {
+            every: components["schemas"]["RepeatEvery"];
             /** Format: uuid */
             id: string;
             /**
              * Format: date
-             * @description The date of the series' last member; growth continues in the months after it.
+             * @description The date of the series' last member; growth continues after it, by `every`.
              */
             last_date: string;
             /**
@@ -1046,6 +1057,7 @@ export interface components {
             date?: string | null;
             kind?: components["schemas"]["CategoryKind"] | null;
             note?: string | null;
+            repeat_every?: components["schemas"]["RepeatEvery"] | null;
             /**
              * Format: int32
              * @description How many entries the series counts, 2 to 60: starts a series from an entry outside one,
@@ -2700,7 +2712,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Amount not above zero or with more than two places, note over 500 characters, `card_id` on a non-`daily` entry or not one of the caller's unarchived cards, a kind other than the category's (`category_id`), `repeat_months` not 2 to 60, `installments` not 2 to 60, with `repeat_months`, or leaving a parcela at zero, a date outside 2000 to 2100, a date before the opening date (`before-opening-date`), or `fatura-paid` when a spend on a card lands in an already paid fatura (D30b) */
+            /** @description Amount not above zero or with more than two places, note over 500 characters, `card_id` on a non-`daily` entry or not one of the caller's unarchived cards, a kind other than the category's (`category_id`), `repeat_months` not 2 to 60, `installments` not 2 to 60, with `repeat_months`, or leaving a parcela at zero, `repeat_every` without `repeat_months` (`needs repeat_months`) or other than `month` with `installments` (`installments are monthly`), a date outside 2000 to 2100 or a series passing 2100 (`must keep every entry up to 2100`), a date before the opening date (`before-opening-date`), or `fatura-paid` when a spend on a card lands in an already paid fatura (D30b) */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -2800,7 +2812,7 @@ export interface operations {
     delete_transaction: {
         parameters: {
             query?: {
-                /** @description `following` also deletes the series' members dated after this one */
+                /** @description `following` also deletes the series' members dated after this one; `all` deletes every member (D33) */
                 scope?: components["schemas"]["Scope"];
             };
             header?: never;
@@ -2819,7 +2831,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description `scope` is not `this` or `following` */
+            /** @description `scope` is not `this`, `following` or `all` */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -2845,7 +2857,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description `archived-cofrinho`: the entry, or with `following` a later series member, is a deposit into or a resgate from a deleted cofrinho; `fatura-paid`: the entry, or with `following` a later series member, is a card spend of a paid fatura (D30b); nothing is deleted */
+            /** @description `archived-cofrinho`: the entry, or with `following` a later (with `all` any) series member, is a deposit into or a resgate from a deleted cofrinho; `fatura-paid`: the entry, or with `following` a later (with `all` any) series member, is a card spend of a paid fatura on its own card (D30b); nothing is deleted */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -2859,7 +2871,7 @@ export interface operations {
     update_transaction: {
         parameters: {
             query?: {
-                /** @description `following` also writes the amount, kind, category and note onto the series' later members, and a new day of the month onto this and every later member, each clamped to its month; the month never spreads */
+                /** @description `following` also writes the amount, kind, category and note onto the series' later members, the card only when the change sets a new card or kind (each member keeps its own otherwise), and a new day onto this and every later member, each in its own period; the period never spreads. `all` does the same for every member, earlier ones included (D33) */
                 scope?: components["schemas"]["Scope"];
             };
             header?: never;
@@ -2884,7 +2896,7 @@ export interface operations {
                     "application/json": components["schemas"]["Transaction"];
                 };
             };
-            /** @description `scope` is not `this` or `following` */
+            /** @description `scope` is not `this`, `following` or `all` */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -2910,7 +2922,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Same rules as create, on the entry after the change, `before-opening-date` included (an archived card it already carries stays allowed); with `repeat_months`, `repeat-not-allowed-on-bill-payment` or `repeat-not-allowed-on-cofrinho-withdrawal` on an entry outside a series, `validation` on `repeat_months` outside 2..60 or below this member's position, on `date` when the series would pass 2100; with `following` on a series member, `validation` on `date` when the new date leaves this entry's month (`must stay in this entry's month when the series moves`) or when two of the moved members share a month (`must not move a series with two entries in one month`); `archived-cofrinho` when the entry, or with `following` a later series member, is a deposit into or a resgate from a deleted cofrinho; `fatura-paid` when the amount, date or card changes on a card spend whose fatura (or, with `following`, a later member's) is paid, or the change lands it in a paid fatura (D30b); nothing is written */
+            /** @description Same rules as create, on the entry after the change, `before-opening-date` included (an archived card it already carries stays allowed); with `repeat_months`, `repeat-not-allowed-on-bill-payment` or `repeat-not-allowed-on-cofrinho-withdrawal` on an entry outside a series, `validation` on `repeat_months` outside 2..60 or below this member's position, on `date` when the series would pass 2100 (`must keep every entry up to 2100`); `validation` on `repeat_every` when it differs from a member's series step (`a series keeps its step`) or comes without `repeat_months` outside a series (`needs repeat_months`); with `following` or `all` on a series member, `before-opening-date` when the earliest moved member would land before the opening date, `validation` on `date` when the new date leaves this entry's month (`must stay in this entry's month when the series moves`), or on a weekly series its ISO week (`must stay in this entry's week when the series moves`), when two of the moved members share a month (`must not move a series with two entries in one month`) or a week (`must not move a series with two entries in one week`), or when a moved member would pass 2100 (`must keep every entry up to 2100`); `archived-cofrinho` when the entry, or with `following` a later (with `all` any) series member, is a deposit into or a resgate from a deleted cofrinho; `fatura-paid` when the amount, date or card changes on this entry or, with `following` a later (with `all` any) member, and its fatura on its own card is paid, or the change lands it in a paid fatura of the card it ends on (D30b); nothing is written */
             422: {
                 headers: {
                     [name: string]: unknown;

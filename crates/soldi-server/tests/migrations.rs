@@ -352,3 +352,51 @@ async fn credit_cards_keep_every_bill_and_entry(pool: PgPool) {
             .unwrap();
     assert_eq!((amount, active), ("0.01".parse().unwrap(), false));
 }
+
+#[sqlx::test(migrations = false)]
+async fn d32_existing_series_rows_repeat_monthly_and_the_step_needs_a_series(pool: PgPool) {
+    migrate_before(&pool, 21).await;
+    let ana = user(&pool, "ana@example.com").await;
+    let market: Uuid = sqlx::query_scalar(
+        "INSERT INTO categories (user_id, name, kind, icon, color)
+         VALUES ($1, 'Mercado', 'daily', 'shopping-cart', 'cat-1') RETURNING id",
+    )
+    .bind(ana)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let insert = "INSERT INTO transactions (user_id, date, amount, kind, category_id, series_id)
+                  VALUES ($1, '2026-11-05', 10, 'daily', $2, $3)";
+    for series_id in [Some(Uuid::new_v4()), None] {
+        sqlx::query(insert)
+            .bind(ana)
+            .bind(market)
+            .bind(series_id)
+            .execute(&pool)
+            .await
+            .unwrap();
+    }
+
+    migrate_from(&pool, 21).await;
+
+    let steps: Vec<(bool, Option<String>)> = sqlx::query_as(
+        "SELECT series_id IS NOT NULL, series_every FROM transactions ORDER BY series_id NULLS LAST",
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(steps, [(true, Some("month".into())), (false, None)]);
+    for (series_id, every) in [(Some(Uuid::new_v4()), None), (None, Some("week"))] {
+        let refused = sqlx::query(
+            "INSERT INTO transactions (user_id, date, amount, kind, category_id, series_id, series_every)
+             VALUES ($1, '2026-11-06', 10, 'daily', $2, $3, $4)",
+        )
+        .bind(ana)
+        .bind(market)
+        .bind(series_id)
+        .bind(every)
+        .execute(&pool)
+        .await;
+        assert!(refused.is_err(), "{every:?}");
+    }
+}

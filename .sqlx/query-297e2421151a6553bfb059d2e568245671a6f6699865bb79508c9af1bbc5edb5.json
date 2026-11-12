@@ -1,0 +1,54 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, date, card_id FROM transactions\n         WHERE user_id = $1 AND series_id = $2 AND date >= $3\n         ORDER BY date, id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "transactions",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "date",
+        "type_info": "Date",
+        "origin": {
+          "Table": {
+            "table": "transactions",
+            "name": "date"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "card_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "transactions",
+            "name": "card_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Date"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "297e2421151a6553bfb059d2e568245671a6f6699865bb79508c9af1bbc5edb5"
+}

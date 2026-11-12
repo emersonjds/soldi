@@ -33,8 +33,34 @@ pub struct TransactionSeries {
     /// 1-based, by date.
     pub position: i64,
     pub total: i64,
-    /// The date of the series' last member; growth continues in the months after it.
+    /// The date of the series' last member; growth continues after it, by `every`.
     pub last_date: NaiveDate,
+    pub every: RepeatEvery,
+}
+
+/// The step between a series' entries (D32); a running series never changes it.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
+#[cfg_attr(
+    feature = "sqlx",
+    derive(sqlx::Encode, sqlx::Decode),
+    sqlx(rename_all = "lowercase")
+)]
+#[serde(rename_all = "lowercase")]
+pub enum RepeatEvery {
+    #[default]
+    Month,
+    Week,
+    Year,
+}
+
+impl RepeatEvery {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            RepeatEvery::Month => "month",
+            RepeatEvery::Week => "week",
+            RepeatEvery::Year => "year",
+        }
+    }
 }
 
 /// Which entries of a series a change or a deletion reaches; `this` when absent.
@@ -46,6 +72,8 @@ pub enum Scope {
     This,
     /// This entry and the series' entries dated on or after it; a new day of the month moves them all.
     Following,
+    /// Every member of the series, earlier ones included (D33).
+    All,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
@@ -63,11 +91,15 @@ pub struct CreateTransaction {
     /// Up to 500 characters; blank means none.
     #[serde(default)]
     pub note: Option<String>,
-    /// 2 to 60 entries, this one included, on the same day of the following months (the
+    /// 2 to 60 entries, this one included, one `repeat_every` apart (a month: the same day, the
     /// month's last day when shorter); absent means just this one.
     #[serde(default)]
     #[schema(minimum = 2, maximum = 60)]
     pub repeat_months: Option<i16>,
+    /// The step of `repeat_months`; absent means `month`. Only with `repeat_months`, or `month`
+    /// with `installments`.
+    #[serde(default)]
+    pub repeat_every: Option<RepeatEvery>,
     /// 2 to 60 monthly parcelas splitting `amount`, the total: each `amount / n` truncated to
     /// cents, the last takes the remainder (D16); dated like `repeat_months`; not with it.
     #[serde(default)]
@@ -99,6 +131,10 @@ pub struct UpdateTransaction {
     #[serde(default)]
     #[schema(minimum = 2, maximum = 60)]
     pub repeat_months: Option<i16>,
+    /// The step of a series `repeat_months` starts from an entry outside one; on a member it must
+    /// equal the series' step.
+    #[serde(default)]
+    pub repeat_every: Option<RepeatEvery>,
     /// A new card must be one of the caller's unarchived cards; keeping an archived one is fine.
     #[serde(default, deserialize_with = "crate::nullable_field")]
     #[schema(value_type = Option<Uuid>, nullable)]
