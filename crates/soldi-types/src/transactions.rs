@@ -147,6 +147,10 @@ pub struct UpdateTransaction {
     /// equal the series' step.
     #[serde(default)]
     pub repeat_every: Option<RepeatEvery>,
+    /// D36: `true` makes the entry's series, or the entry itself, Fixo with no end (Tornar fixo);
+    /// `false` on an open member deletes the later members and closes the series (Parar série).
+    #[serde(default)]
+    pub open_ended: Option<bool>,
     /// A new card must be one of the caller's unarchived cards; keeping an archived one is fine.
     #[serde(default, deserialize_with = "crate::nullable_field")]
     #[schema(value_type = Option<Uuid>, nullable)]

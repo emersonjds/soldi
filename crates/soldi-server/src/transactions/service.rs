@@ -317,8 +317,14 @@ pub async fn update(
         .series
         .as_ref()
         .map_or(RepeatEvery::Month, |series| series.every);
-    if patch.repeat_months.is_some() {
+    if patch.repeat_months.is_some() || patch.open_ended.is_some() {
         domain::check_repeatable(&current)?;
+    }
+    if patch.repeat_months.is_some() && current.series.as_ref().is_some_and(|s| s.open_ended) {
+        return Err(AppError::invalid(
+            "repeat_months",
+            "an open series has no length; stop it instead",
+        ));
     }
     if current.recurring_bill_id.is_some() && patch.kind.is_some_and(|kind| kind != current.kind) {
         return Err(AppError::invalid(
@@ -339,7 +345,7 @@ pub async fn update(
         repeat_every: patch.repeat_every.filter(|_| current.series.is_none()),
         installments: None,
         first_installment: None,
-        open_ended: false,
+        open_ended: patch.open_ended == Some(true),
         card_id: patch.card_id.unwrap_or(current.card_id),
     })?;
     domain::check_kind(next.kind, &category)?;
@@ -416,6 +422,22 @@ pub async fn update(
             repo::set_dates(&mut tx, user.id, &ids, &dates).await?;
         }
     }
+    match (patch.open_ended, &current.series) {
+        (Some(true), Some(series)) if !series.open_ended => {
+            repo::set_open(&mut tx, user.id, series.id, true).await?;
+        }
+        (Some(true), None) => {
+            let every = next.repeat_every.unwrap_or_default();
+            if !repo::set_series(&mut tx, user.id, id, Uuid::new_v4(), every, true).await? {
+                return Err(domain::already_repeated());
+            }
+        }
+        (Some(false), Some(series)) if series.open_ended => {
+            repo::delete_after(&mut tx, user.id, series.id, next.date, id).await?;
+            repo::set_open(&mut tx, user.id, series.id, false).await?;
+        }
+        _ => {}
+    }
     match (next.repeat_months, &current.series) {
         (Some(months), Some(series)) => resize(&mut tx, user, id, series.id, months, &next).await?,
         (Some(months), None) => {
@@ -424,7 +446,7 @@ pub async fn update(
             }
             let series_id = Uuid::new_v4();
             let every = next.repeat_every.unwrap_or_default();
-            if !repo::set_series(&mut tx, user.id, id, series_id, every).await? {
+            if !repo::set_series(&mut tx, user.id, id, series_id, every, false).await? {
                 return Err(domain::already_repeated());
             }
             let dates = domain::repeat_dates(next.date, months, every)?;
@@ -517,6 +539,7 @@ pub async fn delete(
     match reach {
         Some((series_id, from)) => {
             repo::delete_following(&mut tx, user.id, series_id, from).await?;
+            repo::set_open(&mut tx, user.id, series_id, false).await?;
         }
         None => {
             repo::delete(&mut tx, user.id, id).await?;

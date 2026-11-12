@@ -256,18 +256,60 @@ pub async fn set_series(
     id: Uuid,
     series_id: Uuid,
     every: RepeatEvery,
+    open: bool,
 ) -> Result<bool, sqlx::Error> {
     let result = sqlx::query!(
-        "UPDATE transactions SET series_id = $3, series_every = $4, updated_at = now()
+        "UPDATE transactions SET series_id = $3, series_every = $4, series_open = $5,
+                updated_at = now()
          WHERE user_id = $1 AND id = $2 AND series_id IS NULL",
         user_id,
         id,
         series_id,
-        every.as_str()
+        every.as_str(),
+        open
     )
     .execute(&mut *conn)
     .await?;
     Ok(result.rows_affected() == 1)
+}
+
+/// D36: opens or closes every member of the series.
+pub async fn set_open(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    series_id: Uuid,
+    open: bool,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        "UPDATE transactions SET series_open = $3, updated_at = now()
+         WHERE user_id = $1 AND series_id = $2 AND series_open <> $3",
+        user_id,
+        series_id,
+        open
+    )
+    .execute(&mut *conn)
+    .await?;
+    Ok(())
+}
+
+/// D36: deletes the series' members after entry `id` dated `date`, in series order.
+pub async fn delete_after(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    series_id: Uuid,
+    date: NaiveDate,
+    id: Uuid,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        "DELETE FROM transactions WHERE user_id = $1 AND series_id = $2 AND (date, id) > ($3, $4)",
+        user_id,
+        series_id,
+        date,
+        id
+    )
+    .execute(&mut *conn)
+    .await?;
+    Ok(())
 }
 
 /// R6: the series' members dated after `from` take `entry`'s kind, category and note, its card

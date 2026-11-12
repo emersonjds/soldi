@@ -2697,3 +2697,209 @@ async fn d36_weekly_and_yearly_open_series_grow_by_their_step(pool: PgPool) {
     assert_eq!(entry["amount"], "30.00");
     assert_eq!(members(&pool, &hers).await, behind_hers);
 }
+
+/// The series' members flagged open.
+async fn open_members(pool: &PgPool, series: &Value) -> i64 {
+    sqlx::query_scalar(
+        "SELECT count(*) FROM transactions WHERE series_id = $1::uuid AND series_open",
+    )
+    .bind(series["series"]["id"].as_str().unwrap())
+    .fetch_one(pool)
+    .await
+    .unwrap()
+}
+
+/// The series' member `position` (1-based, by date), read through the ledger.
+async fn member(user: &TestApp, series: &Value, position: u32) -> Value {
+    let of = (today() + chrono::Months::new(position - 1))
+        .format("%Y-%m")
+        .to_string();
+    month(user, &of)
+        .await
+        .into_iter()
+        .find(|entry| entry["series"]["id"] == series["series"]["id"])
+        .unwrap()
+}
+
+#[sqlx::test]
+async fn d36_parar_serie_keeps_this_member_and_the_earlier_ones(pool: PgPool) {
+    let ana = opened(pool.clone(), "ana@example.com").await;
+    let bia = opened(pool.clone(), "bia@example.com").await;
+    let created = fixo(&ana, "income", "Salário", json!({})).await;
+    let hers = fixo(&bia, "income", "Salário", json!({})).await;
+    let second = member(&ana, &created, 2).await;
+
+    let (status, stopped) = ana
+        .patch(&uri(&second), json!({ "open_ended": false }))
+        .await;
+
+    assert_eq!(status, StatusCode::OK, "{stopped}");
+    assert_eq!(stopped["series"]["open_ended"], false);
+    assert_eq!(place(&stopped), (2, 2));
+    let (status, _) = ana.get("/api/forecast").await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(members(&pool, &created).await, 2);
+    assert_eq!(open_members(&pool, &created).await, 0);
+    let kept = run(&ana, &this_month(), 2).await;
+    assert_eq!(field_of(&kept, "amount"), ["30.00"; 2]);
+    assert_eq!(kept[0]["id"], created["id"]);
+    assert_eq!(kept[1]["id"], second["id"]);
+
+    let (status, undone) = ana
+        .patch(&uri(&second), json!({ "open_ended": true }))
+        .await;
+
+    assert_eq!(status, StatusCode::OK, "{undone}");
+    assert_eq!(undone["series"]["open_ended"], true);
+    let (status, _) = ana.get("/api/forecast").await;
+    assert_eq!(status, StatusCode::OK);
+    let entries = run(&ana, &this_month(), 12).await;
+    assert_eq!(place(&entries[11]), (12, 12));
+    assert_eq!(members(&pool, &hers).await, 12);
+    assert_eq!(open_members(&pool, &hers).await, 12);
+}
+
+#[sqlx::test]
+async fn d36_a_12x_series_turns_fixo_without_doubling_a_month(pool: PgPool) {
+    let ana = opened(pool.clone(), "ana@example.com").await;
+    let bia = opened(pool.clone(), "bia@example.com").await;
+    let salary = ana.category_id("Salário").await;
+    let (status, created) = ana
+        .post(
+            "/api/transactions",
+            json!({ "date": today().to_string(), "amount": "1000", "kind": "income",
+                    "category_id": salary, "repeat_months": 12 }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{created}");
+    let hers = repeat(&bia, &today().to_string(), "10", 12).await;
+
+    let (status, fixed) = ana
+        .patch(&uri(&created), json!({ "open_ended": true }))
+        .await;
+
+    assert_eq!(status, StatusCode::OK, "{fixed}");
+    assert_eq!(fixed["series"]["open_ended"], true);
+    assert_eq!(open_members(&pool, &created).await, 12);
+    let (status, _) = ana.get("/api/forecast").await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(members(&pool, &created).await, 12);
+    let fourteen = (today() + chrono::Months::new(14))
+        .format("%Y-%m")
+        .to_string();
+    let (status, _) = ana.get(&format!("/api/months/{fourteen}")).await;
+    assert_eq!(status, StatusCode::OK);
+    let entries = run(&ana, &this_month(), 15).await;
+    assert_eq!(place(&entries[14]), (15, 15));
+    assert_eq!(members(&pool, &hers).await, 12);
+    assert_eq!(open_members(&pool, &hers).await, 0);
+}
+
+#[sqlx::test]
+async fn d36_open_series_edges(pool: PgPool) {
+    let ana = opened(pool.clone(), "ana@example.com").await;
+    let bia = opened(pool.clone(), "bia@example.com").await;
+    let salary = ana.category_id("Salário").await;
+    let (_, standalone) = ana
+        .post(
+            "/api/transactions",
+            json!({ "date": today().to_string(), "amount": "50", "kind": "income",
+                    "category_id": salary }),
+        )
+        .await;
+
+    let (status, problem) = ana
+        .patch(
+            &uri(&standalone),
+            json!({ "open_ended": true, "repeat_months": 6 }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+    assert_eq!(problem["errors"][0]["field"], "open_ended");
+    let bill_entry = spend(&ana, &today().to_string(), "10", "Mercado").await;
+    let rent = ana.category_id("Aluguel").await;
+    let (status, problem) = ana
+        .patch(
+            &uri(&bill_entry),
+            json!({ "open_ended": true, "kind": "bill", "category_id": rent }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+    assert_eq!(problem["errors"][0]["field"], "open_ended");
+    let (_, bill) = ana
+        .post(
+            "/api/bills",
+            json!({ "name": "Aluguel", "amount": "1500", "due_day": 5, "category_id": rent }),
+        )
+        .await;
+    let (status, payment) = ana
+        .post(
+            &format!("/api/bills/{}/pay", bill["id"].as_str().unwrap()),
+            json!({ "date": today().to_string() }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{payment}");
+    let (status, problem) = ana
+        .patch(&uri(&payment), json!({ "open_ended": true }))
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+    assert_eq!(
+        problem["type"],
+        "urn:soldi:error:repeat-not-allowed-on-bill-payment"
+    );
+
+    let (status, weekly) = ana
+        .patch(
+            &uri(&standalone),
+            json!({ "open_ended": true, "repeat_every": "week" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{weekly}");
+    assert_eq!(weekly["series"]["open_ended"], true);
+    assert_eq!(weekly["series"]["every"], "week");
+    let (status, _) = ana.get("/api/forecast").await;
+    assert_eq!(status, StatusCode::OK);
+    let dates: Vec<chrono::NaiveDate> = sqlx::query_scalar(
+        "SELECT date FROM transactions WHERE series_id = $1::uuid ORDER BY date",
+    )
+    .bind(weekly["series"]["id"].as_str().unwrap())
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(dates[0], today());
+    assert!(
+        dates
+            .windows(2)
+            .all(|pair| (pair[1] - pair[0]).num_days() == 7)
+    );
+    assert!(horizon_end() < *dates.last().unwrap() + chrono::Days::new(7));
+
+    let created = fixo(&ana, "income", "Salário", json!({})).await;
+    let third = member(&ana, &created, 3).await;
+    let (status, problem) = ana.patch(&uri(&third), json!({ "repeat_months": 6 })).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+    assert_eq!(problem["errors"][0]["field"], "repeat_months");
+    let (status, problem) = bia
+        .patch(&uri(&third), json!({ "open_ended": false }))
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND, "{problem}");
+    let (status, _) = bia
+        .delete(&format!("{}?scope=following", uri(&third)))
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(members(&pool, &created).await, 12);
+
+    let (status, _) = ana
+        .delete(&format!("{}?scope=following", uri(&third)))
+        .await;
+
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    let (status, _) = ana.get("/api/forecast").await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(members(&pool, &created).await, 2);
+    assert_eq!(open_members(&pool, &created).await, 0);
+    assert_eq!(
+        member(&ana, &created, 2).await["series"]["open_ended"],
+        false
+    );
+}
