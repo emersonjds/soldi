@@ -180,6 +180,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/categories/pins": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["category_pins"];
+        put: operations["set_category_pins"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/categories/{id}": {
         parameters: {
             query?: never;
@@ -586,6 +602,13 @@ export interface components {
         };
         /** @enum {string} */
         CategoryKind: "income" | "bill" | "daily";
+        /**
+         * @description The caller's pinned top-level categories, in the order the chip rows show them; at most 24,
+         *     no repeat, never `Resgate`.
+         */
+        CategoryPins: {
+            category_ids: string[];
+        };
         /**
          * @description `outflow` (bills and daily) and `income`, each by amount, largest first; `groups` the same
          *     month by top-level category, outflow groups then income groups, each by amount.
@@ -1868,6 +1891,75 @@ export interface operations {
                 };
             };
             /** @description A bad field, a parent on the other side (income vs outflow) or a non-bill under `Economia`, `nested-subcategory` when the parent is a subcategory, `savings-category` under `Resgate`, `not-a-cofrinho` for a target or deadline outside `Economia`, `color-taken` when the color is taken in any kind the group shows in, or `palette-full` when no color is given and all 24 are taken in the kind */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    category_pins: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The caller's active top-level categories with a pin, in pinned order; an archived or re-parented one leaves the list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryPins"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    set_category_pins: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CategoryPins"];
+            };
+        };
+        responses: {
+            /** @description The new pinned order, replacing the whole previous one; `[]` clears it */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryPins"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description `category_ids` has more than 24 ids, repeats one, or lists one that is not the caller's active top-level category or is `Resgate`; nothing changes */
             422: {
                 headers: {
                     [name: string]: unknown;

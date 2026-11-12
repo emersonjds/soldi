@@ -3,7 +3,7 @@ use axum::extract::State;
 use axum::http::StatusCode;
 use serde::Deserialize;
 use soldi_types::Problem;
-use soldi_types::categories::{Category, CreateCategory, UpdateCategory};
+use soldi_types::categories::{Category, CategoryPins, CreateCategory, UpdateCategory};
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
 use uuid::Uuid;
@@ -16,6 +16,7 @@ use crate::extract::{CurrentUser, JsonBody, PathParams, QueryParams};
 pub fn router() -> OpenApiRouter<AppState> {
     OpenApiRouter::new()
         .routes(routes!(list_categories, create_category))
+        .routes(routes!(category_pins, set_category_pins))
         .routes(routes!(update_category, archive_category))
 }
 
@@ -88,4 +89,28 @@ pub async fn archive_category(
 ) -> Result<StatusCode, AppError> {
     service::archive(&state.pool, &user, id).await?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+#[utoipa::path(get, path = "/api/categories/pins", tag = "categories",
+    responses(
+        (status = 200, body = CategoryPins, description = "The caller's active top-level categories with a pin, in pinned order; an archived or re-parented one leaves the list"),
+        (status = 401, body = Problem, content_type = "application/problem+json")))]
+pub async fn category_pins(
+    State(state): State<AppState>,
+    user: CurrentUser,
+) -> Result<Json<CategoryPins>, AppError> {
+    Ok(Json(service::pins(&state.pool, &user).await?))
+}
+
+#[utoipa::path(put, path = "/api/categories/pins", tag = "categories", request_body = CategoryPins,
+    responses(
+        (status = 200, body = CategoryPins, description = "The new pinned order, replacing the whole previous one; `[]` clears it"),
+        (status = 401, body = Problem, content_type = "application/problem+json"),
+        (status = 422, body = Problem, content_type = "application/problem+json", description = "`category_ids` has more than 24 ids, repeats one, or lists one that is not the caller's active top-level category or is `Resgate`; nothing changes")))]
+pub async fn set_category_pins(
+    State(state): State<AppState>,
+    user: CurrentUser,
+    JsonBody(input): JsonBody<CategoryPins>,
+) -> Result<Json<CategoryPins>, AppError> {
+    Ok(Json(service::set_pins(&state.pool, &user, input).await?))
 }

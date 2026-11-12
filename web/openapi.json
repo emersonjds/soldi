@@ -812,6 +812,82 @@
         }
       }
     },
+    "/api/categories/pins": {
+      "get": {
+        "tags": [
+          "categories"
+        ],
+        "operationId": "category_pins",
+        "responses": {
+          "200": {
+            "description": "The caller's active top-level categories with a pin, in pinned order; an archived or re-parented one leaves the list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryPins"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "categories"
+        ],
+        "operationId": "set_category_pins",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CategoryPins"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The new pinned order, replacing the whole previous one; `[]` clears it",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryPins"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`category_ids` has more than 24 ids, repeats one, or lists one that is not the caller's active top-level category or is `Resgate`; nothing changes",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/categories/{id}": {
       "delete": {
         "tags": [
@@ -2418,6 +2494,23 @@
           "bill",
           "daily"
         ]
+      },
+      "CategoryPins": {
+        "type": "object",
+        "description": "The caller's pinned top-level categories, in the order the chip rows show them; at most 24,\nno repeat, never `Resgate`.",
+        "required": [
+          "category_ids"
+        ],
+        "properties": {
+          "category_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        },
+        "additionalProperties": false
       },
       "CategoryReport": {
         "type": "object",

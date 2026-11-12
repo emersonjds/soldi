@@ -111,3 +111,11 @@ pub struct UpdateCategory {
     #[schema(value_type = Option<String>, nullable)]
     pub note: Option<Option<String>>,
 }
+
+/// The caller's pinned top-level categories, in the order the chip rows show them; at most 24,
+/// no repeat, never `Resgate`.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct CategoryPins {
+    pub category_ids: Vec<Uuid>,
+}

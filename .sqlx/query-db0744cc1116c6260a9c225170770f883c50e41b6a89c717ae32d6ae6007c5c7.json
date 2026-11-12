@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE categories c SET pin_rank = p.rank::smallint\n         FROM UNNEST($2::uuid[]) WITH ORDINALITY AS p (id, rank)\n         WHERE c.user_id = $1 AND c.id = p.id",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "db0744cc1116c6260a9c225170770f883c50e41b6a89c717ae32d6ae6007c5c7"
+}

@@ -1,4 +1,6 @@
-use soldi_types::categories::{Category, CategoryKind, CreateCategory, UpdateCategory};
+use soldi_types::categories::{
+    Category, CategoryKind, CategoryPins, CreateCategory, UpdateCategory,
+};
 use sqlx::{PgConnection, PgPool};
 use uuid::Uuid;
 
@@ -263,4 +265,27 @@ pub async fn archive(pool: &PgPool, user: &CurrentUser, id: Uuid) -> Result<(), 
         true => Ok(()),
         false => Err(AppError::NotFound),
     }
+}
+
+pub async fn pins(pool: &PgPool, user: &CurrentUser) -> Result<CategoryPins, AppError> {
+    let mut conn = pool.acquire().await?;
+    Ok(CategoryPins {
+        category_ids: repo::pins(&mut conn, user.id).await?,
+    })
+}
+
+pub async fn set_pins(
+    pool: &PgPool,
+    user: &CurrentUser,
+    input: CategoryPins,
+) -> Result<CategoryPins, AppError> {
+    domain::check_pins(&input.category_ids)?;
+    let mut tx = pool.begin().await?;
+    let pinnable = repo::count_pinnable(&mut tx, user.id, &input.category_ids).await?;
+    if usize::try_from(pinnable).ok() != Some(input.category_ids.len()) {
+        return Err(domain::not_pinnable());
+    }
+    repo::set_pins(&mut tx, user.id, &input.category_ids).await?;
+    tx.commit().await?;
+    Ok(input)
 }
