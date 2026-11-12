@@ -582,7 +582,7 @@ async fn sol60_a_series_reaching_past_2100_is_refused_and_writes_nothing(pool: P
         assert_eq!(problem["errors"][0]["field"], "date");
         assert_eq!(
             problem["errors"][0]["message"],
-            "must leave room for every month"
+            "must keep every entry up to 2100"
         );
     }
     assert_empty(&user, "2100-06", 7).await;
@@ -2078,10 +2078,6 @@ async fn d28_an_archived_card_reaches_no_new_or_later_entry(pool: PgPool) {
     for (uri, patch) in [
         (uri(&single), json!({ "repeat_months": 3 })),
         (uri(&series), json!({ "repeat_months": 5 })),
-        (
-            format!("{}?scope=following", uri(&series)),
-            json!({ "note": "Feira" }),
-        ),
     ] {
         let (status, problem) = ana.patch(&uri, patch.clone()).await;
         assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{patch}");
@@ -2090,6 +2086,16 @@ async fn d28_an_archived_card_reaches_no_new_or_later_entry(pool: PgPool) {
     let (_, january) = ana.get("/api/transactions?month=2027-01").await;
     assert_eq!(january.as_array().unwrap().len(), 1);
     assert_eq!(january[0]["note"], Value::Null);
+    let (status, noted) = ana
+        .patch(
+            &format!("{}?scope=following", uri(&series)),
+            json!({ "note": "Feira" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{noted}");
+    let (_, january) = ana.get("/api/transactions?month=2027-01").await;
+    assert_eq!(january[0]["note"], "Feira");
+    assert_eq!(january[0]["card_id"], porto);
     let (status, shrunk) = ana
         .patch(&uri(&series), json!({ "repeat_months": 2 }))
         .await;
@@ -2418,4 +2424,41 @@ async fn d33_another_users_member_is_not_found_with_all(pool: PgPool) {
         let entries = run(user, "2026-11", 3).await;
         assert_eq!(field_of(&entries, "amount"), ["10.00"; 3]);
     }
+}
+
+#[sqlx::test]
+async fn d32_d33_an_all_move_keeps_each_weekly_and_yearly_member_in_its_period(pool: PgPool) {
+    let user = opened(pool, "ana@example.com").await;
+    repeat_every(&user, "2026-11-12", "150", 4, "week").await;
+    let weekly = entries_from(&user, "2026-11", 2).await;
+
+    let (status, moved) = user
+        .patch(&all(&weekly[2]), json!({ "date": "2026-11-23" }))
+        .await;
+
+    assert_eq!(status, StatusCode::OK, "{moved}");
+    let weekly = entries_from(&user, "2026-11", 2).await;
+    assert_eq!(
+        field_of(&weekly, "date"),
+        ["2026-11-09", "2026-11-16", "2026-11-23", "2026-11-30"]
+    );
+    assert_ranked(&weekly, 4);
+
+    repeat_every(&user, "2027-03-10", "900", 3, "year").await;
+    let second = only(&user, "2028-03").await;
+
+    let (status, moved) = user
+        .patch(&all(&second), json!({ "date": "2028-03-31" }))
+        .await;
+
+    assert_eq!(status, StatusCode::OK, "{moved}");
+    let mut yearly = vec![];
+    for of in ["2027-03", "2028-03", "2029-03"] {
+        yearly.push(only(&user, of).await);
+    }
+    assert_eq!(
+        field_of(&yearly, "date"),
+        ["2027-03-31", "2028-03-31", "2029-03-31"]
+    );
+    assert_ranked(&yearly, 3);
 }

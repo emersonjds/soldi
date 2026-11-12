@@ -189,10 +189,11 @@ pub fn moved(
         ));
     }
     let offset = Days::new(to.weekday().num_days_from_monday().into());
-    Ok(dates
-        .iter()
-        .map(|date| period_start(every, *date) + offset)
-        .collect())
+    within_2100(
+        dates
+            .iter()
+            .map(|date| period_start(every, *date).checked_add_days(offset)),
+    )
 }
 
 fn weeks_after(date: NaiveDate, count: u32) -> Result<Vec<NaiveDate>, AppError> {
@@ -203,7 +204,7 @@ fn within_2100(dates: impl Iterator<Item = Option<NaiveDate>>) -> Result<Vec<Nai
     dates
         .map(|date| date.filter(|date| date.year() <= 2100))
         .collect::<Option<Vec<_>>>()
-        .ok_or_else(|| AppError::invalid("date", "must leave room for every month"))
+        .ok_or_else(|| AppError::invalid("date", "must keep every entry up to 2100"))
 }
 
 /// L1, L4: `count` dates in the months after `last`'s, each on `day` clamped to its month;
@@ -219,7 +220,7 @@ pub fn following_dates(day: u32, last: NaiveDate, count: u32) -> Result<Vec<Naiv
                 .filter(|date| date.year() <= 2100)
         })
         .collect::<Option<Vec<_>>>()
-        .ok_or_else(|| AppError::invalid("date", "must leave room for every month"))
+        .ok_or_else(|| AppError::invalid("date", "must keep every entry up to 2100"))
 }
 
 /// M3 (D20): growth takes the last member's day, or the larger day of the member `before` it
@@ -792,6 +793,41 @@ mod tests {
             period_start(RepeatEvery::Year, date("2026-11-15")),
             date("2026-11-01")
         );
+    }
+
+    #[test]
+    fn d32_a_weekly_move_keeps_the_iso_week_and_2100() {
+        assert_eq!(
+            field(check_move(
+                RepeatEvery::Week,
+                date("2026-11-15"),
+                date("2026-11-16")
+            )),
+            "date"
+        );
+        assert!(check_move(RepeatEvery::Week, date("2026-11-15"), date("2026-11-09")).is_ok());
+        assert!(check_move(RepeatEvery::Week, date("2027-01-01"), date("2026-12-28")).is_ok());
+        let past = moved(
+            RepeatEvery::Week,
+            &[date("2100-12-24"), date("2100-12-31")],
+            date("2100-12-26"),
+        );
+        assert_eq!(field(past.map(|_| ())), "date");
+    }
+
+    #[test]
+    fn d32_the_2100_cap_names_no_step() {
+        for capped in [
+            repeat_dates(date("2100-12-20"), 3, RepeatEvery::Week),
+            following_dates(5, date("2100-08-05"), 5),
+        ] {
+            match capped {
+                Err(AppError::Validation(errors)) => {
+                    assert_eq!(errors[0].message, "must keep every entry up to 2100");
+                }
+                other => panic!("{other:?}"),
+            }
+        }
     }
 
     #[test]

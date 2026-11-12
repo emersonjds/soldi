@@ -256,8 +256,9 @@ pub async fn set_series(
     Ok(result.rows_affected() == 1)
 }
 
-/// R6: the series' members dated after `from` take `entry`'s kind, category, note and card, and
-/// `amount` when given; without it each keeps its own (parcelas differ by the remainder).
+/// R6: the series' members dated after `from` take `entry`'s kind, category and note, its card
+/// with `card` (each keeps its own otherwise), and `amount` when given; without it each keeps its
+/// own (parcelas differ by the remainder).
 pub async fn update_following(
     conn: &mut PgConnection,
     user_id: Uuid,
@@ -265,11 +266,12 @@ pub async fn update_following(
     from: NaiveDate,
     entry: &CreateTransaction,
     amount: Option<Decimal>,
+    card: bool,
 ) -> Result<(), sqlx::Error> {
     sqlx::query!(
         "UPDATE transactions
-         SET amount = COALESCE($4, amount), kind = $5, category_id = $6, note = $7, card_id = $8,
-             updated_at = now()
+         SET amount = COALESCE($4, amount), kind = $5, category_id = $6, note = $7,
+             card_id = CASE WHEN $9 THEN $8 ELSE card_id END, updated_at = now()
          WHERE user_id = $1 AND series_id = $2 AND date > $3",
         user_id,
         series_id,
@@ -278,7 +280,8 @@ pub async fn update_following(
         entry.kind.as_str(),
         entry.category_id,
         entry.note,
-        entry.card_id
+        entry.card_id,
+        card
     )
     .execute(&mut *conn)
     .await?;
@@ -358,15 +361,16 @@ pub async fn series_end(
     .await
 }
 
-/// M1: the series' members dated `from` on, by `(date, id)`.
+/// M1, D30b: the series' members dated `from` on, by `(date, id)`, with their card.
 pub async fn members_from(
     conn: &mut PgConnection,
     user_id: Uuid,
     series_id: Uuid,
     from: NaiveDate,
-) -> Result<Vec<(Uuid, NaiveDate)>, sqlx::Error> {
+) -> Result<Vec<(Uuid, NaiveDate, Option<Uuid>)>, sqlx::Error> {
     let rows = sqlx::query!(
-        "SELECT id, date FROM transactions WHERE user_id = $1 AND series_id = $2 AND date >= $3
+        "SELECT id, date, card_id FROM transactions
+         WHERE user_id = $1 AND series_id = $2 AND date >= $3
          ORDER BY date, id",
         user_id,
         series_id,
@@ -374,7 +378,10 @@ pub async fn members_from(
     )
     .fetch_all(&mut *conn)
     .await?;
-    Ok(rows.into_iter().map(|row| (row.id, row.date)).collect())
+    Ok(rows
+        .into_iter()
+        .map(|row| (row.id, row.date, row.card_id))
+        .collect())
 }
 
 /// M1, M6: `dates[i]` onto entry `ids[i]`; nothing else changes.
