@@ -894,7 +894,7 @@
         },
         "responses": {
           "200": {
-            "description": "The category after the change; absent fields stay as they are; a new `kind` reaches its subcategories and all their entries",
+            "description": "The category after the change; absent fields stay as they are; a new `kind` moves this category and its own entries; its subcategories keep theirs",
             "content": {
               "application/json": {
                 "schema": {
@@ -933,7 +933,7 @@
             }
           },
           "422": {
-            "description": "A bad field, `kind-locked` for a `kind` on `Economia`, a cofrinho, `Resgate` or an income category or a `kind` of `income`, `category-has-bills` when moving to `daily` a category an active conta fixa uses, a parent on the other side (income vs outflow) or a non-bill under `Economia` or itself, `nested-subcategory` when the parent is a subcategory or this category has subcategories, `savings-category` when moving `Economia` or `Resgate` or under `Resgate`, `not-a-cofrinho` for a target or deadline outside `Economia`, `color-taken` when the color is taken in any kind the group shows in, or `palette-full` when moving to top-level without a color, or changing a top-level's `kind`, and all 24 are taken in the kind",
+            "description": "A bad field, `kind-locked` for a `kind` on `Economia`, a cofrinho, `Resgate` or an income category or a `kind` of `income`, `category-has-bills` when moving to `daily` a category an unarchived conta fixa (active or paused) uses, a parent on the other side (income vs outflow) or a non-bill under `Economia` or itself, `nested-subcategory` when the parent is a subcategory or this category has subcategories, `savings-category` when moving `Economia` or `Resgate` or under `Resgate`, `not-a-cofrinho` for a target or deadline outside `Economia`, `color-taken` when the color is taken in any kind the group shows in, or `palette-full` when moving to top-level without a color, or changing a top-level's `kind`, and all 24 are taken in the kind",
             "content": {
               "application/problem+json": {
                 "schema": {
