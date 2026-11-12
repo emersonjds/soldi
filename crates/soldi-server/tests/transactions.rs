@@ -2414,3 +2414,78 @@ async fn d32_d33_an_all_move_keeps_each_weekly_and_yearly_member_in_its_period(p
     );
     assert_ranked(&yearly, 3);
 }
+
+async fn parcelas_from(user: &TestApp, count: i64, first: i64) -> Value {
+    let market = user.category_id("Mercado").await;
+    let (status, created) = user
+        .post(
+            "/api/transactions",
+            json!({ "date": "2026-11-05", "amount": "1000.01", "kind": "daily", "category_id": market,
+                    "installments": count, "first_installment": first }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{created}");
+    created
+}
+
+#[sqlx::test]
+async fn sol118_a_purchase_from_parcela_4_of_10_writes_seven_parcelas(pool: PgPool) {
+    let ana = opened(pool.clone(), "ana@example.com").await;
+    let bia = opened(pool, "bia@example.com").await;
+    repeat(&bia, "2026-11-05", "10", 3).await;
+
+    let created = parcelas_from(&ana, 10, 4).await;
+
+    assert_eq!(place(&created), (4, 10));
+    assert_eq!(created["amount"], "100.00");
+    let entries = run(&ana, "2026-11", 7).await;
+    assert_eq!(field_of(&entries[..6], "amount"), ["100.00"; 6]);
+    assert_eq!(entries[6]["amount"], "100.01");
+    let places: Vec<_> = entries.iter().map(place).collect();
+    assert_eq!(places, (4..=10).map(|k| (k, 10)).collect::<Vec<_>>());
+    assert_eq!(cents(&entries), 70_001);
+    assert_empty(&ana, "2027-06", 1).await;
+    assert_eq!(place(&only(&bia, "2027-01").await), (3, 3));
+    assert_eq!(place(&parcelas_from(&ana, 10, 10).await), (10, 10));
+}
+
+#[sqlx::test]
+async fn sol118_first_installment_needs_installments_and_stays_inside_them(pool: PgPool) {
+    let user = opened(pool, "ana@example.com").await;
+    let market = user.category_id("Mercado").await;
+
+    for (installments, first) in [(None, 2), (Some(10), 0), (Some(10), 11)] {
+        let (status, problem) = user
+            .post(
+                "/api/transactions",
+                json!({ "date": "2026-11-05", "amount": "100", "kind": "daily", "category_id": market,
+                        "installments": installments, "first_installment": first }),
+            )
+            .await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+        assert_eq!(problem["errors"][0]["field"], "first_installment");
+    }
+    assert!(month(&user, "2026-11").await.is_empty());
+}
+
+#[sqlx::test]
+async fn sol118_a_resize_counts_the_parcelas_paid_before(pool: PgPool) {
+    let user = opened(pool, "ana@example.com").await;
+    let first = parcelas_from(&user, 10, 4).await;
+
+    let (status, shrunk) = user
+        .patch(&uri(&first), json!({ "repeat_months": 8 }))
+        .await;
+
+    assert_eq!(status, StatusCode::OK, "{shrunk}");
+    assert_eq!(place(&shrunk), (4, 8));
+    let places: Vec<_> = run(&user, "2026-11", 5).await.iter().map(place).collect();
+    assert_eq!(places, (4..=8).map(|k| (k, 8)).collect::<Vec<_>>());
+    assert_empty(&user, "2027-04", 3).await;
+    let (status, grown) = user
+        .patch(&uri(&first), json!({ "repeat_months": 10 }))
+        .await;
+    assert_eq!(status, StatusCode::OK, "{grown}");
+    assert_eq!(place(&only(&user, "2027-05").await), (10, 10));
+    assert_empty(&user, "2027-06", 1).await;
+}

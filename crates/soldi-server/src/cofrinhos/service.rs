@@ -71,6 +71,7 @@ pub async fn withdraw(
         repeat_months: None,
         repeat_every: None,
         installments: None,
+        first_installment: None,
         card_id: None,
     })?;
     transactions::service::check_opening(&mut tx, user, entry.date).await?;

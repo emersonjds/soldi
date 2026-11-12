@@ -30,8 +30,9 @@ pub struct Transaction {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct TransactionSeries {
     pub id: Uuid,
-    /// 1-based, by date.
+    /// 1-based, by date; counts the parcelas paid before the first written one.
     pub position: i64,
+    /// The members, the parcelas paid before the first written one included.
     pub total: i64,
     /// The date of the series' last member; growth continues after it, by `every`.
     pub last_date: NaiveDate,
@@ -105,6 +106,10 @@ pub struct CreateTransaction {
     #[serde(default)]
     #[schema(minimum = 2, maximum = 60)]
     pub installments: Option<i16>,
+    /// The parcela this entry is, 1 to `installments`; earlier ones are not written. Absent: 1.
+    #[serde(default)]
+    #[schema(minimum = 1, maximum = 60)]
+    pub first_installment: Option<i16>,
     /// One of the caller's unarchived cards; only on a `daily` entry.
     #[serde(default)]
     pub card_id: Option<Uuid>,

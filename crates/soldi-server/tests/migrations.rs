@@ -507,3 +507,48 @@ async fn d35_a_paused_bill_ends_at_its_last_paid_month_or_before_it_started(pool
         );
     }
 }
+
+#[sqlx::test(migrations = false)]
+async fn d36_series_start_closed_and_their_flags_need_a_series(pool: PgPool) {
+    migrate_before(&pool, 27).await;
+    let ana = user(&pool, "ana@example.com").await;
+    let market: Uuid = sqlx::query_scalar(
+        "INSERT INTO categories (user_id, name, kind, icon, color)
+         VALUES ($1, 'Mercado', 'daily', 'shopping-cart', 'cat-1') RETURNING id",
+    )
+    .bind(ana)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO transactions (user_id, date, amount, kind, category_id, series_id, series_every)
+         VALUES ($1, '2026-11-05', 10, 'daily', $2, $3, 'month')",
+    )
+    .bind(ana)
+    .bind(market)
+    .bind(Uuid::new_v4())
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    migrate_from(&pool, 27).await;
+
+    let flags: (bool, i16) = sqlx::query_as("SELECT series_open, series_offset FROM transactions")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(flags, (false, 0));
+    for (open, offset) in [(true, 0), (false, 2)] {
+        let refused = sqlx::query(
+            "INSERT INTO transactions (user_id, date, amount, kind, category_id, series_open, series_offset)
+             VALUES ($1, '2026-11-06', 10, 'daily', $2, $3, $4)",
+        )
+        .bind(ana)
+        .bind(market)
+        .bind(open)
+        .bind(offset)
+        .execute(&pool)
+        .await;
+        assert!(refused.is_err(), "{open} {offset}");
+    }
+}

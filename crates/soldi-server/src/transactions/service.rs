@@ -176,7 +176,10 @@ pub async fn create(
         check_card(&mut tx, user, card_id).await?;
     }
     check_opening(&mut tx, user, input.date).await?;
-    let count = input.repeat_months.or(input.installments);
+    let skip = input.first_installment.map_or(0, |first| first - 1);
+    let count = input
+        .repeat_months
+        .or(input.installments.map(|parcelas| parcelas - skip));
     let every = input.repeat_every.unwrap_or_default();
     let copies = match count {
         Some(count) => domain::repeat_dates(input.date, count, every)?,
@@ -185,7 +188,9 @@ pub async fn create(
     let dates = [&[input.date], copies.as_slice()].concat();
     check_fatura_open(&mut tx, user, input.card_id, &dates).await?;
     let amounts = match input.installments {
-        Some(parcelas) => domain::installment_amounts(input.amount, parcelas),
+        Some(parcelas) => domain::installment_amounts(input.amount, parcelas)
+            [usize::try_from(skip).unwrap_or(0)..]
+            .to_vec(),
         None => vec![input.amount; usize::try_from(count.unwrap_or(1)).unwrap_or(1)],
     };
     let first = CreateTransaction {
@@ -217,8 +222,8 @@ pub async fn create(
         .await?;
         series = Some(TransactionSeries {
             id: series_id,
-            position: 1,
-            total: count.into(),
+            position: i64::from(1 + skip),
+            total: i64::from(count + skip),
             last_date: copies.last().copied().unwrap_or(first.date),
             every,
         });
@@ -280,6 +285,7 @@ pub async fn update(
         repeat_months: patch.repeat_months,
         repeat_every: patch.repeat_every.filter(|_| current.series.is_none()),
         installments: None,
+        first_installment: None,
         card_id: patch.card_id.unwrap_or(current.card_id),
     })?;
     domain::check_kind(next.kind, &category)?;

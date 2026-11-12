@@ -84,7 +84,8 @@ pub async fn list(
                   c.color AS category_color, c.parent_id AS category_parent_id,
                   c.is_savings AS category_is_savings, c.target AS category_target,
                   c.deadline AS category_deadline, t.series_id,
-                  s.position AS "series_position!", s.total AS "series_total!",
+                  s.position + t.series_offset AS "series_position!",
+                  s.total + t.series_offset AS "series_total!",
                   s.last_date AS series_last_date, t.series_every AS "series_every: RepeatEvery"
            FROM transactions t JOIN categories c ON c.user_id = t.user_id AND c.id = t.category_id
            LEFT JOIN LATERAL (
@@ -121,7 +122,8 @@ pub async fn movements(
                   c.color AS category_color, c.parent_id AS category_parent_id,
                   c.is_savings AS category_is_savings, c.target AS category_target,
                   c.deadline AS category_deadline, t.series_id,
-                  s.position AS "series_position!", s.total AS "series_total!",
+                  s.position + t.series_offset AS "series_position!",
+                  s.total + t.series_offset AS "series_total!",
                   s.last_date AS series_last_date, t.series_every AS "series_every: RepeatEvery"
            FROM transactions t JOIN categories c ON c.user_id = t.user_id AND c.id = t.category_id
            LEFT JOIN LATERAL (
@@ -159,7 +161,8 @@ pub async fn find(
                   c.color AS category_color, c.parent_id AS category_parent_id,
                   c.is_savings AS category_is_savings, c.target AS category_target,
                   c.deadline AS category_deadline, t.series_id,
-                  s.position AS "series_position!", s.total AS "series_total!",
+                  s.position + t.series_offset AS "series_position!",
+                  s.total + t.series_offset AS "series_total!",
                   s.last_date AS series_last_date, t.series_every AS "series_every: RepeatEvery"
            FROM transactions t JOIN categories c ON c.user_id = t.user_id AND c.id = t.category_id
            LEFT JOIN LATERAL (
@@ -187,8 +190,8 @@ pub async fn insert(
     sqlx::query_scalar!(
         "INSERT INTO transactions
              (user_id, date, amount, kind, category_id, note, recurring_bill_id, cofrinho_id,
-              series_id, card_id, series_every)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id",
+              series_id, card_id, series_every, series_offset)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING id",
         user_id,
         input.date,
         input.amount,
@@ -199,13 +202,15 @@ pub async fn insert(
         cofrinho_id,
         series_id,
         input.card_id,
-        every.map(RepeatEvery::as_str)
+        every.map(RepeatEvery::as_str),
+        input.first_installment.map_or(0, |first| first - 1)
     )
     .fetch_one(&mut *conn)
     .await
 }
 
-/// Copies of `entry` on each of `dates`, in `series_id`, with `amounts[i]` on `dates[i]`.
+/// Copies of `entry` on each of `dates`, in `series_id`, with `amounts[i]` on `dates[i]`; they
+/// take the series' `series_open` and `series_offset` from a member already written.
 pub async fn insert_copies(
     conn: &mut PgConnection,
     user_id: Uuid,
@@ -217,9 +222,12 @@ pub async fn insert_copies(
 ) -> Result<(), sqlx::Error> {
     sqlx::query!(
         "INSERT INTO transactions
-             (user_id, date, amount, kind, category_id, note, series_id, card_id, series_every)
-         SELECT $1, c.d, c.a, $4, $5, $6, $7, $8, $9
-         FROM UNNEST($2::date[], $3::numeric[]) AS c(d, a)",
+             (user_id, date, amount, kind, category_id, note, series_id, card_id, series_every,
+              series_open, series_offset)
+         SELECT $1, c.d, c.a, $4, $5, $6, $7, $8, $9, s.series_open, s.series_offset
+         FROM UNNEST($2::date[], $3::numeric[]) AS c(d, a)
+         CROSS JOIN (SELECT series_open, series_offset FROM transactions
+                     WHERE user_id = $1 AND series_id = $7 LIMIT 1) s",
         user_id,
         dates,
         amounts,
@@ -404,7 +412,7 @@ pub async fn set_dates(
     Ok(())
 }
 
-/// L3: deletes the series' members ranked after the first `keep` by `(date, id)`.
+/// L3: deletes the series' members positioned after `keep` by `(date, id)`, `series_offset` counted.
 pub async fn delete_beyond(
     conn: &mut PgConnection,
     user_id: Uuid,
@@ -413,8 +421,10 @@ pub async fn delete_beyond(
 ) -> Result<(), sqlx::Error> {
     sqlx::query!(
         "DELETE FROM transactions WHERE user_id = $1 AND id IN (
-             SELECT id FROM transactions WHERE user_id = $1 AND series_id = $2
-             ORDER BY date, id OFFSET $3)",
+             SELECT id FROM (
+                 SELECT id, series_offset + row_number() OVER (ORDER BY date, id) AS position
+                 FROM transactions WHERE user_id = $1 AND series_id = $2) m
+             WHERE m.position > $3)",
         user_id,
         series_id,
         keep
@@ -608,6 +618,7 @@ mod tests {
             repeat_months: None,
             repeat_every: None,
             installments: None,
+            first_installment: None,
             card_id: None,
         };
         let member = insert(

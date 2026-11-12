@@ -2047,7 +2047,7 @@
         },
         "responses": {
           "201": {
-            "description": "The entry; with `repeat_months` or `installments`, the first of its series (parcela 1), the rest written in the same database transaction",
+            "description": "The entry; with `repeat_months` or `installments`, the first of its series (parcela `first_installment`, 1 when absent), the rest written in the same database transaction",
             "content": {
               "application/json": {
                 "schema": {
@@ -2076,7 +2076,7 @@
             }
           },
           "422": {
-            "description": "Amount not above zero or with more than two places, note over 500 characters, `card_id` on a non-`daily` entry or not one of the caller's unarchived cards, a kind other than the category's (`category_id`), `repeat_months` not 2 to 60, `installments` not 2 to 60, with `repeat_months`, or leaving a parcela at zero, `repeat_every` without `repeat_months` (`needs repeat_months`) or other than `month` with `installments` (`installments are monthly`), a date outside 2000 to 2100 or a series passing 2100 (`must keep every entry up to 2100`), a date before the opening date (`before-opening-date`), or `fatura-paid` when a spend on a card lands in an already paid fatura (D30b)",
+            "description": "Amount not above zero or with more than two places, note over 500 characters, `card_id` on a non-`daily` entry or not one of the caller's unarchived cards, a kind other than the category's (`category_id`), `repeat_months` not 2 to 60, `installments` not 2 to 60, with `repeat_months`, or leaving a parcela at zero, `first_installment` without `installments` (`needs installments`) or outside 1 to `installments`, `repeat_every` without `repeat_months` (`needs repeat_months`) or other than `month` with `installments` (`installments are monthly`), a date outside 2000 to 2100 or a series passing 2100 (`must keep every entry up to 2100`), a date before the opening date (`before-opening-date`), or `fatura-paid` when a spend on a card lands in an already paid fatura (D30b)",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -3027,6 +3027,16 @@
             "type": "string",
             "format": "date"
           },
+          "first_installment": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "The parcela this entry is, 1 to `installments`; earlier ones are not written. Absent: 1.",
+            "maximum": 60,
+            "minimum": 1
+          },
           "installments": {
             "type": [
               "integer",
@@ -3825,11 +3835,12 @@
           "position": {
             "type": "integer",
             "format": "int64",
-            "description": "1-based, by date."
+            "description": "1-based, by date; counts the parcelas paid before the first written one."
           },
           "total": {
             "type": "integer",
-            "format": "int64"
+            "format": "int64",
+            "description": "The members, the parcelas paid before the first written one included."
           }
         }
       },

@@ -96,10 +96,10 @@ pub async fn delete_transactions(
 
 #[utoipa::path(post, path = "/api/transactions", tag = "transactions", request_body = CreateTransaction,
     responses(
-        (status = 201, body = Transaction, description = "The entry; with `repeat_months` or `installments`, the first of its series (parcela 1), the rest written in the same database transaction"),
+        (status = 201, body = Transaction, description = "The entry; with `repeat_months` or `installments`, the first of its series (parcela `first_installment`, 1 when absent), the rest written in the same database transaction"),
         (status = 401, body = Problem, content_type = "application/problem+json"),
         (status = 404, body = Problem, content_type = "application/problem+json", description = "The category is missing, archived or another user's"),
-        (status = 422, body = Problem, content_type = "application/problem+json", description = "Amount not above zero or with more than two places, note over 500 characters, `card_id` on a non-`daily` entry or not one of the caller's unarchived cards, a kind other than the category's (`category_id`), `repeat_months` not 2 to 60, `installments` not 2 to 60, with `repeat_months`, or leaving a parcela at zero, `repeat_every` without `repeat_months` (`needs repeat_months`) or other than `month` with `installments` (`installments are monthly`), a date outside 2000 to 2100 or a series passing 2100 (`must keep every entry up to 2100`), a date before the opening date (`before-opening-date`), or `fatura-paid` when a spend on a card lands in an already paid fatura (D30b)")))]
+        (status = 422, body = Problem, content_type = "application/problem+json", description = "Amount not above zero or with more than two places, note over 500 characters, `card_id` on a non-`daily` entry or not one of the caller's unarchived cards, a kind other than the category's (`category_id`), `repeat_months` not 2 to 60, `installments` not 2 to 60, with `repeat_months`, or leaving a parcela at zero, `first_installment` without `installments` (`needs installments`) or outside 1 to `installments`, `repeat_every` without `repeat_months` (`needs repeat_months`) or other than `month` with `installments` (`installments are monthly`), a date outside 2000 to 2100 or a series passing 2100 (`must keep every entry up to 2100`), a date before the opening date (`before-opening-date`), or `fatura-paid` when a spend on a card lands in an already paid fatura (D30b)")))]
 pub async fn create_transaction(
     State(state): State<AppState>,
     user: CurrentUser,

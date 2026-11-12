@@ -70,7 +70,10 @@ pub fn installment_amounts(total: Decimal, count: i16) -> Vec<Decimal> {
 
 fn check_installments(input: &CreateTransaction, amount: Decimal) -> Result<(), AppError> {
     let Some(count) = input.installments else {
-        return Ok(());
+        return match input.first_installment {
+            Some(_) => Err(AppError::invalid("first_installment", "needs installments")),
+            None => Ok(()),
+        };
     };
     if input.repeat_months.is_some() {
         return Err(AppError::invalid(
@@ -80,6 +83,15 @@ fn check_installments(input: &CreateTransaction, amount: Decimal) -> Result<(), 
     }
     if !(2..=60).contains(&count) {
         return Err(AppError::invalid("installments", "must be 2 to 60"));
+    }
+    if input
+        .first_installment
+        .is_some_and(|first| !(1..=count).contains(&first))
+    {
+        return Err(AppError::invalid(
+            "first_installment",
+            "must be 1 to installments",
+        ));
     }
     if installment_amounts(amount, count)[0] <= Decimal::ZERO {
         return Err(AppError::invalid(
@@ -420,6 +432,7 @@ mod tests {
             repeat_months: None,
             repeat_every: None,
             installments: None,
+            first_installment: None,
             card_id: None,
         }
     }
