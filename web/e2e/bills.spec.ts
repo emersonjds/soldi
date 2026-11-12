@@ -5,7 +5,7 @@ import { requireServer } from "./server";
 
 const SHOTS = process.env.E2E_SHOTS;
 
-test("Contas fixas sums the active bills against this month's income and pauses one from its row", async ({
+test("Contas fixas sums the active bills against the month's income, pauses one from its row and filters by tab", async ({
   page,
   request,
 }) => {
@@ -30,9 +30,6 @@ test("Contas fixas sums the active bills against this month's income and pauses 
 
   // The server's São Paulo calendar, not the runner's clock.
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
-  const month = new Intl.DateTimeFormat("pt-BR", { month: "long", timeZone: "UTC" }).format(
-    new Date(`${today}T12:00:00Z`),
-  );
   const categories: { id: string; kind: string; is_savings: boolean; parent_id: string | null }[] = await (
     await page.request.get("/api/categories")
   ).json();
@@ -54,35 +51,40 @@ test("Contas fixas sums the active bills against this month's income and pauses 
   }
 
   await page.goto("/ajustes/contas");
-  const total = page.getByRole("region", { name: "Total das contas fixas" });
+  await expect(page.getByRole("heading", { level: 1, name: "Contas Fixas Recorrentes" })).toBeVisible();
+  const total = page.getByRole("region", { name: "Total de Despesas Fixas" });
+  const next = page.getByRole("region", { name: "Próximo Vencimento" });
+  const list = page.getByRole("list", { name: "Contas fixas" });
   await expect(total).toContainText("R$ 46.790,10");
-  await expect(total).toContainText("3 contas ativas");
-  await expect(total).toContainText(`Comprometem 73% das entradas de ${month}`);
-  await expect(page.getByRole("region", { name: "Próximo vencimento" })).toContainText("Vence hoje");
+  await expect(total).toContainText("3 contas");
+  await expect(total).toContainText("Compromete 73% da renda líquida");
+  await expect(next).toContainText("Hoje");
 
   // Desfazer must not reach the server: a resume would move active_since (D17).
   const patches: string[] = [];
   page.on("request", (sent) => sent.method() === "PATCH" && patches.push(sent.url()));
   await page.getByRole("switch", { name: "Ativa: Aluguel Residencial" }).click();
-  await expect(page.getByRole("list", { name: "Pausadas" })).toContainText("Aluguel Residencial");
-  await expect(total).toContainText("2 contas ativas");
+  await expect(page.getByRole("tab", { name: "Pausadas (1)" })).toBeVisible();
+  await expect(list.getByRole("listitem").last()).toContainText("Aluguel Residencial");
+  await expect(total).toContainText("2 contas");
   await page.getByRole("button", { name: "Desfazer" }).click();
-  await expect(page.getByRole("list", { name: "Contas ativas" })).toContainText("Aluguel Residencial");
+  await expect(page.getByRole("tab", { name: "Pausadas (0)" })).toBeVisible();
   await page.reload();
   await expect(page.getByRole("switch", { name: "Ativa: Aluguel Residencial" })).toBeChecked();
-  await expect(total).toContainText("3 contas ativas");
-  await expect(page.getByRole("region", { name: "Próximo vencimento" })).toContainText("Aluguel Residencial");
+  await expect(total).toContainText("3 contas");
+  await expect(next).toContainText("Aluguel Residencial");
   expect(patches).toEqual([]);
 
   await page.getByRole("switch", { name: "Ativa: Academia" }).click();
   await expect(page.getByText("Conta pausada")).toBeVisible();
-  await expect(page.getByRole("list", { name: "Pausadas" })).toContainText("Academia");
+  await expect(list.getByRole("listitem").last()).toContainText("AcademiaPausada");
   await expect(total).toContainText("R$ 35.802,45");
-  await expect(total).toContainText("2 contas ativas");
-  await expect(total).toContainText(`Comprometem 56% das entradas de ${month}`);
+  await expect(total).toContainText("2 contas");
+  await expect(total).toContainText("Compromete 56% da renda líquida");
   await expect(page.getByRole("dialog")).toHaveCount(0);
 
-  await page.getByRole("button", { name: /^Condomínio/ }).click();
+  await page.getByRole("button", { name: "Mais ações de Condomínio" }).click();
+  await page.getByRole("menuitem", { name: "Editar" }).click();
   await expect(page.getByRole("dialog", { name: "Editar conta" })).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toHaveCount(0);
@@ -91,7 +93,10 @@ test("Contas fixas sums the active bills against this month's income and pauses 
   await expect(page.getByText("Conta pausada")).toHaveCount(0, { timeout: 10_000 });
   await expect.poll(() => patches.length).toBe(1);
   await page.reload();
-  await expect(page.getByRole("list", { name: "Pausadas" })).toContainText("Academia");
+  await page.getByRole("tab", { name: "Pausadas (1)" }).click();
+  await expect(list).toContainText("Academia");
+  await expect(page.getByText("Mostrando 1 de 3 contas fixas configuradas")).toBeVisible();
+  await page.getByRole("tab", { name: "Todas (3)" }).click();
 
   for (const width of [375, 1024, 1280, 1440]) {
     await page.setViewportSize({ width, height: 900 });
