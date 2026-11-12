@@ -7,6 +7,18 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.48.0
+
+> Headline: Resgatado next to Guardado
+
+### Server
+
+- `/api/reports/savings` splits each month into `deposited` and `withdrawn` (resgates) and the year into `deposited_total` and `withdrawn_total`; `saved` stays their difference.
+
+### Web
+
+- Economia do ano shows Guardado (deposits) and a Resgatado column (`- R$ x`) instead of a negative Guardado; the mobile list adds `Resgatado R$ x`, the summary adds `Guardado R$ x · Resgatado R$ y`, and the CSV gains a Resgatado column.
+
 ## 0.47.1
 
 > Headline: more icons to choose from
