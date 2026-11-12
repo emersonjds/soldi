@@ -384,6 +384,16 @@ describe("AccountSection", () => {
     expect(screen.queryByLabelText("Nome")).not.toBeInTheDocument();
   });
 
+  it("offers a retry and still signs out when the account does not load", async () => {
+    const { requests } = open({ "GET /api/auth/me": { status: 500, body: problem(500, "Falhou.") } });
+
+    await userEvent.click(await screen.findByRole("button", { name: "Tentar de novo" }));
+
+    await waitFor(() => expect(sent(requests, "GET", "/api/auth/me")).toHaveLength(2));
+    expect(screen.getByRole("button", { name: "Sair da conta (Logout)" })).toBeInTheDocument();
+    expect(screen.queryByText("NOME COMPLETO")).not.toBeInTheDocument();
+  });
+
   it("signs out and goes to sign-in", async () => {
     signedIn({ "POST /api/auth/sign-out": { status: 204 } });
     renderWithQuery(<AccountSection />);

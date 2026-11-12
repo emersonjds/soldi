@@ -10,6 +10,7 @@ import { PasswordForm } from "@/features/edit-account/password-form";
 import { ProfileForm } from "@/features/edit-account/profile-form";
 import { SignOutButton } from "@/features/sign-out/sign-out-button";
 import { SignOutEverywhereButton } from "@/features/sign-out/sign-out-everywhere-button";
+import { PageError } from "@/shared/ui/page-state";
 
 const Tile = ({ label, value, children }: { label: string; value: string; children?: ReactNode }) => (
   <div className="flex min-w-0 flex-col items-start gap-1 rounded-2xl bg-muted p-4">
@@ -39,23 +40,25 @@ const FormDialog = ({ action, children }: { action: string; children: ReactNode 
 /** Name, e-mail and password tiles, then account deletion and sign-out. */
 export const AccountSection = () => {
   const me = useMe();
-  if (!me.data) return null;
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <Tile label="NOME COMPLETO" value={me.data.name}>
-          <FormDialog action="Alterar dados">
-            <ProfileForm user={me.data} />
-          </FormDialog>
-        </Tile>
-        <Tile label="E-MAIL CADASTRADO" value={me.data.email} />
-        <Tile label="SENHA DE ACESSO" value="••••••••••••">
-          <FormDialog action="Trocar senha">
-            <PasswordForm />
-          </FormDialog>
-        </Tile>
-      </div>
+      {me.isError && <PageError message="Não foi possível carregar sua conta." onRetry={() => me.refetch()} />}
+      {me.data && (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <Tile label="NOME COMPLETO" value={me.data.name}>
+            <FormDialog action="Alterar dados">
+              <ProfileForm user={me.data} />
+            </FormDialog>
+          </Tile>
+          <Tile label="E-MAIL CADASTRADO" value={me.data.email} />
+          <Tile label="SENHA DE ACESSO" value="••••••••••••">
+            <FormDialog action="Trocar senha">
+              <PasswordForm />
+            </FormDialog>
+          </Tile>
+        </div>
+      )}
       <div className="flex flex-col-reverse gap-4 sm:flex-row sm:items-start sm:justify-between">
         <DeleteAccountButton />
         <div className="flex flex-col items-stretch sm:items-end">
