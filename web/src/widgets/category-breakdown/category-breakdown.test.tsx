@@ -145,6 +145,7 @@ describe("CategoryBreakdown", () => {
     expect(pick("Mercado")).not.toHaveTextContent("vs");
     expect(within(legend()).queryByRole("button", { name: /^Salário/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("radio", { name: "Entradas" })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: "Para Onde Vai" })).toBeInTheDocument();
     expect(screen.getByText("Total Saídas:")).toHaveTextContent("Total Saídas: R$ 13.584,31");
   });
 
