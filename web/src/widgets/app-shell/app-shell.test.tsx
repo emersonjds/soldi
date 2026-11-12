@@ -230,16 +230,13 @@ describe("AppShell", () => {
     expect(within(sidebar).getByRole("link", { name: "Ajustes" })).not.toHaveAttribute("aria-current");
   });
 
-  it("shows the month switcher on Para onde vai in the top bar and in a card opening the main content on mobile", () => {
+  it("shows the month switcher on Para onde vai in the top bar only, leaving mobile to the page hero", () => {
     setPathname("/para-onde-vai");
     renderWithQuery(<AppShell>conteúdo</AppShell>);
 
     const bar = screen.getByRole("banner");
     expect(within(bar).getByRole("group", { name: "Mês" }).parentElement).toHaveClass("hidden", "lg:block");
-    const card = within(screen.getByRole("main")).getByRole("group", { name: "Mês" }).parentElement;
-    expect(card).toHaveClass("lg:hidden");
-    expect(screen.getByRole("main").firstElementChild).toBe(card);
-    expect(screen.getAllByRole("group", { name: "Mês" })).toHaveLength(2);
+    expect(within(screen.getByRole("main")).queryByRole("group", { name: "Mês" })).not.toBeInTheDocument();
   });
 
   it("leaves the mobile switcher of Mês to its hero, keeping the top bar's", () => {
