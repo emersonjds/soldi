@@ -103,3 +103,60 @@ pub struct SavingsYear {
     pub rate_pct: Option<Decimal>,
     pub months: Vec<SavingsMonth>,
 }
+
+/// A month of the year and its `Gastos` (D31).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+pub struct YearMonth {
+    #[schema(example = "2026-03")]
+    pub month: String,
+    #[serde(serialize_with = "crate::money")]
+    pub spent: Decimal,
+}
+
+/// A top-level category's total in the year, its subcategories rolled in; `pct` is its share of
+/// `spent` (outflow) or `totals.income` (income) with one decimal.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+pub struct YearGroup {
+    pub category_id: Uuid,
+    pub name: String,
+    pub icon: String,
+    pub color: String,
+    #[serde(serialize_with = "crate::money")]
+    pub amount: Decimal,
+    #[schema(value_type = String, example = "26.0")]
+    pub pct: Decimal,
+}
+
+/// A credit card's spends in the year by purchase date (D28, D31).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+pub struct YearCard {
+    pub card_id: Uuid,
+    pub name: String,
+    #[serde(serialize_with = "crate::money")]
+    pub amount: Decimal,
+}
+
+/// The year's Entradas and Gastos by purchase date (D31), over whole months from the opening month
+/// or January to today's month or December. `totals` has the month view's shape, Economia deposits
+/// inside `bills`; `spent` (Gastos) leaves deposits and fatura payments out. `first_month` and
+/// `last_month` are null when nothing is counted.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+pub struct YearReport {
+    #[schema(example = 2026)]
+    pub year: i32,
+    #[schema(example = "2026-01")]
+    pub first_month: Option<String>,
+    #[schema(example = "2026-11")]
+    pub last_month: Option<String>,
+    pub totals: crate::months::Totals,
+    #[serde(serialize_with = "crate::money")]
+    pub spent: Decimal,
+    pub top_months: Vec<YearMonth>,
+    pub spending: Vec<YearGroup>,
+    pub income: Vec<YearGroup>,
+    #[serde(serialize_with = "crate::money")]
+    pub card_spent: Decimal,
+    #[schema(value_type = Option<String>, example = "15.0")]
+    pub card_pct: Option<Decimal>,
+    pub cards: Vec<YearCard>,
+}

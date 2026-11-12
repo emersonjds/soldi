@@ -1,15 +1,17 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use chrono::{Datelike, Months, NaiveDate};
 use rust_decimal::{Decimal, RoundingStrategy};
 use soldi_types::categories::CategoryKind;
+use soldi_types::months::Totals;
 use soldi_types::reports::{
-    CategoryGroup, CategoryReport, CategoryShare, SavingsMonth, SavingsYear,
+    CategoryGroup, CategoryReport, CategoryShare, SavingsMonth, SavingsYear, YearCard, YearGroup,
+    YearMonth, YearReport,
 };
 use uuid::Uuid;
 
 use crate::error::AppError;
-use crate::months::domain::first_of;
+use crate::months::domain::{first_of, month_end};
 
 /// A category's total in one month; `month` is its first day. `group_*` describe its top-level
 /// category: its parent, or itself.
@@ -53,6 +55,29 @@ pub struct MonthSaving {
     pub withdrawn: Decimal,
 }
 
+/// One month and card of the year by purchase date (D31); `card_id`/`card_name` only on a card's spends.
+pub struct YearFlow {
+    pub month: NaiveDate,
+    pub card_id: Option<Uuid>,
+    pub card_name: Option<String>,
+    pub income: Decimal,
+    pub withdrawn: Decimal,
+    pub deposited: Decimal,
+    /// Saídas without deposits and fatura payments.
+    pub bills: Decimal,
+    pub daily: Decimal,
+}
+
+/// A top-level category's total in the year; `income` tells an income group from an outflow one.
+pub struct YearGroupSum {
+    pub category_id: Uuid,
+    pub name: String,
+    pub icon: String,
+    pub color: String,
+    pub income: bool,
+    pub amount: Decimal,
+}
+
 /// A year from 2000 to 2100 (SOL-30's bound).
 pub fn parse_year(text: &str) -> Result<i32, AppError> {
     Some(text)
@@ -72,6 +97,17 @@ pub fn year_range(
     let from = NaiveDate::from_ymd_opt(year, 1, 1)?.max(opening);
     let to = NaiveDate::from_ymd_opt(year, 12, 31)?;
     (from <= to && year <= today.year()).then_some((from, to))
+}
+
+/// `year_range` cut at the end of today's month (D31).
+pub fn counted_range(
+    year: i32,
+    opening: NaiveDate,
+    today: NaiveDate,
+) -> Option<(NaiveDate, NaiveDate)> {
+    let (from, to) = year_range(year, opening, today)?;
+    let to = to.min(month_end(today));
+    (from <= to).then_some((from, to))
 }
 
 /// Every month of `range`, newest first, the ones without entries at zero. Months after today's
@@ -119,6 +155,93 @@ pub fn savings_year(
         saved_total,
         rate_pct: percent(saved_total, income_total),
         months,
+    }
+}
+
+/// The year's totals in the month view's shape, its Gastos (D31), the top three months, the top
+/// five outflow and income groups and the card spends.
+pub fn year_report(
+    year: i32,
+    range: Option<(NaiveDate, NaiveDate)>,
+    flows: Vec<YearFlow>,
+    groups: Vec<YearGroupSum>,
+) -> YearReport {
+    let zero = Decimal::ZERO;
+    let (mut income, mut withdrawn, mut deposited, mut bills, mut daily) =
+        (zero, zero, zero, zero, zero);
+    let mut by_month: BTreeMap<NaiveDate, Decimal> = BTreeMap::new();
+    let mut by_card: HashMap<Uuid, YearCard> = HashMap::new();
+    for flow in flows {
+        income += flow.income;
+        withdrawn += flow.withdrawn;
+        deposited += flow.deposited;
+        bills += flow.bills;
+        daily += flow.daily;
+        *by_month.entry(flow.month).or_default() += flow.bills + flow.daily;
+        if let Some(card_id) = flow.card_id {
+            by_card
+                .entry(card_id)
+                .or_insert_with(|| YearCard {
+                    card_id,
+                    name: flow.card_name.unwrap_or_default(),
+                    amount: zero,
+                })
+                .amount += flow.daily;
+        }
+    }
+    let spent = bills + daily;
+    let mut top_months: Vec<YearMonth> = by_month
+        .into_iter()
+        .filter(|(_, spent)| *spent > zero)
+        .map(|(month, spent)| YearMonth {
+            month: month.format("%Y-%m").to_string(),
+            spent,
+        })
+        .collect();
+    top_months.sort_by_key(|month| std::cmp::Reverse(month.spent));
+    top_months.truncate(3);
+    let mut cards: Vec<YearCard> = by_card.into_values().collect();
+    cards.sort_by(|a, b| b.amount.cmp(&a.amount).then_with(|| a.name.cmp(&b.name)));
+    let card_spent: Decimal = cards.iter().map(|card| card.amount).sum();
+    let (income_groups, spending_groups): (Vec<_>, Vec<_>) =
+        groups.into_iter().partition(|group| group.income);
+    let top = |mut groups: Vec<YearGroupSum>, base: Decimal| -> Vec<YearGroup> {
+        groups.sort_by(|a, b| b.amount.cmp(&a.amount).then_with(|| a.name.cmp(&b.name)));
+        groups
+            .into_iter()
+            .take(5)
+            .map(|group| YearGroup {
+                category_id: group.category_id,
+                name: group.name,
+                icon: group.icon,
+                color: group.color,
+                pct: percent(group.amount, base).unwrap_or_default(),
+                amount: group.amount,
+            })
+            .collect()
+    };
+    let outflow = bills + deposited + daily;
+    let month = |date: NaiveDate| date.format("%Y-%m").to_string();
+    YearReport {
+        year,
+        first_month: range.map(|(from, _)| month(from)),
+        last_month: range.map(|(_, to)| month(to)),
+        totals: Totals {
+            income,
+            bills: bills + deposited,
+            daily,
+            outflow,
+            performance: income - outflow,
+            saved: deposited - withdrawn,
+            withdrawn,
+        },
+        spent,
+        top_months,
+        spending: top(spending_groups, spent),
+        income: top(income_groups, income),
+        card_spent,
+        card_pct: percent(card_spent, spent),
+        cards,
     }
 }
 
@@ -680,5 +803,238 @@ mod tests {
         assert_eq!(year.income_total, Decimal::ZERO);
         assert_eq!(year.saved_total, Decimal::ZERO);
         assert_eq!(year.rate_pct, None);
+    }
+
+    fn flow(month: &str, card: Option<(u128, &str)>, amounts: [&str; 5]) -> YearFlow {
+        let [income, withdrawn, deposited, bills, daily] = amounts.map(money);
+        YearFlow {
+            month: date(&format!("{month}-01")),
+            card_id: card.map(|(id, _)| Uuid::from_u128(id)),
+            card_name: card.map(|(_, name)| name.into()),
+            income,
+            withdrawn,
+            deposited,
+            bills,
+            daily,
+        }
+    }
+
+    fn group(id: u128, name: &str, income: bool, amount: &str) -> YearGroupSum {
+        YearGroupSum {
+            category_id: Uuid::from_u128(id),
+            name: name.into(),
+            icon: "tag".into(),
+            color: "cat-1".into(),
+            income,
+            amount: money(amount),
+        }
+    }
+
+    fn months(report: &YearReport) -> Vec<(&str, String)> {
+        report
+            .top_months
+            .iter()
+            .map(|month| (month.month.as_str(), month.spent.to_string()))
+            .collect()
+    }
+
+    fn groups(groups: &[YearGroup]) -> Vec<(&str, String, String)> {
+        groups
+            .iter()
+            .map(|group| {
+                (
+                    group.name.as_str(),
+                    group.amount.to_string(),
+                    group.pct.to_string(),
+                )
+            })
+            .collect()
+    }
+
+    #[test]
+    fn the_counted_year_runs_in_whole_months_up_to_todays_month() {
+        let today = date("2026-11-11");
+        assert_eq!(
+            counted_range(2025, date("2024-06-10"), today),
+            Some((date("2025-01-01"), date("2025-12-31")))
+        );
+        assert_eq!(
+            counted_range(2026, date("2026-06-15"), today),
+            Some((date("2026-06-15"), date("2026-11-30")))
+        );
+        assert_eq!(
+            counted_range(2024, date("2024-02-01"), date("2024-02-10")),
+            Some((date("2024-02-01"), date("2024-02-29")))
+        );
+        assert_eq!(counted_range(2023, date("2024-06-10"), today), None);
+        assert_eq!(counted_range(2027, date("2024-06-10"), today), None);
+        assert_eq!(counted_range(2026, date("2026-12-05"), today), None);
+    }
+
+    #[test]
+    fn card_rows_fold_into_their_month_and_ties_go_to_the_older_month() {
+        let porto = Some((1, "Porto"));
+        let report = year_report(
+            2025,
+            Some((date("2025-01-01"), date("2025-12-31"))),
+            vec![
+                flow("2025-01", None, ["1000", "0", "0", "400", "50"]),
+                flow("2025-01", porto, ["0", "0", "0", "0", "30"]),
+                flow("2025-03", None, ["0", "0", "0", "200", "0"]),
+                flow("2025-03", porto, ["0", "0", "0", "0", "280"]),
+                flow("2025-05", None, ["0", "0", "0", "100", "0"]),
+                flow("2025-07", None, ["0", "0", "0", "480", "0"]),
+                flow("2025-09", None, ["0", "0", "900", "0", "0"]),
+            ],
+            Vec::new(),
+        );
+
+        assert_eq!(
+            months(&report),
+            [
+                ("2025-01", "480".into()),
+                ("2025-03", "480".into()),
+                ("2025-07", "480".into()),
+            ]
+        );
+        assert_eq!(report.first_month.as_deref(), Some("2025-01"));
+        assert_eq!(report.last_month.as_deref(), Some("2025-12"));
+    }
+
+    #[test]
+    fn spending_and_income_keep_five_groups_with_shares_of_the_whole() {
+        let report = year_report(
+            2025,
+            Some((date("2025-01-01"), date("2025-12-31"))),
+            vec![flow("2025-01", None, ["800", "0", "0", "400", "300"])],
+            vec![
+                group(1, "Casa", false, "100"),
+                group(2, "Lazer", false, "100"),
+                group(3, "Alimentação", false, "250"),
+                group(4, "Saúde", false, "50"),
+                group(5, "Veículo", false, "150"),
+                group(6, "Gasto", false, "30"),
+                group(7, "Pets", false, "20"),
+                group(8, "Salário", true, "797"),
+                group(9, "Extra", true, "3"),
+            ],
+        );
+
+        assert_eq!(
+            groups(&report.spending),
+            [
+                ("Alimentação", "250".into(), "35.7".into()),
+                ("Veículo", "150".into(), "21.4".into()),
+                ("Casa", "100".into(), "14.3".into()),
+                ("Lazer", "100".into(), "14.3".into()),
+                ("Saúde", "50".into(), "7.1".into()),
+            ]
+        );
+        assert_eq!(
+            groups(&report.income),
+            [
+                ("Salário", "797".into(), "99.6".into()),
+                ("Extra", "3".into(), "0.4".into()),
+            ]
+        );
+    }
+
+    #[test]
+    fn group_shares_round_half_to_even() {
+        let report = year_report(
+            2025,
+            Some((date("2025-01-01"), date("2025-12-31"))),
+            vec![flow("2025-01", None, ["0", "0", "0", "400", "0"])],
+            vec![
+                group(1, "Casa", false, "397"),
+                group(2, "Lazer", false, "3"),
+            ],
+        );
+
+        assert_eq!(
+            groups(&report.spending),
+            [
+                ("Casa", "397".into(), "99.2".into()),
+                ("Lazer", "3".into(), "0.8".into()),
+            ]
+        );
+    }
+
+    #[test]
+    fn deposits_are_saving_not_spending_and_the_totals_read_like_a_month() {
+        let porto = Some((1, "Porto"));
+        let itau = Some((2, "Itaú"));
+        let report = year_report(
+            2025,
+            Some((date("2025-03-15"), date("2025-12-31"))),
+            vec![
+                flow("2025-03", None, ["2300", "50", "200", "800", "50"]),
+                flow("2025-03", porto, ["0", "0", "0", "0", "120"]),
+                flow("2025-04", itau, ["0", "0", "0", "0", "120"]),
+                flow("2025-04", porto, ["0", "0", "0", "0", "30"]),
+                flow("2025-06", None, ["0", "0", "500", "0", "0"]),
+            ],
+            Vec::new(),
+        );
+
+        let totals = &report.totals;
+        assert_eq!(totals.income, money("2300"));
+        assert_eq!(totals.bills, money("1500"));
+        assert_eq!(totals.daily, money("320"));
+        assert_eq!(totals.outflow, money("1820"));
+        assert_eq!(totals.performance, money("480"));
+        assert_eq!(totals.saved, money("650"));
+        assert_eq!(totals.withdrawn, money("50"));
+        assert_eq!(report.spent, money("1120"));
+        assert_eq!(
+            totals.outflow - totals.saved - totals.withdrawn,
+            report.spent
+        );
+        assert_eq!(
+            months(&report),
+            [("2025-03", "970".into()), ("2025-04", "150".into())]
+        );
+        assert_eq!(report.card_spent, money("270"));
+        assert_eq!(
+            report.card_pct.map(|pct| pct.to_string()),
+            Some("24.1".into())
+        );
+        let cards: Vec<(&str, String)> = report
+            .cards
+            .iter()
+            .map(|card| (card.name.as_str(), card.amount.to_string()))
+            .collect();
+        assert_eq!(cards, [("Porto", "150".into()), ("Itaú", "120".into())]);
+        assert_eq!(report.first_month.as_deref(), Some("2025-03"));
+    }
+
+    #[test]
+    fn a_year_with_only_deposits_has_no_card_share_and_no_top_month() {
+        let report = year_report(
+            2025,
+            Some((date("2025-01-01"), date("2025-12-31"))),
+            vec![flow("2025-02", None, ["0", "0", "300", "0", "0"])],
+            Vec::new(),
+        );
+
+        assert_eq!(report.spent, Decimal::ZERO);
+        assert!(report.top_months.is_empty());
+        assert_eq!(report.card_pct, None);
+    }
+
+    #[test]
+    fn a_year_without_a_range_is_empty() {
+        let report = year_report(2023, None, Vec::new(), Vec::new());
+
+        assert_eq!(report.year, 2023);
+        assert_eq!(report.first_month, None);
+        assert_eq!(report.last_month, None);
+        assert_eq!(report.totals.outflow, Decimal::ZERO);
+        assert_eq!(report.spent, Decimal::ZERO);
+        assert!(report.top_months.is_empty());
+        assert!(report.spending.is_empty());
+        assert!(report.income.is_empty());
+        assert!(report.cards.is_empty());
+        assert_eq!(report.card_pct, None);
     }
 }
