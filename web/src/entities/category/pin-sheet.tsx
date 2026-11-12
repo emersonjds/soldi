@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { ChevronDown, ChevronUp } from "lucide-react";
@@ -38,32 +38,43 @@ const Lists = ({
 }) => {
   const all = useQuery(categoriesQuery).data ?? tops;
   const save = useSetPins();
-  const [pinned, setPinned] = useState(() => global.flatMap((id) => tops.filter((top) => top.id === id)));
+  const [pinned, setPinned] = useState(() => global.filter((id) => tops.some((top) => top.id === id)));
   const fixedId = useId();
   const othersId = useId();
-  const isPinned = (category: Category) => pinned.includes(category);
+  const controlId = useId();
+  const focusTo = useRef<string | null>(null);
+  useEffect(() => {
+    if (focusTo.current) document.getElementById(focusTo.current)?.focus();
+    focusTo.current = null;
+  });
+  const idOf = (action: "up" | "down" | "pin" | "unpin", category: Category) => `${controlId}${action}-${category.id}`;
+  const pinnedTops = pinned.flatMap((id) => tops.filter((top) => top.id === id));
+  const ids = pinnedTops.map((top) => top.id);
+  const isPinned = (category: Category) => ids.includes(category.id);
   const others = tops.filter((top) => !isPinned(top)).sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
-  const full = pinned.length >= MAX_PINNED;
-  const move = (from: number, to: number) => {
-    const next = [...pinned];
+  const merged = mergePins(global, new Set(tops.map((top) => top.id)), ids);
+  // A mixed group takes a slot in the row of each kind it holds.
+  const countIn = (each: Kind) =>
+    all.filter((category) => merged.includes(category.id) && kindsOf(category, all).includes(each)).length;
+  const blocked = (category: Category) => kindsOf(category, all).some((each) => countIn(each) >= MAX_PINNED);
+  const full = others.some(blocked);
+  const move = (from: number, to: number, action: "up" | "down") => {
+    const next = [...ids];
     [next[from], next[to]] = [next[to], next[from]];
     setPinned(next);
+    let target = action;
+    if (to === 0) target = "down";
+    if (to === ids.length - 1) target = "up";
+    focusTo.current = idOf(target, pinnedTops[from]);
   };
   const submit = () =>
-    save.mutate(
-      mergePins(
-        global,
-        new Set(tops.map((top) => top.id)),
-        pinned.map((top) => top.id),
-      ),
-      {
-        onSuccess: () => {
-          onClose();
-          toast.success("Categorias personalizadas");
-        },
-        onError: () => toast.error("Não foi possível salvar a ordem."),
+    save.mutate(merged, {
+      onSuccess: () => {
+        onClose();
+        toast.success("Categorias personalizadas");
       },
-    );
+      onError: () => toast.error("Não foi possível salvar a ordem."),
+    });
   const label = (category: Category) => (
     <span className="flex min-w-0 flex-1 items-center gap-3">
       <CategoryIcon icon={category.icon} color={category.color} className="size-8 shrink-0 [&_svg]:size-4" />
@@ -89,38 +100,44 @@ const Lists = ({
         <h3 id={fixedId} className="font-semibold text-sm">
           Fixadas
         </h3>
-        {pinned.length === 0 ? (
+        {pinnedTops.length === 0 ? (
           <p className="text-muted-foreground text-sm">Nenhuma fixada. A lista segue o uso deste mês.</p>
         ) : (
           <ul aria-labelledby={fixedId} className="flex flex-col gap-1">
-            {pinned.map((category, index) => (
+            {pinnedTops.map((category, index) => (
               <li key={category.id} className="flex items-center gap-1">
                 {label(category)}
                 <Button
+                  id={idOf("up", category)}
                   variant="ghost"
                   size="icon"
                   className="size-11"
                   aria-label={`Subir ${category.name}`}
                   disabled={index === 0}
-                  onClick={() => move(index, index - 1)}
+                  onClick={() => move(index, index - 1, "up")}
                 >
                   <ChevronUp />
                 </Button>
                 <Button
+                  id={idOf("down", category)}
                   variant="ghost"
                   size="icon"
                   className="size-11"
                   aria-label={`Descer ${category.name}`}
-                  disabled={index === pinned.length - 1}
-                  onClick={() => move(index, index + 1)}
+                  disabled={index === ids.length - 1}
+                  onClick={() => move(index, index + 1, "down")}
                 >
                   <ChevronDown />
                 </Button>
                 <Button
+                  id={idOf("unpin", category)}
                   variant="ghost"
                   className={textButton}
                   aria-label={`Desafixar ${category.name}`}
-                  onClick={() => setPinned(pinned.filter((each) => each !== category))}
+                  onClick={() => {
+                    setPinned(ids.filter((id) => id !== category.id));
+                    focusTo.current = idOf("pin", category);
+                  }}
                 >
                   Desafixar
                 </Button>
@@ -139,11 +156,15 @@ const Lists = ({
             <li key={category.id} className="flex items-center gap-1">
               {label(category)}
               <Button
+                id={idOf("pin", category)}
                 variant="ghost"
                 className={textButton}
                 aria-label={`Fixar ${category.name}`}
-                disabled={full}
-                onClick={() => setPinned([...pinned, category])}
+                disabled={blocked(category)}
+                onClick={() => {
+                  setPinned([...ids, category.id]);
+                  focusTo.current = idOf("unpin", category);
+                }}
               >
                 Fixar
               </Button>

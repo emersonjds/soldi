@@ -1,5 +1,6 @@
 import { useState } from "react";
 
+import { onlineManager } from "@tanstack/react-query";
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Toaster } from "sonner";
@@ -183,6 +184,29 @@ describe("CategoryChips", () => {
     await screen.findByRole("radiogroup", { name: "Categoria" });
     expect(chips()).toEqual(["Comida fora", "Carro", "Pets", "Mercado", "Lazer"]);
     expect(screen.getByRole("button", { name: "Personalizar" })).toBeEnabled();
+  });
+
+  it("shows the month's ranking offline, while the pins wait for the network", async () => {
+    stubApi({});
+    onlineManager.setOnline(false);
+    try {
+      const { client } = renderWithQuery(<Picker entries={ENTRIES} />);
+      client.setQueryData(["categories"], SIX_DAILY);
+
+      await screen.findByRole("radiogroup", { name: "Categoria" });
+      expect(chips()).toEqual(["Comida fora", "Carro", "Pets", "Mercado", "Lazer"]);
+    } finally {
+      onlineManager.setOnline(true);
+    }
+  });
+
+  it("asks for the pins together with the categories", async () => {
+    const requests = stubApi({ "GET /api/categories": { status: 200, body: CATEGORIES } });
+    renderHookWithQuery(() => useCategoryChips("daily"));
+
+    await waitFor(() =>
+      expect(requests.map((request) => new URL(request.url).pathname)).toContain("/api/categories/pins"),
+    );
   });
 
   it("shows fewer chips when the kind has fewer categories", async () => {

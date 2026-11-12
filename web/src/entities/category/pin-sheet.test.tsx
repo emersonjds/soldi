@@ -5,7 +5,17 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import type { Schemas } from "@/shared/api/client";
 import { renderWithQuery } from "@/test/render";
-import { ALUGUEL, CATEGORIES, COMIDA, MERCADO, problem, stubApi, VEICULO, WITH_MIXED_GROUP } from "@/test/stub-api";
+import {
+  ALUGUEL,
+  CATEGORIES,
+  COMIDA,
+  LUZ,
+  MERCADO,
+  problem,
+  stubApi,
+  VEICULO,
+  WITH_MIXED_GROUP,
+} from "@/test/stub-api";
 
 import { CategoryChips } from "./category-chips";
 
@@ -28,7 +38,7 @@ const setup = (pins: string[] | null, categories = CATEGORIES, put = { status: 2
       : { status: 500, body: problem(500, "Erro") },
     "PUT /api/categories/pins": put,
   });
-  renderWithQuery(
+  const { client } = renderWithQuery(
     <>
       <CategoryChips kind="daily" chosen={undefined} onChoose={() => undefined} entries={[]} />
       <Toaster />
@@ -38,7 +48,7 @@ const setup = (pins: string[] | null, categories = CATEGORIES, put = { status: 2
     await waitFor(() => expect(requests.some((request) => request.method === "PUT")).toBe(true));
     return requests.find((request) => request.method === "PUT")?.json();
   };
-  return { sent };
+  return { sent, requests, client };
 };
 
 const open = async () => {
@@ -62,11 +72,69 @@ describe("Personalizar", () => {
     let sheet = await open();
     expect(within(sheet).getByText("Nenhuma fixada. A lista segue o uso deste mês.")).toBeInTheDocument();
     expect(names(sheet, "Fixar")).toEqual(["Comida fora", "Mercado"]);
+    await userEvent.click(within(sheet).getByRole("button", { name: "Fixar Mercado" }));
+    expect(names(sheet, "Desafixar")).toEqual(["Mercado"]);
     await userEvent.click(within(sheet).getByRole("button", { name: "Cancelar" }));
 
     await userEvent.click(screen.getByRole("button", { name: "Personalizar" }));
     sheet = await screen.findByRole("dialog", { name: "Personalizar categorias" });
     expect(names(sheet, "Desafixar")).toEqual([]);
+  });
+
+  it("drops a pinned and reordered draft on Cancelar, sending nothing", async () => {
+    const { requests } = setup([MERCADO.id, MORE[0].id], NINE);
+    let sheet = await open();
+    await userEvent.click(within(sheet).getByRole("button", { name: "Fixar Lazer" }));
+    await userEvent.click(within(sheet).getByRole("button", { name: "Descer Mercado" }));
+    expect(names(sheet, "Desafixar")).toEqual(["Pets", "Mercado", "Lazer"]);
+    await userEvent.click(within(sheet).getByRole("button", { name: "Cancelar" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+
+    await userEvent.click(screen.getByRole("button", { name: "Personalizar" }));
+    sheet = await screen.findByRole("dialog", { name: "Personalizar categorias" });
+    expect(names(sheet, "Desafixar")).toEqual(["Mercado", "Pets"]);
+    expect(requests.some((request) => request.method === "PUT")).toBe(false);
+  });
+
+  it("keeps the draft when the categories refetch as new objects, a rename included", async () => {
+    const { client } = setup([MERCADO.id]);
+    const sheet = await open();
+    client.setQueryData(
+      ["categories"],
+      CATEGORIES.map((category) => (category.id === MERCADO.id ? { ...category, name: "Feira" } : category)),
+    );
+
+    await waitFor(() => expect(names(sheet, "Desafixar")).toEqual(["Feira"]));
+    expect(names(sheet, "Fixar")).toEqual(["Comida fora"]);
+  });
+
+  it("disables Fixar on a mixed group whose other row already holds 8 pins", async () => {
+    const bills = ["Água", "Gás", "Internet", "Escola", "Seguro", "Plano"].map((name, index) => ({
+      ...ALUGUEL,
+      id: `b2000000-0000-4000-8000-0000000000${10 + index}`,
+      name,
+    }));
+    setup([ALUGUEL.id, LUZ.id, ...bills.map((bill) => bill.id)], [...WITH_MIXED_GROUP, ...bills]);
+    const sheet = await open();
+
+    expect(within(sheet).getByRole("button", { name: "Fixar Veículo" })).toBeDisabled();
+    expect(within(sheet).getByRole("button", { name: "Fixar Mercado" })).toBeEnabled();
+    expect(within(sheet).getByText("Limite de 8 fixadas.")).toBeInTheDocument();
+  });
+
+  it("keeps focus on the moved or toggled category's next control", async () => {
+    setup([MERCADO.id, MORE[0].id, MORE[1].id], NINE);
+    const sheet = await open();
+    const button = (name: string) => within(sheet).getByRole("button", { name });
+
+    await userEvent.click(button("Subir Pets"));
+    expect(button("Descer Pets")).toHaveFocus();
+    await userEvent.click(button("Descer Mercado"));
+    expect(button("Subir Mercado")).toHaveFocus();
+    await userEvent.click(button("Desafixar Carro"));
+    expect(button("Fixar Carro")).toHaveFocus();
+    await userEvent.click(button("Fixar Lazer"));
+    expect(button("Desafixar Lazer")).toHaveFocus();
   });
 
   it("moves, unpins and pins, then saves the merged order, keeping another kind's pin in its slot", async () => {

@@ -38,6 +38,7 @@ const pickable = (list: Category[]) => list.filter((category) => !(category.kind
 
 export const useCategoryChips = (kind: Kind) => {
   const categories = useCategories(kind);
+  usePins();
   return { ...categories, data: categories.data && grouped(pickable(categories.data), FIRST[kind]) };
 };
 
@@ -103,8 +104,9 @@ export const CategoryChips = ({
 
   if (categories.isError)
     return <PageError message="Não foi possível carregar as categorias." onRetry={() => categories.refetch()} />;
-  // A first failed attempt falls back to the shipped ranking while the retries run.
-  if (!categories.data || !entries || !(pins.isFetched || pins.failureCount > 0))
+  // A first failed attempt, or no network, falls back to the shipped ranking while the pins wait.
+  const pinsWait = !(pins.isFetched || pins.failureCount > 0 || pins.fetchStatus === "paused");
+  if (!categories.data || !entries || pinsWait)
     return (
       <div className="flex gap-2">
         {["a", "b", "c", "d", "e", "f", "g", "h"].map((slot) => (
