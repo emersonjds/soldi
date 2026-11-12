@@ -479,10 +479,10 @@ type HeaderRowProps = { report: Report; groups: Group[]; picked?: string; onPick
 /** Desktop only: the page's pill, the month's outflow, the group select and the export. */
 const HeaderRow = ({ report, groups, picked, onPick }: HeaderRowProps) => (
   <div className="flex flex-wrap items-center gap-3 max-lg:hidden">
-    <span className="flex min-h-11 items-center gap-2 rounded-full bg-card px-4 font-semibold shadow-sm">
+    <h1 className="flex min-h-11 items-center gap-2 rounded-full bg-card px-4 font-semibold text-base shadow-sm">
       <PieIcon aria-hidden className="size-4 text-primary" />
       Para Onde Vai
-    </span>
+    </h1>
     <span aria-hidden className="h-6 w-px bg-border" />
     <p className="text-muted-foreground text-sm">Visão analítica de despesas e alocação de capital</p>
     <span className="ml-auto flex min-h-11 items-center gap-2 rounded-full bg-expense-soft px-4 font-semibold text-sm text-tier-red-foreground">
