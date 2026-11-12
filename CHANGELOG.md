@@ -7,6 +7,19 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.57.0
+
+> Headline: a verified e-mail
+
+### Server
+
+- `POST /api/me/email-verification` mails a single-use link (24 h, only its hash stored, a new request voids the old one; 3 per hour per user and 10 per hour per IP); `POST /api/auth/email-verification/confirm` verifies the account. Confirming a password reset also verifies it. `User.email_verified` is new. Migration 0025 adds `users.email_verified_at` and `email_verifications`.
+- A hosted run (PORT or RAILWAY_ENVIRONMENT set) refuses to boot without `SOLDI_PUBLIC_URL`, and the console mailer only runs for an http localhost URL, so links never reach production logs.
+
+### Web
+
+- Minha Conta shows `Verificado`, or `Não verificado` with `Verificar e-mail`; `/verificar-email` confirms the link once and clears the token from the address bar.
+
 ## 0.56.0
 
 > Headline: pin categories and keep simulations
