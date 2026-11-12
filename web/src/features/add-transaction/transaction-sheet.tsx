@@ -55,9 +55,6 @@ import { DateChips } from "@/shared/ui/date-chips";
 import { HeroAmount } from "@/shared/ui/hero-amount";
 import { ResponsiveSheet, ResponsiveSheetFooter } from "@/shared/ui/responsive-sheet";
 
-import { draftRows, type Plan } from "./draft-rows";
-import { Simulation } from "./simulation";
-
 type Kind = Schemas["CategoryKind"];
 
 const KINDS: { value: Kind; label: string; icon: LucideIcon }[] = [
@@ -84,7 +81,6 @@ type Draft = {
   note: string;
   repeat: boolean;
   installments: boolean;
-  simulate: boolean;
   preset: string;
   custom: string;
   scope: Scope;
@@ -134,7 +130,6 @@ const TransactionForm = ({
   const cards = useCards().data ?? [];
   const category = draft.category ?? categories.data?.[0];
   const cardId = (draft.kind === "daily" && draft.cardId) || null;
-  const card = cards.find(({ id }) => id === cardId);
   const amount = positiveAmount(draft.amount);
   const months = Number(draft.preset === "other" ? draft.custom : draft.preset);
   const series = transaction?.series;
@@ -163,13 +158,6 @@ const TransactionForm = ({
   const split = installments && amount && monthsValid ? installmentCents(cents(amount), months) : null;
   const splitValid = !split || split[0] > 0;
   const money = (value: number) => formatMoney(fromCents(value), currency);
-  let plan: Plan = "once";
-  if (draft.repeat) plan = "repeat";
-  if (installments) plan = "installments";
-  const rows =
-    amount && (plan === "once" || monthsValid)
-      ? draftRows({ kind: draft.kind, amount, date: draft.date, plan, count: months, card })
-      : null;
 
   let amountLabel = draft.kind === "income" ? "Valor da entrada" : "Valor do gasto";
   if (series) amountLabel = "Valor por parcela";
@@ -219,14 +207,12 @@ const TransactionForm = ({
     if (valid) onSave(valid, series ? draft.scope : undefined, moving);
   };
 
-  // D16: while simulating, only Lançar de verdade writes; Enter must not.
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    if (!draft.simulate) save();
+    save();
   };
 
-  const convertible =
-    onConvert && (transaction?.kind ?? draft.kind) === "bill" && !draft.repeat && !installments && !draft.simulate;
+  const convertible = onConvert && (transaction?.kind ?? draft.kind) === "bill" && !draft.repeat && !installments;
 
   // Editar converts the stored entry; its unsaved edits stay out.
   const convert = () => {
@@ -506,28 +492,6 @@ const TransactionForm = ({
         </>
       ) : (
         <>
-          {!transaction && (
-            <label
-              htmlFor="transaction-simulate-switch"
-              className="flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-xl bg-muted px-4 py-2"
-            >
-              <span className="flex flex-col">
-                <span id="transaction-simulate" className="font-medium text-base">
-                  Simular
-                </span>
-                <span id="transaction-simulate-help" className="text-muted-foreground text-xs">
-                  Veja o efeito antes de lançar.
-                </span>
-              </span>
-              <Switch
-                id="transaction-simulate-switch"
-                aria-labelledby="transaction-simulate"
-                aria-describedby="transaction-simulate-help"
-                checked={draft.simulate}
-                onCheckedChange={(simulate) => set({ simulate })}
-              />
-            </label>
-          )}
           <ToggleGroup
             type="single"
             spacing={0}
@@ -560,51 +524,38 @@ const TransactionForm = ({
         </>
       )}
 
-      {draft.simulate && <Simulation rows={rows} countInvalid={Boolean(amount) && monthsChecked && !monthsValid} />}
-
       <ResponsiveSheetFooter>
         {keypad && <AmountKeypad value={draft.amount} onValueChange={(value) => set({ amount: value })} />}
-        {draft.simulate ? (
-          <>
-            <BrandButton type="button" onClick={save}>
-              Lançar de verdade
-            </BrandButton>
-            <Button type="button" variant="ghost" className="h-12 w-full text-base" onClick={onDiscard}>
-              Descartar
-            </Button>
-          </>
-        ) : (
-          <div className={cn("flex flex-wrap items-center gap-3", series && "lg:gap-1")}>
-            {series && onDelete && (
-              <Button
-                type="button"
-                variant="ghost"
-                className="mr-auto h-12 text-base text-destructive hover:text-destructive lg:h-10 lg:gap-1.5 lg:px-2 lg:text-sm"
-                onClick={onDelete}
-              >
-                <Trash2 aria-hidden />
-                Excluir da Série...
-              </Button>
-            )}
-            {isLg && (
-              <Button
-                type="button"
-                variant="ghost"
-                className={cn("ml-auto h-12 text-base", series && "lg:h-10 lg:px-3 lg:text-sm")}
-                onClick={onDiscard}
-              >
-                Cancelar
-              </Button>
-            )}
-            <BrandButton
-              type="submit"
-              className={cn("lg:w-auto lg:px-6", series && "lg:min-h-10 lg:gap-1.5 lg:px-4 lg:text-sm")}
+        <div className={cn("flex flex-wrap items-center gap-3", series && "lg:gap-1")}>
+          {series && onDelete && (
+            <Button
+              type="button"
+              variant="ghost"
+              className="mr-auto h-12 text-base text-destructive hover:text-destructive lg:h-10 lg:gap-1.5 lg:px-2 lg:text-sm"
+              onClick={onDelete}
             >
-              {series ? <Save aria-hidden /> : <CircleCheck aria-hidden />}
-              {series ? "Salvar Alterações na Série" : "Salvar Lançamento"}
-            </BrandButton>
-          </div>
-        )}
+              <Trash2 aria-hidden />
+              Excluir da Série...
+            </Button>
+          )}
+          {isLg && (
+            <Button
+              type="button"
+              variant="ghost"
+              className={cn("ml-auto h-12 text-base", series && "lg:h-10 lg:px-3 lg:text-sm")}
+              onClick={onDiscard}
+            >
+              Cancelar
+            </Button>
+          )}
+          <BrandButton
+            type="submit"
+            className={cn("lg:w-auto lg:px-6", series && "lg:min-h-10 lg:gap-1.5 lg:px-4 lg:text-sm")}
+          >
+            {series ? <Save aria-hidden /> : <CircleCheck aria-hidden />}
+            {series ? "Salvar Alterações na Série" : "Salvar Lançamento"}
+          </BrandButton>
+        </div>
       </ResponsiveSheetFooter>
     </form>
   );
@@ -619,8 +570,6 @@ type TransactionSheetProps = {
   initialKind?: Draft["kind"];
   /** Preselected category when creating, of `initialKind`. */
   initialCategory?: Schemas["Category"];
-  /** Creating with Simular on: Posso comprar isso? */
-  initialSimulate?: boolean;
   /** `YYYY-MM-DD` when creating; today otherwise. */
   initialDate?: string;
   /** A line above the form. */
@@ -642,7 +591,6 @@ export const TransactionSheet = ({
   transaction,
   initialKind = "daily",
   initialCategory,
-  initialSimulate = false,
   initialDate = todayISO(),
   hint,
   billSheet,
@@ -706,7 +654,6 @@ export const TransactionSheet = ({
   const repeat = {
     repeat: false,
     installments: false,
-    simulate: false,
     preset: "12",
     custom: "",
     scope: "this",
@@ -731,7 +678,6 @@ export const TransactionSheet = ({
         date: initialDate,
         note: "",
         ...repeat,
-        simulate: initialSimulate,
       };
 
   return (
@@ -753,7 +699,7 @@ export const TransactionSheet = ({
     >
       {hint && <p className="rounded-xl bg-secondary px-4 py-3 font-medium text-primary text-sm">{hint}</p>}
       <TransactionForm
-        key={transaction?.id ?? `${initialKind}-${initialCategory?.id}-${initialSimulate}-${initialDate}`}
+        key={transaction?.id ?? `${initialKind}-${initialCategory?.id}-${initialDate}`}
         initial={initial}
         transaction={transaction}
         onSave={save}

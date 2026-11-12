@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import { ArrowRight, CalendarRange } from "lucide-react";
 
 import { useForecast } from "@/entities/forecast/forecast-query";
@@ -9,16 +11,12 @@ import { cn } from "@/lib/utils";
 
 type Props = { viewing: string; onOpen: (month: string) => void };
 
-type MonthsAheadProps = Props & {
-  /** `Posso comprar?`: Lançar with Simular on. */
-  onSimulate: () => void;
-  className?: string;
-};
+type MonthsAheadProps = Props & { className?: string };
 
 /**
  * `Próximos meses`: today's month and the next 11, always, each by its lowest balance and tier (D16). Nothing renders while loading or when nothing lands ahead (D25).
  */
-export const MonthsAhead = ({ viewing, onOpen, onSimulate, className }: MonthsAheadProps) => {
+export const MonthsAhead = ({ viewing, onOpen, className }: MonthsAheadProps) => {
   const forecast = useForecast();
   const failed = forecast.isError && !forecast.data;
   if (!failed && (!forecast.data || isFlat(forecast.data))) return null;
@@ -34,14 +32,13 @@ export const MonthsAhead = ({ viewing, onOpen, onSimulate, className }: MonthsAh
           </span>
           Próximos meses
         </h2>
-        <button
-          type="button"
-          onClick={onSimulate}
+        <Link
+          href="/posso-comprar"
           className="inline-flex min-h-11 items-center gap-1 font-semibold text-primary text-sm hover:underline focus-visible:outline-2 focus-visible:outline-ring"
         >
           Posso comprar?
           <ArrowRight className="size-4" aria-hidden />
-        </button>
+        </Link>
       </div>
       {forecast.data ? (
         <MonthChips months={monthsAhead(forecast.data, 12)} current={viewing} onOpen={onOpen} />
