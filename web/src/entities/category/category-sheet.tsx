@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { Check, Palette, Trash2 } from "lucide-react";
@@ -24,10 +24,12 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
 import { hasProblem, hasStatus, problemMessage, type Schemas } from "@/shared/api/client";
 import { positiveAmount } from "@/shared/lib/money";
+import { plain } from "@/shared/lib/text";
 import { AmountInput } from "@/shared/ui/amount-input";
 import { BrandButton } from "@/shared/ui/brand-button";
 import { CategoryIcon, categoryBg } from "@/shared/ui/category-icon";
 import { DateField } from "@/shared/ui/date-field";
+import { PageError, PageLoading } from "@/shared/ui/page-state";
 import { ResponsiveSheet } from "@/shared/ui/responsive-sheet";
 
 import {
@@ -112,7 +114,8 @@ const OUTFLOW_KINDS: [kind: Kind, label: string][] = [
 
 const FLOW_KINDS: [kind: Kind, label: string][] = [...OUTFLOW_KINDS, ["income", "Entrada"]];
 
-const kindLabel = (kind: Kind) => OUTFLOW_KINDS.find(([each]) => each === kind)?.[1];
+/** D27: the confirmation keeps the word Saída while `Tipo de Fluxo` reads Fixa. */
+const CONFIRM_KINDS: Record<Kind, string> = { daily: "Diário", bill: "Saída", income: "Entrada" };
 
 const kindProblemOf = (error: Error) => {
   const message = problemMessage(error);
@@ -139,9 +142,19 @@ type FormProps = {
   onArchive: (category: Category) => void;
   /** Called with the new kind once the API moved or created the category there; given, creating offers `Tipo de Fluxo`. */
   onKindChange?: (kind: Kind) => void;
+  /** Told the parent the form links to, which makes it a cofrinho under Economia. */
+  onParentChange?: (parentId: string) => void;
 };
 
-const CategoryForm = ({ kind, category, parentId: presetParent, onSaved, onArchive, onKindChange }: FormProps) => {
+const CategoryForm = ({
+  kind,
+  category,
+  parentId: presetParent,
+  onSaved,
+  onArchive,
+  onKindChange,
+  onParentChange,
+}: FormProps) => {
   const [name, setName] = useState(category?.name ?? "");
   const [ownKind, setOwnKind] = useState(category?.kind);
   const [asking, setAsking] = useState(false);
@@ -152,6 +165,7 @@ const CategoryForm = ({ kind, category, parentId: presetParent, onSaved, onArchi
   const [picked, setPicked] = useState(presetParent ?? "");
   const [flow, setFlow] = useState(kind);
   const [submitted, setSubmitted] = useState(false);
+  const [parentSearch, setParentSearch] = useState("");
   // Edited from another kind's list (D26), a category keeps its own kind.
   const formKind = ownKind ?? flow;
   const list = useQuery(categoriesQuery).data ?? [];
@@ -159,6 +173,8 @@ const CategoryForm = ({ kind, category, parentId: presetParent, onSaved, onArchi
   const offered = parents.some((each) => each.id === picked);
   const linked = sub && offered ? picked : "";
   const parentId = category ? movedTo : linked;
+  useEffect(() => onParentChange?.(parentId), [onParentChange, parentId]);
+  const shownParents = parents.filter((each) => plain(each.name).includes(plain(parentSearch.trim())));
   const system = useQuery(systemCategoriesQuery).data ?? list;
   const holders = (category ? kindsOf({ ...category, kind: formKind }, system) : [formKind]).flatMap((each) =>
     ofKind(system, each),
@@ -172,7 +188,9 @@ const CategoryForm = ({ kind, category, parentId: presetParent, onSaved, onArchi
   const free = freeColor(holders, category?.id);
   const ownColor = color && !holderOf(holders, color, category?.id) ? color : free;
   const chosenColor = parentId ? parent?.color : ownColor;
-  const full = !parentId && !free;
+  const pickingParent = sub && !category;
+  const needsColor = !parentId && !pickingParent;
+  const full = needsColor && !free;
   const hasChildren = Boolean(category) && list.some((each) => each.parent_id === category?.id);
   // Economia cannot get a parent, and a cofrinho made from Cofrinhos stays under it.
   const fixedParent = category?.is_savings || list.find((each) => each.id === presetParent)?.is_savings;
@@ -327,9 +345,9 @@ const CategoryForm = ({ kind, category, parentId: presetParent, onSaved, onArchi
           <AlertDialog open={asking} onOpenChange={setAsking}>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>{`Mudar para ${kindLabel(nextKind)}?`}</AlertDialogTitle>
+                <AlertDialogTitle>{`Mudar para ${CONFIRM_KINDS[nextKind]}?`}</AlertDialogTitle>
                 <AlertDialogDescription>
-                  {`Todos os lançamentos de ${category.name} passam a ser ${kindLabel(nextKind)}. O saldo não muda.`}
+                  {`Todos os lançamentos de ${category.name} passam a ser ${CONFIRM_KINDS[nextKind]}. O saldo não muda.`}
                 </AlertDialogDescription>
               </AlertDialogHeader>
               {move.error && (
@@ -418,8 +436,18 @@ const CategoryForm = ({ kind, category, parentId: presetParent, onSaved, onArchi
           <span id="category-parents" className="font-semibold text-sm">
             Vincular à Categoria Pai
           </span>
+          {parents.length > 8 && (
+            <Input
+              type="search"
+              aria-label="Buscar categoria"
+              placeholder="Buscar categoria..."
+              value={parentSearch}
+              onChange={(event) => setParentSearch(event.target.value)}
+              className={field}
+            />
+          )}
           <div role="radiogroup" aria-labelledby="category-parents" className="flex flex-col gap-1">
-            {parents.map((each) => (
+            {shownParents.map((each) => (
               <label
                 key={each.id}
                 className="flex min-h-11 cursor-pointer items-center gap-3 rounded-xl px-2 has-checked:bg-secondary has-focus-visible:outline-2 has-focus-visible:outline-ring"
@@ -451,7 +479,7 @@ const CategoryForm = ({ kind, category, parentId: presetParent, onSaved, onArchi
         </p>
       )}
       {full && <p className="text-muted-foreground text-sm">{allTaken(Boolean(category))}</p>}
-      {!parentId && !full && (
+      {needsColor && !full && (
         <fieldset aria-labelledby="category-color" className="flex flex-col gap-2">
           <div className="flex items-center justify-between gap-2">
             <span id="category-color" className="font-semibold text-sm">
@@ -533,9 +561,9 @@ type CategorySheetProps = Omit<FormProps, "onSaved" | "onArchive"> & {
 };
 
 /** The title and the saved toast: a category's, or a cofrinho's under Economia. */
-const useHeading = ({ category, parentId }: Pick<FormProps, "category" | "parentId">) => {
+const useHeading = (category: Category | undefined, parentId: string | null | undefined) => {
   const list = useQuery(categoriesQuery).data;
-  const cofrinho = Boolean(list?.find((each) => each.id === (category?.parent_id ?? parentId))?.is_savings);
+  const cofrinho = Boolean(list?.find((each) => each.id === parentId)?.is_savings);
   const done = category ? "salv" : "criad";
   return {
     title: cofrinho ? `${category ? "Editar" : "Novo"} cofrinho` : `${category ? "Editar" : "Nova"} Categoria`,
@@ -545,6 +573,21 @@ const useHeading = ({ category, parentId }: Pick<FormProps, "category" | "parent
 
 const formKey = ({ category, parentId }: Pick<FormProps, "category" | "parentId">) =>
   category?.id ?? `new-${parentId ?? ""}`;
+
+/** The heading follows the parent the form links to, starting from the given one. */
+const useLinked = ({ category, parentId }: Pick<FormProps, "category" | "parentId">) =>
+  useState(category?.parent_id ?? parentId);
+
+/** The form once the categories arrived; a failure offers to retry. */
+const LoadedForm = (props: FormProps) => {
+  const categories = useQuery(categoriesQuery);
+  if (categories.data) return <CategoryForm {...props} />;
+  if (categories.isError)
+    return <PageError message="Não foi possível carregar as categorias." onRetry={() => categories.refetch()} />;
+  return <PageLoading />;
+};
+
+const pill = "rounded-full bg-muted px-2.5 py-0.5 font-medium text-muted-foreground text-xs";
 
 /**
  * `Nova Categoria` or `Editar Categoria`: Categoria Pai or Subcategoria, name, kind, icon and a free palette color.
@@ -559,18 +602,21 @@ export const CategorySheet = ({
   onCloseAutoFocus,
   ...form
 }: CategorySheetProps) => {
-  const { title, saved } = useHeading(form);
+  const [linked, setLinked] = useLinked(form);
+  const { title, saved } = useHeading(form.category, linked);
   return (
     <ResponsiveSheet
       open={open}
       onOpenChange={onOpenChange}
       title={title}
+      eyebrow={<span className={cn(pill, "self-start")}>Configuração</span>}
       description="Nome, ícone e cor; subcategoria se quiser agrupar."
       onCloseAutoFocus={onCloseAutoFocus}
     >
-      <CategoryForm
+      <LoadedForm
         key={formKey(form)}
         {...form}
+        onParentChange={setLinked}
         onSaved={(category) => {
           onOpenChange(false);
           toast.success(saved);
@@ -587,7 +633,8 @@ export const CategorySheet = ({
 
 /** The same form as a side panel, from 1280 px on Categorias. */
 export const CategoryPanel = ({ onSaved, ...form }: FormProps) => {
-  const { title, saved } = useHeading(form);
+  const [linked, setLinked] = useLinked(form);
+  const { title, saved } = useHeading(form.category, linked);
   return (
     <aside aria-labelledby="category-panel-title" className="flex flex-col gap-5 rounded-2xl bg-card p-5 shadow-sm">
       <div className="flex items-center gap-2">
@@ -595,13 +642,12 @@ export const CategoryPanel = ({ onSaved, ...form }: FormProps) => {
         <h2 id="category-panel-title" className="font-bold text-lg">
           {title}
         </h2>
-        <span className="rounded-full bg-muted px-2.5 py-0.5 font-medium text-muted-foreground text-xs">
-          Configuração
-        </span>
+        <span className={pill}>Configuração</span>
       </div>
-      <CategoryForm
+      <LoadedForm
         key={formKey(form)}
         {...form}
+        onParentChange={setLinked}
         onSaved={(category) => {
           toast.success(saved);
           onSaved(category);
