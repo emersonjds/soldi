@@ -44,19 +44,19 @@ describe("Ajustes › Contas fixas", () => {
     window.innerWidth = 375;
   });
 
-  it("lists the active bills, then the paused ones, with a way back to Ajustes", async () => {
+  it("lists the bills under the breadcrumb back to Configurações", async () => {
     const requests = open();
 
-    const active = await screen.findByRole("list", { name: "Contas ativas" });
-    await waitFor(() => expect(within(active).getByText(/Dia 10 · Aluguel/)).toBeInTheDocument());
-    const [rent, power, ...rest] = within(active).getAllByRole("button");
-    expect(rent).toHaveTextContent("Aluguel ResidencialDia 10 · AluguelR$ 2.259,56");
-    expect(power).toHaveTextContent("Luz (Enel)Dia 2 · LuzR$ 284,10");
-    expect(rest).toEqual([]);
-    const paused = screen.getByRole("list", { name: "Pausadas" });
-    expect(within(paused).getByRole("button")).toHaveTextContent("Academia");
-    expect(screen.getByRole("link", { name: "Ajustes" })).toHaveAttribute("href", "/ajustes");
-    expect(screen.getByRole("heading", { level: 1, name: "Contas fixas" })).not.toHaveClass("lg:sr-only");
+    const list = await screen.findByRole("list", { name: "Contas fixas" });
+    await waitFor(() => expect(within(list).getAllByText("Aluguel")).not.toHaveLength(0));
+    const [power, rent, gym] = within(list).getAllByRole("listitem");
+    expect(power).toHaveTextContent("Luz (Enel)");
+    expect(rent).toHaveTextContent("Aluguel Residencial");
+    expect(gym).toHaveTextContent("AcademiaPausada");
+    const crumbs = screen.getByRole("navigation", { name: "breadcrumb" });
+    expect(within(crumbs).getByRole("link", { name: "Configurações" })).toHaveAttribute("href", "/ajustes");
+    expect(within(crumbs).getByText("Contas Fixas")).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("heading", { level: 1, name: "Contas Fixas Recorrentes" })).toBeInTheDocument();
     expect(new URL(requests.find((request) => request.url.includes("/api/bills"))?.url ?? "").search).toBe(
       "?include_inactive=true",
     );
@@ -76,29 +76,28 @@ describe("Ajustes › Contas fixas", () => {
   it("adds a bill from the sheet, checking every field first", async () => {
     const requests = open({ "POST /api/bills": { status: 201, body: BILL_LUZ } });
 
-    await userEvent.click(await screen.findByRole("button", { name: "Nova conta" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Nova Conta Fixa" }));
     const sheet = await screen.findByRole("dialog", { name: "Nova conta" });
     expect(within(sheet).queryByRole("switch", { name: "Ativa" })).not.toBeInTheDocument();
     expect(
-      within(sheet).getByRole("button", { name: "Salvar" }).closest('[data-slot="responsive-sheet-footer"]'),
+      within(sheet).getByRole("button", { name: "Salvar Conta Fixa" }).closest('[data-slot="responsive-sheet-footer"]'),
     ).not.toBeNull();
-    await userEvent.click(within(sheet).getByRole("button", { name: "Salvar" }));
+    await userEvent.click(within(sheet).getByRole("button", { name: "Salvar Conta Fixa" }));
     expect(within(sheet).getByText("Informe o nome.")).toBeInTheDocument();
     expect(within(sheet).getByText("Informe um valor maior que zero.")).toBeInTheDocument();
     expect(within(sheet).getByText("Escolha um dia de 1 a 31.")).toBeInTheDocument();
 
-    await userEvent.type(within(sheet).getByLabelText("Nome"), " Luz (Enel) ");
-    await userEvent.type(within(sheet).getByLabelText("Valor"), "284,10");
-    await userEvent.type(within(sheet).getByLabelText("Vence dia"), "32");
-    expect(within(sheet).getByRole("radio", { name: "Aluguel" })).toHaveAttribute("aria-checked", "true");
-    await userEvent.click(within(sheet).getByRole("button", { name: "Ver todas" }));
-    await userEvent.click(await screen.findByRole("option", { name: "Luz" }));
-    await userEvent.click(within(sheet).getByRole("button", { name: "Salvar" }));
+    await userEvent.type(within(sheet).getByLabelText("Nome da conta fixa"), " Luz (Enel) ");
+    await userEvent.type(within(sheet).getByLabelText("Valor mensal fixo estimado"), "284,10");
+    await userEvent.type(within(sheet).getByLabelText("Dia do vencimento recorrente"), "32");
+    expect(within(sheet).getByLabelText("Categoria")).toHaveValue(ALUGUEL.id);
+    await userEvent.selectOptions(within(sheet).getByLabelText("Categoria"), "Luz");
+    await userEvent.click(within(sheet).getByRole("button", { name: "Salvar Conta Fixa" }));
     expect(within(sheet).getByText("Escolha um dia de 1 a 31.")).toBeInTheDocument();
 
-    await userEvent.clear(within(sheet).getByLabelText("Vence dia"));
-    await userEvent.type(within(sheet).getByLabelText("Vence dia"), "2");
-    await userEvent.click(within(sheet).getByRole("button", { name: "Salvar" }));
+    await userEvent.clear(within(sheet).getByLabelText("Dia do vencimento recorrente"));
+    await userEvent.type(within(sheet).getByLabelText("Dia do vencimento recorrente"), "2");
+    await userEvent.click(within(sheet).getByRole("button", { name: "Salvar Conta Fixa" }));
 
     expect(await screen.findByText("Conta salva")).toBeInTheDocument();
     expect(await sent(requests, "POST")[0].json()).toEqual({
@@ -114,17 +113,17 @@ describe("Ajustes › Contas fixas", () => {
 
     await userEvent.click(await screen.findByRole("button", { name: /^Aluguel Residencial/ }));
     const sheet = await screen.findByRole("dialog", { name: "Editar conta" });
-    expect(within(sheet).getByLabelText("Valor")).toHaveValue("2.259,56");
-    expect(within(sheet).getByRole("radio", { name: "Aluguel" })).toHaveAttribute("aria-checked", "true");
+    expect(within(sheet).getByLabelText("Valor mensal fixo estimado")).toHaveValue("2.259,56");
+    expect(within(sheet).getByLabelText("Categoria")).toHaveValue(ALUGUEL.id);
     const pinned = within(sheet)
-      .getByRole("button", { name: "Salvar" })
+      .getByRole("button", { name: "Salvar Conta Fixa" })
       .closest('[data-slot="responsive-sheet-footer"]');
     expect(
       within(sheet).getByRole("button", { name: "Arquivar" }).closest('[data-slot="responsive-sheet-footer"]'),
     ).toBeNull();
     expect(pinned).not.toBeNull();
     await userEvent.click(within(sheet).getByRole("switch", { name: "Ativa" }));
-    await userEvent.click(within(sheet).getByRole("button", { name: "Salvar" }));
+    await userEvent.click(within(sheet).getByRole("button", { name: "Salvar Conta Fixa" }));
 
     await waitFor(() => expect(sent(requests, "PATCH")).toHaveLength(1));
     expect(await sent(requests, "PATCH")[0].json()).toEqual({
@@ -144,12 +143,11 @@ describe("Ajustes › Contas fixas", () => {
 
     await userEvent.click(await screen.findByRole("button", { name: /^Luz \(Enel\)/ }));
     const sheet = await screen.findByRole("dialog", { name: "Editar conta" });
-    const row = await within(sheet).findByRole("radiogroup", { name: "Categoria" });
-    expect(within(row).queryByRole("radio", { checked: true })).not.toBeInTheDocument();
+    expect(await within(sheet).findByRole("option", { name: "Categoria arquivada" })).toHaveProperty("selected", true);
     expect(
       within(sheet).getByText("Categoria arquivada. Fica a mesma se você não escolher outra."),
     ).toBeInTheDocument();
-    await userEvent.click(within(sheet).getByRole("button", { name: "Salvar" }));
+    await userEvent.click(within(sheet).getByRole("button", { name: "Salvar Conta Fixa" }));
 
     await waitFor(() => expect(sent(requests, "PATCH")).toHaveLength(1));
     expect(await sent(requests, "PATCH")[0].json()).toMatchObject({ category_id: LUZ.id });
@@ -161,7 +159,7 @@ describe("Ajustes › Contas fixas", () => {
     await userEvent.click(await screen.findByRole("button", { name: /^Academia/ }));
     const sheet = await screen.findByRole("dialog", { name: "Editar conta" });
     expect(within(sheet).getByRole("switch", { name: "Ativa" })).not.toBeChecked();
-    await userEvent.click(within(sheet).getByRole("button", { name: "Salvar" }));
+    await userEvent.click(within(sheet).getByRole("button", { name: "Salvar Conta Fixa" }));
 
     expect(await screen.findByText("Não foi possível salvar a conta.")).toBeInTheDocument();
   });
@@ -175,17 +173,17 @@ describe("Ajustes › Contas fixas", () => {
       vi.useRealTimers();
     });
 
-    const archive = async (name: RegExp) => {
+    const archive = async (name: string) => {
       const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
-      await user.click(await screen.findByRole("button", { name }));
-      await user.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Arquivar" }));
+      await user.click(await screen.findByRole("button", { name: `Mais ações de ${name}` }));
+      await user.click(await screen.findByRole("menuitem", { name: "Arquivar" }));
       return user;
     };
 
     it("hides the bill, holds the archive while Desfazer shows and sends nothing when undone", async () => {
       const requests = open({ [`DELETE /api/bills/${BILL_LUZ.id}`]: { status: 204 } });
 
-      const user = await archive(/^Luz \(Enel\)/);
+      const user = await archive("Luz (Enel)");
 
       expect(await screen.findByText("Conta arquivada")).toBeInTheDocument();
       expect(screen.queryByRole("button", { name: /^Luz \(Enel\)/ })).not.toBeInTheDocument();
@@ -198,7 +196,7 @@ describe("Ajustes › Contas fixas", () => {
     it("archives once the toast is gone", async () => {
       const requests = open({ [`DELETE /api/bills/${BILL_LUZ.id}`]: { status: 204 } });
 
-      await archive(/^Luz \(Enel\)/);
+      await archive("Luz (Enel)");
       await screen.findByText("Conta arquivada");
       expect(sent(requests, "DELETE")).toHaveLength(0);
       act(() => vi.advanceTimersByTime(6000));
@@ -209,7 +207,7 @@ describe("Ajustes › Contas fixas", () => {
     it("brings the bill back and says so when archiving fails", async () => {
       open({ [`DELETE /api/bills/${BILL_LUZ.id}`]: { status: 500, body: problem(500, "Falhou.") } });
 
-      await archive(/^Luz \(Enel\)/);
+      await archive("Luz (Enel)");
       await screen.findByText("Conta arquivada");
       act(() => vi.advanceTimersByTime(6000));
 
