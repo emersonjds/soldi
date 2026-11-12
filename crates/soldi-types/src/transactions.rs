@@ -22,6 +22,8 @@ pub struct Transaction {
     pub cofrinho_id: Option<Uuid>,
     /// The repeated run this entry belongs to, if any.
     pub series: Option<TransactionSeries>,
+    /// The card a Diário spend went on; it weighs on the balance with the card's fatura (D28).
+    pub card_id: Option<Uuid>,
 }
 
 /// Entries sharing `id` were launched together by `repeat_months`; counted at read time.
@@ -71,9 +73,12 @@ pub struct CreateTransaction {
     #[serde(default)]
     #[schema(minimum = 2, maximum = 60)]
     pub installments: Option<i16>,
+    /// One of the caller's unarchived cards; only on a `daily` entry.
+    #[serde(default)]
+    pub card_id: Option<Uuid>,
 }
 
-/// Absent fields stay as they are; `"note": null` clears the note.
+/// Absent fields stay as they are; `"note": null` clears the note, `"card_id": null` the card.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct UpdateTransaction {
@@ -94,6 +99,10 @@ pub struct UpdateTransaction {
     #[serde(default)]
     #[schema(minimum = 2, maximum = 60)]
     pub repeat_months: Option<i16>,
+    /// A new card must be one of the caller's unarchived cards; keeping an archived one is fine.
+    #[serde(default, deserialize_with = "crate::nullable_field")]
+    #[schema(value_type = Option<Uuid>, nullable)]
+    pub card_id: Option<Option<Uuid>>,
 }
 
 /// How many of the caller's entries a period holds.

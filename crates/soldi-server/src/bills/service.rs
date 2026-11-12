@@ -90,12 +90,26 @@ pub async fn update(
     let current = repo::find(&mut conn, user.id, id)
         .await?
         .ok_or(AppError::NotFound)?;
+    // D28: a conta fixa never turns into a card, so its past payments keep their meaning.
+    if current.closing_day.is_none() && patch.closing_day.is_some() {
+        return Err(AppError::invalid(
+            "closing_day",
+            "only a card has a closing day",
+        ));
+    }
+    if current.closing_day.is_some() && patch.active == Some(false) {
+        return Err(AppError::invalid(
+            "active",
+            "a card has no pause; delete it instead",
+        ));
+    }
     let next = domain::check(
         CreateBill {
             name: patch.name.unwrap_or(current.name),
-            amount: patch.amount.unwrap_or(current.amount),
+            amount: patch.amount.or(current.amount),
             due_day: patch.due_day.unwrap_or(current.due_day),
             category_id: patch.category_id.unwrap_or(current.category_id),
+            closing_day: patch.closing_day.or(current.closing_day),
         },
         "",
     )?;
@@ -120,7 +134,8 @@ pub async fn archive(pool: &PgPool, user: &CurrentUser, id: Uuid) -> Result<(), 
     }
 }
 
-/// Rules 2 to 4 and 12: one bill entry a month, inside `month` when given.
+/// Rules 2 to 4 and 12: one bill entry a month, inside `month` when given. D28: a card's
+/// fatura needs its amount and stays payable once the card is archived.
 pub async fn pay(
     pool: &PgPool,
     user: &CurrentUser,
@@ -130,19 +145,24 @@ pub async fn pay(
 ) -> Result<Transaction, AppError> {
     let month = month.map(parse_month).transpose()?;
     let mut conn = pool.acquire().await?;
-    let bill = repo::find(&mut conn, user.id, id)
+    let bill = repo::find_payable(&mut conn, user.id, id)
         .await?
         .filter(|bill| bill.active)
         .ok_or(AppError::NotFound)?;
     check_bill_kind(&mut conn, user, bill.category_id).await?;
+    let amount = input
+        .amount
+        .or(bill.amount)
+        .ok_or_else(|| AppError::invalid("amount", "required for a card"))?;
     let entry = transactions::domain::check(CreateTransaction {
         date: input.date,
-        amount: input.amount.unwrap_or(bill.amount),
+        amount,
         kind: CategoryKind::Bill,
         category_id: bill.category_id,
         note: None,
         repeat_months: None,
         installments: None,
+        card_id: None,
     })?;
     if month.is_some_and(|first| !(first..=month_end(first)).contains(&entry.date)) {
         return Err(AppError::invalid("date", "must be in the month"));

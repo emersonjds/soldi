@@ -103,6 +103,18 @@ async fn check_cofrinho_active(
     Ok(())
 }
 
+/// D28: one of the caller's unarchived cards.
+async fn check_card(
+    conn: &mut PgConnection,
+    user: &CurrentUser,
+    card_id: Uuid,
+) -> Result<(), AppError> {
+    match crate::bills::repo::find_card(conn, user.id, card_id).await? {
+        Some(_) => Ok(()),
+        None => Err(AppError::invalid("card_id", "must be one of your cards")),
+    }
+}
+
 /// R2, R9: with `repeat_months` or `installments`, the series in one database transaction.
 pub async fn create(
     pool: &PgPool,
@@ -113,6 +125,9 @@ pub async fn create(
     let mut tx = pool.begin().await?;
     let category = category(&mut tx, user, input.category_id, true).await?;
     domain::check_kind(input.kind, &category)?;
+    if let Some(card_id) = input.card_id {
+        check_card(&mut tx, user, card_id).await?;
+    }
     check_opening(&mut tx, user, input.date).await?;
     let count = input.repeat_months.or(input.installments);
     let amounts = match input.installments {
@@ -176,8 +191,13 @@ pub async fn update(
         note: patch.note.unwrap_or(current.note),
         repeat_months: patch.repeat_months,
         installments: None,
+        card_id: patch.card_id.unwrap_or(current.card_id),
     })?;
     domain::check_kind(next.kind, &category)?;
+    // An entry keeps a since-archived card; only a new card must be live.
+    if let Some(card_id) = next.card_id.filter(|id| Some(*id) != current.card_id) {
+        check_card(&mut tx, user, card_id).await?;
+    }
     let moves = scope == Scope::Following && current.series.is_some() && next.date != current.date;
     if moves {
         domain::check_day_move(current.date, next.date)?;

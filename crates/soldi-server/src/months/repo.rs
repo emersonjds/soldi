@@ -31,10 +31,10 @@ pub async fn day_sums(
 pub async fn bills(conn: &mut PgConnection, user_id: Uuid) -> Result<Vec<MonthBill>, sqlx::Error> {
     sqlx::query_as!(
         MonthBill,
-        r#"SELECT b.id, b.name, c.icon, c.color, b.amount, b.due_day,
+        r#"SELECT b.id, b.name, c.icon, c.color, b.amount AS "amount!", b.due_day,
                   b.active_since
            FROM recurring_bills b JOIN categories c ON c.user_id = b.user_id AND c.id = b.category_id
-           WHERE b.user_id = $1 AND b.active AND b.archived_at IS NULL
+           WHERE b.user_id = $1 AND b.active AND b.archived_at IS NULL AND b.closing_day IS NULL
            ORDER BY b.due_day, lower(b.name), b.id"#,
         user_id
     )

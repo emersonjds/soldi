@@ -26,6 +26,7 @@ struct Row {
     series_position: i64,
     series_total: i64,
     series_last_date: Option<NaiveDate>,
+    card_id: Option<Uuid>,
 }
 
 impl From<Row> for Transaction {
@@ -38,6 +39,7 @@ impl From<Row> for Transaction {
             note: row.note,
             recurring_bill_id: row.recurring_bill_id,
             cofrinho_id: row.cofrinho_id,
+            card_id: row.card_id,
             series: row
                 .series_id
                 .zip(row.series_last_date)
@@ -74,7 +76,7 @@ pub async fn list(
     let rows = sqlx::query_as!(
         Row,
         r#"SELECT t.id, t.date, t.amount, t.kind AS "kind: CategoryKind", t.note,
-                  t.recurring_bill_id, t.cofrinho_id,
+                  t.recurring_bill_id, t.cofrinho_id, t.card_id,
                   c.id AS category_id, c.name AS category_name,
                   c.kind AS "category_kind: CategoryKind", c.icon AS category_icon,
                   c.color AS category_color, c.parent_id AS category_parent_id,
@@ -111,7 +113,7 @@ pub async fn movements(
     let rows = sqlx::query_as!(
         Row,
         r#"SELECT t.id, t.date, t.amount, t.kind AS "kind: CategoryKind", t.note,
-                  t.recurring_bill_id, t.cofrinho_id,
+                  t.recurring_bill_id, t.cofrinho_id, t.card_id,
                   c.id AS category_id, c.name AS category_name,
                   c.kind AS "category_kind: CategoryKind", c.icon AS category_icon,
                   c.color AS category_color, c.parent_id AS category_parent_id,
@@ -149,7 +151,7 @@ pub async fn find(
     let row = sqlx::query_as!(
         Row,
         r#"SELECT t.id, t.date, t.amount, t.kind AS "kind: CategoryKind", t.note,
-                  t.recurring_bill_id, t.cofrinho_id,
+                  t.recurring_bill_id, t.cofrinho_id, t.card_id,
                   c.id AS category_id, c.name AS category_name,
                   c.kind AS "category_kind: CategoryKind", c.icon AS category_icon,
                   c.color AS category_color, c.parent_id AS category_parent_id,
@@ -182,8 +184,8 @@ pub async fn insert(
     sqlx::query_scalar!(
         "INSERT INTO transactions
              (user_id, date, amount, kind, category_id, note, recurring_bill_id, cofrinho_id,
-              series_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id",
+              series_id, card_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id",
         user_id,
         input.date,
         input.amount,
@@ -192,7 +194,8 @@ pub async fn insert(
         input.note,
         recurring_bill_id,
         cofrinho_id,
-        series_id
+        series_id,
+        input.card_id
     )
     .fetch_one(&mut *conn)
     .await
@@ -208,15 +211,16 @@ pub async fn insert_copies(
     amounts: &[Decimal],
 ) -> Result<(), sqlx::Error> {
     sqlx::query!(
-        "INSERT INTO transactions (user_id, date, amount, kind, category_id, note, series_id)
-         SELECT $1, c.d, c.a, $4, $5, $6, $7 FROM UNNEST($2::date[], $3::numeric[]) AS c(d, a)",
+        "INSERT INTO transactions (user_id, date, amount, kind, category_id, note, series_id, card_id)
+         SELECT $1, c.d, c.a, $4, $5, $6, $7, $8 FROM UNNEST($2::date[], $3::numeric[]) AS c(d, a)",
         user_id,
         dates,
         amounts,
         entry.kind.as_str(),
         entry.category_id,
         entry.note,
-        series_id
+        series_id,
+        entry.card_id
     )
     .execute(&mut *conn)
     .await?;
@@ -242,7 +246,7 @@ pub async fn set_series(
     Ok(result.rows_affected() == 1)
 }
 
-/// R6: the series' members dated after `from` take `entry`'s kind, category and note, and
+/// R6: the series' members dated after `from` take `entry`'s kind, category, note and card, and
 /// `amount` when given; without it each keeps its own (parcelas differ by the remainder).
 pub async fn update_following(
     conn: &mut PgConnection,
@@ -254,7 +258,8 @@ pub async fn update_following(
 ) -> Result<(), sqlx::Error> {
     sqlx::query!(
         "UPDATE transactions
-         SET amount = COALESCE($4, amount), kind = $5, category_id = $6, note = $7, updated_at = now()
+         SET amount = COALESCE($4, amount), kind = $5, category_id = $6, note = $7, card_id = $8,
+             updated_at = now()
          WHERE user_id = $1 AND series_id = $2 AND date > $3",
         user_id,
         series_id,
@@ -262,7 +267,8 @@ pub async fn update_following(
         amount,
         entry.kind.as_str(),
         entry.category_id,
-        entry.note
+        entry.note,
+        entry.card_id
     )
     .execute(&mut *conn)
     .await?;
@@ -432,7 +438,8 @@ pub async fn update(
 ) -> Result<bool, sqlx::Error> {
     let result = sqlx::query!(
         "UPDATE transactions
-         SET date = $3, amount = $4, kind = $5, category_id = $6, note = $7, updated_at = now()
+         SET date = $3, amount = $4, kind = $5, category_id = $6, note = $7, card_id = $8,
+             updated_at = now()
          WHERE user_id = $1 AND id = $2",
         user_id,
         id,
@@ -440,7 +447,8 @@ pub async fn update(
         input.amount,
         input.kind.as_str(),
         input.category_id,
-        input.note
+        input.note,
+        input.card_id
     )
     .execute(&mut *conn)
     .await?;
@@ -564,9 +572,10 @@ mod tests {
             user.id,
             &CreateBill {
                 name: "Aluguel".into(),
-                amount: "10".parse().unwrap(),
+                amount: Some("10".parse().unwrap()),
                 due_day: 7,
                 category_id: rent,
+                closing_day: None,
             },
         )
         .await
@@ -579,6 +588,7 @@ mod tests {
             note: None,
             repeat_months: None,
             installments: None,
+            card_id: None,
         };
         let member = insert(
             &mut conn,
