@@ -55,11 +55,6 @@ describe("AppShell", () => {
     ["/para-onde-vai", "Para Onde Vai"],
     ["/economia", "Economia"],
     ["/ajustes", "Ajustes"],
-    ["/ajustes/conta", "Minha Conta"],
-    ["/ajustes/moeda", "Moeda"],
-    ["/ajustes/termometro", "Termômetro"],
-    ["/ajustes/saldo-inicial", "Saldo Inicial"],
-    ["/ajustes/apagar", "Apagar Lançamentos"],
     ["/ajustes/contas", "Contas Fixas"],
     ["/ajustes/categorias", "Categorias"],
   ])(
@@ -72,7 +67,7 @@ describe("AppShell", () => {
       const bar = screen.getByRole("banner");
       expect(within(bar).getByText(name, { selector: "p" })).toHaveClass("lg:hidden");
       const avatar = within(bar).getByRole("link", { name: "Minha conta" });
-      expect(avatar).toHaveAttribute("href", "/ajustes/conta");
+      expect(avatar).toHaveAttribute("href", "/ajustes#conta");
       expect(await within(avatar).findByText("APS")).toBeInTheDocument();
       expect(screen.queryByText(/^Olá/)).not.toBeInTheDocument();
     },
@@ -247,7 +242,7 @@ describe("AppShell", () => {
     expect(within(screen.getByRole("main")).queryByRole("group", { name: "Mês" })).not.toBeInTheDocument();
   });
 
-  it.each(["/economia", "/ajustes/contas"])(
+  it.each(["/economia", "/ajustes", "/ajustes/contas"])(
     "shows the month switcher on %s in the top bar and, below 1024 px, in a card under the app bar",
     (path) => {
       setPathname(path);
@@ -259,19 +254,6 @@ describe("AppShell", () => {
       );
       const card = within(screen.getByRole("main")).getByRole("group", { name: "Mês" }).parentElement;
       expect(card).toHaveClass("rounded-2xl", "bg-card", "lg:hidden");
-    },
-  );
-
-  it.each(["/ajustes", "/ajustes/conta"])(
-    "hides the month switcher on %s, a page that does not read the month",
-    (path) => {
-      setPathname(path);
-      setSearch("m=2026-12");
-      renderWithQuery(<AppShell>conteúdo</AppShell>);
-
-      expect(screen.queryByRole("group", { name: "Mês" })).not.toBeInTheDocument();
-      expect(screen.getByRole("main").firstElementChild).toBeNull();
-      expect(within(screen.getByRole("banner")).getByRole("button", { name: "Lançar" })).toBeInTheDocument();
     },
   );
 
@@ -383,22 +365,19 @@ describe("AppShell", () => {
     expect(router.replace).toHaveBeenLastCalledWith("/ajustes/categorias?k=bill&m=2027-01", { scroll: false });
   });
 
-  it("takes the sidebar user card and the top-bar avatar to Minha conta, with the version under it and no sign-out", async () => {
-    vi.stubEnv("NEXT_PUBLIC_APP_VERSION", "0.34.0");
+  it("takes the sidebar user card and the top-bar avatar to Minha conta, with no version and no sign-out", async () => {
     renderWithQuery(<AppShell>conteúdo</AppShell>);
 
     const email = await screen.findByText("ana@example.com");
     const card = screen.getByRole("link", { name: "Minha conta, Ana" });
-    expect(card).toHaveAttribute("href", "/ajustes/conta");
+    expect(card).toHaveAttribute("href", "/ajustes#conta");
     expect(card).toContainElement(email);
     expect(card.textContent).toBe("AAnaana@example.com");
     const sidebar = screen.getByRole("complementary", { name: "Barra lateral" });
     expect(within(sidebar).queryByRole("button", { name: "Sair" })).not.toBeInTheDocument();
-    const version = within(sidebar).getByText("v0.34.0");
-    expect(version).toHaveClass("text-muted-foreground");
-    expect(card.compareDocumentPosition(version) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(within(sidebar).queryByText(/^v\d/)).not.toBeInTheDocument();
     const avatar = within(screen.getByRole("banner")).getByRole("link", { name: "Minha conta" });
-    expect(avatar).toHaveAttribute("href", "/ajustes/conta");
+    expect(avatar).toHaveAttribute("href", "/ajustes#conta");
     expect(avatar).toHaveClass("size-11");
     expect(avatar.firstElementChild).toHaveClass("size-10");
   });
