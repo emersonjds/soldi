@@ -3310,7 +3310,7 @@
             "oneOf": [
               {
                 "$ref": "#/components/schemas/SavingsTarget",
-                "description": "Null without `Settings.savings_target_pct`."
+                "description": "Null without `Settings.savings_target_pct` or for a year before the opening or after this one."
               },
               {
                 "type": "null"

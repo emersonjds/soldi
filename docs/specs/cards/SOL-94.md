@@ -38,12 +38,13 @@ Rejected: notes on Mês (not drawn); a note history; a `Category.note` on every 
 - **N1.** `note`: trimmed; blank → null; ≤ 140 characters (chars, not bytes); NUL refused. Field `note`, messages `"must have at most 140 characters"`.
 - **N2 (P4).** `CreateCategory.note` / `UpdateCategory.note` (nullable; `null` clears) only on a cofrinho; elsewhere 422 `not-a-cofrinho` (the `check_goal` rule). A cofrinho moved out of Economia loses its note with its target and deadline. Economia itself (Reserva Livre) takes no note.
 - **N3 (P5).** `UpdateSettings.savings_target_pct` (nullable decimal string): `> 0` and `≤ 100`, up to two places, never rounded; `null` clears. Field `savings_target_pct`, messages `"must be greater than 0 and at most 100"`.
-- **N4 (P5).** `SavingsYear.target` is null without a pct; otherwise `{ pct, amount, remaining, progress_pct, done }`:
+- **N3a (P5).** One `savings_target_pct` applies to every year; there is no per-year target. Changing it changes the target shown for past years too.
+- **N4 (P5).** `SavingsYear.target` is null without a pct, and null for a year outside the account's range (before the opening year or after the current year: no month to measure); otherwise `{ pct, amount, remaining, progress_pct, done }`:
   - `amount` = round_half_even(pct × `income_total` / 100, 2);
   - `remaining` = max(0, `amount` − `saved_total`);
   - `progress_pct` = round_half_even(`saved_total` / `amount` × 100, 1), floored at 0; null when `amount` is 0;
   - `done` = `amount` > 0 and `saved_total` ≥ `amount`.
-- **N5 (P6).** `PUT /api/months/{month}/note {note}`: `month` is `YYYY-MM`, years 2000–2100 (`parse_month`); any month is accepted. Upsert on `(user_id, month)`; blank deletes. 204.
+- **N5 (P6).** `PUT /api/months/{month}/note {note}`: `month` is `YYYY-MM`, years 2000–2100 (`parse_month`); any month is accepted, a month before the opening too, but the savings year shows only notes of its months (opening month through December, forecast months included). Upsert on `(user_id, month)`; blank deletes. 204.
 - **N6 (P6).** `SavingsMonth.note` is the month's note or null, read with the user's `user_id` only.
 - **N7.** Account deletion cascades every new row (FK `ON DELETE CASCADE`). Period deletion of entries leaves notes and the target.
 
@@ -136,8 +137,8 @@ DROP TABLE month_notes;
 Backend:
 
 - Cofrinho note: create and patch on a cofrinho store it; the list returns it trimmed; 141 characters is 422 `note`; on a plain category 422 `not-a-cofrinho`; moving the cofrinho out of Economia clears it; another user's cofrinho is 404.
-- Target: PATCH `"20"` stores `20.00`; `"0"`, `"100.01"`, `"12.345"` are 422; `null` clears. Savings year with income 64.482,80 and saved 5.416,53 at 20% returns amount `12896.56`, remaining `7480.03`, progress `42.0`, done false; saved above the amount gives done true and progress over 100; income 0 gives amount `0.00`, progress null; a negative `saved_total` gives progress `0.0`; null pct gives `target: null`.
-- Month notes: PUT stores, PUT again replaces, blank deletes; `2026-13` and `1999-12` are 422; 141 characters is 422; the savings year returns the note on its month only; user B's note never shows for A, and B's PUT never touches A's row.
+- Target: PATCH `"20"` stores `20.00`; `"0"`, `"100.01"`, `"12.345"` are 422; `null` clears. Savings year with income 64.482,80 and saved 5.416,53 at 20% returns amount `12896.56`, remaining `7480.03`, progress `42.0`, done false; saved above the amount gives done true and progress over 100; income 0 gives amount `0.00`, progress null; a negative `saved_total` gives progress `0.0`; null pct gives `target: null`; a year before the opening gives `target: null` with a pct set; a PATCH of another setting keeps the pct.
+- Month notes: PUT stores, PUT again replaces, blank deletes; `2026-13` and `1999-12` are 422; 141 characters is 422; the savings year returns the note on its month only, from the opening month through December (a note before the opening is stored but not shown); user B's note never shows for A, and B's PUT never touches A's row.
 - Account deletion test covers `month_notes`; the migrations test still sees no `savings_goal_pct`.
 
 Web (every state):

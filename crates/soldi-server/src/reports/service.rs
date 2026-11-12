@@ -49,8 +49,8 @@ pub async fn savings(
     for month in &mut year.months {
         month.note = notes.remove(&month.month);
     }
-    year.target = settings
-        .savings_target_pct
+    year.target = range
+        .and(settings.savings_target_pct)
         .map(|pct| domain::savings_target(pct, year.income_total, year.saved_total));
     Ok(year)
 }

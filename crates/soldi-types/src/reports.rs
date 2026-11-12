@@ -103,7 +103,7 @@ pub struct SavingsYear {
     pub saved_total: Decimal,
     #[schema(value_type = Option<String>, example = "8.4")]
     pub rate_pct: Option<Decimal>,
-    /// Null without `Settings.savings_target_pct`.
+    /// Null without `Settings.savings_target_pct` or for a year before the opening or after this one.
     pub target: Option<SavingsTarget>,
     pub months: Vec<SavingsMonth>,
 }

@@ -947,4 +947,7 @@ async fn p5_the_savings_year_carries_the_target_on_the_summarys_totals(pool: PgP
         json!({ "pct": "20.00", "amount": "12896.56", "remaining": "7480.03",
                 "progress_pct": "42.0", "done": false })
     );
+    let (status, before_opening) = savings(&ana, "2024").await;
+    assert_eq!(status, StatusCode::OK, "{before_opening}");
+    assert_eq!(before_opening["target"], serde_json::Value::Null);
 }
