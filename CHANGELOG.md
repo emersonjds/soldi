@@ -7,6 +7,18 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.53.1
+
+> Headline: a bill payment stays a Saída
+
+### Server
+
+- Editing a conta fixa or fatura payment refuses a new kind (422 `kind`); amount, date, note and another Saída category still change.
+
+### Web
+
+- Editing a bill payment hides Tipo and explains a refused change: `Um pagamento de conta fixa continua sendo Saída.`
+
 ## 0.53.0
 
 > Headline: Meu ano
