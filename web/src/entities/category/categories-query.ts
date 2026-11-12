@@ -13,8 +13,26 @@ export const systemCategoriesQuery = queryOptions({
   queryFn: async () => dataOrThrow(await api.GET("/api/categories", { params: { query: { include_system: true } } })),
 });
 
-export const useCategories = (kind: Schemas["CategoryKind"]) =>
-  useQuery({ ...categoriesQuery, select: (categories) => categories.filter((category) => category.kind === kind) });
+type Kind = Schemas["CategoryKind"];
+type Category = Schemas["Category"];
+
+/** D26: the categories of `kind` and the parents of another kind that hold one; such a parent is a header only. */
+export const ofKind = (categories: Category[], kind: Kind) =>
+  categories.filter(
+    (category) =>
+      category.kind === kind || categories.some((child) => child.parent_id === category.id && child.kind === kind),
+  );
+
+/** The kinds a top-level shows in: its own and its subcategories'. */
+export const kindsOf = (category: Category, categories: Category[]) => [
+  ...new Set([
+    category.kind,
+    ...categories.filter((child) => child.parent_id === category.id).map((child) => child.kind),
+  ]),
+];
+
+export const useCategories = (kind: Kind) =>
+  useQuery({ ...categoriesQuery, select: (categories) => ofKind(categories, kind) });
 
 // Cofrinhos are the subcategories of Economia; the cofrinho entity owns that key.
 const refresh = (client: QueryClient) =>
