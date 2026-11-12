@@ -5,7 +5,7 @@ import { type ReactNode, Suspense, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
-import { Calendar, PieChart, PiggyBank, Plus, ReceiptText, Settings, Sparkles } from "lucide-react";
+import { Calendar, CalendarRange, PieChart, PiggyBank, Plus, ReceiptText, Settings, Sparkles } from "lucide-react";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -50,6 +50,7 @@ const SIDEBAR = [
     items: [
       { href: "/mes", label: "Mês", icon: Calendar },
       { href: "/para-onde-vai", label: "Para onde vai", icon: PieChart },
+      { href: "/meu-ano", label: "Meu ano", icon: CalendarRange },
       { href: "/economia", label: "Cofrinhos", icon: PiggyBank },
       { href: "/posso-comprar", label: "Posso comprar isso?", icon: Sparkles },
     ],
@@ -72,7 +73,14 @@ const PAGE_NAMES = [
   ["/para-onde-vai", "Para Onde Vai"],
   ["/mes", "Mês"],
   ["/posso-comprar", "Posso comprar?"],
+  ["/meu-ano", "Meu ano"],
 ] as const;
+
+/** Below 1024 px Meu ano rides under the Economia tab, with this pair switching between the two. */
+const SAVINGS_PAIR = [
+  { href: "/economia", label: "Economia" },
+  { href: "/meu-ano", label: "Meu ano" },
+];
 
 /** The pages that read `?m=`; the switcher shows only there. */
 const MONTH_PAGES = ["/mes", "/para-onde-vai", "/economia", "/ajustes", "/ajustes/contas", "/ajustes/categorias"];
@@ -240,6 +248,25 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
             </Link>
           </header>
           <main className="mx-auto w-full max-w-6xl flex-1 px-4 pt-4 pb-(--tabbar-space) lg:px-6 lg:pt-6 lg:pb-10">
+            {SAVINGS_PAIR.some((item) => isAt(item.href)) && (
+              <nav aria-label="Economia e Meu ano" className="mb-4 flex rounded-xl bg-muted p-1 lg:hidden">
+                {SAVINGS_PAIR.map((item) => (
+                  <MonthLink
+                    key={item.href}
+                    href={item.href}
+                    aria-current={isAt(item.href) ? "page" : undefined}
+                    className={cn(
+                      "flex min-h-11 flex-1 items-center justify-center rounded-lg font-medium text-sm transition-colors duration-200 focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2 motion-reduce:transition-none",
+                      isAt(item.href)
+                        ? "bg-card text-primary shadow-sm"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    {item.label}
+                  </MonthLink>
+                ))}
+              </nav>
+            )}
             {switcherCard && (
               <Suspense>
                 <div className="mb-4 rounded-2xl bg-card p-2 shadow-sm lg:hidden">
@@ -270,7 +297,11 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
               </button>
             </div>
             {NAV.slice(2).map((item) => (
-              <TabLink key={item.href} item={item} active={isAt(item.href)} />
+              <TabLink
+                key={item.href}
+                item={item}
+                active={isAt(item.href) || (item.href === "/economia" && isAt("/meu-ano"))}
+              />
             ))}
           </div>
         </nav>
