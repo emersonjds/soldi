@@ -7,6 +7,18 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.43.1
+
+> Headline: a deleted cofrinho's money stays put
+
+### Server
+
+- Editing or deleting a deposit or a resgate of a deleted cofrinho is refused with 422 `archived-cofrinho`, for one entry or a whole series from that member on, so a deleted cofrinho can no longer hide money. Ajustes › Apagar lançamentos still wipes them.
+
+### Web
+
+- That refusal reads `Esse cofrinho foi excluído; os movimentos dele não podem mais ser alterados.`
+
 ## 0.43.0
 
 > Headline: Economia do ano looks like Stitch
