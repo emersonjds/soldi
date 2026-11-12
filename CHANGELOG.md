@@ -7,6 +7,14 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.57.2
+
+> Headline: a month ahead lists all its entries
+
+### Web
+
+- Lançamentos on a month entirely ahead shows every scheduled day, so the salary and the parcelas due late in the month are visible without `Ver o mês inteiro` (SOL-117).
+
 ## 0.57.1
 
 > Headline: the right day on a weekly or yearly deposit

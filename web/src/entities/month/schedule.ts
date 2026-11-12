@@ -30,12 +30,12 @@ export const subtitleOf = (bills: Bill[], today: string) => {
 };
 
 /**
- * Spec 2026-11-10 §3.3: the next 3 scheduled days, today and the 6 days before it; the last 7 days of a past month.
- * Keeps the order it was given.
+ * Spec 2026-11-10 §3.3: the next 3 scheduled days, today and the 6 days before it; the last 7 days of a past month;
+ * every day of a future month (SOL-117). Keeps the order it was given.
  */
 export const visibleDays = <Day extends { date: string }>(days: Day[], today: string, expanded: boolean) => {
-  if (expanded) return days;
   const dates = days.map(({ date }) => date).sort();
+  if (expanded || dates.every((date) => date.slice(0, 7) > today.slice(0, 7))) return days;
   const past = dates.every((date) => date.slice(0, 7) < today.slice(0, 7));
   const shown = new Set([
     ...dates.filter((date) => date > today).slice(0, 3),
