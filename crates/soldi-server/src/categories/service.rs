@@ -36,7 +36,7 @@ pub async fn create(
     let note = input
         .note
         .as_deref()
-        .map(domain::check_note)
+        .map(crate::error::check_note)
         .transpose()?
         .flatten();
     let icon = input.icon.unwrap_or_else(|| domain::DEFAULT_ICON.into());
@@ -100,7 +100,7 @@ pub async fn update(
     let name = input.name.as_deref().map(domain::check_name).transpose()?;
     let note = input
         .note
-        .map(|note| note.as_deref().map(domain::check_note).transpose())
+        .map(|note| note.as_deref().map(crate::error::check_note).transpose())
         .transpose()?
         .map(Option::flatten);
     input.icon.as_deref().map(domain::check_icon).transpose()?;

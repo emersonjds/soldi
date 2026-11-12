@@ -268,19 +268,6 @@ pub fn category_has_card_entries() -> AppError {
     )
 }
 
-/// N1: trimmed, at most 140 characters; blank is none.
-pub fn check_note(note: &str) -> Result<Option<String>, AppError> {
-    reject_nul("note", note)?;
-    let note = note.trim();
-    if note.chars().count() > 140 {
-        return Err(AppError::invalid(
-            "note",
-            "must have at most 140 characters",
-        ));
-    }
-    Ok((!note.is_empty()).then(|| note.to_string()))
-}
-
 /// `target`, `deadline` and a `note` are set only on a cofrinho; a target is money greater than zero.
 pub fn check_goal(
     cofrinho: bool,
@@ -405,15 +392,6 @@ mod tests {
         assert!(check_not_savings(&category(3, CategoryKind::Daily, None)).is_ok());
         assert_eq!(slug(check_goal(false, None, None, true)), "not-a-cofrinho");
         assert!(check_goal(true, None, None, true).is_ok());
-    }
-
-    #[test]
-    fn p4_a_note_is_trimmed_up_to_140_characters_and_blank_is_none() {
-        assert_eq!(check_note("  Plano  ").unwrap().as_deref(), Some("Plano"));
-        assert_eq!(check_note("   ").unwrap(), None);
-        assert!(check_note(&"é".repeat(140)).unwrap().is_some());
-        assert_eq!(field(check_note(&"a".repeat(141))), "note");
-        assert_eq!(field(check_note("a\0b")), "note");
     }
 
     #[test]
