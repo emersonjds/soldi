@@ -1,5 +1,6 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { Toaster } from "sonner";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Schemas } from "@/shared/api/client";
@@ -16,7 +17,12 @@ const show = (replies: Record<string, Reply> = {}, opening = SETTINGS.opening_da
     "GET /api/reports/savings": { status: 200, body: SAVINGS_YEAR },
     ...replies,
   });
-  renderWithQuery(<SavingsYear />);
+  renderWithQuery(
+    <>
+      <SavingsYear />
+      <Toaster />
+    </>,
+  );
   return requests;
 };
 
@@ -326,6 +332,93 @@ describe("SavingsYear", () => {
 
     await userEvent.click(within(await tableRow("Outubro")).getByRole("button", { name: "Ações de Outubro" }));
     expect(await screen.findByRole("menuitem", { name: "Abrir no Mês" })).toHaveAttribute("href", "/mes?m=2026-10");
+  });
+
+  describe("month notes", () => {
+    const NOTE = "1ª parcela do 13º salário";
+    const noted = (notes: Record<string, string>) =>
+      year(SAVINGS_YEAR.months.map((each) => ({ ...each, note: notes[each.month] ?? null })));
+    const PUT = "PUT /api/months/2026-10/note";
+    const put = async (requests: Request[]) => {
+      await waitFor(() => expect(requests.some((request) => request.method === "PUT")).toBe(true));
+      const request = requests.find((each) => each.method === "PUT");
+      return { path: request && new URL(request.url).pathname, body: await request?.json() };
+    };
+    const noteDialog = () => screen.findByRole("dialog", { name: "Observação de Outubro de 2026" });
+
+    it("shows a past month's note, and today's under its status", async () => {
+      show({ "GET /api/reports/savings": noted({ "2026-10": NOTE, "2026-11": "Bônus" }) });
+
+      expect(text((await tableRow("Outubro")).lastElementChild?.previousElementSibling ?? null)).toBe(NOTE);
+      const november = (await tableRow("Novembro")).lastElementChild?.previousElementSibling ?? null;
+      expect(text(november)).toBe("Em andamento (fechamento em 25 dias)Bônus");
+      expect(within(november as HTMLElement).getByText("Bônus")).toHaveClass("text-muted-foreground");
+      expect(text((await tableRow("Setembro")).lastElementChild?.previousElementSibling ?? null)).toBe("");
+    });
+
+    it("chips the note on the mobile row and reads it in the row's name", async () => {
+      show({ "GET /api/reports/savings": noted({ "2026-10": NOTE }) });
+
+      const october = await row("Outubro");
+      expect(october).toHaveAccessibleName(expect.stringMatching(new RegExp(`, observação: ${NOTE}$`)));
+      expect(within(october).getByText(NOTE)).toHaveClass("max-w-[50%]", "truncate");
+      expect((await row("Setembro")).getAttribute("aria-label")).not.toContain("observação");
+    });
+
+    it("adds a note from the table's row menu", async () => {
+      const requests = show({ [PUT]: { status: 204 } });
+
+      await userEvent.click(within(await tableRow("Outubro")).getByRole("button", { name: "Ações de Outubro" }));
+      await userEvent.click(await screen.findByRole("menuitem", { name: "Adicionar observação" }));
+      const dialog = await noteDialog();
+      expect(within(dialog).getByText("0/140")).toBeInTheDocument();
+      expect(within(dialog).queryByRole("button", { name: "Remover observação" })).not.toBeInTheDocument();
+      await userEvent.type(within(dialog).getByRole("textbox", { name: "Observação" }), NOTE);
+      await userEvent.click(within(dialog).getByRole("button", { name: "Salvar" }));
+
+      expect(await put(requests)).toEqual({ path: "/api/months/2026-10/note", body: { note: NOTE } });
+      expect(await screen.findByText("Observação salva")).toBeInTheDocument();
+    });
+
+    it("edits and removes a note from the mobile menu beside the row link", async () => {
+      const requests = show({ "GET /api/reports/savings": noted({ "2026-10": NOTE }), [PUT]: { status: 204 } });
+
+      const trigger = within(await list()).getByRole("button", { name: "Ações de Outubro" });
+      expect(trigger.closest("a")).toBeNull();
+      expect(trigger).toHaveClass("size-11");
+      await userEvent.click(trigger);
+      await userEvent.click(await screen.findByRole("menuitem", { name: "Editar observação" }));
+      const dialog = await noteDialog();
+      expect(within(dialog).getByRole("textbox", { name: "Observação" })).toHaveValue(NOTE);
+      await userEvent.click(within(dialog).getByRole("button", { name: "Remover observação" }));
+
+      expect((await put(requests)).body).toEqual({ note: "" });
+      expect(await screen.findByText("Observação removida")).toBeInTheDocument();
+    });
+
+    it("blocks a note over 140 characters", async () => {
+      show();
+
+      await userEvent.click(within(await tableRow("Outubro")).getByRole("button", { name: "Ações de Outubro" }));
+      await userEvent.click(await screen.findByRole("menuitem", { name: "Adicionar observação" }));
+      const dialog = await noteDialog();
+      await userEvent.click(within(dialog).getByRole("textbox", { name: "Observação" }));
+      await userEvent.paste("a".repeat(141));
+
+      expect(within(dialog).getByText("141/140")).toHaveClass("text-destructive");
+      expect(within(dialog).getByRole("button", { name: "Salvar" })).toBeDisabled();
+    });
+
+    it("toasts when the note could not be saved", async () => {
+      show({ [PUT]: { status: 500, body: problem(500, "boom") } });
+
+      await userEvent.click(within(await tableRow("Outubro")).getByRole("button", { name: "Ações de Outubro" }));
+      await userEvent.click(await screen.findByRole("menuitem", { name: "Adicionar observação" }));
+      await userEvent.type(within(await noteDialog()).getByRole("textbox", { name: "Observação" }), "x");
+      await userEvent.click(within(await noteDialog()).getByRole("button", { name: "Salvar" }));
+
+      expect(await screen.findByText("Não foi possível salvar a observação.")).toBeInTheDocument();
+    });
   });
 
   it("exports the table as a pt-BR CSV", async () => {

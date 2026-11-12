@@ -9,6 +9,8 @@ import {
   CalendarDays,
   Download,
   MoreHorizontal,
+  MoreVertical,
+  NotebookPen,
   Pencil,
   PiggyBank,
   TrendingDown,
@@ -38,6 +40,7 @@ import { Switcher } from "@/shared/ui/month-switcher";
 import { PageError } from "@/shared/ui/page-state";
 import { PageHero } from "@/widgets/month-header/month-header";
 
+import { MonthNoteDialog } from "./month-note-dialog";
 import { SavingsTarget } from "./savings-target";
 
 type Month = Schemas["SavingsMonth"];
@@ -132,28 +135,37 @@ const Rate = ({ month }: { month: Month }) => {
   );
 };
 
-const RowMenu = ({ month }: { month: Month }) => (
-  <DropdownMenu>
-    <DropdownMenuTrigger asChild>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        aria-label={`Ações de ${monthTitle(month.month)}`}
-        className="size-11 rounded-full text-muted-foreground"
-      >
-        <MoreHorizontal className="size-5" />
-      </Button>
-    </DropdownMenuTrigger>
-    <DropdownMenuContent align="end" className="w-auto">
-      <DropdownMenuItem asChild className="min-h-11 text-base">
-        <Link href={`/mes?m=${month.month}`}>Abrir no Mês</Link>
-      </DropdownMenuItem>
-    </DropdownMenuContent>
-  </DropdownMenu>
-);
+type Noting = { onNote: (month: Month) => void };
 
-const TableMonth = ({ month, current, today }: { month: Month; current: boolean; today: string }) => {
+const RowMenu = ({ month, onNote, vertical = false }: Noting & { month: Month; vertical?: boolean }) => {
+  const Icon = vertical ? MoreVertical : MoreHorizontal;
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          aria-label={`Ações de ${monthTitle(month.month)}`}
+          className="size-11 shrink-0 rounded-full text-muted-foreground"
+        >
+          <Icon className="size-5" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-auto">
+        <DropdownMenuItem asChild className="min-h-11 text-base">
+          <Link href={`/mes?m=${month.month}`}>Abrir no Mês</Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem className="min-h-11 text-base" onSelect={() => onNote(month)}>
+          <NotebookPen />
+          {month.note ? "Editar observação" : "Adicionar observação"}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+};
+
+const TableMonth = ({ month, current, today, onNote }: Noting & { month: Month; current: boolean; today: string }) => {
   const currency = useCurrency();
   const name = monthTitle(month.month);
   return (
@@ -203,37 +215,43 @@ const TableMonth = ({ month, current, today }: { month: Month; current: boolean;
       </TableCell>
       <TableCell className={cn("whitespace-normal text-sm", current && "text-primary", month.forecast && "italic")}>
         {current ? closing(today) : situation(month, "")}
+        {month.note && <span className="block text-muted-foreground not-italic">{month.note}</span>}
       </TableCell>
       <TableCell className="pr-6 text-right">
-        <RowMenu month={month} />
+        <RowMenu month={month} onNote={onNote} />
       </TableCell>
     </TableRow>
   );
 };
 
-const ListMonth = ({ month, current }: { month: Month; current: boolean }) => {
+const ListMonth = ({ month, current, onNote }: Noting & { month: Month; current: boolean }) => {
   const currency = useCurrency();
   const name = monthTitle(month.month);
   const share = month.rate_pct ? `${formatPct(month.rate_pct)} das entradas` : "sem entradas";
   const level = month.rate_pct ? levelOf(month.rate_pct) : undefined;
   const withdrawn = cents(month.withdrawn) > 0 ? `resgatou ${formatMoney(month.withdrawn, currency)}, ` : "";
   return (
-    <li>
+    <li className="flex items-center gap-1">
       <Link
         href={current ? adjustHref(month.month) : `/mes?m=${month.month}`}
-        aria-label={`${name} de ${month.month.slice(0, 4)}: guardou ${formatMoney(month.deposited, currency)}, ${withdrawn}${share}${level ? `, ${level.word}` : ""}${current ? ", ajustar" : ""}`}
+        aria-label={`${name} de ${month.month.slice(0, 4)}: guardou ${formatMoney(month.deposited, currency)}, ${withdrawn}${share}${level ? `, ${level.word}` : ""}${current ? ", ajustar" : ""}${month.note ? `, observação: ${month.note}` : ""}`}
         aria-current={current ? "date" : undefined}
         className={cn(
-          "flex min-h-11 items-center justify-between gap-3 rounded-xl px-3 py-3 hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring",
+          "flex min-h-11 min-w-0 flex-1 items-center justify-between gap-3 rounded-xl px-3 py-3 hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring",
           current && "bg-primary/5",
         )}
       >
-        <span className="flex min-w-0 flex-col">
+        <span className="flex min-w-0 flex-1 flex-col">
           <span className="flex items-center gap-2 font-medium text-base">
             {name}
             {current && (
               <span className="rounded-full bg-primary px-2 py-0.5 font-semibold text-primary-foreground text-xs uppercase">
                 Atual
+              </span>
+            )}
+            {month.note && (
+              <span className="max-w-[50%] truncate rounded-full bg-muted px-2 py-0.5 font-normal text-muted-foreground text-xs">
+                {month.note}
               </span>
             )}
           </span>
@@ -262,6 +280,7 @@ const ListMonth = ({ month, current }: { month: Month; current: boolean }) => {
           </span>
         </span>
       </Link>
+      <RowMenu month={month} onNote={onNote} vertical />
     </li>
   );
 };
@@ -287,6 +306,7 @@ const YearBody = ({ data, year, today }: { data: Schemas["SavingsYear"]; year: n
     undefined,
   );
   const one = run === 1;
+  const [noting, setNoting] = useState<Month>();
 
   return (
     <>
@@ -416,16 +436,28 @@ const YearBody = ({ data, year, today }: { data: Schemas["SavingsYear"]; year: n
           </TableHeader>
           <TableBody>
             {ascending.map((month) => (
-              <TableMonth key={month.month} month={month} current={month.month === current} today={today} />
+              <TableMonth
+                key={month.month}
+                month={month}
+                current={month.month === current}
+                today={today}
+                onNote={setNoting}
+              />
             ))}
           </TableBody>
         </Table>
         <ul aria-label="Meses" className="flex flex-col gap-1 lg:hidden">
           {past.map((month) => (
-            <ListMonth key={month.month} month={month} current={month.month === current} />
+            <ListMonth key={month.month} month={month} current={month.month === current} onNote={setNoting} />
           ))}
         </ul>
       </section>
+      <MonthNoteDialog
+        month={noting?.month}
+        title={noting ? `Observação de ${monthTitle(noting.month)} de ${noting.month.slice(0, 4)}` : ""}
+        note={noting?.note}
+        onClose={() => setNoting(undefined)}
+      />
     </>
   );
 };
