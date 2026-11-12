@@ -58,6 +58,8 @@ pt-BR only product (D3): the server computes `today` in `America/Sao_Paulo` (chr
 
 "Repetir por N meses" (2..60, N counts the original) inserts all N rows at once, sharing a nullable `transactions.series_id`; position and total are counted at read time, never stored. A series action reaches only `this` row or `following` rows (date ≥ the edited one); past members are never rewritten, and a date change never propagates (D20: `following` moves the day of the month). Bill payments and resgates cannot repeat: an open-ended repeat is a recurring bill (D8), offered as "Transformar em conta fixa". Trade-off: D8's "no rows ahead of time" holds for bills only; a finite user-chosen repeat writes future rows, bounded by 60. Options: lazy generation (breaks D8's single ledger), a third "Toda a série" scope (rewrites reconciled months).
 
+Update (2026-11-12, SOL-93): monthly-only is reversed by D32 (weekly and yearly steps) and the third scope by D33.
+
 ## D15 — Category colors are unique per kind; subcategories wear the parent's (2026-11-08, owner)
 
 Among a user's active top-level categories of one kind no two share a color; the palette grows to 24 tokens so the defaults fit. Every subcategory, cofrinhos included, takes its parent's color and has no picker. Rejected: uniqueness across kinds (about 40 tokens, too close to tell apart) and cofrinhos keeping their own colors (an exception to a rule the owner wants without exceptions). Detail: `docs/specs/cards/SOL-32.md`.
@@ -65,6 +67,8 @@ Among a user's active top-level categories of one kind no two share a color; the
 ## D16 — Forecast is computed from what the user entered, never guessed (2026-11-10, owner + product/finance/ux panel)
 
 Future days show a projected balance built from committed future entries and unpaid contas fixas on their due day (a past-due one lands today); nothing is stored ahead (D8 holds). Future daily spending is not averaged in: false alarms cost more trust than late ones. Salary stays an entry repeated with D14, no recurring-income entity. The alert is the user's red tier, not "below zero". Horizon tops out at 12 months. "Posso comprar isso?" previews a draft without writing it; installments are a D14 series with the cents remainder on the last one. Rejected: bank sync, multi-year or multi-scenario models, envelope budgeting. Detail: `docs/specs/forecast/`.
+
+Update (2026-11-12, SOL-95): D34 keeps a browser-only history of simulation inputs; the server still stores none.
 
 ## D17 — A conta fixa unpaid in an earlier month lands today until it is paid in its own month (2026-11-10, SOL-55 architect + finance rule 2)
 
@@ -81,6 +85,8 @@ The `Termômetro.xlsx` importer (SOL-7) is removed: every spreadsheet has its ow
 ## D20 — `Este e os próximos` moves the day of the month (2026-11-10, SOL-48 panel, architect arbitrated)
 
 A date change with `scope=following` on a series member moves this and every later member to the new day, each clamped to its own month (D14 clamp); members before it never change and `scope=this` still moves one row to any month. The month never spreads: a month change with `following` is refused, and so is a move whose months hold two members of the series, so `(date, id)` order never changes. Money is untouched. D19's growth now takes the last member's day, or the larger day of the member before it when the last sits clamped on its month's last day, so a resize after a mid-series move lands on the new day. Rejected: a separate "move day" action (a second sheet for one field), keeping the first member as the anchor (wrong after a mid-series move), a stored series day (migration), applying a month change to this row only (one save with two meanings). Detail: `docs/specs/cards/SOL-48.md`.
+
+Update (2026-11-12, SOL-93): "members before it never change" is reversed by D33 (`Toda a série` from any member, after a confirmation).
 
 ## D21 — Mês is a dashboard of cards; the shell owns the month and Lançar; Soldi stays light only (2026-11-10, SOL-61 panel, designer arbitrated)
 
@@ -256,3 +262,15 @@ Rejected:
 - cutting the year at today (it would disagree with Economia do ano).
 
 Detail: `docs/specs/cards/SOL-103.md`.
+
+## D32 — A series repeats monthly, weekly or yearly; the step lives on every member (2026-11-12, SOL-93 panel, architect arbitrated; reverses D14's monthly-only)
+
+Stitch draws `Mensal` / `Semanal` / `Anual` (FIDELITY 9.8). `repeat_every: "month" | "week" | "year"` on create (absent = month) and when a standalone entry starts a series; a running series never changes its step. Every member carries `transactions.series_every`, null outside a series, tied to `series_id` by a CHECK. D19 and D20 apply per step: weekly members sit 7 days apart, grow 7 days after the last and move to a new weekday inside each one's ISO week; yearly members sit on the original's day each year (29 Feb clamps to 28 Feb and returns in leap years), grow on the last member's month and move like monthly. `repeat_months` keeps its name and counts entries of any step (2..60, 2100 cap). Parcelas stay monthly. Rejected: a series table (D14), inferring the step from dates (wrong after a gap or a `Só este` move), weekly or yearly parcelas. Detail: `docs/specs/cards/SOL-93.md`.
+
+## D33 — `Toda a série` reaches every member from any member, after a confirmation (2026-11-12, SOL-93 panel; reverses D20's "members before it never change" and D14's rejected third scope)
+
+`?scope=all` on PATCH and DELETE rewrites or deletes every member, past ones included; from a middle member the web asks first, naming how many earlier entries change. Frozen rows still refuse the whole call: a member in a paid fatura (D30b, when amount, date or card changes, and on delete) and a member in a deleted cofrinho (SOL-102). Bill payments and resgates are never members (R3, R8). A date change under `all` moves every member per D32's step and refuses when the earliest would land before the opening date. Member 1 keeps sending `following`, which already reaches the whole series. Trade-off: reconciled months can change, guarded by the dialog and the frozen-row refusals, not by a lock. Detail: `docs/specs/cards/SOL-93.md`.
+
+## D34 — Simulation history lives in the browser only (2026-11-12, SOL-95 panel; a note to D16)
+
+D16's "a simulation is never stored" holds for the server: no table, no endpoint. `/posso-comprar` keeps the last 10 simulation inputs in `localStorage` under `soldi:simulations:{userId}`, never a verdict (it goes stale when entries change; a row re-runs against today's forecast). Sign-out, sign-out-everywhere and account deletion remove every such key. Trade-off: the history does not follow the user to another browser. Detail: `docs/specs/cards/SOL-95.md`.
