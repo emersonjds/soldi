@@ -727,7 +727,7 @@ async fn r6_m1_this_keeps_the_series_and_following_rewrites_later_members_and_th
     assert_eq!(first["amount"], "99.90");
     assert_eq!(first["category"]["name"], "Mercado");
     let (status, _) = user
-        .patch(&format!("{}?scope=all", uri(&second)), json!({}))
+        .patch(&format!("{}?scope=every", uri(&second)), json!({}))
         .await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
 }
@@ -2292,4 +2292,130 @@ async fn d32_another_users_weekly_series_is_not_found(pool: PgPool) {
         ["2026-11-12", "2026-11-19", "2026-11-26"]
     );
     assert_ranked(&entries, 3);
+}
+
+fn all(entry: &Value) -> String {
+    format!("{}?scope=all", uri(entry))
+}
+
+#[sqlx::test]
+async fn d33_all_from_a_middle_member_rewrites_every_member(pool: PgPool) {
+    let user = opened(pool, "ana@example.com").await;
+    repeat(&user, "2026-11-05", "99.90", 6).await;
+    let third = only(&user, "2027-01").await;
+    let food = user.category_id("Comer fora").await;
+
+    let (status, edited) = user
+        .patch(
+            &all(&third),
+            json!({ "category_id": food, "amount": "120", "note": "nova" }),
+        )
+        .await;
+
+    assert_eq!(status, StatusCode::OK, "{edited}");
+    assert_eq!(place(&edited), (3, 6));
+    let entries = run(&user, "2026-11", 6).await;
+    assert_eq!(field_of(&entries, "amount"), ["120.00"; 6]);
+    assert_eq!(field_of(&entries, "note"), ["nova"; 6]);
+    assert_eq!(field_of(&entries, "date"), days_from("2026-11", 6, "05"));
+    for entry in &entries {
+        assert_eq!(entry["category"]["name"], "Comer fora");
+    }
+    assert_ranked(&entries, 6);
+}
+
+#[sqlx::test]
+async fn d33_delete_all_from_a_middle_member_removes_the_whole_series(pool: PgPool) {
+    let user = opened(pool, "ana@example.com").await;
+    repeat(&user, "2026-11-05", "10", 6).await;
+    let alone = spend(&user, "2026-11-20", "7", "Mercado").await;
+    let third = only(&user, "2027-01").await;
+
+    assert_eq!(user.delete(&all(&third)).await.0, StatusCode::NO_CONTENT);
+
+    assert_eq!(only(&user, "2026-11").await["id"], alone["id"]);
+    assert_empty(&user, "2026-12", 5).await;
+}
+
+#[sqlx::test]
+async fn d33_all_from_the_first_member_equals_following(pool: PgPool) {
+    let ana = opened(pool, "ana@example.com").await;
+    let bia = ana.another_user("bia@example.com").await;
+    bia.open_at("0", "2026-10-01").await;
+    let body = json!({ "amount": "5", "date": "2026-11-20" });
+    let first = repeat(&ana, "2026-11-05", "10", 3).await;
+    let (status, _) = ana.patch(&following(&first), body.clone()).await;
+    assert_eq!(status, StatusCode::OK);
+    let first = repeat(&bia, "2026-11-05", "10", 3).await;
+
+    let (status, edited) = bia.patch(&all(&first), body).await;
+
+    assert_eq!(status, StatusCode::OK, "{edited}");
+    let (by_following, by_all) = (run(&ana, "2026-11", 3).await, run(&bia, "2026-11", 3).await);
+    for field in ["date", "amount"] {
+        assert_eq!(field_of(&by_all, field), field_of(&by_following, field));
+    }
+    assert_eq!(field_of(&by_all, "date"), days_from("2026-11", 3, "20"));
+    let entries = run(&bia, "2026-11", 3).await;
+    let (status, _) = bia.delete(&all(&entries[0])).await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    assert_empty(&bia, "2026-11", 3).await;
+}
+
+#[sqlx::test]
+async fn d33_an_all_move_lands_every_member_on_the_new_day_and_refuses_before_the_opening_date(
+    pool: PgPool,
+) {
+    let ana = TestApp::signed_in(pool, "ana@example.com").await;
+    ana.open_at("0", "2026-03-01").await;
+    repeat(&ana, "2026-03-10", "10", 3).await;
+    let second = only(&ana, "2026-04").await;
+
+    let (status, moved) = ana
+        .patch(&all(&second), json!({ "date": "2026-04-05" }))
+        .await;
+
+    assert_eq!(status, StatusCode::OK, "{moved}");
+    let entries = run(&ana, "2026-03", 3).await;
+    assert_eq!(field_of(&entries, "date"), days_from("2026-03", 3, "05"));
+    assert_ranked(&entries, 3);
+    let (status, problem) = ana
+        .patch(&all(&entries[1]), json!({ "date": "2026-05-05" }))
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+    assert_eq!(problem["errors"][0]["field"], "date");
+
+    let bia = ana.another_user("bia@example.com").await;
+    bia.open_at("0", "2026-03-08").await;
+    repeat(&bia, "2026-03-10", "10", 3).await;
+    let second = only(&bia, "2026-04").await;
+
+    let (status, problem) = bia
+        .patch(&all(&second), json!({ "date": "2026-04-05" }))
+        .await;
+
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+    assert_eq!(problem["type"], "urn:soldi:error:before-opening-date");
+    let entries = run(&bia, "2026-03", 3).await;
+    assert_eq!(field_of(&entries, "date"), days_from("2026-03", 3, "10"));
+}
+
+#[sqlx::test]
+async fn d33_another_users_member_is_not_found_with_all(pool: PgPool) {
+    let ana = opened(pool, "ana@example.com").await;
+    let bia = ana.another_user("bia@example.com").await;
+    bia.open_at("0", "2026-10-01").await;
+    repeat(&ana, "2026-11-05", "10", 3).await;
+    repeat(&bia, "2026-11-05", "10", 3).await;
+    let second = only(&ana, "2026-12").await;
+
+    let (status, _) = bia.patch(&all(&second), json!({ "amount": "1" })).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let (status, _) = bia.delete(&all(&second)).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+
+    for user in [&ana, &bia] {
+        let entries = run(user, "2026-11", 3).await;
+        assert_eq!(field_of(&entries, "amount"), ["10.00"; 3]);
+    }
 }

@@ -112,13 +112,13 @@ pub async fn create_transaction(
 #[utoipa::path(patch, path = "/api/transactions/{id}", tag = "transactions", request_body = UpdateTransaction,
     params(
         ("id" = Uuid, Path, description = "Transaction id"),
-        ("scope" = Option<Scope>, Query, description = "`following` also writes the amount, kind, category and note onto the series' later members, and a new day of the month onto this and every later member, each clamped to its month; the month never spreads")),
+        ("scope" = Option<Scope>, Query, description = "`following` also writes the amount, kind, category and note onto the series' later members, and a new day onto this and every later member, each in its own period; the period never spreads. `all` does the same for every member, earlier ones included (D33)")),
     responses(
         (status = 200, body = Transaction, description = "The entry after the change, with the series' new total; absent fields stay as they are"),
-        (status = 400, body = Problem, content_type = "application/problem+json", description = "`scope` is not `this` or `following`"),
+        (status = 400, body = Problem, content_type = "application/problem+json", description = "`scope` is not `this`, `following` or `all`"),
         (status = 401, body = Problem, content_type = "application/problem+json"),
         (status = 404, body = Problem, content_type = "application/problem+json", description = "The entry is missing or another user's, or the new category is missing, archived or another user's"),
-        (status = 422, body = Problem, content_type = "application/problem+json", description = "Same rules as create, on the entry after the change, `before-opening-date` included (an archived card it already carries stays allowed); with `repeat_months`, `repeat-not-allowed-on-bill-payment` or `repeat-not-allowed-on-cofrinho-withdrawal` on an entry outside a series, `validation` on `repeat_months` outside 2..60 or below this member's position, on `date` when the series would pass 2100; with `following` on a series member, `validation` on `date` when the new date leaves this entry's month (`must stay in this entry's month when the series moves`) or when two of the moved members share a month (`must not move a series with two entries in one month`); `archived-cofrinho` when the entry, or with `following` a later series member, is a deposit into or a resgate from a deleted cofrinho; `fatura-paid` when the amount, date or card changes on a card spend whose fatura (or, with `following`, a later member's) is paid, or the change lands it in a paid fatura (D30b); nothing is written")))]
+        (status = 422, body = Problem, content_type = "application/problem+json", description = "Same rules as create, on the entry after the change, `before-opening-date` included (an archived card it already carries stays allowed); with `repeat_months`, `repeat-not-allowed-on-bill-payment` or `repeat-not-allowed-on-cofrinho-withdrawal` on an entry outside a series, `validation` on `repeat_months` outside 2..60 or below this member's position, on `date` when the series would pass 2100; with `following` or `all` on a series member, `before-opening-date` when the earliest moved member would land before the opening date, `validation` on `date` when the new date leaves this entry's month (`must stay in this entry's month when the series moves`) or when two of the moved members share a month (`must not move a series with two entries in one month`); `archived-cofrinho` when the entry, or with `following` a later (with `all` any) series member, is a deposit into or a resgate from a deleted cofrinho; `fatura-paid` when the amount, date or card changes on a card spend whose fatura (or, with `following`, a later member's, with `all`, any member's) is paid, or the change lands it in a paid fatura (D30b); nothing is written")))]
 pub async fn update_transaction(
     State(state): State<AppState>,
     user: CurrentUser,
@@ -134,13 +134,13 @@ pub async fn update_transaction(
 #[utoipa::path(delete, path = "/api/transactions/{id}", tag = "transactions",
     params(
         ("id" = Uuid, Path, description = "Transaction id"),
-        ("scope" = Option<Scope>, Query, description = "`following` also deletes the series' members dated after this one")),
+        ("scope" = Option<Scope>, Query, description = "`following` also deletes the series' members dated after this one; `all` deletes every member (D33)")),
     responses(
         (status = 204, description = "Deleted"),
-        (status = 400, body = Problem, content_type = "application/problem+json", description = "`scope` is not `this` or `following`"),
+        (status = 400, body = Problem, content_type = "application/problem+json", description = "`scope` is not `this`, `following` or `all`"),
         (status = 401, body = Problem, content_type = "application/problem+json"),
         (status = 404, body = Problem, content_type = "application/problem+json", description = "Missing or another user's"),
-        (status = 422, body = Problem, content_type = "application/problem+json", description = "`archived-cofrinho`: the entry, or with `following` a later series member, is a deposit into or a resgate from a deleted cofrinho; `fatura-paid`: the entry, or with `following` a later series member, is a card spend of a paid fatura (D30b); nothing is deleted")))]
+        (status = 422, body = Problem, content_type = "application/problem+json", description = "`archived-cofrinho`: the entry, or with `following` a later (with `all` any) series member, is a deposit into or a resgate from a deleted cofrinho; `fatura-paid`: the entry, or with `following` a later (with `all` any) series member, is a card spend of a paid fatura (D30b); nothing is deleted")))]
 pub async fn delete_transaction(
     State(state): State<AppState>,
     user: CurrentUser,

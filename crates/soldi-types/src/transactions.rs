@@ -72,6 +72,8 @@ pub enum Scope {
     This,
     /// This entry and the series' entries dated on or after it; a new day of the month moves them all.
     Following,
+    /// Every member of the series, earlier ones included (D33).
+    All,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]

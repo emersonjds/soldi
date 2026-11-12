@@ -916,3 +916,80 @@ async fn sol113_a_payment_keeps_its_kind_and_takes_only_a_bill_category(pool: Pg
         StatusCode::NO_CONTENT
     );
 }
+
+#[sqlx::test]
+async fn d33_all_refuses_a_paid_fatura_on_an_earlier_member(pool: PgPool) {
+    let ana = TestApp::signed_in(pool, "ana@example.com").await;
+    ana.open_at("1000", "2026-10-01").await;
+    let card = create(&ana, porto(&ana.category_id("Cartão").await)).await;
+    let first = entry(
+        &ana,
+        json!({ "date": "2026-11-02", "amount": "50", "kind": "daily", "repeat_months": 3,
+                "category_id": ana.category_id("Mercado").await, "card_id": card["id"] }),
+    )
+    .await;
+    let (status, payment) = ana
+        .post(
+            &format!("{}?month=2026-11", pay_uri(&card)),
+            json!({ "date": "2026-11-10", "amount": "50" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{payment}");
+    let (_, december) = ana.get("/api/transactions?month=2026-12").await;
+    let second = entry_uri(&december[0]);
+
+    let (status, problem) = ana
+        .patch(&format!("{second}?scope=all"), json!({ "amount": "60" }))
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+    assert_eq!(problem["type"], "urn:soldi:error:fatura-paid");
+    let (status, problem) = ana.delete(&format!("{second}?scope=all")).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+    assert_eq!(problem["type"], "urn:soldi:error:fatura-paid");
+    let (_, november) = ana.get("/api/transactions?month=2026-11").await;
+    let spent = |listed: &serde_json::Value| {
+        listed
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|row| row["id"] == first["id"])
+            .unwrap()
+            .clone()
+    };
+    assert_eq!(spent(&november)["amount"], "50.00");
+
+    let (status, noted) = ana
+        .patch(&format!("{second}?scope=all"), json!({ "note": "feira" }))
+        .await;
+    assert_eq!(status, StatusCode::OK, "{noted}");
+    let (status, changed) = ana
+        .patch(
+            &format!("{second}?scope=following"),
+            json!({ "amount": "60" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{changed}");
+    let (_, november) = ana.get("/api/transactions?month=2026-11").await;
+    assert_eq!(spent(&november)["amount"], "50.00");
+    assert_eq!(spent(&november)["note"], "feira");
+}
+
+#[sqlx::test]
+async fn d33_a_series_member_never_becomes_a_bill_payment(pool: PgPool) {
+    let ana = TestApp::signed_in(pool, "ana@example.com").await;
+    ana.open_at("0", "2026-11-01").await;
+    let rent = category_id(&ana, "Aluguel").await;
+    entry(
+        &ana,
+        json!({ "date": "2026-11-07", "amount": "10", "kind": "bill", "category_id": rent, "repeat_months": 3 }),
+    )
+    .await;
+    let (_, december) = ana.get("/api/transactions?month=2026-12").await;
+    let body = json!({ "name": "Aluguel", "amount": "10", "due_day": 7, "category_id": rent });
+
+    let (status, problem) = ana.post(&from_entry(&december[0]), body).await;
+
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+    assert_eq!(problem["type"], "urn:soldi:error:cannot-become-bill");
+    assert_eq!(ana.get("/api/bills").await.1, json!([]));
+}
