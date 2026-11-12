@@ -1,4 +1,4 @@
-import type { KeyboardEvent } from "react";
+import type { KeyboardEvent, ReactNode } from "react";
 
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
@@ -24,7 +24,7 @@ type Tone = keyof typeof TONE;
 
 type SwitcherProps = {
   legend: string;
-  label: string;
+  label: ReactNode;
   previousLabel: string;
   nextLabel: string;
   atStart: boolean;
@@ -66,7 +66,10 @@ export const Switcher = ({
       <button type="button" aria-label={previousLabel} className={button} disabled={atStart} onClick={previous}>
         <ChevronLeft className="size-5" />
       </button>
-      <span aria-live="polite" className="min-w-36 text-center font-semibold text-base tabular-nums">
+      <span
+        aria-live="polite"
+        className="flex min-w-36 items-center justify-center gap-2 font-semibold text-base tabular-nums"
+      >
         {label}
       </span>
       <button type="button" aria-label={nextLabel} className={button} disabled={atEnd} onClick={next}>

@@ -47,7 +47,7 @@ pub struct YearQuery {
 #[utoipa::path(get, path = "/api/reports/savings", tag = "reports",
     params(("year" = String, Query, description = "The year, `YYYY` from 2000 to 2100", example = "2026")),
     responses(
-        (status = 200, body = SavingsYear, description = "Each month's income and savings, as the month view, from the opening month to today's month, newest first; empty outside them"),
+        (status = 200, body = SavingsYear, description = "Each month's income and savings, as the month view, from the opening month to December, newest first; months after today's are a `forecast` of their entries, out of the totals; empty before the opening or after today's year"),
         (status = 400, body = Problem, content_type = "application/problem+json", description = "No `year`"),
         (status = 401, body = Problem, content_type = "application/problem+json"),
         (status = 422, body = Problem, content_type = "application/problem+json", description = "`year` is not a year from 2000 to 2100")))]

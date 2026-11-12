@@ -1564,7 +1564,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Each month's income and savings, as the month view, from the opening month to today's month, newest first; empty outside them",
+            "description": "Each month's income and savings, as the month view, from the opening month to December, newest first; months after today's are a `forecast` of their entries, out of the totals; empty before the opening or after today's year",
             "content": {
               "application/json": {
                 "schema": {
@@ -2996,13 +2996,18 @@
       },
       "SavingsMonth": {
         "type": "object",
-        "description": "A month of the savings year: `income` without resgates and `saved` (Economia and its\ncofrinhos minus resgates), as the month view's `totals.income` and `savings.saved`.\n`rate_pct` is `saved` over `income` with one decimal, null when `income` is 0.",
+        "description": "A month of the savings year: `income` without resgates and `saved` (Economia and its\ncofrinhos minus resgates), as the month view's `totals.income` and `savings.saved`.\n`rate_pct` is `saved` over `income` with one decimal, null when `income` is 0. `forecast`\nmarks a month after today's: only the entries already dated there, out of the year's totals.",
         "required": [
           "month",
           "income",
-          "saved"
+          "saved",
+          "forecast"
         ],
         "properties": {
+          "forecast": {
+            "type": "boolean",
+            "example": false
+          },
           "income": {
             "type": "string"
           },
@@ -3024,7 +3029,7 @@
       },
       "SavingsYear": {
         "type": "object",
-        "description": "A year's savings month by month, newest first, from the opening month (or January) to today's\nmonth (or December); totals and `rate_pct` are over the listed months.",
+        "description": "A year's savings month by month, newest first, from the opening month (or January) to\nDecember; totals and `rate_pct` are over the months up to today's, not the forecast ones.",
         "required": [
           "year",
           "income_total",

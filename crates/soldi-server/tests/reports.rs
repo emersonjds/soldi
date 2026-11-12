@@ -196,21 +196,22 @@ async fn the_savings_year_matches_each_month_view_and_only_the_callers_entries(p
             "2025-04", "2025-03"
         ]
     );
+    assert!(months.iter().all(|month| month["forecast"] == false));
     assert_eq!(
         months[9],
-        json!({ "month": "2025-03", "income": "5000.00", "saved": "200.55", "rate_pct": "4.0" })
+        json!({ "month": "2025-03", "income": "5000.00", "saved": "200.55", "rate_pct": "4.0", "forecast": false })
     );
     assert_eq!(
         months[6],
-        json!({ "month": "2025-06", "income": "1000.00", "saved": "-100.00", "rate_pct": "-10.0" })
+        json!({ "month": "2025-06", "income": "1000.00", "saved": "-100.00", "rate_pct": "-10.0", "forecast": false })
     );
     assert_eq!(
         months[0],
-        json!({ "month": "2025-12", "income": "0.00", "saved": "10.00", "rate_pct": null })
+        json!({ "month": "2025-12", "income": "0.00", "saved": "10.00", "rate_pct": null, "forecast": false })
     );
     assert_eq!(
         months[7],
-        json!({ "month": "2025-05", "income": "0.00", "saved": "0.00", "rate_pct": null })
+        json!({ "month": "2025-05", "income": "0.00", "saved": "0.00", "rate_pct": null, "forecast": false })
     );
     assert_eq!(
         (
@@ -249,26 +250,60 @@ async fn the_savings_year_matches_each_month_view_and_only_the_callers_entries(p
 }
 
 #[sqlx::test]
-async fn the_current_year_stops_at_todays_month_and_counts_its_future_dated_entries(pool: PgPool) {
+async fn the_current_year_runs_to_december_with_later_months_a_forecast_out_of_the_totals(
+    pool: PgPool,
+) {
     let ana = TestApp::signed_in(pool, "ana@example.com").await;
+    let bia = ana.another_user("bia@example.com").await;
     let today = soldi_server::today_sao_paulo();
-    let first = today.format("%Y-%m-01").to_string();
+    let year = today.format("%Y").to_string();
+    let this_month = today.format("%Y-%m").to_string();
     let last = soldi_server::months::domain::month_end(today).to_string();
     let next = (soldi_server::months::domain::month_end(today) + chrono::Days::new(1)).to_string();
-    ana.open_at("0", &first).await;
+    ana.open_at("0", &format!("{year}-01-01")).await;
+    bia.open_at("0", &format!("{year}-01-01")).await;
     log(&ana, &last, "income", "1000", "Salário").await;
     log(&ana, &last, "bill", "100", "Economia").await;
     log(&ana, &next, "bill", "500", "Economia").await;
     log(&ana, &next, "income", "500", "Salário").await;
+    log(&bia, &next, "bill", "777", "Economia").await;
 
-    let (status, year) = savings(&ana, &today.format("%Y").to_string()).await;
+    let (status, body) = savings(&ana, &year).await;
 
-    assert_eq!(status, StatusCode::OK, "{year}");
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let months = body["months"].as_array().unwrap();
+    assert_eq!(months.len(), 12);
+    assert_eq!(months[0]["month"], format!("{year}-12"));
+    for row in months {
+        let month = row["month"].as_str().unwrap();
+        assert_eq!(
+            row["forecast"],
+            json!(month > this_month.as_str()),
+            "{month}"
+        );
+    }
+    let at = |month: &str| months.iter().find(|row| row["month"] == month);
     assert_eq!(
-        year["months"],
-        json!([{ "month": today.format("%Y-%m").to_string(), "income": "1000.00", "saved": "100.00", "rate_pct": "10.0" }])
+        at(&this_month).unwrap(),
+        &json!({ "month": this_month, "income": "1000.00", "saved": "100.00", "rate_pct": "10.0", "forecast": false })
     );
-    assert_eq!(year["saved_total"], "100.00");
+    // In December next month belongs to next year, so this year must not list it.
+    if next[..4] == this_month[..4] {
+        assert_eq!(
+            at(&next[..7]).unwrap(),
+            &json!({ "month": &next[..7], "income": "500.00", "saved": "500.00", "rate_pct": "100.0", "forecast": true })
+        );
+    } else {
+        assert!(at(&next[..7]).is_none());
+    }
+    assert_eq!(
+        (
+            &body["income_total"],
+            &body["saved_total"],
+            &body["rate_pct"]
+        ),
+        (&json!("1000.00"), &json!("100.00"), &json!("10.0"))
+    );
 }
 
 #[sqlx::test]

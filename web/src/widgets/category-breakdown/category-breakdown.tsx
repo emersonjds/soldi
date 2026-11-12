@@ -16,6 +16,7 @@ import { TransactionSheet } from "@/features/add-transaction/transaction-sheet";
 import { EditBillSheet } from "@/features/edit-bill/edit-bill-sheet";
 import { cn } from "@/lib/utils";
 import type { Schemas } from "@/shared/api/client";
+import { commaDecimal, csvCell, downloadCsv } from "@/shared/lib/csv";
 import { addMonths, dayMonth, monthShort, todayISO } from "@/shared/lib/date";
 import { formatDelta, formatPct } from "@/shared/lib/percent";
 import { cents, fromCents } from "@/shared/lib/tier";
@@ -44,15 +45,6 @@ const plural = (count: number, one: string, many: string) => `${count} ${count =
 /** `2026-11` → `out`, the month the deltas compare against. */
 const previousShort = (month: string) => monthShort(addMonths(month, -1)).toLowerCase();
 
-/** A leading `=`, `+`, `-` or `@` would run as a spreadsheet formula. */
-const csvCell = (text: string) => {
-  const inert = /^[=+\-@]/.test(text) ? `'${text}` : text;
-  return `"${inert.replaceAll('"', '""')}"`;
-};
-
-const commaDecimal = (value: string) => value.replace(".", ",");
-
-/** pt-BR spreadsheets read `;` columns, comma decimals and need the BOM to see UTF-8. */
 const exportCsv = (report: Report) => {
   const groupName = new Map(report.groups.map((group) => [group.category_id, group.name]));
   const lines = report.outflow.map((share) => {
@@ -64,17 +56,15 @@ const exportCsv = (report: Report) => {
       commaDecimal(share.pct),
     ].join(";");
   });
-  const text = ["Grupo;Subcategoria;Valor;Percentual", ...lines, ""].join("\r\n");
-  const url = URL.createObjectURL(new Blob([`\uFEFF${text}`], { type: "text/csv;charset=utf-8" }));
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `soldi-para-onde-vai-${report.month}.csv`;
-  document.body.append(link);
-  link.click();
-  link.remove();
-  // Safari and Firefox cancel a download whose URL is revoked in the same task.
-  setTimeout(() => URL.revokeObjectURL(url), 0);
+  downloadCsv(`soldi-para-onde-vai-${report.month}.csv`, ["Grupo;Subcategoria;Valor;Percentual", ...lines]);
 };
+
+/** `Poupança` → `poupanca`, for a group named in the address. */
+const plain = (name: string) =>
+  name
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase();
 
 /** Spending that fell is good news; no change stays neutral. */
 const DeltaBadge = ({ delta_pct, previous }: { delta_pct?: string | null; previous: string }) => {
@@ -515,9 +505,10 @@ const HeaderRow = ({ report, groups, picked, onPick }: HeaderRowProps) => (
 );
 
 /** `Para onde vai`: the month's outflow by group; a slice, legend item, row or the select picks a group's entries. */
-export const CategoryBreakdown = ({ month }: { month: string }) => {
+export const CategoryBreakdown = ({ month, group: asked }: { month: string; group?: string }) => {
   const report = useCategoryReport(month);
-  const [picked, setPicked] = useState<string>();
+  const categories = useQuery(categoriesQuery);
+  const [chosen, setChosen] = useState<string | null>();
   const [open, setOpen] = useState<string[]>([]);
   const detailId = useId();
 
@@ -531,10 +522,17 @@ export const CategoryBreakdown = ({ month }: { month: string }) => {
 
   const shares = report.data.outflow;
   const groups = report.data.groups.filter((group) => group.kind !== "income");
+  const savingsId = categories.data?.find((each) => each.is_savings && !each.parent_id)?.id;
+  const wanted = asked && plain(asked);
+  const named =
+    groups.find((each) => wanted === "economia" && each.category_id === savingsId) ??
+    groups.find((each) => plain(each.name) === wanted);
+  const picked = chosen === undefined ? named?.category_id : (chosen ?? undefined);
+  const setPicked = (id?: string) => setChosen(id ?? null);
   const group = groups.find((each) => each.category_id === picked);
   const folding = groups.filter((each) => each.children.length > 0).map((each) => each.category_id);
   const previous = previousShort(month);
-  const toggle = (id: string) => setPicked((current) => (current === id ? undefined : id));
+  const toggle = (id: string) => setPicked(picked === id ? undefined : id);
   const fold = (id: string) =>
     setOpen((current) => (current.includes(id) ? current.filter((each) => each !== id) : [...current, id]));
 
