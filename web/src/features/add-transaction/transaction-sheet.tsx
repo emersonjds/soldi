@@ -93,6 +93,12 @@ type Source = Transaction | NewTransaction;
 
 /** The server's 422 `date` message when a move meets a month holding two members (M5). */
 const SHARED_MONTH = "must not move a series with two entries in one month";
+/** The server's 422 `kind` message when a conta fixa or fatura payment is moved off Saída (SOL-113). */
+const PAYMENT_KIND = "a conta fixa payment stays a Saída";
+const FIELD_MESSAGES: [server: string, message: string][] = [
+  [SHARED_MONTH, "Outro lançamento da série está no mesmo mês. Mova-o com Só este antes."],
+  [PAYMENT_KIND, "Um pagamento de conta fixa continua sendo Saída."],
+];
 
 const prefillOf = ({ note, category, amount, date }: Source): BillPrefill => ({
   name: (note ?? category.name).slice(0, 100),
@@ -492,28 +498,30 @@ const TransactionForm = ({
         </>
       ) : (
         <>
-          <ToggleGroup
-            type="single"
-            spacing={0}
-            value={draft.kind}
-            onValueChange={(kind: Kind | "") =>
-              kind &&
-              set({ kind, category: undefined, cardId: "", installments: draft.installments && kind !== "income" })
-            }
-            aria-label="Tipo"
-            className="grid w-full grid-cols-3 rounded-2xl bg-muted p-1"
-          >
-            {KINDS.map(({ value, label, icon: Icon }) => (
-              <ToggleGroupItem
-                key={value}
-                value={value}
-                className={cn(chip, "gap-1.5", value === "income" && "text-income-text")}
-              >
-                <Icon aria-hidden className="size-4" />
-                {label}
-              </ToggleGroupItem>
-            ))}
-          </ToggleGroup>
+          {!transaction?.recurring_bill_id && (
+            <ToggleGroup
+              type="single"
+              spacing={0}
+              value={draft.kind}
+              onValueChange={(kind: Kind | "") =>
+                kind &&
+                set({ kind, category: undefined, cardId: "", installments: draft.installments && kind !== "income" })
+              }
+              aria-label="Tipo"
+              className="grid w-full grid-cols-3 rounded-2xl bg-muted p-1"
+            >
+              {KINDS.map(({ value, label, icon: Icon }) => (
+                <ToggleGroupItem
+                  key={value}
+                  value={value}
+                  className={cn(chip, "gap-1.5", value === "income" && "text-income-text")}
+                >
+                  <Icon aria-hidden className="size-4" />
+                  {label}
+                </ToggleGroupItem>
+              ))}
+            </ToggleGroup>
+          )}
           {amountField}
           {categoryField}
           {cardField}
@@ -623,9 +631,11 @@ export const TransactionSheet = ({
           done(scope === "following" ? "Série atualizada" : "Lançamento atualizado");
         },
         onError: (error) =>
-          error instanceof ApiError && error.errors.some(({ message }) => message === SHARED_MONTH)
-            ? toast.error("Outro lançamento da série está no mesmo mês. Mova-o com Só este antes.")
-            : toast.error(problemMessage(error) ?? "Não foi possível salvar o lançamento."),
+          toast.error(
+            (error instanceof ApiError &&
+              FIELD_MESSAGES.find(([server]) => error.errors.some(({ message }) => message === server))?.[1]) ||
+              (problemMessage(error) ?? "Não foi possível salvar o lançamento."),
+          ),
       },
     );
   };
