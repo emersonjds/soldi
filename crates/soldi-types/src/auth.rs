@@ -57,6 +57,13 @@ pub struct ConfirmPasswordReset {
     pub new_password: String,
 }
 
+#[derive(Clone, Serialize, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ConfirmEmailVerification {
+    /// The `token` of the link in the e-mail.
+    pub token: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct User {
     pub id: Uuid,
@@ -66,4 +73,6 @@ pub struct User {
     pub onboarded: bool,
     /// False until `POST /api/me/tour-seen` runs; the web shows the welcome tour after onboarding while it is false.
     pub tour_seen: bool,
+    /// False until a link from `POST /api/me/email-verification` or a password reset is confirmed.
+    pub email_verified: bool,
 }

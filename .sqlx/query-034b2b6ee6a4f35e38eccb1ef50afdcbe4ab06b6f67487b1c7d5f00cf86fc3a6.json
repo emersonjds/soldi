@@ -1,0 +1,69 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE users SET name = $2, updated_at = now() WHERE id = $1\n           RETURNING id, email::text AS \"email!\", name, onboarded_at IS NOT NULL AS \"onboarded!\", tour_seen_at IS NOT NULL AS \"tour_seen!\", email_verified_at IS NOT NULL AS \"email_verified!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "email!",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "onboarded!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 4,
+        "name": "tour_seen!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 5,
+        "name": "email_verified!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      false,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "034b2b6ee6a4f35e38eccb1ef50afdcbe4ab06b6f67487b1c7d5f00cf86fc3a6"
+}

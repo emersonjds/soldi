@@ -1,6 +1,7 @@
 use chrono::{Duration, Utc};
 use soldi_types::auth::{
-    ChangePassword, ConfirmPasswordReset, DeleteAccount, SignIn, SignUp, UpdateMe, User,
+    ChangePassword, ConfirmEmailVerification, ConfirmPasswordReset, DeleteAccount, SignIn, SignUp,
+    UpdateMe, User,
 };
 use sqlx::{PgConnection, PgPool};
 use uuid::Uuid;
@@ -151,7 +152,7 @@ pub async fn request_password_reset(
         .map_err(|error| AppError::Internal(error.to_string()))
 }
 
-/// Sets the password and ends every session and every pending link of the user.
+/// Sets the password, verifies the e-mail and ends every session and every pending link of the user.
 pub async fn confirm_password_reset(
     pool: &PgPool,
     input: ConfirmPasswordReset,
@@ -171,8 +172,56 @@ pub async fn confirm_password_reset(
         return Err(domain::invalid_reset_link());
     };
     repo::set_password_hash(&mut tx, user_id, &password_hash).await?;
+    repo::mark_email_verified(&mut tx, user_id).await?;
     repo::delete_all_sessions(&mut tx, user_id).await?;
     repo::delete_password_resets(&mut tx, user_id).await?;
+    repo::delete_email_verifications(&mut tx, user_id).await?;
+    tx.commit().await?;
+    Ok(())
+}
+
+/// Runs before the request is answered, so an already verified e-mail gets the 422.
+pub async fn check_unverified(pool: &PgPool, user: &CurrentUser) -> Result<(), AppError> {
+    let mut conn = pool.acquire().await?;
+    if repo::email_verified(&mut conn, user.id).await? {
+        return Err(domain::email_already_verified());
+    }
+    Ok(())
+}
+
+/// Runs after the request was answered: voids the user's older links and mails a new one.
+pub async fn request_email_verification(
+    pool: &PgPool,
+    mailer: &Mailer,
+    public_url: &str,
+    user: &CurrentUser,
+) -> Result<(), AppError> {
+    let token = domain::new_reset_token();
+    let mut tx = pool.begin().await?;
+    repo::lock_email_verifications(&mut tx, user.id).await?;
+    repo::delete_email_verifications(&mut tx, user.id).await?;
+    repo::insert_email_verification(&mut tx, user.id, &domain::hash_token(&token)).await?;
+    let found = repo::find_user(&mut tx, user.id).await?;
+    tx.commit().await?;
+    let link = format!("{public_url}/verificar-email#token={token}");
+    mailer
+        .send_email_verification(&found.email, &link)
+        .await
+        .map_err(|error| AppError::Internal(error.to_string()))
+}
+
+/// Verifies the owner of the link; signs nobody in and ends no session.
+pub async fn confirm_email_verification(
+    pool: &PgPool,
+    input: ConfirmEmailVerification,
+) -> Result<(), AppError> {
+    let token_hash = domain::hash_token(&input.token);
+    let mut tx = pool.begin().await?;
+    let Some(user_id) = repo::take_email_verification(&mut tx, &token_hash).await? else {
+        return Err(domain::invalid_verification_link());
+    };
+    repo::mark_email_verified(&mut tx, user_id).await?;
+    repo::delete_email_verifications(&mut tx, user_id).await?;
     tx.commit().await?;
     Ok(())
 }

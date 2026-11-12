@@ -9,10 +9,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let database_url = std::env::var("DATABASE_URL")?;
     let port = std::env::var("PORT").unwrap_or_else(|_| "8080".into());
     let web_dir = std::env::var("SOLDI_WEB_DIR").unwrap_or_else(|_| "web/out".into());
-    let public_url = std::env::var("SOLDI_PUBLIC_URL")
-        .unwrap_or_else(|_| "http://localhost:8080".into())
-        .trim_end_matches('/')
-        .to_string();
+    let hosted =
+        std::env::var_os("PORT").is_some() || std::env::var_os("RAILWAY_ENVIRONMENT").is_some();
+    let public_url =
+        soldi_server::mail::public_url(std::env::var("SOLDI_PUBLIC_URL").ok(), hosted)?;
     let mailer = soldi_server::mail::Mailer::from_env(
         std::env::var("RESEND_API_KEY").ok(),
         std::env::var("SOLDI_MAIL_FROM").ok(),

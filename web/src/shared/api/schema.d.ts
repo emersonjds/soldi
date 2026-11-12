@@ -4,6 +4,22 @@
  */
 
 export interface paths {
+    "/api/auth/email-verification/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["confirm_email_verification"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/auth/me": {
         parameters: {
             query?: never;
@@ -306,6 +322,22 @@ export interface paths {
         options?: never;
         head?: never;
         patch: operations["update_me"];
+        trace?: never;
+    };
+    "/api/me/email-verification": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["request_email_verification"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/me/password": {
@@ -682,6 +714,10 @@ export interface components {
             items: components["schemas"]["Cofrinho"][];
             saved_this_month: string;
             total_saved: string;
+        };
+        ConfirmEmailVerification: {
+            /** @description The `token` of the link in the e-mail. */
+            token: string;
         };
         ConfirmPasswordReset: {
             /** @description 8 to 128 characters. */
@@ -1142,6 +1178,8 @@ export interface components {
         };
         User: {
             email: string;
+            /** @description False until a link from `POST /api/me/email-verification` or a password reset is confirmed. */
+            email_verified: boolean;
             /** Format: uuid */
             id: string;
             name: string;
@@ -1222,6 +1260,46 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    confirm_email_verification: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmEmailVerification"];
+            };
+        };
+        responses: {
+            /** @description E-mail verified; every pending verification link of the user ends. Signs nobody in */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `invalid-verification-link` for an unknown, expired or used token */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Rate limited; wait `Retry-After` seconds */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     me: {
         parameters: {
             query?: never;
@@ -2363,6 +2441,50 @@ export interface operations {
             };
             /** @description `name` blank, over 60 characters or with NUL */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    request_email_verification: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A verification link valid for 24 hours is e-mailed to the caller; older links stop working */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description `email-already-verified`; nothing is sent */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Rate limited; wait `Retry-After` seconds */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -32,6 +32,7 @@ export const ANA: Schemas["User"] = {
   name: "Ana",
   onboarded: true,
   tour_seen: true,
+  email_verified: true,
 };
 
 export const SETTINGS: Schemas["Settings"] = {

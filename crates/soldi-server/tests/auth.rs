@@ -31,6 +31,7 @@ async fn sign_up_then_me_then_sign_out_ends_the_session(pool: PgPool) {
     assert_eq!(created["email"], "ana@example.com");
     assert_eq!(created["name"], "ana");
     assert_eq!(created["onboarded"], false);
+    assert_eq!(created["email_verified"], false);
 
     let (status, me) = user.get("/api/auth/me").await;
     assert_eq!(status, StatusCode::OK);
