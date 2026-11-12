@@ -12,9 +12,17 @@ import OnboardingPage from "./page";
 vi.mock("next/navigation", () => import("@/test/next-navigation"));
 
 const CATEGORIES = [
-  { id: "11111111-1111-4111-8111-111111111111", name: "Aluguel", kind: "bill", icon: "house", color: "cat-6" },
+  {
+    id: "11111111-1111-4111-8111-111111111111",
+    name: "Aluguel",
+    kind: "bill",
+    icon: "key-round",
+    color: "cat-6",
+    parent_id: "44444444-4444-4444-8444-444444444444",
+  },
   { id: "22222222-2222-4222-8222-222222222222", name: "Luz", kind: "bill", icon: "zap", color: "cat-7" },
   { id: "33333333-3333-4333-8333-333333333333", name: "Mercado", kind: "daily", icon: "shopping-cart", color: "cat-1" },
+  { id: "44444444-4444-4444-8444-444444444444", name: "Casa", kind: "bill", icon: "home", color: "cat-6" },
 ];
 
 const NEW_USER = { ...ANA, onboarded: false, tour_seen: false };
@@ -78,7 +86,7 @@ describe("Onboarding", () => {
     await userEvent.type(screen.getByLabelText("Nome"), "Aluguel do apê");
     await userEvent.type(screen.getByLabelText("Valor"), "2.259,56");
     await userEvent.type(screen.getByLabelText("Dia"), "5");
-    await userEvent.click(await screen.findByRole("radio", { name: "Aluguel" }));
+    await userEvent.click(await screen.findByRole("radio", { name: "Casa › Aluguel" }));
     expect(screen.queryByRole("radio", { name: "Mercado" })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Continuar" }));
 
@@ -179,7 +187,7 @@ describe("Onboarding", () => {
     await userEvent.type(within(second).getByLabelText("Nome"), "Internet");
     await userEvent.type(within(second).getByLabelText("Valor"), "99,90");
     await userEvent.type(within(second).getByLabelText("Dia"), "12");
-    await userEvent.click(within(second).getByRole("radio", { name: "Aluguel" }));
+    await userEvent.click(within(second).getByRole("radio", { name: "Casa › Aluguel" }));
     await userEvent.click(screen.getByRole("button", { name: "Continuar" }));
 
     expect(await screen.findByText(/2 contas fixas/)).toBeInTheDocument();

@@ -26,12 +26,12 @@ test("a new user logs a Diário in three taps and sees it with the day balance",
   await expect(page.getByRole("region", { name: "Saldo hoje" })).toContainText("R$ 1.000,00");
 
   await page.getByRole("navigation", { name: "Navegação principal" }).getByRole("button", { name: "Lançar" }).click();
-  await expect(page.getByRole("radio", { name: "Mercado" })).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByRole("radio", { name: "Gasto" })).toHaveAttribute("aria-checked", "true");
   await page.keyboard.type("12,50");
   await page.getByRole("button", { name: "Salvar" }).click();
 
   const ledger = page.getByRole("region", { name: "Lançamentos" });
-  await expect(ledger.getByRole("button", { name: /Mercado/ })).toContainText("R$ 12,50");
+  await expect(ledger.getByRole("button", { name: /Gasto/ })).toContainText("R$ 12,50");
   await expect(ledger.getByRole("heading", { level: 3 }).first()).toContainText(/Hoje.*R\$\s987,50.*Apertado/);
   await expect(page.getByRole("region", { name: "Saldo hoje" })).toContainText("R$ 987,50");
 });
@@ -119,13 +119,13 @@ test("Lançar fills the cents from the right and a category created from the pic
 
   const tabs = page.getByRole("navigation", { name: "Navegação principal" });
   await tabs.getByRole("button", { name: "Lançar" }).click();
-  await expect(page.getByRole("radio", { name: "Mercado" })).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByRole("radio", { name: "Gasto" })).toHaveAttribute("aria-checked", "true");
   await page.keyboard.type("12345");
   await expect(page.getByLabel("Valor")).toHaveValue("123,45");
   await page.getByRole("button", { name: "Salvar" }).click();
 
   const ledger = page.getByRole("region", { name: "Lançamentos" });
-  await expect(ledger.getByRole("button", { name: /Mercado/ })).toContainText("R$ 123,45");
+  await expect(ledger.getByRole("button", { name: /Gasto/ })).toContainText("R$ 123,45");
 
   await tabs.getByRole("button", { name: "Lançar" }).click();
   await page.getByRole("button", { name: "Ver todas" }).click();
@@ -175,7 +175,7 @@ test("the hero shows the balance and the summary, and the spending glance opens 
   await page.getByRole("button", { name: "Salvar" }).click();
 
   await page.getByRole("navigation", { name: "Navegação principal" }).getByRole("button", { name: "Lançar" }).click();
-  await expect(page.getByRole("radio", { name: "Mercado" })).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByRole("radio", { name: "Gasto" })).toHaveAttribute("aria-checked", "true");
   await page.keyboard.type("1250");
   await page.getByRole("button", { name: "Salvar" }).click();
 
@@ -184,7 +184,7 @@ test("the hero shows the balance and the summary, and the spending glance opens 
   await expect(hero).toContainText(/Saldo hoje em conta\s*R\$\s2\.987,50/);
 
   const spending = page.getByRole("region", { name: "Para Onde Vai" });
-  await expect(spending.getByRole("listitem")).toHaveText([/Mercado\s*R\$\s12,50\s*100,0%/]);
+  await expect(spending.getByRole("listitem")).toHaveText([/Gasto\s*R\$\s12,50\s*100,0%/]);
   await spending.getByRole("link", { name: "Ver análise" }).click();
   await expect(page).toHaveURL(/\/para-onde-vai\?m=\d{4}-\d{2}$/);
 
@@ -221,40 +221,39 @@ test("Lançamentos shows only bills under Contas, and Lançar picks from a row o
   const launch = page.getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ });
   const row = launch.getByRole("radiogroup", { name: "Categoria" });
   await expect(row.getByRole("radio")).toHaveText([
-    "Mercado",
-    "Beleza",
-    "Casa",
-    "Combustível",
-    "Comida fora",
+    "Gasto",
     "Educação",
-    "Farmácia",
+    "Saúde",
+    "Alimentação",
+    "Família",
     "Lazer",
+    "Transporte",
   ]);
-  await row.getByRole("radio", { name: "Comida fora" }).click();
+  await row.getByRole("radio", { name: "Lazer" }).click();
   await launch.getByLabel("Valor").fill("12.345,67");
   await expectNoClipped(page);
   await expect(launch.getByRole("button", { name: "Salvar" })).toBeInViewport();
   await launch.getByRole("button", { name: "Salvar" }).click();
 
   await tabs.getByRole("button", { name: "Lançar" }).click();
-  await expect(row.getByRole("radio").first()).toHaveText("Comida fora");
+  await expect(row.getByRole("radio").first()).toHaveText("Lazer");
   await launch.getByRole("radio", { name: "Conta" }).click();
-  await expect(row.getByRole("radio", { name: "Aluguel" })).toHaveAttribute("aria-checked", "true");
+  await expect(row.getByRole("radio", { name: "Casa" })).toHaveAttribute("aria-checked", "true");
   await launch.getByLabel("Valor").fill("23.456,78");
   await launch.getByRole("button", { name: "Salvar" }).click();
 
   const ledger = page.getByRole("region", { name: "Lançamentos" });
-  await expect(ledger.getByRole("button", { name: /Aluguel/ })).toContainText("R$ 23.456,78");
+  await expect(ledger.getByRole("button", { name: /Casa/ })).toContainText("R$ 23.456,78");
   await ledger.getByRole("radio", { name: "Contas" }).click();
-  await expect(ledger.getByRole("button", { name: /Comida fora/ })).toBeHidden();
-  await expect(ledger.getByRole("button", { name: /Aluguel/ })).toBeVisible();
+  await expect(ledger.getByRole("button", { name: /Lazer/ })).toBeHidden();
+  await expect(ledger.getByRole("button", { name: /Casa/ })).toBeVisible();
   for (const width of [375, 1024, 1280, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     await expectNoClipped(page);
   }
   await ledger.getByRole("radio", { name: "Diário" }).click();
-  await expect(ledger.getByRole("button", { name: /Comida fora/ })).toContainText("R$ 12.345,67");
-  await expect(ledger.getByRole("button", { name: /Aluguel/ })).toBeHidden();
+  await expect(ledger.getByRole("button", { name: /Lazer/ })).toContainText("R$ 12.345,67");
+  await expect(ledger.getByRole("button", { name: /Casa/ })).toBeHidden();
 
   await page.getByRole("button", { name: "Lançar", exact: true }).first().click();
   await expect(launch.getByRole("radiogroup", { name: "Categoria" })).toBeVisible();

@@ -21,7 +21,7 @@ type Entry = Schemas["Transaction"];
 const CIRCLES = 8;
 
 /** The category that comes first and preselected; the API sorts by name. */
-const FIRST: Record<Kind, string> = { income: "Salário", bill: "Aluguel", daily: "Mercado" };
+const FIRST: Record<Kind, string> = { income: "Salário", bill: "Casa", daily: "Gasto" };
 
 /** Top-level categories, `FIRST` leading, each followed by its children; a child of an unknown parent stands alone. */
 const grouped = (list: Category[], first: string) => {
