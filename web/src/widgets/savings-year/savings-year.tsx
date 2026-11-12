@@ -4,7 +4,16 @@ import { type ReactNode, useId, useState } from "react";
 
 import Link from "next/link";
 
-import { BadgeCheck, CalendarDays, Download, MoreHorizontal, Pencil, PiggyBank, TrendingUp } from "lucide-react";
+import {
+  BadgeCheck,
+  CalendarDays,
+  Download,
+  MoreHorizontal,
+  Pencil,
+  PiggyBank,
+  TrendingDown,
+  TrendingUp,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -69,6 +78,7 @@ const saved = (month: Month) => cents(month.saved) > 0;
 
 /** Saving months in a row, ending at the last closed-or-current month, or the one before while it has not saved. */
 const streak = (past: Month[]) => {
+  if (past.length === 0) return 0;
   const run = saved(past[past.length - 1]) ? past : past.slice(0, -1);
   const broken = run.findLastIndex((month) => !saved(month));
   return run.length - broken - 1;
@@ -276,7 +286,11 @@ const YearBody = ({ data, year, today }: { data: Schemas["SavingsYear"]; year: n
           </div>
           {data.rate_pct && (
             <span className="flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 font-semibold text-primary text-sm tabular-nums">
-              <TrendingUp aria-hidden className="size-4" />
+              {cents(data.saved_total) < 0 ? (
+                <TrendingDown aria-hidden className="size-4" />
+              ) : (
+                <TrendingUp aria-hidden className="size-4" />
+              )}
               {formatPct(data.rate_pct)} das entradas
             </span>
           )}
@@ -296,7 +310,12 @@ const YearBody = ({ data, year, today }: { data: Schemas["SavingsYear"]; year: n
       </section>
 
       {(run > 0 || best) && (
-        <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,14rem),1fr))] gap-4 lg:order-last">
+        <div
+          className={cn(
+            "grid grid-cols-[repeat(auto-fit,minmax(min(100%,14rem),1fr))] gap-4 lg:order-last",
+            run === 0 && "max-lg:hidden",
+          )}
+        >
           {run > 0 && (
             <Tile icon={<BadgeCheck className="size-5" />} tone="bg-tier-green-soft text-tier-green-foreground">
               <span className="text-muted-foreground text-sm">Consistência {year}</span>
@@ -399,8 +418,9 @@ export const SavingsYear = () => {
   const minYear = settings.data && Number(settings.data.opening_date.slice(0, 4));
   const data = savings.data;
   const empty = data && !data.months.some(hasMoney);
+  const opensThisYear = minYear === undefined || minYear >= thisYear;
 
-  if (year === thisYear && (empty || (!data && !savings.isError))) return null;
+  if ((!data && !savings.isError) || (empty && opensThisYear)) return null;
 
   const body = () => {
     if (savings.isError && !data)
@@ -410,13 +430,14 @@ export const SavingsYear = () => {
         </div>
       );
     if (!data) return null;
-    if (empty) return <p className="py-6 text-center text-muted-foreground">Nada para mostrar em {year}.</p>;
-    return <YearBody data={data} year={year} today={today} />;
+    if (empty) return <p className="py-6 text-center text-muted-foreground">Nada para mostrar em {data.year}.</p>;
+    return <YearBody data={data} year={data.year} today={today} />;
   };
 
   return (
     <section aria-label="Economia do ano" className="flex flex-col gap-6">
       <PageHero
+        level={2}
         eyebrow={
           <>
             PLANEJAMENTO & METAS<span className="max-lg:hidden"> • Exercício Fiscal</span>

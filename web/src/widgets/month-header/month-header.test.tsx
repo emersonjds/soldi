@@ -22,6 +22,13 @@ describe("PageHero", () => {
     expect(title.compareDocumentPosition(switcher) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
+  it("drops the title to a level-2 heading under another page's hero", () => {
+    render(<PageHero title="Economia do ano" level={2} />);
+
+    expect(screen.getByRole("heading", { level: 2, name: "Economia do ano" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { level: 1 })).not.toBeInTheDocument();
+  });
+
   it("shows the title alone without an eyebrow, and takes the page's class", () => {
     render(<PageHero title="Para onde vai" className="lg:sr-only" />);
 

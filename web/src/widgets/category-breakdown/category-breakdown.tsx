@@ -523,8 +523,11 @@ export const CategoryBreakdown = ({ month, group: asked }: { month: string; grou
   const shares = report.data.outflow;
   const groups = report.data.groups.filter((group) => group.kind !== "income");
   const savingsId = categories.data?.find((each) => each.is_savings && !each.parent_id)?.id;
-  const named = (each: Group) => plain(each.name) === asked || (asked === "economia" && each.category_id === savingsId);
-  const picked = chosen === undefined ? groups.find(named)?.category_id : (chosen ?? undefined);
+  const wanted = asked && plain(asked);
+  const named =
+    groups.find((each) => wanted === "economia" && each.category_id === savingsId) ??
+    groups.find((each) => plain(each.name) === wanted);
+  const picked = chosen === undefined ? named?.category_id : (chosen ?? undefined);
   const setPicked = (id?: string) => setChosen(id ?? null);
   const group = groups.find((each) => each.category_id === picked);
   const folding = groups.filter((each) => each.children.length > 0).map((each) => each.category_id);

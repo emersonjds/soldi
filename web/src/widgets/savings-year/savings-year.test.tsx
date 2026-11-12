@@ -74,7 +74,7 @@ describe("SavingsYear", () => {
     const hero = await within(await screen.findByRole("region", { name: "Economia do ano" })).findByRole("region", {
       name: "Evolução e Poupança Anual",
     });
-    expect(within(hero).getByRole("heading", { level: 1 })).toHaveTextContent("Evolução e Poupança Anual");
+    expect(within(hero).getByRole("heading", { level: 2 })).toHaveTextContent("Evolução e Poupança Anual");
     expect(within(hero).getByText("Anual")).toHaveClass("max-lg:hidden");
     expect(hero).toHaveTextContent("PLANEJAMENTO & METAS • Exercício Fiscal");
     expect(within(hero).getByText("• Exercício Fiscal")).toHaveClass("max-lg:hidden");
@@ -142,6 +142,100 @@ describe("SavingsYear", () => {
     expect(within(section()).queryByText(/^Consistência/)).not.toBeInTheDocument();
     expect(within(section()).queryByText("Maior Aporte Único")).not.toBeInTheDocument();
     expect(within(section()).queryByText(/das entradas$/)).not.toBeInTheDocument();
+  });
+
+  it("points the share pill down when the year lost savings", async () => {
+    show({
+      "GET /api/reports/savings": year([month("2026-11", "-5.00", { rate_pct: "-2.5" })], {
+        saved_total: "-5.00",
+        rate_pct: "-2.5",
+      }),
+    });
+    await list();
+
+    expect(
+      within(section())
+        .getByText(/das entradas$/)
+        .querySelector("svg"),
+    ).toHaveClass("lucide-trending-down");
+  });
+
+  it("points the share pill up when the year saved", async () => {
+    show();
+    await list();
+
+    expect(
+      within(section())
+        .getByText(/das entradas$/)
+        .querySelector("svg"),
+    ).toHaveClass("lucide-trending-up");
+  });
+
+  it("hides the tiles row below 1024 when only the largest aporte is left", async () => {
+    show({
+      "GET /api/reports/savings": year([
+        month("2026-11", "0.00"),
+        month("2026-10", "-5.00"),
+        month("2026-09", "30.00"),
+      ]),
+    });
+    await list();
+
+    expect(within(section()).queryByText(/^Consistência/)).not.toBeInTheDocument();
+    expect(within(section()).getByText("Maior Aporte Único").closest(".grid")).toHaveClass("max-lg:hidden");
+  });
+
+  it("keeps the tiles row on mobile while a run is on", async () => {
+    show();
+    await list();
+
+    expect(within(section()).getByText("Consistência 2026").closest(".grid")).not.toHaveClass("max-lg:hidden");
+  });
+
+  it("draws a year holding only forecast months with no run", async () => {
+    show({
+      "GET /api/reports/savings": year([month("2026-12", "0.00", { income: "3000.00", forecast: true })]),
+    });
+
+    expect(within(await list()).queryAllByRole("link")).toHaveLength(0);
+    expect(within(section()).getByText("0 meses")).toBeInTheDocument();
+    expect(within(section()).queryByText(/^Consistência/)).not.toBeInTheDocument();
+  });
+
+  it("keeps the band for an older account with nothing yet this year and reaches past years", async () => {
+    const requests = show(
+      {
+        "GET /api/reports/savings": year([month("2026-11", "0.00", { income: "0.00", rate_pct: null })]),
+        "GET /api/reports/savings?year=2025": year([month("2025-11", "50.00")], { year: 2025 }),
+      },
+      "2025-03-01",
+    );
+
+    expect(await screen.findByText("Nada para mostrar em 2026.")).toBeInTheDocument();
+    const previous = within(section()).getByRole("button", { name: "Ano anterior" });
+    await waitFor(() => expect(previous).toBeEnabled());
+    await userEvent.click(previous);
+
+    expect(await row("Novembro de 2025")).toBeInTheDocument();
+    expect(asked(requests)).toEqual(["2026", "2025"]);
+  });
+
+  it("keeps the shown year's labels while the next year loads", async () => {
+    show({}, "2025-03-01");
+    const answer = globalThis.fetch;
+    vi.stubGlobal("fetch", (request: Request) =>
+      new URL(request.url).searchParams.get("year") === "2025"
+        ? new Promise<Response>(() => undefined)
+        : answer(request),
+    );
+
+    await row("Novembro de 2026");
+    const previous = within(section()).getByRole("button", { name: "Ano anterior" });
+    await waitFor(() => expect(previous).toBeEnabled());
+    await userEvent.click(previous);
+
+    expect(within(section()).getByRole("group", { name: "Ano" })).toHaveTextContent("2025");
+    expect(within(section()).getByText("Consistência 2026")).toBeInTheDocument();
   });
 
   it("tables the months ascending with today's marked, its pencil and the forecast after it", async () => {

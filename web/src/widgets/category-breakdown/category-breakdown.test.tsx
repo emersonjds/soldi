@@ -444,6 +444,22 @@ describe("CategoryBreakdown", () => {
     expect(panel("Mercado")).toBeInTheDocument();
   });
 
+  it("prefers the renamed savings group for economia over an ordinary group named Economia", async () => {
+    const groups = REPORT.groups.map((each) => {
+      if (each.category_id === ECONOMIA.id) return { ...each, name: "Poupança" };
+      return each.category_id === MERCADO.id ? { ...each, name: "Economia" } : each;
+    });
+    show({ group: "economia", report: { ...REPORT, groups } });
+
+    expect(await screen.findByRole("region", { name: "Lançamentos: Poupança" })).toBeInTheDocument();
+  });
+
+  it("matches the group in the address whatever its case", async () => {
+    show({ group: "Economia" });
+
+    expect(await screen.findByRole("region", { name: "Lançamentos: Economia" })).toBeInTheDocument();
+  });
+
   it("ignores a group the month does not have", async () => {
     show({ group: "viagem" });
     await screen.findByText("Total gasto");

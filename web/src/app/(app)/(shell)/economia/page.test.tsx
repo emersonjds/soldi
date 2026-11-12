@@ -495,6 +495,7 @@ describe("Cofrinhos", () => {
       "href",
       "/mes?m=2026-10",
     );
+    expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
   });
 
   it("creates from the header button", async () => {
