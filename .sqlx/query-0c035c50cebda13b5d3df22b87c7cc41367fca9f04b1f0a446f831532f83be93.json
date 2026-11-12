@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE categories SET pin_rank = NULL WHERE user_id = $1 AND pin_rank IS NOT NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0c035c50cebda13b5d3df22b87c7cc41367fca9f04b1f0a446f831532f83be93"
+}

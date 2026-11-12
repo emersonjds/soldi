@@ -2,11 +2,12 @@ import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { api, okOrThrow } from "@/shared/api/client";
 import { router, setPathname } from "@/test/next-navigation";
-import { renderWithQuery } from "@/test/render";
+import { renderHookWithQuery, renderWithQuery } from "@/test/render";
 import { ANA, anonymous, problem, signedIn, stubApi } from "@/test/stub-api";
 
-import { redirectFor, SessionGate } from "./session";
+import { redirectFor, SessionGate, useLeave } from "./session";
 
 vi.mock("next/navigation", () => import("@/test/next-navigation"));
 
@@ -75,5 +76,32 @@ describe("SessionGate", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Tentar de novo" }));
 
     await waitFor(() => expect(requests).toHaveLength(2));
+  });
+});
+
+describe("useLeave", () => {
+  it("forgets every simulation history in this browser, and nothing else, before going to sign-in", async () => {
+    localStorage.clear();
+    localStorage.setItem("soldi:simulations:ana", "[]");
+    localStorage.setItem("soldi:simulations:bia", "[]");
+    localStorage.setItem("theme", "light");
+    const { result } = renderHookWithQuery(() => useLeave(async () => undefined));
+
+    result.current.mutate();
+
+    await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/entrar"));
+    expect(Object.keys(localStorage)).toEqual(["theme"]);
+  });
+
+  it("forgets the histories even when the session already expired", async () => {
+    localStorage.clear();
+    localStorage.setItem("soldi:simulations:ana", "[]");
+    stubApi({ "POST /api/auth/sign-out": { status: 401, body: problem(401, "Sessão expirada") } });
+    const { result } = renderHookWithQuery(() => useLeave(async () => okOrThrow(await api.POST("/api/auth/sign-out"))));
+
+    result.current.mutate();
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(localStorage.getItem("soldi:simulations:ana")).toBeNull();
   });
 });

@@ -6,6 +6,7 @@ import type { Schemas } from "@/shared/api/client";
 import { pickDate } from "@/test/pick-date";
 import { renderWithQuery } from "@/test/render";
 import {
+  ANA,
   BILL_ALUGUEL,
   COMIDA,
   forecastFixture,
@@ -314,5 +315,135 @@ describe("Posso comprar isso?", () => {
 
     expect(await screen.findByText("Não foi possível carregar a projeção.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Tentar de novo" })).toBeInTheDocument();
+  });
+});
+
+describe("Histórico", () => {
+  const KEY = `soldi:simulations:${ANA.id}`;
+  const signedIn = () =>
+    setup({ "GET /api/auth/me": { status: 200, body: ANA }, "GET /api/bills": { status: 200, body: [NUBANK] } });
+  const history = () => screen.getByRole("dialog", { name: "Histórico de simulações" });
+  const rows = () =>
+    within(history())
+      .getAllByRole("button")
+      .filter((button) => button.textContent?.includes("·"))
+      .map((button) => button.textContent);
+
+  beforeEach(() => localStorage.clear());
+
+  it("shows only after a Calcular, lists it, and restores a row's inputs with the results", async () => {
+    signedIn();
+    await screen.findByRole("radio", { name: "Comida fora" });
+    expect(screen.queryByRole("button", { name: "Histórico" })).not.toBeInTheDocument();
+
+    await typeAmount("2400,00");
+    await userEvent.click(screen.getByRole("radio", { name: "6x" }));
+    await userEvent.selectOptions(screen.getByLabelText("Cartão"), "Nubank");
+    await calculate();
+    await userEvent.click(screen.getByRole("button", { name: "Limpar valor" }));
+    await typeAmount("50,00");
+    await userEvent.click(screen.getByRole("radio", { name: "À vista" }));
+    await userEvent.click(screen.getByRole("radio", { name: "Mercado" }));
+    await calculate();
+
+    await userEvent.click(screen.getByRole("button", { name: "Histórico" }));
+    expect(rows()).toEqual([
+      expect.stringMatching(/^R\$\s50,00 · À vistaMercado · 10\/11\/2026$/),
+      expect.stringMatching(/^R\$\s2\.400,00 · 6xComida fora · 10\/11\/2026$/),
+    ]);
+    await userEvent.click(within(history()).getByRole("button", { name: /2\.400,00/ }));
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Valor total estimado")).toHaveValue("2.400,00");
+    expect(screen.getByRole("radio", { name: "6x" })).toBeChecked();
+    expect(screen.getByLabelText("Cartão")).toHaveValue(NUBANK.id);
+    expect(screen.getByRole("radio", { name: "Comida fora" })).toBeChecked();
+    expect(await screen.findByRole("region", { name: "Veredito do orçamento" })).toBeInTheDocument();
+    expect(JSON.parse(localStorage.getItem(KEY) ?? "[]")).toHaveLength(2);
+  });
+
+  it("drops a gone card or category on restore, and Limpar histórico empties it", async () => {
+    localStorage.setItem(
+      KEY,
+      JSON.stringify([
+        { amount: "100.00", count: 1, date: "", cardId: "gone", categoryId: "gone", at: "2026-11-09T12:00:00.000Z" },
+      ]),
+    );
+    signedIn();
+    await userEvent.click(await screen.findByRole("button", { name: "Histórico" }));
+    await userEvent.click(within(history()).getByRole("button", { name: /100,00/ }));
+
+    expect(screen.getByLabelText("Cartão")).toHaveValue("");
+    expect(await screen.findByRole("region", { name: "Veredito do orçamento" })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Histórico" }));
+    await userEvent.click(within(history()).getByRole("button", { name: "Limpar histórico" }));
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Histórico" })).not.toBeInTheDocument();
+    expect(localStorage.getItem(KEY)).toBeNull();
+  });
+
+  it("restores a date before today or past the last month as the forecast's today", async () => {
+    const saved = (date: string, at: string) => ({ amount: "100.00", count: 1, date, cardId: "", at });
+    localStorage.setItem(
+      KEY,
+      JSON.stringify([
+        saved("2026-11-01", "2026-11-09T12:00:00.000Z"),
+        saved("2027-11-01", "2026-11-08T12:00:00.000Z"),
+      ]),
+    );
+    signedIn();
+    const today = "Primeiro vencimento, 10 de Novembro, 2026";
+
+    const restore = async (row: number) => {
+      await userEvent.click(await screen.findByRole("button", { name: "Histórico" }));
+      await userEvent.click(within(history()).getAllByRole("button", { name: /100,00/ })[row]);
+    };
+
+    await restore(0);
+    expect(screen.getByRole("button", { name: today })).toBeInTheDocument();
+    await pickDate("Primeiro vencimento", "2026-12-20");
+    await restore(1);
+    expect(screen.getByRole("button", { name: today })).toBeInTheDocument();
+  });
+
+  it("restores a spend into a fatura already paid without the results", async () => {
+    localStorage.setItem(
+      KEY,
+      JSON.stringify([{ amount: "600.00", count: 1, date: "", cardId: NUBANK.id, at: "2026-11-09T12:00:00.000Z" }]),
+    );
+    setup({
+      "GET /api/auth/me": { status: 200, body: ANA },
+      "GET /api/bills": { status: 200, body: [NUBANK] },
+      "GET /api/months/2026-12": {
+        status: 200,
+        body: {
+          ...MONTH,
+          month: "2026-12",
+          bills_of_month: [
+            {
+              ...outflow("Nubank", "600.00", "2026-12-15"),
+              bill_id: NUBANK.id,
+              is_card: true,
+              paid: true,
+              lands_on: null,
+            },
+          ],
+        },
+      },
+    });
+    await userEvent.click(await screen.findByRole("button", { name: "Histórico" }));
+    await userEvent.click(within(history()).getByRole("button", { name: /600,00/ }));
+
+    expect(await screen.findByText("Essa fatura já foi paga.")).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Veredito do orçamento" })).not.toBeInTheDocument();
+  });
+
+  it("hides the button over corrupt storage", async () => {
+    localStorage.setItem(KEY, "{oops");
+    signedIn();
+
+    await screen.findByRole("radio", { name: "Comida fora" });
+    expect(screen.queryByRole("button", { name: "Histórico" })).not.toBeInTheDocument();
   });
 });

@@ -11,8 +11,10 @@ import { CategoryIcon } from "@/shared/ui/category-icon";
 import { PageError } from "@/shared/ui/page-state";
 
 import { categoryLabel, useCategories } from "./categories-query";
+import { pinnedFirst, usePins } from "./category-pins";
 import { CategorySelect } from "./category-select";
 import { CategorySheet } from "./category-sheet";
+import { PinSheet } from "./pin-sheet";
 
 type Kind = Schemas["CategoryKind"];
 type Category = Schemas["Category"];
@@ -36,6 +38,7 @@ const pickable = (list: Category[]) => list.filter((category) => !(category.kind
 
 export const useCategoryChips = (kind: Kind) => {
   const categories = useCategories(kind);
+  usePins();
   return { ...categories, data: categories.data && grouped(pickable(categories.data), FIRST[kind]) };
 };
 
@@ -78,7 +81,9 @@ export const CategoryChips = ({
   label?: string;
 }) => {
   const categories = useCategoryChips(kind);
+  const pins = usePins();
   const [creating, setCreating] = useState(false);
+  const [customizing, setCustomizing] = useState(false);
   const labelId = useId();
   const errorId = useId();
   const chipRow = useRef<HTMLDivElement>(null);
@@ -99,7 +104,9 @@ export const CategoryChips = ({
 
   if (categories.isError)
     return <PageError message="Não foi possível carregar as categorias." onRetry={() => categories.refetch()} />;
-  if (!categories.data || !entries)
+  // A first failed attempt, or no network, falls back to the shipped ranking while the pins wait.
+  const pinsWait = !(pins.isFetched || pins.failureCount > 0 || pins.fetchStatus === "paused");
+  if (!categories.data || !entries || pinsWait)
     return (
       <div className="flex gap-2">
         {["a", "b", "c", "d", "e", "f", "g", "h"].map((slot) => (
@@ -110,11 +117,8 @@ export const CategoryChips = ({
 
   const list = categories.data;
   const parent = chosen && topOf(chosen, list);
-  const top = ranked(
-    list.filter((category) => topOf(category, list) === category),
-    entries,
-    list,
-  ).slice(0, CIRCLES);
+  const tops = list.filter((category) => topOf(category, list) === category);
+  const top = pinnedFirst(ranked(tops, entries, list), pins.data ?? []).slice(0, CIRCLES);
   const row = !parent || top.some((each) => each.id === parent.id) ? top : [...top.slice(0, CIRCLES - 1), parent];
   const children = parent ? list.filter((category) => category.parent_id === parent.id) : [];
 
@@ -125,15 +129,24 @@ export const CategoryChips = ({
           <span aria-hidden className="size-1.5 rounded-full bg-primary" />
           {label}
         </span>
-        <CategorySelect
-          ref={more}
-          kind={kind}
-          categories={list}
-          chosen={chosen}
-          onChoose={pick}
-          onCreate={() => setCreating(true)}
-          onCloseAutoFocus={refocus}
-        />
+        <span className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => setCustomizing(true)}
+            className="inline-flex min-h-11 items-center rounded-lg px-2 font-semibold text-muted-foreground text-sm outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+          >
+            Personalizar
+          </button>
+          <CategorySelect
+            ref={more}
+            kind={kind}
+            categories={list}
+            chosen={chosen}
+            onChoose={pick}
+            onCreate={() => setCreating(true)}
+            onCloseAutoFocus={refocus}
+          />
+        </span>
       </div>
       <div ref={chipRow} className="flex flex-col gap-2">
         <ToggleGroup
@@ -210,6 +223,7 @@ export const CategoryChips = ({
           {error}
         </p>
       )}
+      <PinSheet kind={kind} tops={tops} open={customizing} onOpenChange={setCustomizing} />
       <CategorySheet kind={kind} open={creating} onOpenChange={setCreating} onSaved={pick} onCloseAutoFocus={refocus} />
     </div>
   );

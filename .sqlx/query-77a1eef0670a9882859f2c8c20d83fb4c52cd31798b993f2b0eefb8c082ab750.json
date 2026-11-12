@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT count(*) AS \"count!\" FROM categories\n           WHERE user_id = $1 AND id = ANY($2) AND parent_id IS NULL AND archived_at IS NULL\n             AND NOT (kind = 'income' AND is_savings)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "77a1eef0670a9882859f2c8c20d83fb4c52cd31798b993f2b0eefb8c082ab750"
+}
