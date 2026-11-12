@@ -599,7 +599,10 @@ describe("Mês", () => {
       "GET /api/transactions": {
         status: 200,
         body: [
-          { ...TRANSACTIONS[1], series: { id: "s1", position: 3, total: 12, last_date: "2027-08-04", every: "month" } },
+          {
+            ...TRANSACTIONS[1],
+            series: { id: "s1", position: 3, total: 12, last_date: "2027-08-04", open_ended: false, every: "month" },
+          },
         ],
       },
     });
@@ -616,7 +619,7 @@ describe("Mês", () => {
   it("asks how much of a series to delete, then deletes without Desfazer", async () => {
     const member = {
       ...TRANSACTIONS[1],
-      series: { id: "s1", position: 3, total: 12, last_date: "2027-08-04", every: "month" },
+      series: { id: "s1", position: 3, total: 12, last_date: "2027-08-04", open_ended: false, every: "month" },
     };
     const requests = open({
       "GET /api/transactions": { status: 200, body: [member] },
@@ -651,7 +654,7 @@ describe("Mês", () => {
   it("deletes the whole series from member 2 after asking", async () => {
     const member = {
       ...TRANSACTIONS[1],
-      series: { id: "s1", position: 2, total: 12, last_date: "2027-09-04", every: "month" },
+      series: { id: "s1", position: 2, total: 12, last_date: "2027-09-04", open_ended: false, every: "month" },
     };
     const requests = open({
       "GET /api/transactions": { status: 200, body: [member] },
@@ -680,7 +683,7 @@ describe("Mês", () => {
   it("deletes only this member by default", async () => {
     const member = {
       ...TRANSACTIONS[1],
-      series: { id: "s1", position: 1, total: 2, last_date: "2026-12-04", every: "month" },
+      series: { id: "s1", position: 1, total: 2, last_date: "2026-12-04", open_ended: false, every: "month" },
     };
     open({
       "GET /api/transactions": { status: 200, body: [member] },
@@ -704,7 +707,7 @@ describe("Mês", () => {
   it("opens the delete scope from Excluir da Série... in the series sheet", async () => {
     const member = {
       ...TRANSACTIONS[1],
-      series: { id: "s1", position: 3, total: 12, last_date: "2027-08-04", every: "month" },
+      series: { id: "s1", position: 3, total: 12, last_date: "2027-08-04", open_ended: false, every: "month" },
     };
     open({ "GET /api/transactions": { status: 200, body: [member] } });
 

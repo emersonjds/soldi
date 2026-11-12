@@ -82,6 +82,7 @@ const ENTRIES = [
     position: 3,
     total: 12,
     last_date: "2027-08-20",
+    open_ended: false,
     every: "month",
   }),
   entry("t3", ECONOMIA, "149.70", null),

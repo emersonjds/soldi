@@ -29,7 +29,7 @@ const MERCADO_ROW = TRANSACTIONS[0];
 const ALUGUEL_ROW = TRANSACTIONS[1];
 const MEMBER = {
   ...ALUGUEL_ROW,
-  series: { id: "s1", position: 3, total: 12, last_date: "2027-09-04", every: "month" as const },
+  series: { id: "s1", position: 3, total: 12, last_date: "2027-09-04", open_ended: false, every: "month" as const },
 };
 
 const PETS: Schemas["Category"] = {
@@ -595,7 +595,7 @@ describe("TransactionSheet", () => {
     const first = {
       ...MEMBER,
       date: "2026-03-04",
-      series: { id: "s1", position: 1, total: 12, last_date: "2027-02-04", every: "month" as const },
+      series: { id: "s1", position: 1, total: 12, last_date: "2027-02-04", open_ended: false, every: "month" as const },
     };
     setup({ transaction: first }, { [`PATCH /api/transactions/${MEMBER.id}`]: { status: 200, body: first } });
 
@@ -1064,7 +1064,7 @@ describe("TransactionSheet", () => {
   describe("series step", () => {
     const WEEKLY = {
       ...MEMBER,
-      series: { id: "s1", position: 3, total: 8, last_date: "2026-12-10", every: "week" as const },
+      series: { id: "s1", position: 3, total: 8, last_date: "2026-12-10", open_ended: false, every: "week" as const },
     };
     const weekly = { [`PATCH /api/transactions/${WEEKLY.id}`]: { status: 200, body: WEEKLY } };
 
