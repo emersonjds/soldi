@@ -28,7 +28,8 @@ impl CategoryKind {
 }
 
 /// `icon` is a lucide icon name; `color` a palette token, `cat-1` to `cat-24`, unique among the
-/// active top-level categories of a kind and the parent's on a subcategory; `parent_id` the
+/// active top-level categories showing in a kind (their own or a subcategory's) and the parent's on
+/// a subcategory; `parent_id` the
 /// category this one is a subcategory of, null for a top-level one. `is_savings` marks the
 /// user's `Economia` (bill) and `Resgate` (income); `target` and `deadline` belong only to
 /// cofrinhos, the subcategories of `Economia`.
@@ -49,8 +50,10 @@ pub struct Category {
 
 /// `icon` defaults to `circle-dashed`; `color`, `cat-1` to `cat-24`, to the lowest token free in
 /// the kind. `parent_id` makes it a subcategory of one of the caller's active top-level categories
-/// of the same kind; for a subcategory `color` is validated, then ignored: it wears its parent's
-/// color.
+/// on the same side: income under income, `daily` or `bill` under either outflow kind, only `bill`
+/// under `Economia`. For a subcategory `color` is validated, then ignored: it wears its parent's
+/// color; a parent whose color is taken in the child's kind moves to the lowest token free in every
+/// kind it shows in, or keeps it when none is.
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct CreateCategory {

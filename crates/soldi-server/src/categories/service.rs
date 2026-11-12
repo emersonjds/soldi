@@ -61,7 +61,7 @@ pub async fn create(
     let color = match &parent {
         Some(parent) => parent.color.clone(),
         None => {
-            let taken = repo::top_colors(conn, user.id, input.kind, None).await?;
+            let taken = repo::top_colors(conn, user.id, &[input.kind], None).await?;
             domain::pick_color(input.color.as_deref(), &taken)?
         }
     };
@@ -74,7 +74,11 @@ pub async fn create(
         target: input.target,
         deadline: input.deadline,
     };
-    let created = repo::insert(conn, user.id, new).await?;
+    let mut created = repo::insert(conn, user.id, new).await?;
+    if let Some(parent_id) = input.parent_id {
+        fit_group_color(conn, user, parent_id).await?;
+        created = active(conn, user, created.id).await?;
+    }
     tx.commit().await?;
     Ok(created)
 }
@@ -110,7 +114,8 @@ pub async fn update(
     let color = match (&parent, parent_id) {
         (Some(parent), _) => Some(parent.color.clone()),
         (None, None) if input.color.is_some() || category.parent_id.is_some() => {
-            let taken = repo::top_colors(conn, user.id, category.kind, Some(id)).await?;
+            let kinds = repo::group_kinds(conn, user.id, id).await?;
+            let taken = repo::top_colors(conn, user.id, &kinds, Some(id)).await?;
             Some(domain::pick_color(input.color.as_deref(), &taken)?)
         }
         (None, _) => None,
@@ -129,14 +134,40 @@ pub async fn update(
         target,
         deadline,
     };
-    let updated = repo::update(conn, user.id, id, change)
+    let mut updated = repo::update(conn, user.id, id, change)
         .await?
         .ok_or(AppError::NotFound)?;
     if updated.parent_id.is_none() && color.is_some() {
         repo::recolor_children(conn, user.id, id, &updated.color).await?;
     }
+    if let Some(Some(parent_id)) = input.parent_id {
+        fit_group_color(conn, user, parent_id).await?;
+        updated = active(conn, user, id).await?;
+    }
     tx.commit().await?;
     Ok(updated)
+}
+
+/// D26: a group that shows in a kind where its color is taken moves to the lowest token free
+/// in every kind it shows in, or keeps its color when none is.
+pub async fn fit_group_color(
+    conn: &mut PgConnection,
+    user: &CurrentUser,
+    parent_id: Uuid,
+) -> Result<(), AppError> {
+    let parent = repo::find_active_shared(conn, user.id, parent_id)
+        .await?
+        .ok_or(AppError::NotFound)?;
+    let kinds = repo::group_kinds(conn, user.id, parent_id).await?;
+    let taken = repo::top_colors(conn, user.id, &kinds, Some(parent_id)).await?;
+    if !taken.contains(&parent.color) {
+        return Ok(());
+    }
+    if let Ok(color) = domain::pick_color(None, &taken) {
+        repo::set_color(conn, user.id, parent_id, &color).await?;
+        repo::recolor_children(conn, user.id, parent_id, &color).await?;
+    }
+    Ok(())
 }
 
 pub async fn archive(pool: &PgPool, user: &CurrentUser, id: Uuid) -> Result<(), AppError> {

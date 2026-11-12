@@ -124,23 +124,62 @@ pub async fn has_children(
     .await
 }
 
-/// The colors of the user's active top-level categories of `kind`, but `except`.
+/// D26: colors of the user's active top-levels that show in any of `kinds` (own kind or an
+/// active subcategory's), but `except`.
 pub async fn top_colors(
     conn: &mut PgConnection,
     user_id: Uuid,
-    kind: CategoryKind,
+    kinds: &[CategoryKind],
     except: Option<Uuid>,
 ) -> Result<Vec<String>, sqlx::Error> {
+    let kinds: Vec<&str> = kinds.iter().map(|kind| kind.as_str()).collect();
     sqlx::query_scalar!(
-        "SELECT color FROM categories
-         WHERE user_id = $1 AND kind = $2 AND parent_id IS NULL AND archived_at IS NULL
-           AND id IS DISTINCT FROM $3",
+        "SELECT c.color FROM categories c
+         WHERE c.user_id = $1 AND c.parent_id IS NULL AND c.archived_at IS NULL
+           AND c.id IS DISTINCT FROM $3
+           AND (c.kind = ANY($2) OR EXISTS (
+                SELECT 1 FROM categories s
+                WHERE s.user_id = $1 AND s.parent_id = c.id AND s.archived_at IS NULL
+                  AND s.kind = ANY($2)))",
         user_id,
-        kind.as_str(),
+        &kinds as &[&str],
         except
     )
     .fetch_all(&mut *conn)
     .await
+}
+
+/// The category's own kind and its active subcategories' kinds.
+pub async fn group_kinds(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    id: Uuid,
+) -> Result<Vec<CategoryKind>, sqlx::Error> {
+    sqlx::query_scalar!(
+        r#"SELECT DISTINCT kind AS "kind!: CategoryKind" FROM categories
+           WHERE user_id = $1 AND (id = $2 OR (parent_id = $2 AND archived_at IS NULL))"#,
+        user_id,
+        id
+    )
+    .fetch_all(&mut *conn)
+    .await
+}
+
+pub async fn set_color(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    id: Uuid,
+    color: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        "UPDATE categories SET color = $3, updated_at = now() WHERE user_id = $1 AND id = $2",
+        user_id,
+        id,
+        color
+    )
+    .execute(&mut *conn)
+    .await?;
+    Ok(())
 }
 
 /// Archived subcategories included.

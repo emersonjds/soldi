@@ -178,8 +178,9 @@ pub fn check_color(color: &str) -> Result<(), AppError> {
     Ok(())
 }
 
-/// `parent` may hold the category `id` (none when creating) of `kind`: a top-level category of the
-/// same kind, not itself, and only when `id` has no subcategories of its own.
+/// `parent` may hold the category `id` (none when creating) of `kind`: a top-level category on the
+/// same side (income or outflow, D26), `Economia` only for bills, not itself, and only when `id`
+/// has no subcategories of its own.
 pub fn check_parent(
     id: Option<Uuid>,
     kind: CategoryKind,
@@ -189,7 +190,9 @@ pub fn check_parent(
     if parent.is_savings && parent.kind == CategoryKind::Income {
         return Err(savings_category());
     }
-    if parent.kind != kind {
+    let same_side = (parent.kind == CategoryKind::Income) == (kind == CategoryKind::Income);
+    let cofrinho_ok = !parent.is_savings || kind == CategoryKind::Bill;
+    if !same_side || !cofrinho_ok {
         return Err(AppError::invalid("parent_id", "must be of the same kind"));
     }
     if id == Some(parent.id) {
@@ -442,15 +445,11 @@ mod tests {
     }
 
     #[test]
-    fn a_parent_is_a_top_level_category_of_the_same_kind() {
+    fn a_parent_is_another_top_level_category() {
         let casa = category(1, CategoryKind::Daily, None);
 
         assert!(check_parent(None, CategoryKind::Daily, false, &casa).is_ok());
         assert!(check_parent(Some(Uuid::from_u128(2)), CategoryKind::Daily, false, &casa).is_ok());
-        assert_eq!(
-            field(check_parent(None, CategoryKind::Bill, false, &casa)),
-            "parent_id"
-        );
         assert_eq!(
             field(check_parent(
                 Some(Uuid::from_u128(1)),
@@ -460,6 +459,29 @@ mod tests {
             )),
             "parent_id"
         );
+    }
+
+    #[test]
+    fn a_group_holds_both_outflow_kinds_but_never_income_and_economia_only_bills() {
+        let veiculo = category(1, CategoryKind::Bill, None);
+        assert!(check_parent(None, CategoryKind::Daily, false, &veiculo).is_ok());
+        assert!(check_parent(None, CategoryKind::Bill, false, &veiculo).is_ok());
+        assert_eq!(
+            field(check_parent(None, CategoryKind::Income, false, &veiculo)),
+            "parent_id"
+        );
+        let salario = category(2, CategoryKind::Income, None);
+        assert_eq!(
+            field(check_parent(None, CategoryKind::Daily, false, &salario)),
+            "parent_id"
+        );
+        let mut economia = category(3, CategoryKind::Bill, None);
+        economia.is_savings = true;
+        assert_eq!(
+            field(check_parent(None, CategoryKind::Daily, false, &economia)),
+            "parent_id"
+        );
+        assert!(check_parent(None, CategoryKind::Bill, false, &economia).is_ok());
     }
 
     #[test]

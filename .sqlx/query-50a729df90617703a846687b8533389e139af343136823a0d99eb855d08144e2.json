@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT c.color FROM categories c\n         WHERE c.user_id = $1 AND c.parent_id IS NULL AND c.archived_at IS NULL\n           AND c.id IS DISTINCT FROM $3\n           AND (c.kind = ANY($2) OR EXISTS (\n                SELECT 1 FROM categories s\n                WHERE s.user_id = $1 AND s.parent_id = c.id AND s.archived_at IS NULL\n                  AND s.kind = ANY($2)))",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "color",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "categories",
+            "name": "color"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "50a729df90617703a846687b8533389e139af343136823a0d99eb855d08144e2"
+}
