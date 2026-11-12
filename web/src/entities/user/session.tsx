@@ -7,6 +7,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { queryOptions, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, okOrThrow, type Schemas } from "@/shared/api/client";
+import { clearAllHistories } from "@/shared/lib/simulation-history";
 import { PageError, PageLoading } from "@/shared/ui/page-state";
 
 export type User = Schemas["User"];
@@ -65,6 +66,7 @@ export const useLeave = (leave: () => Promise<void>) => {
   return useMutation({
     mutationFn: leave,
     onSuccess: () => {
+      clearAllHistories();
       queryClient.clear();
       queryClient.setQueryData(meQuery.queryKey, null);
       router.replace("/entrar");

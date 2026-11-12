@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
-import { Calculator, CreditCard, Delete, Info, Lightbulb, PieChart, RotateCcw, Sparkles } from "lucide-react";
+import { Calculator, CreditCard, Delete, History, Info, Lightbulb, PieChart, RotateCcw, Sparkles } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Field, FieldLabel } from "@/components/ui/field";
@@ -13,15 +13,18 @@ import { CategoryChips, useCategoryChips } from "@/entities/category/category-ch
 import { useForecast } from "@/entities/forecast/forecast-query";
 import { useMonth } from "@/entities/month/month-query";
 import { useTransactions } from "@/entities/transaction/transaction-queries";
+import { useMe } from "@/entities/user/session";
 import type { Schemas } from "@/shared/api/client";
 import { useCurrency } from "@/shared/lib/currency";
-import { addMonths, lastDay, monthName, monthSlashYear, todayISO } from "@/shared/lib/date";
+import { addMonths, lastDay, monthName, monthSlashYear, slashDate, todayISO } from "@/shared/lib/date";
 import { formatMoney, positiveAmount } from "@/shared/lib/money";
 import { formatPct, wholeShare } from "@/shared/lib/percent";
+import { clearHistory, pushHistory, readHistory, type SavedSimulation } from "@/shared/lib/simulation-history";
 import { cents, fromCents } from "@/shared/lib/tier";
 import { BrandButton } from "@/shared/ui/brand-button";
 import { DateField } from "@/shared/ui/date-field";
 import { HeroAmount } from "@/shared/ui/hero-amount";
+import { ResponsiveSheet } from "@/shared/ui/responsive-sheet";
 
 import { draftRows } from "./draft-rows";
 import { monthOnly, Results } from "./results";
@@ -48,6 +51,9 @@ const blank = (): Inputs => ({ amount: "", count: 1, date: "", cardId: "" });
 export const PurchaseSimulator = () => {
   const [inputs, setInputs] = useState(blank);
   const [shown, setShown] = useState(false);
+  const [history, setHistory] = useState<SavedSimulation[]>([]);
+  const [browsing, setBrowsing] = useState(false);
+  const userId = useMe().data?.id;
   const currency = useCurrency();
   const today = useForecast().data?.today ?? todayISO();
   const lastMonth = addMonths(today.slice(0, 7), 11);
@@ -72,6 +78,32 @@ export const PurchaseSimulator = () => {
   const set = (patch: Partial<Inputs>) => {
     setInputs((current) => ({ ...current, ...patch }));
     setShown(false);
+  };
+
+  useEffect(() => {
+    if (userId) setHistory(readHistory(userId));
+  }, [userId]);
+
+  const calculate = () => {
+    setShown(true);
+    if (!userId) return;
+    const { amount, count, date, cardId } = inputs;
+    setHistory(
+      pushHistory(userId, { amount, count, date, cardId, categoryId: category?.id, at: new Date().toISOString() }),
+    );
+  };
+  const categoryOf = (entry: SavedSimulation) => chips.data?.find(({ id }) => id === entry.categoryId);
+  /** A card or category gone since falls back to `Nenhum` / the first chip (P10-3). */
+  const restore = (entry: SavedSimulation) => {
+    const cardId = cards.some(({ id }) => id === entry.cardId) ? entry.cardId : "";
+    setInputs({ amount: entry.amount, count: entry.count, date: entry.date, cardId, category: categoryOf(entry) });
+    setShown(true);
+    setBrowsing(false);
+  };
+  const forget = () => {
+    if (userId) clearHistory(userId);
+    setHistory([]);
+    setBrowsing(false);
   };
 
   const infoOf = () => {
@@ -100,7 +132,43 @@ export const PurchaseSimulator = () => {
             real.
           </p>
         </div>
+        {history.length > 0 && (
+          <Button variant="outline" className="ml-auto min-h-11 shrink-0" onClick={() => setBrowsing(true)}>
+            <History aria-hidden />
+            Histórico
+          </Button>
+        )}
       </header>
+      <ResponsiveSheet
+        open={browsing}
+        onOpenChange={setBrowsing}
+        title="Histórico de simulações"
+        description="As últimas 10 simulações ficam só neste navegador."
+        showDescription
+      >
+        <ul className="flex flex-col gap-1">
+          {history.map((entry) => (
+            <li key={entry.at}>
+              <button
+                type="button"
+                onClick={() => restore(entry)}
+                className="flex min-h-11 w-full flex-col items-start rounded-xl px-3 py-2 text-left outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50"
+              >
+                <span className="font-semibold">
+                  {formatMoney(entry.amount, currency)} ·{" "}
+                  {COUNTS.find(({ value }) => value === String(entry.count))?.label}
+                </span>
+                <span className="text-muted-foreground text-sm">
+                  {(categoryOf(entry) ?? chips.data?.[0])?.name} · {slashDate(todayISO(new Date(entry.at)))}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+        <Button variant="ghost" className="min-h-11 text-destructive" onClick={forget}>
+          Limpar histórico
+        </Button>
+      </ResponsiveSheet>
 
       <div className="flex flex-col gap-6 lg:grid lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] lg:grid-rows-[auto_1fr] lg:items-start">
         <section
@@ -236,12 +304,7 @@ export const PurchaseSimulator = () => {
             >
               <RotateCcw aria-hidden className="size-5" />
             </Button>
-            <BrandButton
-              type="button"
-              disabled={!rows || paid}
-              onClick={() => setShown(true)}
-              className="min-w-0 flex-1"
-            >
+            <BrandButton type="button" disabled={!rows || paid} onClick={calculate} className="min-w-0 flex-1">
               <Calculator aria-hidden />
               Calcular Projeção
             </BrandButton>
