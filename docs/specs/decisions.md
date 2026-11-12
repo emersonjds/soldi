@@ -60,6 +60,8 @@ pt-BR only product (D3): the server computes `today` in `America/Sao_Paulo` (chr
 
 Update (2026-11-12, SOL-93): monthly-only is reversed by D32 (weekly and yearly steps) and the third scope by D33.
 
+Update (2026-11-12, SOL-118): D36 adds open-ended Entrada/Diário series that grow as months are read; an open-ended Saída is still a conta fixa.
+
 ## D15 — Category colors are unique per kind; subcategories wear the parent's (2026-11-08, owner)
 
 Among a user's active top-level categories of one kind no two share a color; the palette grows to 24 tokens so the defaults fit. Every subcategory, cofrinhos included, takes its parent's color and has no picker. Rejected: uniqueness across kinds (about 40 tokens, too close to tell apart) and cofrinhos keeping their own colors (an exception to a rule the owner wants without exceptions). Detail: `docs/specs/cards/SOL-32.md`.
@@ -274,3 +276,73 @@ Stitch draws `Mensal` / `Semanal` / `Anual` (FIDELITY 9.8). `repeat_every: "mont
 ## D34 — Simulation history lives in the browser only (2026-11-12, SOL-95 panel; a note to D16)
 
 D16's "a simulation is never stored" holds for the server: no table, no endpoint. `/posso-comprar` keeps the last 10 simulation inputs in `localStorage` under `soldi:simulations:{userId}`, never a verdict (it goes stale when entries change; a row re-runs against today's forecast). Sign-out, sign-out-everywhere and account deletion remove every such key. Trade-off: the history does not follow the user to another browser. Detail: `docs/specs/cards/SOL-95.md`.
+
+## D35 — Stopping or finishing something ends it at a month; past months never change (2026-11-12, owner + SOL-118 panel, architect arbitrated)
+
+Owner rule (binding): stopping a conta fixa, a Fixo series or a subscription removes its amount from the **following** months only. Every past month, every paid entry and Para onde vai's history stay visible and unchanged. Reaching the last parcela behaves the same way.
+
+Model:
+
+- A bill gains `recurring_bills.last_month`: the first day of the last month it owes; null means no end.
+- A bill gains `installments` (2..60), which makes it parcelado. Month `m` holds parcela `installments − months(m → last_month)`; it is computed, never stored per month.
+- `recurring_bills.active` is dropped. `Bill.active` is derived and false once **Parar** ends a non-parcelado bill.
+- **Parar** sets `last_month` to this month, or to a later month already paid. **Retomar** clears it, and moves `active_since` to today only when the end was before this month (D17).
+- A parcelado bill (Fies) is created with its `installments` and `last_month`. The form's `Já pagas` computes `last_month`. Nothing is written at the last parcela.
+- `months::domain::owed` gains one gate, `month ≤ last_month` and parcela ≥ 1. Month view, Contas a pagar, the D17 carry and the forecast all share it.
+- Paying a month after `last_month` is refused 422 `bill-ended`. Earlier months stay payable, so a carried month can still be paid after Parar.
+- The migration ends each paused bill at its last paid month, or before it started owing.
+
+This reverses:
+
+- `active = false` hiding a bill from every month, past ones included. SOL-4 rule 10 and its `rule_10_…` test no longer hold.
+- SOL-55's "a paused bill is out of the month and the projection" for months before the stop.
+- The SOL-118 brief's "Parar = the `Ativa` switch as is" and "auto `active = false` at the last parcela". The switch stays; what it writes changes.
+
+Unchanged: Excluir (archive) still removes a bill from every month, because deleting is not stopping. A card has no end and no pause (D28).
+
+Trade-offs:
+
+- An unpaid month between two paid ones of a once-paused bill reappears as `Venceu em …` (D17 was hiding nothing; the pause was).
+- Ending a parcelado bill early means editing its parcelas, not tapping Parar.
+
+Rejected:
+
+- a `paid_before` seed counted from `active_since` (it restarts on resume);
+- keeping `active` beside `last_month` (two truths for one fact);
+- a per-month skip (D17 rejected it).
+
+Detail: `docs/specs/cards/SOL-118.md` › Technical design.
+
+## D36 — An open-ended Fixo is a series that grows as months are read (2026-11-12, SOL-118 panel, architect arbitrated; reverses D24's "recurring income" cut and narrows D14's "open-ended repeat is a conta fixa")
+
+`open_ended` on an Entrada or Diário entry (not on a card yet, SOL-119) starts an ordinary D14 series. Every member carries `transactions.series_open`.
+
+Growth:
+
+- Before the month view, the forecast and the ledger list read rows, the server appends copies of each open series' last member through `max(horizon_end(today), the viewed month)`.
+- It uses D19's growth under the series lock, capped at 60 months from today and at 2100.
+- It usually costs one indexed query and no write; concurrent reads write once.
+- A salary therefore counts in every month of Mês and Próximos meses without typing, as committed rows (D16), never as a guess.
+
+Editing and stopping:
+
+- Edits use this/following/all as any series does.
+- **Parar série** at a member deletes only the later members and closes the series, per D35's rule. Deleting `following` closes it too.
+- **Tornar fixo** opens a bounded series or a standalone entry. Growth starts after the last member, by period (D19), so converting the owner's 12x salary never doubles a month.
+- `transactions.series_offset` lets a parcelado purchase start at parcela k (`first_installment`): earlier parcelas are never written, and the chip reads k/N from the first save.
+
+A Saída with no end is still a conta fixa (D8, D14). D8's "no rows ahead" for bills is untouched.
+
+Trade-offs:
+
+- Three GETs may write, bounded and idempotent.
+- Rows exist up to 60 months ahead.
+- Deleting only the very last member of an open series is refilled on the next read.
+
+Rejected:
+
+- (a) a general recurring rule for income and card spends, projected and confirmed monthly. An unconfirmed salary would land "today" under D17, or need a tap each month. Faturas, Para onde vai, Meu ano and Economia do ano would each need a projection branch. It also breaks D14's "income is never a bill".
+- A scheduled job, because the binary has no scheduler.
+- A stored infinite flag with no rows, which breaks every report that reads rows.
+
+Detail: `docs/specs/cards/SOL-118.md` › Technical design, plan `docs/specs/plans/SOL-118.md`.
