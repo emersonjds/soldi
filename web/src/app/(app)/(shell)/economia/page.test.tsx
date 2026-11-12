@@ -382,6 +382,24 @@ describe("Cofrinhos", () => {
       expect(await region("Reserva")).toHaveTextContent("Faltam R$ 9.700,00 · Sem prazo");
     });
 
+    it("describes a cofrinho under its goal, with the deadline's year when it has one", async () => {
+      const note = "Início planejado após consolidar a Reserva de Emergência.";
+      open(
+        items([
+          { ...COFRINHO_RESERVA, note },
+          { ...COFRINHO_VIAGEM, note: "Férias em família" },
+          CARRO,
+          { ...LOOSE, note: "Nunca aparece" },
+        ]),
+      );
+
+      const reserva = await region("Reserva");
+      expect(within(reserva).getByText(`Meta para 2027 · ${note}`)).toHaveClass("line-clamp-2");
+      expect(within(await region("Viagem")).getByText("Férias em família")).toBeInTheDocument();
+      expect(screen.queryByText(/Nunca aparece/)).not.toBeInTheDocument();
+      expect(within(await region("Carro")).queryByText(/Meta para/)).not.toBeInTheDocument();
+    });
+
     it("Guardar opens Lançar as a Saída in the cofrinho", async () => {
       open();
 
@@ -622,12 +640,13 @@ describe("Cofrinhos", () => {
     });
 
     it("Editar opens the cofrinho's sheet, whose Excluir follows the same rule", async () => {
-      const requests = open();
+      const requests = open(items([{ ...COFRINHO_RESERVA, note: "Para imprevistos" }]));
 
       await menu("Reserva");
       await userEvent.click(screen.getByRole("menuitem", { name: "Editar" }));
       const sheet = await screen.findByRole("dialog", { name: "Editar cofrinho" });
       expect(within(sheet).getByLabelText("Nome do agrupador")).toHaveValue("Reserva");
+      expect(within(sheet).getByLabelText("Descrição (opcional)")).toHaveValue("Para imprevistos");
       await userEvent.click(within(sheet).getByRole("button", { name: "Excluir" }));
 
       expect(await screen.findByText("Resgate tudo antes de excluir")).toBeInTheDocument();

@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Field, FieldError, FieldLabel, FieldTitle } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
 import { hasProblem, hasStatus, problemMessage, type Schemas } from "@/shared/api/client";
@@ -146,6 +147,8 @@ type FormProps = {
   onParentChange?: (parentId: string) => void;
   /** Creating: the name and goal the form starts with. */
   initial?: { name: string; target: string };
+  /** Editing a cofrinho: its stored note, which `Category` does not carry. */
+  note?: string | null;
 };
 
 const CategoryForm = ({
@@ -157,6 +160,7 @@ const CategoryForm = ({
   onKindChange,
   onParentChange,
   initial,
+  note: storedNote,
 }: FormProps) => {
   const [name, setName] = useState(category?.name ?? initial?.name ?? "");
   const [ownKind, setOwnKind] = useState(category?.kind);
@@ -185,6 +189,10 @@ const CategoryForm = ({
   const [color, setColor] = useState(category?.color);
   const [target, setTarget] = useState(category?.target ?? initial?.target ?? "");
   const [deadline, setDeadline] = useState(category?.deadline ?? "");
+  const [note, setNote] = useState(storedNote ?? "");
+  // Code points, like the server's `chars().count()`: an emoji counts once.
+  const noteLength = [...note].length;
+  const noteTooLong = noteLength > 140;
   const parent = list.find((each) => each.id === parentId);
   const cofrinho = Boolean(parent?.is_savings);
   const chosenIcon = icon ?? parent?.icon ?? "circle-dashed";
@@ -244,9 +252,10 @@ const CategoryForm = ({
     // React bubbles the submit through the portal to the Lançar form around the picker.
     event.stopPropagation();
     setSubmitted(true);
-    if (!trimmed || (!category && sub && !parentId)) return;
+    if (!trimmed || (!category && sub && !parentId) || (cofrinho && noteTooLong)) return;
+    const noteChange = note === (storedNote ?? "") ? {} : { note: note.trim() || null };
     // Outside Economia the API refuses a goal, so only a cofrinho sends one.
-    const goal = cofrinho ? { target: positiveAmount(target), deadline: deadline || null } : {};
+    const goal = cofrinho ? { target: positiveAmount(target), deadline: deadline || null, ...noteChange } : {};
     if (category)
       return update.mutate(
         {
@@ -415,6 +424,27 @@ const CategoryForm = ({
             )}
           </Field>
         </div>
+      )}
+      {cofrinho && (
+        <Field className="gap-1.5" data-invalid={noteTooLong}>
+          <FieldLabel htmlFor="category-note">Descrição (opcional)</FieldLabel>
+          <Textarea
+            id="category-note"
+            value={note}
+            onChange={(event) => setNote(event.target.value)}
+            placeholder="Ex.: Início planejado após consolidar a Reserva de Emergência."
+            className="text-base md:text-base"
+            aria-invalid={noteTooLong}
+            aria-describedby="category-note-count"
+          />
+          <span
+            id="category-note-count"
+            className={cn("self-end text-sm", noteTooLong ? "text-destructive" : "text-muted-foreground")}
+          >
+            {noteLength}/140
+          </span>
+          {noteTooLong && <FieldError>Use até 140 caracteres.</FieldError>}
+        </Field>
       )}
       {category && !hasChildren && !fixedParent && (
         <Field className="gap-1.5">
