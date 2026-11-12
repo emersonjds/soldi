@@ -11,7 +11,7 @@ const monthFrom = (offset: number) => {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 };
 
-test("Simular previews a purchase without writing it; Parcelar 3x writes three parcelas", async ({ page, request }) => {
+test("Parcelar 3x writes three parcelas", async ({ page, request }) => {
   await requireServer(request);
   test.setTimeout(90_000);
 
@@ -31,15 +31,6 @@ test("Simular previews a purchase without writing it; Parcelar 3x writes three p
 
   const tabs = page.getByRole("navigation", { name: "Navegação principal" });
   await tabs.getByRole("button", { name: "Lançar" }).click();
-  await launch.getByRole("switch", { name: "Simular" }).click();
-  await launch.getByRole("radio", { name: "Conta" }).click();
-  await launch.getByLabel("Valor").fill("1.600,00");
-  await expect(launch.getByRole("status")).toHaveText(/^Com essa compra, hoje fica no vermelho: -R\$\s600,00\.$/);
-  await launch.getByRole("button", { name: "Descartar" }).click();
-  await expect(launch).toBeHidden();
-  await expect(page.getByRole("region", { name: "Lançamentos" })).toHaveCount(0);
-
-  await tabs.getByRole("button", { name: "Lançar" }).click();
   await launch.getByRole("radio", { name: "Conta" }).click();
   await launch.getByLabel("Valor").fill("300,00");
   await launch.getByRole("switch", { name: "Parcelar compra" }).click();
@@ -51,7 +42,7 @@ test("Simular previews a purchase without writing it; Parcelar 3x writes three p
   await expect(page.getByRole("region", { name: "Lançamentos" })).toContainText("R$ 100,00");
 });
 
-test("Posso comprar isso? from the sidebar: 6× R$ 12.000,00 names the red day's balance and marks the moved months", async ({
+test("Posso comprar isso? from the sidebar: 6× R$ 12.000,00 names the red month and recalculates in 10x", async ({
   page,
   request,
 }) => {
@@ -72,28 +63,36 @@ test("Posso comprar isso? from the sidebar: 6× R$ 12.000,00 names the red day's
   const launch = page.getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ });
   await launch.getByRole("button", { name: "Fechar" }).click();
 
-  // A fresh account has nothing ahead, so Próximos meses does not render (D25); the sidebar asks instead.
   await page.setViewportSize({ width: 1440, height: 900 });
   await page
     .getByRole("complementary", { name: "Barra lateral" })
-    .getByRole("button", { name: "Posso comprar isso?" })
+    .getByRole("link", { name: "Posso comprar isso?" })
     .click();
-  await expect(launch.getByRole("switch", { name: "Simular" })).toBeChecked();
-  await expect(launch.getByRole("radio", { name: "Diário" })).toBeChecked();
-  await launch.getByLabel("Valor").fill("72.000,00");
-  await launch.getByRole("switch", { name: "Parcelar compra" }).click();
-  await launch.getByRole("radio", { name: "6×" }).click();
-  await expect(launch).toContainText("Projeção: 6× de R$ 12.000,00");
+  await expect(page).toHaveURL(/\/posso-comprar/);
+  await expect(page.getByRole("heading", { level: 1, name: "Posso comprar isso?" })).toBeVisible();
+
+  await page.getByLabel("Valor total estimado").fill("72.000,00");
+  await page.getByRole("radio", { name: "6x" }).click();
+  await expect(page.getByText(/^6 parcelas de R\$\s12\.000,00 a partir de /)).toBeVisible();
+  await page.getByRole("button", { name: "Calcular Projeção" }).click();
 
   // Today keeps R$ 345,67; the second parcela is the first red day.
-  await expect(launch.getByRole("status")).toHaveText(
-    /^Com essa compra, dia \d{1,2}\/\d\d fica no vermelho: -R\$\s11\.654,33\.$/,
-  );
-  const months = launch.getByRole("listitem", { name: /antes R\$\s12\.345,67$/ });
-  await expect(months.first()).toBeVisible();
-  await expect(launch.getByRole("listitem", { name: /menor saldo -R\$\s59\.654,33/ }).first()).toContainText("-59.655");
-  await expectNoClipped(page);
+  const verdict = page.getByRole("region", { name: "Veredito do orçamento" });
+  await expect(verdict).toContainText("VEREDITO DO ORÇAMENTO • ALERTA CRÍTICO");
+  await expect(verdict.getByRole("heading")).toHaveText(/ você fica no vermelho: -R\$\s11\.654,33$/);
+  await expect(verdict).toContainText(/mas a soma da 2ª parcela \(R\$\s12\.000,00\)/);
+  const months = page
+    .getByRole("list", { name: "Projeção Mensal Comparativa (Antes vs. Depois)" })
+    .getByRole("listitem");
+  await expect(months).toHaveCount(6);
+  await expect(months.nth(1)).toContainText("CRÍTICO");
+  await expect(months.nth(1)).toContainText("Saldo com Compra:");
 
-  await launch.getByRole("button", { name: "Descartar" }).click();
+  await page.getByRole("button", { name: "Testar em 10x" }).click();
+  await expect(page.getByRole("radio", { name: "10x" })).toBeChecked();
+  await expect(page.getByRole("heading", { name: "Curva de Saldo Projetado (10 Meses)" })).toBeVisible();
+
+  await page.setViewportSize({ width: 375, height: 812 });
+  await expectNoClipped(page);
   await expect(page.getByRole("region", { name: "Lançamentos" })).toHaveCount(0);
 });

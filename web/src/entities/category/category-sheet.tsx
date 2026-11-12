@@ -144,6 +144,8 @@ type FormProps = {
   onKindChange?: (kind: Kind) => void;
   /** Told the parent the form links to, which makes it a cofrinho under Economia. */
   onParentChange?: (parentId: string) => void;
+  /** Creating: the name and goal the form starts with. */
+  initial?: { name: string; target: string };
 };
 
 const CategoryForm = ({
@@ -154,8 +156,9 @@ const CategoryForm = ({
   onArchive,
   onKindChange,
   onParentChange,
+  initial,
 }: FormProps) => {
-  const [name, setName] = useState(category?.name ?? "");
+  const [name, setName] = useState(category?.name ?? initial?.name ?? "");
   const [ownKind, setOwnKind] = useState(category?.kind);
   const [asking, setAsking] = useState(false);
   const [nextKind, setNextKind] = useState<Kind>("bill");
@@ -180,7 +183,7 @@ const CategoryForm = ({
     ofKind(system, each),
   );
   const [color, setColor] = useState(category?.color);
-  const [target, setTarget] = useState(category?.target ?? "");
+  const [target, setTarget] = useState(category?.target ?? initial?.target ?? "");
   const [deadline, setDeadline] = useState(category?.deadline ?? "");
   const parent = list.find((each) => each.id === parentId);
   const cofrinho = Boolean(parent?.is_savings);

@@ -24,6 +24,7 @@ export const DateField = ({
   onChange,
   min = "2000-01-01",
   max = "2100-12-31",
+  format,
   className,
 }: {
   id?: string;
@@ -34,11 +35,13 @@ export const DateField = ({
   onChange: (date: string) => void;
   min?: string;
   max?: string;
+  /** What the button reads for `value`; `dd/MM/yyyy` otherwise. */
+  format?: (date: string) => string;
   className?: string;
 }) => {
   const [open, setOpen] = useState(false);
   const selected = value ? toDate(value) : undefined;
-  const shown = selected && new Intl.DateTimeFormat("pt-BR").format(selected);
+  const shown = selected && (format?.(value) ?? new Intl.DateTimeFormat("pt-BR").format(selected));
 
   return (
     <Popover modal open={open} onOpenChange={setOpen}>
