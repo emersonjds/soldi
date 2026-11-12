@@ -178,7 +178,7 @@ export const Results = ({ rows, count, total, name, onRetest }: Props) => {
               after: cents(month.endAfter),
               alert: month.red ? cents(month.low.projected_balance) : null,
             }))}
-            margin={{ top: 8, right: 8, bottom: 0, left: 8 }}
+            margin={{ top: 24, right: 8, bottom: 0, left: 8 }}
           >
             <XAxis dataKey="label" tickLine={false} axisLine={false} />
             <YAxis hide domain={["auto", "auto"]} />
@@ -186,7 +186,11 @@ export const Results = ({ rows, count, total, name, onRetest }: Props) => {
               y={0}
               ifOverflow="extendDomain"
               stroke="var(--color-expense)"
-              label={{ value: `${money("0")} (Linha Zero)`, position: "insideTopLeft", fill: "var(--color-expense)" }}
+              label={{
+                value: `${money("0")} (Linha Zero)`,
+                position: "insideBottomLeft",
+                fill: "var(--color-expense)",
+              }}
             />
             <Line
               dataKey="before"

@@ -1,7 +1,7 @@
 mod common;
 
 use axum::http::StatusCode;
-use common::TestApp;
+use common::{TestApp, behind, hold, waiting};
 use serde_json::{Value, json};
 use sqlx::PgPool;
 
@@ -1766,54 +1766,6 @@ async fn m1_m3_a_following_move_and_a_resize_in_one_patch_grow_on_the_new_day(po
     assert_eq!(field_of(&entries, "date"), dates);
     assert_ranked(&entries, 15);
     assert_empty(&user, "2028-02", 1).await;
-}
-
-/// A transaction holding `entry`'s row lock until it commits.
-async fn hold(pool: &PgPool, entry: &Value) -> sqlx::Transaction<'static, sqlx::Postgres> {
-    let mut lock = pool.begin().await.unwrap();
-    sqlx::query("SELECT 1 FROM transactions WHERE id = $1::uuid FOR UPDATE")
-        .bind(entry["id"].as_str().unwrap())
-        .execute(&mut *lock)
-        .await
-        .unwrap();
-    lock
-}
-
-/// Returns once `count` sessions of this test's database wait on a lock.
-async fn waiting(pool: &PgPool, count: i64) {
-    loop {
-        let waiters: i64 = sqlx::query_scalar(
-            "SELECT count(*) FROM pg_stat_activity \
-             WHERE datname = current_database() AND wait_event_type = 'Lock'",
-        )
-        .fetch_one(pool)
-        .await
-        .unwrap();
-        if waiters >= count {
-            return;
-        }
-        tokio::task::yield_now().await;
-    }
-}
-
-/// Runs `request` until it ends or `count` sessions wait on a lock, then commits `lock`.
-async fn behind<T>(
-    pool: &PgPool,
-    lock: sqlx::Transaction<'static, sqlx::Postgres>,
-    count: i64,
-    request: impl Future<Output = T>,
-) -> T {
-    tokio::pin!(request);
-    tokio::select! {
-        done = &mut request => {
-            lock.commit().await.unwrap();
-            done
-        }
-        () = waiting(pool, count) => {
-            lock.commit().await.unwrap();
-            request.await
-        }
-    }
 }
 
 #[sqlx::test]

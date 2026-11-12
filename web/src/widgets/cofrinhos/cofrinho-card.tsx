@@ -103,14 +103,28 @@ const Badge = ({ cofrinho, focus, today }: { cofrinho: Cofrinho; focus: boolean;
   );
 };
 
+const WEEKLY = [
+  "todo domingo",
+  "toda segunda",
+  "toda terça",
+  "toda quarta",
+  "toda quinta",
+  "toda sexta",
+  "todo sábado",
+];
+
 const chip = "flex items-center gap-2 rounded-xl bg-muted px-3 py-2 text-muted-foreground text-sm";
 
 const InfoChip = ({ cofrinho, today }: { cofrinho: Cofrinho; today: string }) => {
   const currency = useCurrency();
   const next = cofrinho.next_contribution;
   if (next) {
-    // The DTO carries only the day of the month: no weekday or month to name.
-    const when = { month: `todo dia ${String(next.day).padStart(2, "0")}`, week: "toda semana", year: "todo ano" };
+    const [, month, day] = next.date.split("-");
+    const when = {
+      month: `todo dia ${String(next.day).padStart(2, "0")}`,
+      week: WEEKLY[new Date(next.date).getUTCDay()],
+      year: `todo ano em ${day}/${month}`,
+    };
     return (
       <p className={chip}>
         <RefreshCw className="size-4 shrink-0" aria-hidden />

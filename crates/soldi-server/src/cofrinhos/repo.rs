@@ -62,7 +62,7 @@ pub async fn next_contributions(
     today: NaiveDate,
 ) -> Result<HashMap<Uuid, NextContribution>, sqlx::Error> {
     let rows = sqlx::query!(
-        r#"SELECT DISTINCT ON (t.category_id) t.category_id, t.amount,
+        r#"SELECT DISTINCT ON (t.category_id) t.category_id, t.amount, t.date,
                   EXTRACT(DAY FROM t.date)::int2 AS "day!",
                   t.series_every AS "every: RepeatEvery"
            FROM transactions t JOIN categories c ON c.user_id = t.user_id AND c.id = t.category_id
@@ -82,6 +82,7 @@ pub async fn next_contributions(
                 amount: row.amount,
                 day: row.day,
                 every: row.every.unwrap_or_default(),
+                date: row.date,
             };
             (row.category_id, next)
         })

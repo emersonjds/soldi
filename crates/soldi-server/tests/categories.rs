@@ -743,8 +743,7 @@ async fn a_child_created_while_its_parent_is_recolored_wears_the_new_color(pool:
 
     let ((status, child), ()) =
         tokio::join!(create_child(&user, "Móveis", "daily", &casa), async {
-            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
-            recolor.commit().await.unwrap();
+            common::release_once_waiting(&pool, recolor).await;
         });
 
     assert_eq!(
@@ -767,8 +766,7 @@ async fn a_category_moved_under_a_parent_while_it_is_recolored_wears_the_new_col
 
     let ((status, moved), ()) =
         tokio::join!(user.patch(&pets, json!({ "parent_id": casa })), async {
-            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
-            recolor.commit().await.unwrap();
+            common::release_once_waiting(&pool, recolor).await;
         });
 
     assert_eq!(
@@ -1013,8 +1011,7 @@ async fn an_entry_logged_while_its_category_changes_kind_sees_the_new_kind(pool:
             json!({ "date": "2026-11-03", "amount": "10", "kind": "daily", "category_id": lazer }),
         ),
         async {
-            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
-            change.commit().await.unwrap();
+            common::release_once_waiting(&pool, change).await;
         }
     );
 

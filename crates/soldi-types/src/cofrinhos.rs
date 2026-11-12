@@ -45,6 +45,8 @@ pub struct NextContribution {
     #[schema(minimum = 1, maximum = 31)]
     pub day: i16,
     pub every: crate::transactions::RepeatEvery,
+    /// The next member's date; names the weekday or the day and month the chip shows.
+    pub date: NaiveDate,
 }
 
 /// `total_saved` sums every balance; `saved_this_month` is the requested month view's `totals.saved`.
