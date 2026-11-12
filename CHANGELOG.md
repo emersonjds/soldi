@@ -7,6 +7,21 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.55.0
+
+> Headline: cofrinho notes, a yearly savings target and month notes
+
+### Server
+
+- A cofrinho takes a one-line note (≤ 140 characters). Migration 0022 adds `categories.note` and `settings.savings_target_pct`.
+- `savings_target_pct` sets a yearly savings target; `/api/reports/savings` returns `target` (amount, remaining, progress, done) from the year's income so far, one percent for every year.
+- `PUT /api/months/{m}/note` keeps a note per month (a blank note deletes it); the savings year returns each month's note. Migration 0023 adds `month_notes`.
+
+### Web
+
+- The cofrinho form has `Descrição (opcional)` and the card shows it.
+- Economia do ano shows `Definir meta anual` or the Meta Anual card, and each month's note in Status / Observação (or a chip on mobile), written from the row menu.
+
 ## 0.54.0
 
 > Headline: weekly and yearly series, and Toda a série
