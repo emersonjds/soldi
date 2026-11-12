@@ -4,7 +4,7 @@ import { requireServer } from "./server";
 
 const SHOTS = process.env.E2E_SHOTS;
 
-test("a subcategory is created under Gasto from the header +, renamed, and deleted with its parent until Desfazer", async ({
+test("a subcategory is created from Gasto's card, renamed, and deleted with its parent until Desfazer", async ({
   page,
   request,
 }) => {
@@ -28,30 +28,29 @@ test("a subcategory is created under Gasto from the header +, renamed, and delet
 
   await page.getByRole("navigation", { name: "Navegação principal" }).getByRole("link", { name: "Ajustes" }).click();
   await page.getByRole("link", { name: /^Categorias/ }).click();
-  await expect(page.getByRole("heading", { level: 1, name: "Categorias" })).toBeVisible();
-  await expect(page.getByRole("radio", { name: "Diário" })).toBeChecked();
+  await expect(page.getByRole("heading", { level: 1, name: "Categorias & Subcategorias" })).toBeVisible();
+  await expect(page.getByRole("radio", { name: /^Gastos Diários/ })).toBeChecked();
 
-  await page.getByRole("button", { name: "Nova categoria" }).click();
-  await page
-    .getByRole("dialog", { name: "Nova" })
-    .getByRole("button", { name: /^Subcategoria/ })
-    .click();
-  const parents = page.getByRole("dialog", { name: "Subcategoria de qual categoria?" });
-  await parents.getByPlaceholder("Buscar categoria").fill("Gasto");
-  await parents.getByRole("option", { name: "Gasto" }).click();
-  const create = page.getByRole("dialog", { name: "Nova categoria" });
-  await expect(create.getByText("Em Gasto")).toBeVisible();
-  await create.getByLabel("Nome").fill("Pet shop");
-  await create.getByRole("button", { name: "Criar" }).click();
+  await page.getByRole("listitem", { name: "Gasto" }).getByRole("button", { name: "Adicionar subcategoria" }).click();
+  const create = page.getByRole("dialog", { name: "Nova Categoria" });
+  await expect(
+    create.getByRole("radiogroup", { name: "Vincular à Categoria Pai" }).getByRole("radio", { name: "Gasto" }),
+  ).toBeChecked();
+  await create.getByLabel("Nome do agrupador").fill("Pet shop");
+  await create.getByRole("button", { name: "Criar Categoria" }).click();
   const children = page.getByRole("list", { name: "Subcategorias de Gasto" });
   await expect(children.getByRole("button", { name: "Editar Pet shop" })).toBeVisible();
   if (SHOTS) await page.screenshot({ path: `${SHOTS}/categorias-375.png`, fullPage: true });
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
 
+  await page.getByRole("searchbox", { name: "Buscar categoria" }).fill("zzz");
+  await expect(page.getByText("Nenhuma categoria encontrada.")).toBeVisible();
+  await page.getByRole("searchbox", { name: "Buscar categoria" }).fill("");
+
   await children.getByRole("button", { name: "Editar Pet shop" }).click();
-  const edit = page.getByRole("dialog", { name: "Editar categoria" });
-  await edit.getByLabel("Nome").fill("Pet shop e banho");
-  await edit.getByRole("button", { name: "Salvar" }).click();
+  const edit = page.getByRole("dialog", { name: "Editar Categoria" });
+  await edit.getByLabel("Nome do agrupador").fill("Pet shop e banho");
+  await edit.getByRole("button", { name: "Salvar Categoria" }).click();
   await expect(children.getByRole("button", { name: "Editar Pet shop e banho" })).toBeVisible();
 
   await page.getByRole("button", { name: "Mais ações de Gasto" }).click();
@@ -64,16 +63,18 @@ test("a subcategory is created under Gasto from the header +, renamed, and delet
   await expect(children.getByRole("button", { name: "Editar Pet shop e banho" })).toBeVisible();
 
   await page.setViewportSize({ width: 1440, height: 900 });
+  await expect(page.getByRole("complementary", { name: "Nova Categoria" })).toBeVisible();
   if (SHOTS) {
     await page.screenshot({ path: `${SHOTS}/categorias-1440.png`, fullPage: true });
-    await page.getByRole("button", { name: "Editar Pet shop e banho" }).click();
-    await expect(page.getByRole("dialog", { name: "Editar categoria" })).toBeVisible();
-    await page.waitForTimeout(400);
-    await page.screenshot({ path: `${SHOTS}/categorias-edit-1440.png` });
-    await page.keyboard.press("Escape");
+    await page.getByRole("listitem", { name: "Gasto" }).getByRole("button", { name: "Adicionar subcategoria" }).click();
+    await page
+      .getByRole("complementary", { name: "Nova Categoria" })
+      .getByRole("radio", { name: "Subcategoria" })
+      .waitFor();
+    await page.screenshot({ path: `${SHOTS}/categorias-sub-1440.png`, fullPage: true });
     await page.setViewportSize({ width: 375, height: 812 });
     await page.getByRole("button", { name: "Editar Pet shop e banho" }).click();
-    await expect(page.getByRole("dialog", { name: "Editar categoria" })).toBeVisible();
+    await expect(page.getByRole("dialog", { name: "Editar Categoria" })).toBeVisible();
     await page.waitForTimeout(400);
     await page.screenshot({ path: `${SHOTS}/categorias-edit-375.png` });
   }

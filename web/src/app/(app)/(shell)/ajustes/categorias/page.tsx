@@ -2,26 +2,54 @@
 
 import { Suspense } from "react";
 
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 
-import { BackLink } from "@/shared/ui/back-link";
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
+import { monthParam } from "@/shared/lib/date";
 import { PageLoading } from "@/shared/ui/page-state";
 import { CategoryList, kindParam } from "@/widgets/category-list/category-list";
 
 const CategoriasScreen = () => {
   const router = useRouter();
-  const kind = kindParam(useSearchParams().get("k"));
+  const search = useSearchParams();
   return (
     <CategoryList
-      kind={kind}
-      onKindChange={(next) => router.replace(`/ajustes/categorias?k=${next}`, { scroll: false })}
+      kind={kindParam(search.get("k"))}
+      month={monthParam(search.get("m"))}
+      onKindChange={(next) => {
+        const params = new URLSearchParams(search.toString());
+        params.set("k", next);
+        router.replace(`/ajustes/categorias?${params}`, { scroll: false });
+      }}
     />
   );
 };
 
 const CategoriasPage = () => (
-  <div className="mx-auto flex w-full max-w-2xl flex-col gap-4">
-    <BackLink href="/ajustes" label="Ajustes" />
+  <div className="mx-auto flex w-full max-w-4xl flex-col gap-2 xl:max-w-7xl">
+    <Breadcrumb>
+      <BreadcrumbList>
+        <BreadcrumbItem>
+          <BreadcrumbLink asChild>
+            <Link href="/ajustes" className="inline-flex min-h-11 items-center">
+              Configurações
+            </Link>
+          </BreadcrumbLink>
+        </BreadcrumbItem>
+        <BreadcrumbSeparator />
+        <BreadcrumbItem>
+          <BreadcrumbPage className="font-medium text-primary">Gestão de Categorias</BreadcrumbPage>
+        </BreadcrumbItem>
+      </BreadcrumbList>
+    </Breadcrumb>
     <Suspense fallback={<PageLoading />}>
       <CategoriasScreen />
     </Suspense>

@@ -262,7 +262,7 @@ describe("AppShell", () => {
     },
   );
 
-  it.each(["/ajustes", "/ajustes/categorias", "/ajustes/conta"])(
+  it.each(["/ajustes", "/ajustes/conta"])(
     "hides the month switcher on %s, a page that does not read the month",
     (path) => {
       setPathname(path);
@@ -371,6 +371,16 @@ describe("AppShell", () => {
     await waitFor(() =>
       expect(within(screen.getByRole("banner")).getByRole("button", { name: "Mês anterior" })).toBeDisabled(),
     );
+  });
+
+  it("keeps the page's other parameters when moving the month", async () => {
+    setPathname("/ajustes/categorias");
+    setSearch("k=bill&m=2026-12");
+    router.replace.mockClear();
+    renderWithQuery(<AppShell>conteúdo</AppShell>);
+
+    await userEvent.click(screen.getAllByRole("button", { name: "Próximo mês" })[0]);
+    expect(router.replace).toHaveBeenLastCalledWith("/ajustes/categorias?k=bill&m=2027-01", { scroll: false });
   });
 
   it("takes the sidebar user card and the top-bar avatar to Minha conta, with the version under it and no sign-out", async () => {

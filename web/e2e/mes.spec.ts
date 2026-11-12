@@ -130,14 +130,11 @@ test("Lançar fills the cents from the right and a category created from the pic
   await tabs.getByRole("button", { name: "Lançar" }).click();
   await page.getByRole("button", { name: "Ver todas" }).click();
   await page.getByRole("dialog", { name: "Categoria" }).getByRole("button", { name: "Nova categoria" }).click();
-  await page
-    .getByRole("dialog", { name: "Nova" })
-    .getByRole("button", { name: /^Categoria/ })
-    .click();
-  const create = page.getByRole("dialog", { name: "Nova categoria" });
-  await create.getByLabel("Nome").fill("Feira");
+  const create = page.getByRole("dialog", { name: "Nova Categoria" });
+  await expect(create.getByRole("radio", { name: "Categoria Pai" })).toBeChecked();
+  await create.getByLabel("Nome do agrupador").fill("Feira");
   await create.getByRole("radio", { name: "Ícone shopping-cart" }).check({ force: true });
-  await create.getByRole("button", { name: "Criar" }).click();
+  await create.getByRole("button", { name: "Criar Categoria" }).click();
 
   await expect(page.getByText("Categoria criada")).toBeVisible();
   await expect(create).toBeHidden();

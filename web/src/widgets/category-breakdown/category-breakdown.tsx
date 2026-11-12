@@ -19,6 +19,7 @@ import type { Schemas } from "@/shared/api/client";
 import { commaDecimal, csvCell, downloadCsv } from "@/shared/lib/csv";
 import { addMonths, dayMonth, monthShort, todayISO } from "@/shared/lib/date";
 import { formatDelta, formatPct } from "@/shared/lib/percent";
+import { plain } from "@/shared/lib/text";
 import { cents, fromCents } from "@/shared/lib/tier";
 import { CategoryIcon, categoryBg, categoryFill } from "@/shared/ui/category-icon";
 import { Money } from "@/shared/ui/money";
@@ -58,13 +59,6 @@ const exportCsv = (report: Report) => {
   });
   downloadCsv(`soldi-para-onde-vai-${report.month}.csv`, ["Grupo;Subcategoria;Valor;Percentual", ...lines]);
 };
-
-/** `Poupança` → `poupanca`, for a group named in the address. */
-const plain = (name: string) =>
-  name
-    .normalize("NFD")
-    .replace(/\p{Diacritic}/gu, "")
-    .toLowerCase();
 
 /** Spending that fell is good news; no change stays neutral. */
 const DeltaBadge = ({ delta_pct, previous }: { delta_pct?: string | null; previous: string }) => {

@@ -407,15 +407,12 @@ describe("TransactionSheet", () => {
     await userEvent.click(
       within(await screen.findByRole("dialog", { name: "Categoria" })).getByRole("button", { name: "Nova categoria" }),
     );
-    await userEvent.click(
-      within(await screen.findByRole("dialog", { name: "Nova" })).getByRole("button", { name: /^Categoria/ }),
-    );
-    const create = await screen.findByRole("dialog", { name: "Nova categoria" });
+    const create = await screen.findByRole("dialog", { name: "Nova Categoria" });
     const requests = stubApi({
       "GET /api/categories": { status: 200, body: [...CATEGORIES, carro] },
       "POST /api/categories": { status: 201, body: carro },
     });
-    await userEvent.type(within(create).getByLabelText("Nome"), "Carro{Enter}");
+    await userEvent.type(within(create).getByLabelText("Nome do agrupador"), "Carro{Enter}");
 
     expect(await screen.findByRole("radio", { name: "Carro" })).toHaveAttribute("aria-checked", "true");
     expect(screen.getByRole("dialog", { name: "Novo Registro" })).toBeInTheDocument();
