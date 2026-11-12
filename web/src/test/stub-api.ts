@@ -209,6 +209,7 @@ export const BILLS_OF_MONTH: Schemas["BillOfMonth"][] = [
     paid: false,
     transaction_id: null,
     overdue: true,
+    is_card: false,
   },
   {
     bill_id: BILL_ALUGUEL.id,
@@ -220,6 +221,7 @@ export const BILLS_OF_MONTH: Schemas["BillOfMonth"][] = [
     paid: false,
     transaction_id: null,
     overdue: false,
+    is_card: false,
   },
 ];
 
@@ -228,6 +230,7 @@ export const CARRIED_ALUGUEL: Schemas["BillOfMonth"] = {
   ...BILLS_OF_MONTH[1],
   due_date: "2026-10-10",
   overdue: true,
+  is_card: false,
   lands_on: "2026-11-05",
 };
 
@@ -261,6 +264,7 @@ const forecastBill = (id: number, name: string, amount: string, due: string): Sc
   paid: false,
   transaction_id: null,
   overdue: false,
+  is_card: false,
   lands_on: due,
 });
 
