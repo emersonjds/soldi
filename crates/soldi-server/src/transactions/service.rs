@@ -188,6 +188,12 @@ pub async fn update(
     if patch.repeat_months.is_some() {
         domain::check_repeatable(&current)?;
     }
+    if current.recurring_bill_id.is_some() && patch.kind.is_some_and(|kind| kind != current.kind) {
+        return Err(AppError::invalid(
+            "kind",
+            "a conta fixa payment stays a Saída",
+        ));
+    }
     let category_id = patch.category_id.unwrap_or(current.category.id);
     let category = category(&mut tx, user, category_id, patch.category_id.is_some()).await?;
     let next = domain::check(CreateTransaction {

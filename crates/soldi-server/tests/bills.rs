@@ -836,3 +836,83 @@ async fn d30b_a_card_paid_this_month_or_later_keeps_its_closing_day(pool: PgPool
         .await;
     assert_eq!(status, StatusCode::OK, "{moved}");
 }
+
+#[sqlx::test]
+async fn sol113_a_payment_keeps_its_kind_and_takes_only_a_bill_category(pool: PgPool) {
+    let (ana, rent) = opened_with_rent(pool).await;
+    let card = create(&ana, porto(&ana.category_id("Cartão").await)).await;
+    let (_, conta) = ana
+        .post(&pay_uri(&rent), json!({ "date": "2026-11-05" }))
+        .await;
+    let (_, fatura) = ana
+        .post(
+            &pay_uri(&card),
+            json!({ "date": "2026-11-10", "amount": "52.00" }),
+        )
+        .await;
+    let mercado = ana.category_id("Mercado").await;
+    let salario = ana.category_id("Salário").await;
+    let luz = ana.category_id("Luz").await;
+    let bia = ana.another_user("bia@example.com").await;
+
+    for paid in [&conta, &fatura] {
+        for (body, field) in [
+            (json!({ "kind": "daily", "category_id": mercado }), "kind"),
+            (json!({ "kind": "daily" }), "kind"),
+            (json!({ "kind": "income", "category_id": salario }), "kind"),
+            (json!({ "category_id": mercado }), "category_id"),
+        ] {
+            let (status, problem) = ana.patch(&entry_uri(paid), body.clone()).await;
+            assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+            assert_eq!(problem["errors"][0]["field"], field, "{body}");
+        }
+        let (status, problem) = ana
+            .patch(
+                &entry_uri(paid),
+                json!({ "kind": "daily", "category_id": mercado }),
+            )
+            .await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+        assert_eq!(
+            problem["errors"][0]["message"],
+            "a conta fixa payment stays a Saída"
+        );
+        let (_, listed) = ana.get("/api/transactions?month=2026-11").await;
+        assert!(listed.as_array().unwrap().contains(paid), "{listed}");
+        assert_eq!(
+            bia.patch(&entry_uri(paid), json!({ "kind": "daily" }))
+                .await
+                .0,
+            StatusCode::NOT_FOUND
+        );
+        let (status, changed) = ana
+            .patch(
+                &entry_uri(paid),
+                json!({ "kind": "bill", "amount": "60", "note": "pago", "category_id": luz }),
+            )
+            .await;
+        assert_eq!(status, StatusCode::OK, "{changed}");
+        assert_eq!(
+            (&changed["kind"], &changed["amount"], &changed["note"]),
+            (&json!("bill"), &json!("60.00"), &json!("pago"))
+        );
+        assert_eq!(changed["recurring_bill_id"], paid["recurring_bill_id"]);
+    }
+    let plain = entry(
+        &ana,
+        json!({ "date": "2026-11-07", "amount": "50", "kind": "bill", "category_id": luz }),
+    )
+    .await;
+    let (status, moved) = ana
+        .patch(
+            &entry_uri(&plain),
+            json!({ "kind": "daily", "category_id": mercado }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{moved}");
+    assert_eq!(moved["kind"], "daily");
+    assert_eq!(
+        ana.delete(&entry_uri(&conta)).await.0,
+        StatusCode::NO_CONTENT
+    );
+}

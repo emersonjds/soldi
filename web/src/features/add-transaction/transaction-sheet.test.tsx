@@ -468,6 +468,29 @@ describe("TransactionSheet", () => {
     expect(screen.queryByRole("switch", { name: "Repetir lançamento (Série)" })).not.toBeInTheDocument();
   });
 
+  it("keeps a bill payment a Saída: no Tipo to pick, and a refused kind says why", async () => {
+    const payment = { ...ALUGUEL_ROW, recurring_bill_id: "b1" };
+    setup(
+      { transaction: payment },
+      {
+        [`PATCH /api/transactions/${payment.id}`]: {
+          status: 422,
+          body: {
+            ...problem(422, "Invalid."),
+            errors: [{ field: "kind", message: "a conta fixa payment stays a Saída" }],
+          },
+        },
+      },
+    );
+
+    await screen.findByRole("dialog", { name: "Editar lançamento" });
+    expect(screen.queryByRole("radio", { name: "Diário" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("radio", { name: "Entrada" })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Salvar Lançamento" }));
+
+    expect(await screen.findByText("Um pagamento de conta fixa continua sendo Saída.")).toBeInTheDocument();
+  });
+
   it("offers no Repetir for a resgate", async () => {
     setup({ transaction: { ...TRANSACTIONS[2], cofrinho_id: "c1" } });
 
