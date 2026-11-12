@@ -185,7 +185,9 @@ const dueIn = (date: string, today: string) => {
 
 const NextDue = ({ rows: month, today }: { rows: Schemas["BillOfMonth"][]; today: string }) => {
   const rows = month.filter((row) => !row.is_card);
-  const next = rows.filter((row) => !row.paid).sort((a, b) => a.due_date.localeCompare(b.due_date))[0];
+  // D17: a bill registered after its day this month is not owed until next month.
+  const owed = rows.filter((row) => !row.paid && (row.overdue || row.due_date >= today));
+  const next = owed.sort((a, b) => a.due_date.localeCompare(b.due_date))[0];
   const when = next && dueIn(next.due_date, today);
   return (
     <DashCard

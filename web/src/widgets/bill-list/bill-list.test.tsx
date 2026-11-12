@@ -233,6 +233,17 @@ describe("Contas fixas", () => {
       expect(within(card).getByText("Vence no dia 02")).toBeInTheDocument();
     });
 
+    it("skips a bill registered after its day this month, which owes nothing yet (D17)", async () => {
+      withRows([
+        { ...luz, overdue: false },
+        { ...aluguel, due_date: "2026-11-07" },
+      ]);
+
+      const card = await nextDue();
+      expect(within(card).getByText("Aluguel Residencial")).toBeInTheDocument();
+      expect(within(card).queryByText("Vencida")).not.toBeInTheDocument();
+    });
+
     it.each([
       ["2026-11-05", "Hoje"],
       ["2026-11-06", "Amanhã"],
