@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Schemas } from "@/shared/api/client";
 import { renderWithQuery } from "@/test/render";
 import {
+  ALUGUEL,
   BILL_ALUGUEL,
   BILL_LUZ,
   BILL_PAUSED,
@@ -84,6 +85,17 @@ const open = ({
   };
 };
 
+const PORTO: Schemas["Bill"] = {
+  ...BILL_LUZ,
+  id: "b1000000-0000-4000-8000-000000000009",
+  name: "Porto",
+  amount: null,
+  closing_day: 3,
+  due_day: 10,
+};
+
+const sent = (requests: Request[], method: string) => requests.filter((request) => request.method === method);
+
 const total = () => screen.findByRole("region", { name: "Total das contas fixas" });
 const nextDue = () => screen.findByRole("region", { name: "Próximo vencimento" });
 const list = (name: string) => screen.getByRole("list", { name });
@@ -119,14 +131,12 @@ describe("Contas fixas", () => {
       expect(await within(card).findByText("Comprometem 36% das entradas de novembro")).toBeInTheDocument();
     });
 
-    it("leaves a card out of the total and the rows", async () => {
-      const porto: Schemas["Bill"] = { ...BILL_LUZ, name: "Porto", amount: null, closing_day: 3 };
-      open({ bills: [BILL_ALUGUEL, porto] });
+    it("leaves a card out of the total", async () => {
+      open({ bills: [BILL_ALUGUEL, PORTO] });
 
       const card = await total();
       expect(within(card).getByText("R$ 2.259,56")).toBeInTheDocument();
       expect(within(card).getByText("1 conta ativa")).toBeInTheDocument();
-      expect(screen.queryByText("Porto")).not.toBeInTheDocument();
     });
 
     it("says there is no income yet instead of a share", async () => {
@@ -398,6 +408,75 @@ describe("Contas fixas", () => {
       expect(paused.getByRole("switch", { name: "Ativa: Luz (Enel)" })).not.toBeChecked();
       expect(paused.getByRole("switch", { name: "Ativa: Academia" })).not.toBeChecked();
       expect(screen.queryByRole("list", { name: "Contas ativas" })).not.toBeInTheDocument();
+    });
+  });
+
+  describe("credit card", () => {
+    it("creates a card with the switch: no Valor, a Fecha dia from 1 to 31 and no category until one is picked", async () => {
+      const { requests } = open({ replies: { "POST /api/bills": { status: 201, body: PORTO } } });
+
+      await userEvent.click(await screen.findByRole("button", { name: "Nova conta" }));
+      const sheet = await screen.findByRole("dialog", { name: "Nova conta" });
+      await userEvent.click(within(sheet).getByRole("switch", { name: "Cartão de crédito" }));
+
+      expect(within(sheet).queryByLabelText("Valor")).not.toBeInTheDocument();
+      expect(within(sheet).getByText("Ex.: Cartão › Porto")).toBeInTheDocument();
+      expect(within(sheet).getByRole("radio", { name: "Aluguel" })).toHaveAttribute("aria-checked", "false");
+      await userEvent.type(within(sheet).getByLabelText("Nome"), "Porto");
+      await userEvent.type(within(sheet).getByLabelText("Fecha dia"), "0");
+      await userEvent.type(within(sheet).getByLabelText("Vence dia"), "10");
+      await userEvent.click(within(sheet).getByRole("button", { name: "Salvar" }));
+      expect(within(sheet).getByLabelText("Fecha dia")).toHaveAttribute("aria-invalid", "true");
+      expect(within(sheet).getByLabelText("Vence dia")).toHaveAttribute("aria-invalid", "false");
+      expect(within(sheet).getByText("Escolha uma categoria.")).toBeInTheDocument();
+
+      await userEvent.clear(within(sheet).getByLabelText("Fecha dia"));
+      await userEvent.type(within(sheet).getByLabelText("Fecha dia"), "32");
+      await userEvent.click(within(sheet).getByRole("radio", { name: "Aluguel" }));
+      await userEvent.click(within(sheet).getByRole("button", { name: "Salvar" }));
+      expect(within(sheet).getByText("Escolha um dia de 1 a 31.")).toBeInTheDocument();
+      expect(sent(requests, "POST")).toHaveLength(0);
+
+      await userEvent.clear(within(sheet).getByLabelText("Fecha dia"));
+      await userEvent.type(within(sheet).getByLabelText("Fecha dia"), "3");
+      await userEvent.click(within(sheet).getByRole("button", { name: "Salvar" }));
+
+      await waitFor(() => expect(sent(requests, "POST")).toHaveLength(1));
+      expect(await sent(requests, "POST")[0].json()).toEqual({
+        name: "Porto",
+        due_day: 10,
+        closing_day: 3,
+        category_id: ALUGUEL.id,
+      });
+    });
+
+    it("lists a card by its days and edits its Fecha dia, with no card or Ativa switch", async () => {
+      const { requests } = open({
+        bills: [BILL_ALUGUEL, PORTO],
+        replies: { [`PATCH /api/bills/${PORTO.id}`]: { status: 200, body: PORTO } },
+      });
+
+      const row = await screen.findByRole("button", { name: /^Porto/ });
+      expect(row).toHaveTextContent("Fecha dia 3 · vence dia 10");
+      expect(row).not.toHaveTextContent("R$");
+      expect(within(list("Contas ativas")).queryByRole("switch", { name: "Ativa: Porto" })).not.toBeInTheDocument();
+
+      await userEvent.click(row);
+      const sheet = await screen.findByRole("dialog", { name: "Editar conta" });
+      expect(within(sheet).queryByRole("switch")).not.toBeInTheDocument();
+      expect(within(sheet).queryByLabelText("Valor")).not.toBeInTheDocument();
+      expect(within(sheet).getByLabelText("Fecha dia")).toHaveValue("3");
+      await userEvent.clear(within(sheet).getByLabelText("Fecha dia"));
+      await userEvent.type(within(sheet).getByLabelText("Fecha dia"), "5");
+      await userEvent.click(within(sheet).getByRole("button", { name: "Salvar" }));
+
+      await waitFor(() => expect(patches(requests)).toHaveLength(1));
+      expect(await patches(requests)[0].json()).toEqual({
+        name: "Porto",
+        due_day: 10,
+        closing_day: 5,
+        category_id: PORTO.category_id,
+      });
     });
   });
 });

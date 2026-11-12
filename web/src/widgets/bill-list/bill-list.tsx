@@ -22,6 +22,9 @@ import { DashCard } from "@/shared/ui/dash-card";
 import { Money } from "@/shared/ui/money";
 import { PageError, PageLoading } from "@/shared/ui/page-state";
 
+/** A card (D28) has no amount: Contas fixas shows its days instead and leaves it out of the total. */
+const hasAmount = (bill: Bill): bill is Bill & { amount: string } => bill.amount != null;
+
 const Rows = ({
   label,
   bills,
@@ -44,6 +47,7 @@ const Rows = ({
     <ul aria-label={label} className="flex flex-col rounded-2xl bg-card p-2 shadow-sm">
       {bills.map((bill) => {
         const category = categoryOf(bill);
+        const label = category && categoryLabel(category, categories.data);
         return (
           <li key={bill.id} className="flex items-center">
             <button
@@ -55,19 +59,26 @@ const Rows = ({
               <span className="flex min-w-0 flex-1 flex-col">
                 <span className="truncate font-medium text-base">{bill.name}</span>
                 <span className="text-muted-foreground text-xs">
-                  Dia {bill.due_day}
-                  {category && ` · ${categoryLabel(category, categories.data)}`}
+                  {hasAmount(bill) ? [`Dia ${bill.due_day}`, label].filter(Boolean).join(" · ") : label}
                 </span>
               </span>
-              <Money amount={bill.amount ?? "0"} className="font-bold text-sm sm:text-base" />
+              {hasAmount(bill) ? (
+                <Money amount={bill.amount} className="font-bold text-sm sm:text-base" />
+              ) : (
+                <span className="shrink-0 text-muted-foreground text-xs sm:text-sm">
+                  Fecha dia {bill.closing_day} · vence dia {bill.due_day}
+                </span>
+              )}
             </button>
-            <Switch
-              aria-label={`Ativa: ${bill.name}`}
-              checked={isActive(bill)}
-              disabled={isSaving(bill)}
-              onCheckedChange={(active) => onToggle(bill, active)}
-              className="mx-3 shrink-0 after:-inset-y-3.5"
-            />
+            {hasAmount(bill) && (
+              <Switch
+                aria-label={`Ativa: ${bill.name}`}
+                checked={isActive(bill)}
+                disabled={isSaving(bill)}
+                onCheckedChange={(active) => onToggle(bill, active)}
+                className="mx-3 shrink-0 after:-inset-y-3.5"
+              />
+            )}
           </li>
         );
       })}
@@ -100,11 +111,11 @@ const NextDue = ({ rows: month, today }: { rows: Schemas["BillOfMonth"][]; today
 };
 
 /** Spec SOL-72 §9: the active bills' total against this month's income (never the viewed one), and the next bill due. */
-const Summary = ({ active }: { active: Bill[] }) => {
+const Summary = ({ active }: { active: (Bill & { amount: string })[] }) => {
   const today = todayISO();
   const month = today.slice(0, 7);
   const view = useMonth(month);
-  const total = active.reduce((sum, bill) => sum + cents(bill.amount ?? "0"), 0);
+  const total = active.reduce((sum, bill) => sum + cents(bill.amount), 0);
   const income = view.data ? cents(view.data.totals.income) : 0;
   const name = monthName(`${month}-01`, month);
 
@@ -222,14 +233,13 @@ export const BillList = () => {
     return <PageError message="Não foi possível carregar as contas." onRetry={() => bills.refetch()} />;
   if (!bills.data) return <PageLoading />;
 
-  // ponytail: cards stay out until SOL-106 Task 8 gives them their own row.
-  const visible = bills.data.filter((bill) => bill.closing_day == null && !archiving.includes(bill.id));
+  const visible = bills.data.filter((bill) => !archiving.includes(bill.id));
   const active = visible.filter(isActive);
   const paused = visible.filter((bill) => !isActive(bill));
 
   return (
     <div className="flex flex-col gap-6">
-      {visible.length > 0 && <Summary active={active} />}
+      {visible.length > 0 && <Summary active={active.filter(hasAmount)} />}
       {visible.length === 0 ? (
         <div className="flex flex-col items-center gap-3 rounded-2xl bg-card px-4 py-10 text-center shadow-sm">
           <span className="flex size-12 items-center justify-center rounded-full bg-secondary text-primary">

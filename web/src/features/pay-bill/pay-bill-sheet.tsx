@@ -4,7 +4,7 @@ import { type FormEvent, useState } from "react";
 
 import { toast } from "sonner";
 
-import { type BillOfMonth, payDateFor, usePayBill } from "@/entities/bill/bill-queries";
+import { type BillOfMonth, billTitle, payDateFor, usePayBill } from "@/entities/bill/bill-queries";
 import { billKey } from "@/entities/month/forecast-alert";
 import { monthName, todayISO } from "@/shared/lib/date";
 import { positiveAmount } from "@/shared/lib/money";
@@ -32,6 +32,9 @@ const PayForm = ({ bill, month, onPay }: { bill: BillOfMonth; month: string; onP
   return (
     <form noValidate onSubmit={submit} className="flex flex-col gap-6">
       <HeroAmount id="pay-amount" value={input} onChange={setInput} invalid={submitted && !amount} />
+      {bill.is_card && (
+        <p className="-mt-3 text-center text-muted-foreground text-sm">Confira com a fatura do banco.</p>
+      )}
       <DateChips
         legend="Quando pagou?"
         value={date}
@@ -54,7 +57,7 @@ type PayBillSheetProps = {
   onOpenChange: (open: boolean) => void;
 };
 
-/** `Pagar`: the bill's amount prefilled and editable, dated today. */
+/** `Pagar`: the bill's amount (a card's fatura) prefilled and editable, dated today; the amount is always sent. */
 export const PayBillSheet = ({ month, bill, open, onOpenChange }: PayBillSheetProps) => {
   const pay = usePayBill();
 
@@ -67,7 +70,7 @@ export const PayBillSheet = ({ month, bill, open, onOpenChange }: PayBillSheetPr
     <ResponsiveSheet
       open={open}
       onOpenChange={onOpenChange}
-      title={bill ? `Pagar ${bill.name}` : "Pagar"}
+      title={bill ? `Pagar ${billTitle(bill)}` : "Pagar"}
       description={
         month === todayISO().slice(0, 7)
           ? "Valor e data do pagamento desta conta."

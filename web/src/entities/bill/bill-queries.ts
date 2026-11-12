@@ -14,6 +14,9 @@ export type Bill = Schemas["Bill"];
 export type BillOfMonth = Schemas["BillOfMonth"];
 export type BillPrefill = Schemas["CreateBill"];
 
+/** `Fatura Porto` for a card's row (D28), the bill's name otherwise. */
+export const billTitle = (bill: BillOfMonth) => (bill.is_card ? `Fatura ${bill.name}` : bill.name);
+
 export const billsQuery = (includeInactive = false) =>
   queryOptions({
     queryKey: ["bills", includeInactive],
@@ -89,13 +92,20 @@ const patchRow = async (
   };
 };
 
+// ponytail: the API sends a paid fatura's payment, not its total; the total seen when paying puts it back on Desfazer, and after a reload the paid amount shows until the refetch.
+const faturas = new Map<string, string>();
+const faturaKey = ({ billId, month }: Payment) => `${billId}:${month}`;
+
 export const usePayBill = () => {
   const client = useQueryClient();
   return useMutation({
     mutationFn: async ({ billId, month, ...body }: Payment & Schemas["PayBill"]) =>
       dataOrThrow(await api.POST("/api/bills/{id}/pay", { params: { path: { id: billId }, query: { month } }, body })),
     onMutate: (payment) =>
-      patchRow(client, payment, (row) => ({ paid: true, overdue: false, amount: payment.amount ?? row.amount })),
+      patchRow(client, payment, (row) => {
+        if (row.is_card) faturas.set(faturaKey(payment), row.amount);
+        return { paid: true, overdue: false, amount: payment.amount ?? row.amount };
+      }),
     onError: (_error, _payment, rollback) => rollback?.(),
     onSettled: () => refresh(client),
   });
@@ -107,7 +117,12 @@ export const useUnpayBill = () => {
     mutationFn: async ({ billId, month }: Payment) =>
       okOrThrow(await api.DELETE("/api/bills/{id}/pay", { params: { path: { id: billId }, query: { month } } })),
     onMutate: (payment) =>
-      patchRow(client, payment, (row) => ({ paid: false, transaction_id: null, overdue: row.due_date < todayISO() })),
+      patchRow(client, payment, (row) => ({
+        paid: false,
+        transaction_id: null,
+        overdue: row.due_date < todayISO(),
+        amount: (row.is_card && faturas.get(faturaKey(payment))) || row.amount,
+      })),
     onError: (_error, _payment, rollback) => rollback?.(),
     onSettled: () => refresh(client),
   });
