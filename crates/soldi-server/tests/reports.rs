@@ -138,6 +138,40 @@ async fn subcategories_add_up_in_their_parents_group(pool: PgPool) {
     assert_eq!(report["groups"].as_array().unwrap().len(), 2);
 }
 
+#[sqlx::test]
+async fn a_mixed_group_sums_both_outflow_kinds_and_reports_its_own_kind(pool: PgPool) {
+    let ana = TestApp::signed_in(pool, "ana@example.com").await;
+    ana.open_at("0", "2026-10-01").await;
+    let (_, veiculo) = ana
+        .post(
+            "/api/categories",
+            json!({ "name": "Veículo", "kind": "bill", "color": "cat-16" }),
+        )
+        .await;
+    for (name, kind) in [("Parcela", "bill"), ("Gasolina", "daily")] {
+        let (status, _) = ana
+            .post(
+                "/api/categories",
+                json!({ "name": name, "kind": kind, "parent_id": veiculo["id"] }),
+            )
+            .await;
+        assert_eq!(status, StatusCode::CREATED);
+    }
+    log(&ana, "2026-11-02", "daily", "300", "Gasolina").await;
+    log(&ana, "2026-11-03", "bill", "100", "Parcela").await;
+    let parcela = ana.category_id("Parcela").await;
+    let gasolina = ana.category_id("Gasolina").await;
+
+    let (status, report) = ana.get("/api/reports/categories?month=2026-11").await;
+
+    assert_eq!(status, StatusCode::OK, "{report}");
+    assert_eq!(report["groups"].as_array().unwrap().len(), 1);
+    assert_eq!(report["groups"][0]["name"], "Veículo");
+    assert_eq!(report["groups"][0]["kind"], "bill");
+    assert_eq!(report["groups"][0]["amount"], "400.00");
+    assert_eq!(report["groups"][0]["children"], json!([gasolina, parcela]));
+}
+
 async fn savings(user: &TestApp, year: &str) -> (StatusCode, serde_json::Value) {
     user.get(&format!("/api/reports/savings?year={year}")).await
 }

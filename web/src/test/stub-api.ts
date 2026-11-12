@@ -85,6 +85,16 @@ export const RESGATE = category("c1000000-0000-4000-8000-000000000010", "Resgate
 /** In the API's order: kind, then name. */
 export const CATEGORIES = [EXTRA, SALARIO, ALUGUEL, LUZ, COMIDA, MERCADO];
 
+/** A mixed group (D26): `Veículo` is Saída and holds a Diário and a Saída subcategory. */
+export const VEICULO = category("c1000000-0000-4000-8000-000000000020", "Veículo", "bill", "car", "cat-8");
+export const COMBUSTIVEL = category("c1000000-0000-4000-8000-000000000021", "Combustível", "daily", "fuel", "cat-8", {
+  parent_id: VEICULO.id,
+});
+export const PARCELA = category("c1000000-0000-4000-8000-000000000022", "Parcela", "bill", "car", "cat-8", {
+  parent_id: VEICULO.id,
+});
+export const WITH_MIXED_GROUP = [...CATEGORIES, VEICULO, COMBUSTIVEL, PARCELA];
+
 /** With `Economia` and its cofrinhos, each parent followed by its children; `Resgate` only with `include_system`. */
 export const WITH_COFRINHOS = [EXTRA, SALARIO, ALUGUEL, ECONOMIA, RESERVA, VIAGEM, LUZ, COMIDA, MERCADO];
 

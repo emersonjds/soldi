@@ -8,7 +8,9 @@ import type { Schemas } from "@/shared/api/client";
 import { pickDate } from "@/test/pick-date";
 import { renderWithQuery } from "@/test/render";
 import {
+  ALUGUEL,
   CATEGORIES,
+  COMBUSTIVEL,
   COMIDA,
   ECONOMIA,
   EXTRA,
@@ -18,8 +20,10 @@ import {
   RESGATE,
   SALARIO,
   stubApi,
+  VEICULO,
   VIAGEM,
   WITH_COFRINHOS,
+  WITH_MIXED_GROUP,
 } from "@/test/stub-api";
 
 import { CategorySheet } from "./category-sheet";
@@ -103,7 +107,9 @@ describe("CategorySheet", () => {
 
     const sheet = await screen.findByRole("dialog", { name: "Editar categoria" });
     expect(within(sheet).getByLabelText("Nome")).toHaveValue("Ração");
-    await waitFor(() => expect(options(sheet)).toEqual(["Nenhuma", "Comida fora", "Mercado", "Pets"]));
+    await waitFor(() =>
+      expect(options(sheet)).toEqual(["Nenhuma", "Aluguel", "Luz", "Comida fora", "Mercado", "Pets"]),
+    );
     expect(within(sheet).getByText("Usa a cor de Pets")).toBeInTheDocument();
     expect(within(sheet).queryByRole("radio", { name: /^Cor / })).not.toBeInTheDocument();
     expect(within(sheet).getByLabelText("Subcategoria de")).toHaveValue(PETS.id);
@@ -151,7 +157,60 @@ describe("CategorySheet", () => {
     open({ category: MERCADO });
 
     const sheet = await screen.findByRole("dialog", { name: "Editar categoria" });
-    await waitFor(() => expect(options(sheet)).toEqual(["Nenhuma", "Comida fora", "Pets"]));
+    await waitFor(() => expect(options(sheet)).toEqual(["Nenhuma", "Aluguel", "Luz", "Comida fora", "Pets"]));
+  });
+
+  describe("with a group of another kind (D26)", () => {
+    it("edits it in its own kind from the Diário list, its colors taken in every kind it shows in", async () => {
+      const { requests } = open(
+        { category: VEICULO },
+        {
+          "GET /api/categories": { status: 200, body: WITH_MIXED_GROUP },
+          [`PATCH /api/categories/${VEICULO.id}`]: { status: 200, body: VEICULO },
+        },
+      );
+
+      const sheet = await screen.findByRole("dialog", { name: "Editar categoria" });
+      await waitFor(() => expect(within(sheet).getByRole("radio", { name: "Cor Ciano" })).toBeChecked());
+      expect(within(sheet).getByRole("radio", { name: "Cor Âmbar, usada por Mercado" })).toBeDisabled();
+      expect(within(sheet).getByRole("radio", { name: "Cor Índigo, usada por Aluguel" })).toBeDisabled();
+      await userEvent.click(within(sheet).getByRole("button", { name: "Salvar" }));
+
+      expect(await patched(requests)).toEqual({ name: "Veículo", icon: "car", color: "cat-8", parent_id: null });
+    });
+
+    it("offers a Diário child every outflow top-level", async () => {
+      open({ category: COMBUSTIVEL }, { "GET /api/categories": { status: 200, body: WITH_MIXED_GROUP } });
+      const sheet = await screen.findByRole("dialog", { name: "Editar categoria" });
+      await waitFor(() =>
+        expect(options(sheet)).toEqual(["Nenhuma", "Aluguel", "Luz", "Comida fora", "Mercado", "Veículo"]),
+      );
+      expect(within(sheet).getByText("Usa a cor de Veículo")).toBeInTheDocument();
+    });
+
+    it("keeps Economia out of a Diário child's parents", async () => {
+      open({ category: MERCADO }, { "GET /api/categories": { status: 200, body: WITH_COFRINHOS } });
+      const sheet = await screen.findByRole("dialog", { name: "Editar categoria" });
+      await waitFor(() => expect(options(sheet)).toEqual(["Nenhuma", "Aluguel", "Luz", "Comida fora"]));
+    });
+
+    it("creates a Diário subcategory under a Saída top-level", async () => {
+      const { requests } = open({}, { "POST /api/categories": { status: 201, body: COMBUSTIVEL } });
+      await choose("Subcategoria");
+      await userEvent.click(
+        await within(await screen.findByRole("dialog", { name: "Subcategoria de qual categoria?" })).findByRole(
+          "option",
+          { name: "Aluguel" },
+        ),
+      );
+
+      const sheet = await screen.findByRole("dialog", { name: "Nova categoria" });
+      expect(within(sheet).getByText("Em Aluguel")).toBeInTheDocument();
+      expect(within(sheet).getByText("Usa a cor de Aluguel")).toBeInTheDocument();
+      await userEvent.type(within(sheet).getByLabelText("Nome"), "Gás{Enter}");
+
+      expect(await posted(requests)).toEqual({ name: "Gás", kind: "daily", icon: "home", parent_id: ALUGUEL.id });
+    });
   });
 
   it("deletes from the sheet", async () => {
@@ -327,7 +386,7 @@ describe("CategorySheet", () => {
       const { requests } = open({}, { "POST /api/categories": { status: 201, body: created } });
       await choose("Subcategoria");
 
-      expect(await parents()).toEqual(["Comida fora", "Mercado", "Pets"]);
+      expect(await parents()).toEqual(["Aluguel", "Luz", "Comida fora", "Mercado", "Pets"]);
       const list = screen.getByRole("dialog", { name: "Subcategoria de qual categoria?" });
       expect(list.querySelector("select")).toBeNull();
       await userEvent.type(within(list).getByPlaceholderText("Buscar categoria"), "pet");
@@ -361,7 +420,7 @@ describe("CategorySheet", () => {
       await userEvent.type(within(sheet).getByLabelText("Nome"), "Feira");
 
       await userEvent.click(within(sheet).getByRole("button", { name: "Trocar" }));
-      expect(await parents()).toEqual(["Comida fora", "Mercado", "Pets"]);
+      expect(await parents()).toEqual(["Aluguel", "Luz", "Comida fora", "Mercado", "Pets"]);
       await userEvent.click(within(screen.getByRole("dialog")).getByRole("option", { name: "Mercado" }));
 
       const again = await screen.findByRole("dialog", { name: "Nova categoria" });
@@ -395,7 +454,7 @@ describe("CategorySheet", () => {
       open({ kind: "bill" }, { "GET /api/categories": { status: 200, body: WITH_COFRINHOS } });
       await choose("Subcategoria");
 
-      expect(await parents()).toEqual(["Aluguel", "Economia", "Luz"]);
+      expect(await parents()).toEqual(["Aluguel", "Economia", "Luz", "Comida fora", "Mercado"]);
       await userEvent.click(within(screen.getByRole("dialog")).getByRole("option", { name: "Economia" }));
       const sheet = await screen.findByRole("dialog", { name: "Novo cofrinho" });
       expect(within(sheet).getByLabelText("Meta")).toBeInTheDocument();
@@ -422,7 +481,7 @@ describe("CategorySheet", () => {
       expect(await within(list).findByText("Não foi possível carregar as categorias.")).toBeInTheDocument();
       stubApi({ "GET /api/categories": { status: 200, body: LIST } });
       await userEvent.click(within(list).getByRole("button", { name: "Tentar de novo" }));
-      expect(await parents()).toEqual(["Comida fora", "Mercado", "Pets"]);
+      expect(await parents()).toEqual(["Aluguel", "Luz", "Comida fora", "Mercado", "Pets"]);
     });
   });
 

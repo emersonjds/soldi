@@ -19,8 +19,16 @@ import { CategoryIcon, categoryBg } from "@/shared/ui/category-icon";
 import { DateField } from "@/shared/ui/date-field";
 import { ResponsiveSheet } from "@/shared/ui/responsive-sheet";
 
-import { systemCategoriesQuery, useCategories, useCreateCategory, useUpdateCategory } from "./categories-query";
-import { ChooseKind, ChooseParent } from "./category-chooser";
+import {
+  categoriesQuery,
+  kindsOf,
+  ofKind,
+  systemCategoriesQuery,
+  useCategories,
+  useCreateCategory,
+  useUpdateCategory,
+} from "./categories-query";
+import { ChooseKind, ChooseParent, sameSide } from "./category-chooser";
 import { IconPicker } from "./icon-picker";
 
 type Kind = Schemas["CategoryKind"];
@@ -54,7 +62,7 @@ export const COLOR_NAMES: [token: string, name: string][] = [
   ["cat-24", "Malva"],
 ];
 
-/** The other active top-level category of the kind that wears `token`; subcategories wear their parent's. */
+/** The other active top-level category in the kinds that wears `token`; subcategories wear their parent's. */
 const holderOf = (list: Category[], token: string, except?: string) =>
   list.find((each) => !each.parent_id && each.id !== except && each.color === token);
 
@@ -105,10 +113,11 @@ const CategoryForm = ({ kind, category, parentId: presetParent, onChangeParent, 
   const [movedTo, setParentId] = useState(category?.parent_id ?? "");
   const parentId = category ? movedTo : (presetParent ?? "");
   const [submitted, setSubmitted] = useState(false);
-  const categories = useCategories(kind);
-  const list = categories.data ?? [];
-  const holders =
-    useQuery({ ...systemCategoriesQuery, select: (all) => all.filter((each) => each.kind === kind) }).data ?? list;
+  // Edited from another kind's list (D26), a category keeps its own kind.
+  const formKind = category?.kind ?? kind;
+  const list = useQuery(categoriesQuery).data ?? [];
+  const system = useQuery(systemCategoriesQuery).data ?? list;
+  const holders = (category ? kindsOf(category, system) : [formKind]).flatMap((each) => ofKind(system, each));
   const [color, setColor] = useState(category?.color);
   const [target, setTarget] = useState(category?.target ?? "");
   const [deadline, setDeadline] = useState(category?.deadline ?? "");
@@ -119,7 +128,7 @@ const CategoryForm = ({ kind, category, parentId: presetParent, onChangeParent, 
   const ownColor = color && !holderOf(holders, color, category?.id) ? color : free;
   const chosenColor = parentId ? parent?.color : ownColor;
   const full = !parentId && !free;
-  const parents = list.filter((each) => !each.parent_id && each.id !== category?.id);
+  const parents = list.filter((each) => !each.parent_id && each.id !== category?.id && sameSide(each, formKind));
   const hasChildren = Boolean(category) && list.some((each) => each.parent_id === category?.id);
   // Economia cannot get a parent, and a cofrinho made from Cofrinhos stays under it.
   const fixedParent = category?.is_savings || list.find((each) => each.id === presetParent)?.is_savings;

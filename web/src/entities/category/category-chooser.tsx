@@ -1,5 +1,6 @@
 "use client";
 
+import { useQuery } from "@tanstack/react-query";
 import { ListTree, Shapes } from "lucide-react";
 
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
@@ -8,7 +9,11 @@ import { BrandButton } from "@/shared/ui/brand-button";
 import { CategoryIcon } from "@/shared/ui/category-icon";
 import { PageError, PageLoading } from "@/shared/ui/page-state";
 
-import { useCategories } from "./categories-query";
+import { categoriesQuery } from "./categories-query";
+
+/** D26: outflow and income never share a group, and only Saída goes under Economia. */
+export const sameSide = (parent: Schemas["Category"], kind: Schemas["CategoryKind"]) =>
+  (parent.kind === "income") === (kind === "income") && (!parent.is_savings || kind === "bill");
 
 const option =
   "flex min-h-14 items-center gap-3 rounded-2xl border border-border bg-card p-3 text-left transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring";
@@ -35,7 +40,7 @@ export const ChooseKind = ({ onCategory, onSubcategory }: { onCategory: () => vo
   </div>
 );
 
-/** Step 2: the kind's top-level categories, searchable; no parent means a top-level one after all. */
+/** Step 2: the top-levels of the kind's side (outflow or income), Economia only for Saída; searchable; no parent means a top-level one after all. */
 export const ChooseParent = ({
   kind,
   onPick,
@@ -43,11 +48,11 @@ export const ChooseParent = ({
   kind: Schemas["CategoryKind"];
   onPick: (parentId?: string) => void;
 }) => {
-  const categories = useCategories(kind);
+  const categories = useQuery(categoriesQuery);
   if (categories.isError)
     return <PageError message="Não foi possível carregar as categorias." onRetry={() => categories.refetch()} />;
   if (!categories.data) return <PageLoading />;
-  const parents = categories.data.filter((each) => !each.parent_id);
+  const parents = categories.data.filter((each) => !each.parent_id && sameSide(each, kind));
   if (!parents.length)
     return (
       <div className="flex flex-col items-center gap-4 py-4 text-center">
