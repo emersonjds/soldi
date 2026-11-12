@@ -6,7 +6,7 @@ import { useSearchParams } from "next/navigation";
 
 import { monthParam } from "@/shared/lib/date";
 import { ShellMonthSwitcher } from "@/widgets/app-shell/app-shell";
-import { BreakdownSkeleton, CategoryBreakdown } from "@/widgets/category-breakdown/category-breakdown";
+import { CategoryBreakdown } from "@/widgets/category-breakdown/category-breakdown";
 import { PageHero } from "@/widgets/month-header/month-header";
 
 const ParaOndeVaiScreen = () => {
@@ -23,7 +23,7 @@ const ParaOndeVaiScreen = () => {
 };
 
 const ParaOndeVaiPage = () => (
-  <Suspense fallback={<BreakdownSkeleton />}>
+  <Suspense fallback={null}>
     <ParaOndeVaiScreen />
   </Suspense>
 );

@@ -9,7 +9,6 @@ import { Pie, PieChart } from "recharts";
 import { Button } from "@/components/ui/button";
 import { ChartContainer } from "@/components/ui/chart";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Skeleton } from "@/components/ui/skeleton";
 import { categoriesQuery } from "@/entities/category/categories-query";
 import { type CategoryShare, useCategoryReport } from "@/entities/report/report-query";
 import { useTransactions } from "@/entities/transaction/transaction-queries";
@@ -45,7 +44,11 @@ const plural = (count: number, one: string, many: string) => `${count} ${count =
 /** `2026-11` → `out`, the month the deltas compare against. */
 const previousShort = (month: string) => monthShort(addMonths(month, -1)).toLowerCase();
 
-const csvCell = (text: string) => `"${text.replaceAll('"', '""')}"`;
+/** A leading `=`, `+`, `-` or `@` would run as a spreadsheet formula. */
+const csvCell = (text: string) => {
+  const inert = /^[=+\-@]/.test(text) ? `'${text}` : text;
+  return `"${inert.replaceAll('"', '""')}"`;
+};
 
 const commaDecimal = (value: string) => value.replace(".", ",");
 
@@ -66,8 +69,11 @@ const exportCsv = (report: Report) => {
   const link = document.createElement("a");
   link.href = url;
   link.download = `soldi-para-onde-vai-${report.month}.csv`;
+  document.body.append(link);
   link.click();
-  URL.revokeObjectURL(url);
+  link.remove();
+  // Safari and Firefox cancel a download whose URL is revoked in the same task.
+  setTimeout(() => URL.revokeObjectURL(url), 0);
 };
 
 /** Spending that fell is good news; no change stays neutral. */
@@ -104,7 +110,7 @@ const Donut = ({ groups, active, onSelect, children }: DonutProps) => {
   }));
 
   return (
-    <div className="relative mx-auto aspect-square w-full max-w-56 lg:max-w-64">
+    <div className="@container relative mx-auto aspect-square w-full max-w-56 lg:max-w-64">
       <ChartContainer config={{}} aria-hidden className="aspect-square size-full">
         <PieChart accessibilityLayer={false}>
           <Pie
@@ -153,7 +159,7 @@ const Composition = ({ groups, total, active, onSelect }: CompositionProps) => {
           <span className="max-lg:hidden">Total gasto</span>
           <span className="lg:hidden">Total de saídas</span>
         </span>
-        <Money amount={total} size="figure" />
+        <Money amount={total} size="figure" className="text-[length:min(1.75rem,10cqi)]" />
         <span className="flex items-center gap-1 font-semibold text-income-text text-sm max-lg:hidden">
           <Check aria-hidden className="size-4" />
           {groups.length} categorias
@@ -261,9 +267,14 @@ const GroupRow = ({ group, shares, previous, open, picked, onOpen, onPick }: Gro
             </span>
             <Money amount={group.amount} className="font-bold text-base" />
             <span className="col-span-2 flex flex-wrap items-center gap-x-2 text-muted-foreground text-sm tabular-nums">
-              <span className={cn(picked && "lg:text-primary")}>
-                {formatPct(group.pct)} {picked ? "do total gasto" : "das despesas"}
-              </span>
+              {picked ? (
+                <>
+                  <span className="text-primary max-lg:hidden">{formatPct(group.pct)} do total gasto</span>
+                  <span className="lg:hidden">{formatPct(group.pct)} das despesas</span>
+                </>
+              ) : (
+                <span>{formatPct(group.pct)} das despesas</span>
+              )}
               {folds && (
                 <span className="max-lg:hidden">{plural(group.children.length, "subcategoria", "subcategorias")}</span>
               )}
@@ -355,8 +366,10 @@ const CategoryEntries = ({ month, group, shares }: EntriesProps) => {
   const [adding, setAdding] = useState(false);
   const children = shares.filter((share) => share.parent_id === group.category_id);
   const narrowed = children.find((child) => child.category_id === sub);
-  const ids = narrowed ? [narrowed.category_id] : [group.category_id, ...group.children];
-  const inScope = (entry: Transaction) => ids.includes(entry.category.id);
+  const inScope = ({ category }: Transaction) =>
+    narrowed
+      ? category.id === narrowed.category_id
+      : category.id === group.category_id || category.parent_id === group.category_id;
   const shown = entries.data?.filter(inScope);
   const references = lastMonth.data?.filter(inScope).slice(0, 3) ?? [];
   const category = categories.data?.find((each) => each.id === group.category_id);
@@ -501,21 +514,6 @@ const HeaderRow = ({ report, groups, picked, onPick }: HeaderRowProps) => (
   </div>
 );
 
-export const BreakdownSkeleton = () => (
-  <div role="status" aria-label="Carregando" className={cn(card, "items-center gap-6")}>
-    <Skeleton className="size-48 rounded-full border-[24px] border-muted bg-transparent" />
-    <div className="flex w-full flex-col gap-4">
-      {[0, 1, 2, 3].map((index) => (
-        <div key={index} className="flex items-center gap-3">
-          <Skeleton className="size-10 rounded-full" />
-          <Skeleton className="h-4 flex-1" />
-          <Skeleton className="h-4 w-20" />
-        </div>
-      ))}
-    </div>
-  </div>
-);
-
 /** `Para onde vai`: the month's outflow by group; a slice, legend item, row or the select picks a group's entries. */
 export const CategoryBreakdown = ({ month }: { month: string }) => {
   const report = useCategoryReport(month);
@@ -529,7 +527,7 @@ export const CategoryBreakdown = ({ month }: { month: string }) => {
         <PageError message="Não foi possível carregar o mês por categoria." onRetry={() => report.refetch()} />
       </div>
     );
-  if (!report.data) return <BreakdownSkeleton />;
+  if (!report.data) return null;
 
   const shares = report.data.outflow;
   const groups = report.data.groups.filter((group) => group.kind !== "income");

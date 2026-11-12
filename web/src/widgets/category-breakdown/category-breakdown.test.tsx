@@ -237,6 +237,16 @@ describe("CategoryBreakdown", () => {
     ]);
   });
 
+  it("keeps last month's entries of a subcategory with nothing this month", async () => {
+    const groups = REPORT.groups.map((each) =>
+      each.category_id === ECONOMIA.id ? { ...each, children: [RESERVA.id] } : each,
+    );
+    show({ report: { ...REPORT, groups } });
+    await open("Economia");
+
+    expect(await within(panel("Economia")).findByText("Passagem (Viagem)")).toBeInTheDocument();
+  });
+
   it("narrows the panel to a subcategory and back, keeping the parent's own entries under all", async () => {
     show();
     await open("Economia");
@@ -324,6 +334,29 @@ describe("CategoryBreakdown", () => {
         "",
       ].join("\r\n"),
     );
+  });
+
+  it("escapes quotes, separators and formulas in the CSV", async () => {
+    const created = vi.fn((_blob: Blob | MediaSource) => "blob:soldi");
+    URL.createObjectURL = created;
+    URL.revokeObjectURL = vi.fn();
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
+    const odd = { ...ALUGUEL, name: 'Casa; "Reforma"' };
+    const formula = { ...MERCADO, name: "=SOMA(A1)" };
+    show({
+      report: {
+        ...REPORT,
+        outflow: [share(odd, "12000.00", "88.3", "-6.0"), share(formula, "184.31", "1.4")],
+        groups: [group(odd, "12000.00", "88.3", "-6.0"), group(formula, "184.31", "1.4", null)],
+      },
+    });
+
+    await userEvent.click(await screen.findByRole("button", { name: "Exportar CSV" }));
+
+    const blob = created.mock.calls[0][0];
+    if (!(blob instanceof Blob)) throw new Error("no blob");
+    const lines = (await blob.text()).split("\r\n");
+    expect(lines.slice(1, 3)).toEqual(['"Casa; ""Reforma""";"";12000,00;88,3', '"\'=SOMA(A1)";"";184,31;1,4']);
   });
 
   it("says when nothing was spent, keeping the header", async () => {

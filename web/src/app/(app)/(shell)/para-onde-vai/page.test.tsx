@@ -80,10 +80,10 @@ describe("Para onde vai", () => {
     );
   });
 
-  it("shows a skeleton while loading, then an error with a retry", async () => {
+  it("renders nothing while loading, then an error with a retry", async () => {
     const requests = open({ "GET /api/reports/categories": { status: 500, body: problem(500, "Falhou.") } });
 
-    expect(screen.getByRole("status", { name: "Carregando" })).toBeInTheDocument();
+    expect(screen.queryByRole("status", { name: "Carregando" })).not.toBeInTheDocument();
     await userEvent.click(await screen.findByRole("button", { name: "Tentar de novo" }));
 
     await waitFor(() =>
