@@ -54,6 +54,7 @@ export const Money = ({
       <span className="sr-only">{text}</span>
       <span aria-hidden>
         {income && "+ "}
+        {outflow && "- "}
         {formatMoneyParts(amount, currency).map(({ type, value }, index) => (
           // biome-ignore lint/suspicious/noArrayIndexKey: Intl's parts are a fixed sequence, never reordered.
           <span key={index} className={cn(minorOf(size, type))}>

@@ -73,4 +73,10 @@ describe("Money", () => {
 
     expect(screen.getByText("+ R$ 6.000,00").parentElement).toHaveClass("text-income-text");
   });
+
+  it("draws the minus of an outflow figure", () => {
+    render(<Money amount="7200.00" outflow size="figure" />);
+
+    expect(screen.getByText("- R$ 7.200,00").nextSibling).toHaveTextContent(/^- R\$\s7\.200,00$/);
+  });
 });
