@@ -287,6 +287,34 @@ pub async fn delete_following(
     Ok(())
 }
 
+/// SOL-102: whether entry `id`, or with `series_id` that series' members dated `from` on, is a
+/// deposit into or a resgate from an archived cofrinho.
+pub async fn moves_archived_cofrinho(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    id: Uuid,
+    series_id: Option<Uuid>,
+    from: NaiveDate,
+) -> Result<bool, sqlx::Error> {
+    sqlx::query_scalar!(
+        r#"SELECT EXISTS (
+             SELECT 1 FROM transactions t
+             LEFT JOIN categories c ON c.user_id = t.user_id AND c.id = t.category_id
+             LEFT JOIN categories p ON p.user_id = c.user_id AND p.id = c.parent_id
+             LEFT JOIN categories w ON w.user_id = t.user_id AND w.id = t.cofrinho_id
+             WHERE t.user_id = $1 AND (t.id = $2 OR (t.series_id = $3 AND t.date >= $4))
+               AND ((t.kind = 'bill' AND c.archived_at IS NOT NULL
+                     AND p.is_savings AND p.kind = 'bill')
+                    OR w.archived_at IS NOT NULL)) AS "archived!""#,
+        user_id,
+        id,
+        series_id,
+        from
+    )
+    .fetch_one(&mut *conn)
+    .await
+}
+
 /// Serializes every write to one series until the transaction ends; taken before any row lock.
 pub async fn lock_series(conn: &mut PgConnection, series_id: Uuid) -> Result<(), sqlx::Error> {
     sqlx::query!(
