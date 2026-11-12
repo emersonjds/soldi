@@ -10,15 +10,24 @@ use crate::error::AppError;
 use crate::extract::CurrentUser;
 use crate::{categories, months, settings, transactions};
 
-pub async fn list(pool: &PgPool, user: &CurrentUser) -> Result<Cofrinhos, AppError> {
+/// `month` (`YYYY-MM`) picks `saved_this_month`; today's São Paulo month when absent.
+pub async fn list(
+    pool: &PgPool,
+    user: &CurrentUser,
+    month: Option<&str>,
+) -> Result<Cofrinhos, AppError> {
+    let today = crate::today_sao_paulo();
+    let first = match month {
+        Some(month) => months::domain::parse_month(month)?,
+        None => today.with_day(1).unwrap_or(today),
+    };
     let mut conn = pool.acquire().await?;
     let opening = settings::repo::find(&mut conn, user.id).await?.opening_date;
     let rows = repo::balances(&mut conn, user.id, opening).await?;
-    let today = crate::today_sao_paulo();
-    let first = today.with_day(1).unwrap_or(today);
     let end = months::domain::month_end(first);
     let saved = months::repo::saved(&mut conn, user.id, first, end).await?;
-    Ok(domain::cofrinhos(rows, saved, today))
+    let next = repo::next_contributions(&mut conn, user.id, today).await?;
+    Ok(domain::cofrinhos(rows, saved, next, today))
 }
 
 /// `Economia` or one of its active subcategories; 404 when the user has no such active

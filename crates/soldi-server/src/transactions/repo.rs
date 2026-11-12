@@ -100,7 +100,8 @@ pub async fn list(
     Ok(rows.into_iter().map(Transaction::from).collect())
 }
 
-/// A cofrinho's entries and resgates, newest date first, then newest entry first.
+/// A cofrinho's entries and resgates, with its subcategories' for `Economia`, newest date first,
+/// then newest entry first.
 pub async fn movements(
     conn: &mut PgConnection,
     user_id: Uuid,
@@ -123,7 +124,12 @@ pub async fn movements(
                SELECT count(*) AS total, max(m.date) AS last_date, count(*) FILTER (WHERE (m.date, m.id) <= (t.date, t.id)) AS position
                FROM transactions m WHERE m.user_id = t.user_id AND m.series_id = t.series_id
            ) s ON true
-           WHERE t.user_id = $1 AND (t.category_id = $2 OR t.cofrinho_id = $2)
+           CROSS JOIN (
+               SELECT array_agg(k.id) AS ids FROM categories k
+               WHERE k.user_id = $1 AND (k.id = $2 OR k.parent_id = $2)
+           ) o
+           WHERE t.user_id = $1
+             AND (t.category_id = ANY(o.ids) OR t.cofrinho_id = ANY(o.ids))
            ORDER BY t.date DESC, t.created_at DESC, t.id DESC
            LIMIT $3"#,
         user_id,

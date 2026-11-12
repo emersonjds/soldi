@@ -8,7 +8,8 @@ use uuid::Uuid;
 /// its entries minus its resgates since the opening date; `progress_pct` is `balance / target`
 /// with one decimal, capped at 100, null without a target; `done` is a balance at or above the
 /// target; `monthly_suggestion` is what is left over the months to the deadline, this one
-/// included, null without a deadline or when done.
+/// included, null without a deadline or when done; `next_contribution` is the earliest member
+/// dated after today of a repeated entry into it, null without one.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct Cofrinho {
     pub category_id: Uuid,
@@ -29,9 +30,19 @@ pub struct Cofrinho {
     #[schema(value_type = Option<String>)]
     pub monthly_suggestion: Option<Decimal>,
     pub parent: bool,
+    pub next_contribution: Option<NextContribution>,
 }
 
-/// `total_saved` sums every balance; `saved_this_month` is the month view's `totals.saved`.
+/// A repeated entry's next deposit: its amount and the day of the month it falls on.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+pub struct NextContribution {
+    #[serde(serialize_with = "crate::money")]
+    #[schema(value_type = String)]
+    pub amount: Decimal,
+    pub day: i16,
+}
+
+/// `total_saved` sums every balance; `saved_this_month` is the requested month view's `totals.saved`.
 /// Items go done last, then by name; `Sem objetivo` only while its balance is above zero.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct Cofrinhos {

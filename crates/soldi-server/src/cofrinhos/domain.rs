@@ -1,6 +1,8 @@
 use chrono::{Datelike, NaiveDate};
 use rust_decimal::{Decimal, RoundingStrategy};
-use soldi_types::cofrinhos::{Cofrinho, Cofrinhos};
+use std::collections::HashMap;
+
+use soldi_types::cofrinhos::{Cofrinho, Cofrinhos, NextContribution};
 use uuid::Uuid;
 
 use crate::error::AppError;
@@ -54,15 +56,24 @@ pub fn cofrinho(row: Balance, today: NaiveDate) -> Cofrinho {
         done,
         monthly_suggestion,
         parent: row.parent,
+        next_contribution: None,
     }
 }
 
-pub fn cofrinhos(rows: Vec<Balance>, saved_this_month: Decimal, today: NaiveDate) -> Cofrinhos {
+pub fn cofrinhos(
+    rows: Vec<Balance>,
+    saved_this_month: Decimal,
+    mut next: HashMap<Uuid, NextContribution>,
+    today: NaiveDate,
+) -> Cofrinhos {
     let total_saved = rows.iter().map(|row| row.balance).sum();
     let mut items: Vec<Cofrinho> = rows
         .into_iter()
         .filter(|row| !row.parent || row.balance > Decimal::ZERO)
-        .map(|row| cofrinho(row, today))
+        .map(|row| Cofrinho {
+            next_contribution: next.remove(&row.category_id),
+            ..cofrinho(row, today)
+        })
         .collect();
     items.sort_by_cached_key(|item| (item.done, item.name.to_lowercase()));
     Cofrinhos {
@@ -207,8 +218,8 @@ mod tests {
             ]
         };
 
-        let list = cofrinhos(rows("0"), money("7"), date("2026-11-05"));
-        let with_money = cofrinhos(rows("3"), money("7"), date("2026-11-05"));
+        let list = cofrinhos(rows("0"), money("7"), HashMap::new(), date("2026-11-05"));
+        let with_money = cofrinhos(rows("3"), money("7"), HashMap::new(), date("2026-11-05"));
 
         let names = |list: &Cofrinhos| -> Vec<String> {
             list.items.iter().map(|item| item.name.clone()).collect()

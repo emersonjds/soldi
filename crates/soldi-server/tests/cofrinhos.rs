@@ -1,6 +1,7 @@
 mod common;
 
 use axum::http::StatusCode;
+use chrono::{Datelike, Months, NaiveDate};
 use common::TestApp;
 use serde_json::{Value, json};
 use sqlx::PgPool;
@@ -396,4 +397,154 @@ async fn a_cofrinho_with_money_is_archived_only_once_empty(pool: PgPool) {
     );
     let (_, cofrinhos) = user.get("/api/cofrinhos").await;
     assert_eq!(cofrinhos["items"], json!([]));
+}
+
+fn first_of(today: &str) -> NaiveDate {
+    format!("{}-01", &today[..7]).parse().unwrap()
+}
+
+async fn repeat(user: &TestApp, date: &str, category_id: &str, amount: &str) {
+    let (status, created) = user
+        .post(
+            "/api/transactions",
+            json!({ "date": date, "amount": amount, "kind": "bill", "category_id": category_id, "repeat_months": 3 }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{created}");
+}
+
+#[sqlx::test]
+async fn the_month_param_picks_its_savings_and_a_bad_one_is_422(pool: PgPool) {
+    let Setup {
+        user,
+        today,
+        reserva,
+        ..
+    } = setup(pool).await;
+    let next = (first_of(&today) + Months::new(1)).to_string();
+    deposit(&user, &today, &reserva, "300").await;
+    deposit(&user, &next, &reserva, "50").await;
+
+    let (_, default) = user.get("/api/cofrinhos").await;
+    let (_, this) = user
+        .get(&format!("/api/cofrinhos?month={}", &today[..7]))
+        .await;
+    let (_, later) = user
+        .get(&format!("/api/cofrinhos?month={}", &next[..7]))
+        .await;
+    let (status, problem) = user.get("/api/cofrinhos?month=2026-13").await;
+
+    assert_eq!(default["saved_this_month"], "300.00");
+    assert_eq!(this["saved_this_month"], "300.00");
+    assert_eq!(later["saved_this_month"], "50.00");
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(problem["errors"][0]["field"], "month");
+}
+
+#[sqlx::test]
+async fn the_next_contribution_is_the_earliest_future_member_of_the_users_series(pool: PgPool) {
+    let Setup {
+        user,
+        today,
+        reserva,
+        viagem,
+    } = setup(pool).await;
+    let first = first_of(&today);
+    let economia = user.category_id("Economia").await;
+    let (_, casa) = user
+        .post(
+            "/api/categories",
+            json!({ "name": "Casa", "kind": "bill", "parent_id": economia }),
+        )
+        .await;
+    repeat(&user, &first.to_string(), &reserva, "100").await;
+    repeat(&user, &today, &viagem, "40").await;
+    let next = (first + Months::new(1)).to_string();
+    deposit(&user, &next, casa["id"].as_str().unwrap(), "5").await;
+    let bia = user.another_user("bia@example.com").await;
+    bia.open_at("0", &first.to_string()).await;
+    let bia_economia = bia.category_id("Economia").await;
+    let (_, bia_casa) = bia
+        .post(
+            "/api/categories",
+            json!({ "name": "Casa", "kind": "bill", "parent_id": bia_economia }),
+        )
+        .await;
+    repeat(
+        &bia,
+        &first.to_string(),
+        bia_casa["id"].as_str().unwrap(),
+        "777",
+    )
+    .await;
+
+    let (_, cofrinhos) = user.get("/api/cofrinhos").await;
+
+    let in_a_month = today.parse::<NaiveDate>().unwrap() + Months::new(1);
+    assert_eq!(
+        item(&cofrinhos, "Reserva")["next_contribution"],
+        json!({ "amount": "100.00", "day": 1 })
+    );
+    assert_eq!(
+        item(&cofrinhos, "Viagem")["next_contribution"],
+        json!({ "amount": "40.00", "day": in_a_month.day() })
+    );
+    assert_eq!(item(&cofrinhos, "Casa")["next_contribution"], Value::Null);
+}
+
+#[sqlx::test]
+async fn economia_movements_include_its_childrens_with_their_category(pool: PgPool) {
+    let Setup {
+        user,
+        today,
+        reserva,
+        viagem,
+    } = setup(pool).await;
+    let economia = user.category_id("Economia").await;
+    deposit(&user, &today, &economia, "10").await;
+    deposit(&user, &today, &reserva, "500").await;
+    deposit(&user, &today, &viagem, "7").await;
+    withdraw(&user, &reserva, json!({ "date": today, "amount": "200" })).await;
+
+    let (status, parent) = user
+        .get(&format!("/api/cofrinhos/{economia}/movements"))
+        .await;
+    let (_, child) = user
+        .get(&format!("/api/cofrinhos/{reserva}/movements"))
+        .await;
+
+    assert_eq!(status, StatusCode::OK, "{parent}");
+    let rows = |list: &Value| -> Vec<(String, String)> {
+        list.as_array()
+            .unwrap()
+            .iter()
+            .map(|entry| {
+                (
+                    entry["category"]["name"].as_str().unwrap().into(),
+                    entry["amount"].as_str().unwrap().into(),
+                )
+            })
+            .collect()
+    };
+    let named = |pairs: &[(&str, &str)]| -> Vec<(String, String)> {
+        pairs
+            .iter()
+            .map(|(name, amount)| (name.to_string(), amount.to_string()))
+            .collect()
+    };
+    assert_eq!(
+        rows(&parent),
+        named(&[
+            ("Resgate", "200.00"),
+            ("Viagem", "7.00"),
+            ("Reserva", "500.00"),
+            ("Economia", "10.00")
+        ])
+    );
+    assert_eq!(parent[1]["category"]["id"], viagem.as_str());
+    assert_eq!(parent[0]["cofrinho_id"], reserva.as_str());
+    assert_eq!(
+        rows(&child),
+        named(&[("Resgate", "200.00"), ("Reserva", "500.00")])
+    );
 }

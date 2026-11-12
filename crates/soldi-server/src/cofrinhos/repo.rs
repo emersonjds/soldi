@@ -1,5 +1,8 @@
+use std::collections::HashMap;
+
 use chrono::NaiveDate;
 use rust_decimal::Decimal;
+use soldi_types::cofrinhos::NextContribution;
 use sqlx::PgConnection;
 use uuid::Uuid;
 
@@ -49,4 +52,33 @@ pub async fn balance(
     )
     .fetch_one(&mut *conn)
     .await
+}
+
+/// Per category, the earliest repeated entry dated after `today`.
+pub async fn next_contributions(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    today: NaiveDate,
+) -> Result<HashMap<Uuid, NextContribution>, sqlx::Error> {
+    let rows = sqlx::query!(
+        r#"SELECT DISTINCT ON (t.category_id) t.category_id, t.amount,
+                  EXTRACT(DAY FROM t.date)::int2 AS "day!"
+           FROM transactions t JOIN categories c ON c.user_id = t.user_id AND c.id = t.category_id
+           WHERE t.user_id = $1 AND c.kind = 'bill' AND t.series_id IS NOT NULL AND t.date > $2
+           ORDER BY t.category_id, t.date"#,
+        user_id,
+        today
+    )
+    .fetch_all(&mut *conn)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .map(|row| {
+            let next = NextContribution {
+                amount: row.amount,
+                day: row.day,
+            };
+            (row.category_id, next)
+        })
+        .collect())
 }
