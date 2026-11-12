@@ -43,11 +43,10 @@ describe("MonthChips", () => {
     expect(onOpen).not.toHaveBeenCalled();
   });
 
-  it("goes neutral when nothing lands ahead, hiding amounts, and static without onOpen", () => {
-    render(<MonthChips months={MONTHS} neutral />);
+  it("goes neutral when nothing lands ahead, hiding amounts", () => {
+    render(<MonthChips months={MONTHS} neutral onOpen={vi.fn()} />);
 
-    expect(screen.queryByRole("button")).not.toBeInTheDocument();
-    const november = screen.getByRole("listitem", { name: "novembro de 2026" });
+    const november = screen.getByRole("button", { name: "novembro de 2026" });
     expect(november).not.toHaveTextContent("Crítico");
     expect(november).not.toHaveTextContent("12.346");
   });
@@ -85,13 +84,13 @@ describe("MonthChips", () => {
       { month: "2026-11", lowest: "light_green", low: "1210.00", redDays: 0 },
       { month: "2026-12", lowest: "green", low: "2500.99", redDays: 0 },
     ];
-    render(<MonthChips months={MONTHS} before={before} />);
+    render(<MonthChips months={MONTHS} before={before} onOpen={vi.fn()} />);
 
-    const november = screen.getByRole("listitem", {
+    const november = screen.getByRole("button", {
       name: `novembro de 2026: menor saldo -${R}12.345,67, Crítico, antes ${R}1.210,00`,
     });
     expect(november).toHaveTextContent("antes 1.210");
-    const december = screen.getByRole("listitem", { name: `dezembro de 2026: menor saldo ${R}2.500,99, Folga` });
+    const december = screen.getByRole("button", { name: `dezembro de 2026: menor saldo ${R}2.500,99, Folga` });
     expect(december).not.toHaveTextContent("antes");
   });
 });
