@@ -21,6 +21,7 @@ import type { Schemas } from "@/shared/api/client";
 import { useCurrency } from "@/shared/lib/currency";
 import { monthShort, monthSlashYear } from "@/shared/lib/date";
 import { formatMoney } from "@/shared/lib/money";
+import type { Count } from "@/shared/lib/simulation-history";
 import { cents, fromCents } from "@/shared/lib/tier";
 import { BrandButton } from "@/shared/ui/brand-button";
 import { Money } from "@/shared/ui/money";
@@ -32,7 +33,7 @@ import { type MonthProjection, projectedUntil, projectMonths } from "./projectio
 export const monthOnly = (month: string) => monthSlashYear(month).slice(0, -5);
 const monthTitle = (month: string) => monthSlashYear(month).replace("/", " ");
 const list = new Intl.ListFormat("pt-BR", { type: "conjunction" });
-const COUNTS = [6, 10, 12];
+const COUNTS: Count[] = [6, 10, 12];
 const card = "flex flex-col gap-4 rounded-2xl bg-card p-4 shadow-sm lg:p-6";
 const eyebrow = "font-semibold text-xs uppercase tracking-wider";
 
@@ -50,7 +51,7 @@ type Props = {
   total: string;
   /** The draft's category: the cofrinho's name. */
   name: string;
-  onRetest: (count: number) => void;
+  onRetest: (count: Count) => void;
 };
 
 export const Results = ({ rows, count, total, name, onRetest }: Props) => {

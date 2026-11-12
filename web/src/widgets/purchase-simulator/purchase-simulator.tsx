@@ -19,7 +19,14 @@ import { useCurrency } from "@/shared/lib/currency";
 import { addMonths, lastDay, monthName, monthSlashYear, slashDate, todayISO } from "@/shared/lib/date";
 import { formatMoney, positiveAmount } from "@/shared/lib/money";
 import { formatPct, wholeShare } from "@/shared/lib/percent";
-import { clearHistory, pushHistory, readHistory, type SavedSimulation } from "@/shared/lib/simulation-history";
+import {
+  type Count,
+  clearHistory,
+  isCount,
+  pushHistory,
+  readHistory,
+  type SavedSimulation,
+} from "@/shared/lib/simulation-history";
 import { cents, fromCents } from "@/shared/lib/tier";
 import { BrandButton } from "@/shared/ui/brand-button";
 import { DateField } from "@/shared/ui/date-field";
@@ -42,7 +49,7 @@ const label = "font-medium text-sm";
 /** `2026-11-10` → `10 de Novembro, 2026`. */
 const longDate = (date: string) => `${Number(date.slice(8))} de ${monthOnly(date)}, ${date.slice(0, 4)}`;
 
-type Inputs = { amount: string; count: number; date: string; cardId: string; category?: Schemas["Category"] };
+type Inputs = { amount: string; count: Count; date: string; cardId: string; category?: Schemas["Category"] };
 
 /** `date` empty: the forecast's today. */
 const blank = (): Inputs => ({ amount: "", count: 1, date: "", cardId: "" });
@@ -57,6 +64,7 @@ export const PurchaseSimulator = () => {
   const currency = useCurrency();
   const today = useForecast().data?.today ?? todayISO();
   const lastMonth = addMonths(today.slice(0, 7), 11);
+  const maxDate = `${lastMonth}-${lastDay(lastMonth)}`;
   const date = inputs.date || today;
   const thisMonth = useTransactions(today.slice(0, 7));
   const income = useMonth(today.slice(0, 7)).data?.totals.income;
@@ -96,7 +104,8 @@ export const PurchaseSimulator = () => {
   /** A card or category gone since falls back to `Nenhum` / the first chip (P10-3). */
   const restore = (entry: SavedSimulation) => {
     const cardId = cards.some(({ id }) => id === entry.cardId) ? entry.cardId : "";
-    setInputs({ amount: entry.amount, count: entry.count, date: entry.date, cardId, category: categoryOf(entry) });
+    const date = entry.date < today || entry.date > maxDate ? "" : entry.date;
+    setInputs({ amount: entry.amount, count: entry.count, date, cardId, category: categoryOf(entry) });
     setShown(true);
     setBrowsing(false);
   };
@@ -218,7 +227,10 @@ export const PurchaseSimulator = () => {
               type="single"
               spacing={0}
               value={String(inputs.count)}
-              onValueChange={(value: string) => value && set({ count: Number(value) })}
+              onValueChange={(value: string) => {
+                const count = Number(value);
+                if (isCount(count)) set({ count });
+              }}
               aria-labelledby="purchase-count"
               className="grid w-full grid-cols-4 rounded-2xl bg-muted p-1"
             >
@@ -247,7 +259,7 @@ export const PurchaseSimulator = () => {
               value={date}
               onChange={(picked) => set({ date: picked })}
               min={today}
-              max={`${lastMonth}-${lastDay(lastMonth)}`}
+              max={maxDate}
               format={longDate}
               className="h-12 rounded-xl border-0 bg-muted"
             />
@@ -328,7 +340,7 @@ export const PurchaseSimulator = () => {
         </aside>
 
         <div aria-live="polite" className="empty:hidden lg:col-start-2 lg:row-span-2 lg:row-start-1">
-          {shown && rows && amount && (
+          {shown && rows && amount && !paid && (
             <Results
               rows={rows}
               count={inputs.count}

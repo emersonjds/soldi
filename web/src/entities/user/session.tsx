@@ -65,8 +65,8 @@ export const useLeave = (leave: () => Promise<void>) => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: leave,
+    onSettled: clearAllHistories,
     onSuccess: () => {
-      clearAllHistories();
       queryClient.clear();
       queryClient.setQueryData(meQuery.queryKey, null);
       router.replace("/entrar");

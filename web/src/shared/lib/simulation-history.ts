@@ -1,7 +1,13 @@
+const COUNTS = [1, 6, 10, 12] as const;
+
+export type Count = (typeof COUNTS)[number];
+
+export const isCount = (value: unknown): value is Count => COUNTS.some((count) => count === value);
+
 /** D34: the last simulations of `/posso-comprar`, in this browser only; no verdict, it goes stale. */
 export type SavedSimulation = {
   amount: string;
-  count: number;
+  count: Count;
   /** `""`: the forecast's today. */
   date: string;
   cardId: string;
@@ -11,25 +17,30 @@ export type SavedSimulation = {
 
 const PREFIX = "soldi:simulations:";
 const MAX = 10;
-const COUNTS = [1, 6, 10, 12];
+const AMOUNT = /^\d+(\.\d{1,2})?$/;
+const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 const keyOf = (userId: string) => `${PREFIX}${userId}`;
+
+const isDate = (value: string) => value === "" || (DATE.test(value) && !Number.isNaN(Date.parse(value)));
 
 const isEntry = (value: unknown): value is SavedSimulation =>
   typeof value === "object" &&
   value !== null &&
   "amount" in value &&
   typeof value.amount === "string" &&
+  AMOUNT.test(value.amount) &&
   "count" in value &&
-  typeof value.count === "number" &&
-  COUNTS.includes(value.count) &&
+  isCount(value.count) &&
   "date" in value &&
   typeof value.date === "string" &&
+  isDate(value.date) &&
   "cardId" in value &&
   typeof value.cardId === "string" &&
   (!("categoryId" in value) || value.categoryId === undefined || typeof value.categoryId === "string") &&
   "at" in value &&
-  typeof value.at === "string";
+  typeof value.at === "string" &&
+  !Number.isNaN(Date.parse(value.at));
 
 const sameInputs = (a: SavedSimulation, b: SavedSimulation) =>
   a.amount === b.amount &&

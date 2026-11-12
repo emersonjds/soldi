@@ -383,6 +383,62 @@ describe("Histórico", () => {
     expect(localStorage.getItem(KEY)).toBeNull();
   });
 
+  it("restores a date before today or past the last month as the forecast's today", async () => {
+    const saved = (date: string, at: string) => ({ amount: "100.00", count: 1, date, cardId: "", at });
+    localStorage.setItem(
+      KEY,
+      JSON.stringify([
+        saved("2026-11-01", "2026-11-09T12:00:00.000Z"),
+        saved("2027-11-01", "2026-11-08T12:00:00.000Z"),
+      ]),
+    );
+    signedIn();
+    const today = "Primeiro vencimento, 10 de Novembro, 2026";
+
+    const restore = async (row: number) => {
+      await userEvent.click(await screen.findByRole("button", { name: "Histórico" }));
+      await userEvent.click(within(history()).getAllByRole("button", { name: /100,00/ })[row]);
+    };
+
+    await restore(0);
+    expect(screen.getByRole("button", { name: today })).toBeInTheDocument();
+    await pickDate("Primeiro vencimento", "2026-12-20");
+    await restore(1);
+    expect(screen.getByRole("button", { name: today })).toBeInTheDocument();
+  });
+
+  it("restores a spend into a fatura already paid without the results", async () => {
+    localStorage.setItem(
+      KEY,
+      JSON.stringify([{ amount: "600.00", count: 1, date: "", cardId: NUBANK.id, at: "2026-11-09T12:00:00.000Z" }]),
+    );
+    setup({
+      "GET /api/auth/me": { status: 200, body: ANA },
+      "GET /api/bills": { status: 200, body: [NUBANK] },
+      "GET /api/months/2026-12": {
+        status: 200,
+        body: {
+          ...MONTH,
+          month: "2026-12",
+          bills_of_month: [
+            {
+              ...outflow("Nubank", "600.00", "2026-12-15"),
+              bill_id: NUBANK.id,
+              is_card: true,
+              paid: true,
+              lands_on: null,
+            },
+          ],
+        },
+      },
+    });
+    await userEvent.click(await screen.findByRole("button", { name: "Histórico" }));
+    await userEvent.click(within(history()).getByRole("button", { name: /600,00/ }));
+
+    expect(await screen.findByText("Essa fatura já foi paga.")).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Veredito do orçamento" })).not.toBeInTheDocument();
+  });
+
   it("hides the button over corrupt storage", async () => {
     localStorage.setItem(KEY, "{oops");
     signedIn();
