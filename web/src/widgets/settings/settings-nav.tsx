@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 
 import { ChevronRight, CircleHelp, Coins, Shapes, ShieldAlert, Thermometer, UserRoundCog } from "lucide-react";
 
+import { useSettings } from "@/entities/settings/settings-query";
 import { cn } from "@/lib/utils";
 
 const SECTIONS = [
@@ -15,29 +16,38 @@ const SECTIONS = [
   { id: "ajuda", label: "Ajuda & Como Funciona", icon: CircleHelp },
 ];
 
-/** The id of the section crossing the top part of the viewport. */
+/** The last section whose top passed the upper 40% of the window; the last one once the page bottoms out. */
 const useSectionInView = () => {
   const [inView, setInView] = useState(SECTIONS[0].id);
 
   useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries: Pick<IntersectionObserverEntry, "isIntersecting" | "target">[]) => {
-        const shown = entries.find((entry) => entry.isIntersecting);
-        if (shown) setInView(shown.target.id);
-      },
-      { rootMargin: "0px 0px -60% 0px" },
-    );
-    for (const section of document.querySelectorAll(SECTIONS.map(({ id }) => `#${id}`).join(",")))
-      observer.observe(section);
-    return () => observer.disconnect();
+    const track = () => {
+      const bottom = window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 1;
+      const passed = SECTIONS.filter(
+        ({ id }) => (document.getElementById(id)?.getBoundingClientRect().top ?? Infinity) <= window.innerHeight * 0.4,
+      );
+      setInView((bottom ? SECTIONS : passed).at(-1)?.id ?? SECTIONS[0].id);
+    };
+    window.addEventListener("scroll", track, { passive: true });
+    return () => window.removeEventListener("scroll", track);
   }, []);
 
   return inView;
 };
 
+/** Scrolls to the address's section once the settings have laid the page out. */
+const useScrollToHash = () => {
+  const ready = useSettings().isSuccess;
+
+  useEffect(() => {
+    if (ready && window.location.hash) document.getElementById(window.location.hash.slice(1))?.scrollIntoView();
+  }, [ready]);
+};
+
 /** The sticky sub-nav of Ajustes from 1024 px; below it the sections just stack. */
 export const SettingsNav = () => {
   const inView = useSectionInView();
+  useScrollToHash();
 
   return (
     <nav aria-label="Seções dos ajustes" className="sticky top-24 hidden rounded-2xl bg-card p-2 shadow-sm lg:block">

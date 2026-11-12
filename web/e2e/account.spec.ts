@@ -25,8 +25,17 @@ test("a user renames, changes the password, signs out everywhere and signs in wi
     .getByRole("button", { name: "Fechar" })
     .click();
 
+  const account = page.getByRole("heading", { name: "Minha Conta & Segurança" });
+  await page.goto("/ajustes/conta");
+  await expect(page).toHaveURL(/\/ajustes#conta$/);
+  await expect(account).toBeInViewport();
+  await page.goto("/ajustes#dados");
+  await expect(page.getByRole("heading", { name: "Gestão de Dados & Zona de Perigo" })).toBeInViewport();
+  await page.goto("/mes");
+
   await page.getByRole("link", { name: "Minha conta", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Minha Conta & Segurança" })).toBeVisible();
+  await expect(page).toHaveURL(/\/ajustes#conta$/);
+  await expect(account).toBeInViewport();
   await page.getByRole("button", { name: "Alterar dados" }).click();
   const profile = page.getByRole("dialog", { name: "Alterar dados" });
   await profile.getByLabel("Nome").fill("Ana Paula");
