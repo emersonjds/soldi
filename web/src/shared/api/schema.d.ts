@@ -941,18 +941,23 @@ export interface components {
             name?: string | null;
         };
         /**
-         * @description Absent fields stay as they are; the kind never changes; `"parent_id": null` makes it top-level,
-         *     with `color` or the lowest token free in the kind. For a subcategory `color` is validated, then
-         *     ignored: it wears its parent's; a parent's new color reaches its subcategories. A move under a
-         *     group can recolor that group and its subcategories to a color free in every kind it shows in.
-         *     `null` clears `target` or `deadline`, which only a subcategory of `Economia` may set. Leaving
-         *     `Economia` clears both.
+         * @description Absent fields stay as they are; `kind`, `daily` or `bill`, moves this category alone, top-level
+         *     or subcategory, with all its entries to that kind; its subcategories keep theirs (D27). A
+         *     top-level keeps its color when free in every kind it then shows in, else takes the lowest free
+         *     one; a subcategory's group may recolor the same way. The savings categories, cofrinhos and
+         *     income ones never change kind. `"parent_id": null` makes it top-level, with `color` or the
+         *     lowest token free in the kind. For a subcategory `color` is validated, then ignored: it wears
+         *     its parent's; a parent's new color reaches its subcategories. A move under a group can recolor
+         *     that group and its subcategories to a color free in every kind it shows in. `null` clears
+         *     `target` or `deadline`, which only a subcategory of `Economia` may set. Leaving `Economia`
+         *     clears both.
          */
         UpdateCategory: {
             color?: string | null;
             /** Format: date */
             deadline?: string | null;
             icon?: string | null;
+            kind?: components["schemas"]["CategoryKind"] | null;
             name?: string | null;
             /** Format: uuid */
             parent_id?: string | null;
@@ -1759,7 +1764,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description The category after the change; absent fields stay as they are */
+            /** @description The category after the change; absent fields stay as they are; a new `kind` moves this category and its own entries; its subcategories keep theirs */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1785,6 +1790,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
+            /** @description An active category of the same kind has this name; `duplicate-name` when the new `kind` already holds this category's name */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -1793,7 +1799,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description A bad field, a parent on the other side (income vs outflow) or a non-bill under `Economia` or itself, `nested-subcategory` when the parent is a subcategory or this category has subcategories, `savings-category` when moving `Economia` or `Resgate` or under `Resgate`, `not-a-cofrinho` for a target or deadline outside `Economia`, `color-taken` when the color is taken in any kind the group shows in, or `palette-full` when moving to top-level without a color and all 24 are taken in the kind */
+            /** @description A bad field, `kind-locked` for a `kind` on `Economia`, a cofrinho, `Resgate` or an income category or a `kind` of `income`, `category-has-bills` when moving to `daily` a category an unarchived conta fixa (active or paused) uses, a parent on the other side (income vs outflow) or a non-bill under `Economia` or itself, `nested-subcategory` when the parent is a subcategory or this category has subcategories, `savings-category` when moving `Economia` or `Resgate` or under `Resgate`, `not-a-cofrinho` for a target or deadline outside `Economia`, `color-taken` when the color is taken in any kind the group shows in, or `palette-full` when moving to top-level without a color, or changing a top-level's `kind`, and all 24 are taken in the kind */
             422: {
                 headers: {
                     [name: string]: unknown;

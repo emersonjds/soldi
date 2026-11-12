@@ -6,12 +6,23 @@ import { useQuery } from "@tanstack/react-query";
 import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { Field, FieldError, FieldLabel } from "@/components/ui/field";
+import { Field, FieldError, FieldLabel, FieldTitle } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
-import { hasProblem, hasStatus, type Schemas } from "@/shared/api/client";
+import { hasProblem, hasStatus, problemMessage, type Schemas } from "@/shared/api/client";
 import { positiveAmount } from "@/shared/lib/money";
 import { AmountInput } from "@/shared/ui/amount-input";
 import { BrandButton } from "@/shared/ui/brand-button";
@@ -95,6 +106,25 @@ const problemOf = (error: Error | null, editing: boolean) => {
   return editing ? "Não foi possível salvar a categoria." : "Não foi possível criar a categoria.";
 };
 
+const OUTFLOW_KINDS: [kind: Kind, label: string][] = [
+  ["daily", "Diário"],
+  ["bill", "Saída"],
+];
+
+const kindLabel = (kind: Kind) => OUTFLOW_KINDS.find(([each]) => each === kind)?.[1];
+
+const kindProblemOf = (error: Error) => {
+  const message = problemMessage(error);
+  if (message) return message;
+  if (hasProblem(error, "palette-full"))
+    return "Todas as 24 cores estão em uso no outro tipo. Arquive uma categoria e tente de novo.";
+  if (hasStatus(error, 404)) return "Essa categoria não existe mais.";
+  return "Não foi possível mudar o tipo.";
+};
+
+const kindChip =
+  "h-11 rounded-xl! font-semibold text-base text-muted-foreground data-[state=on]:bg-brand data-[state=on]:text-brand-foreground data-[state=on]:shadow-sm";
+
 type FormProps = {
   kind: Kind;
   /** Given: the form edits it and offers `Excluir`. */
@@ -105,19 +135,34 @@ type FormProps = {
   onChangeParent?: () => void;
   onSaved: (category: Category) => void;
   onArchive: (category: Category) => void;
+  /** Called with the new kind once the API moved the category. */
+  onKindChange?: (kind: Kind) => void;
 };
 
-const CategoryForm = ({ kind, category, parentId: presetParent, onChangeParent, onSaved, onArchive }: FormProps) => {
+const CategoryForm = ({
+  kind,
+  category,
+  parentId: presetParent,
+  onChangeParent,
+  onSaved,
+  onArchive,
+  onKindChange,
+}: FormProps) => {
   const [name, setName] = useState(category?.name ?? "");
+  const [ownKind, setOwnKind] = useState(category?.kind);
+  const [asking, setAsking] = useState(false);
+  const [nextKind, setNextKind] = useState<Kind>("bill");
   const [icon, setIcon] = useState(category?.icon);
   const [movedTo, setParentId] = useState(category?.parent_id ?? "");
   const parentId = category ? movedTo : (presetParent ?? "");
   const [submitted, setSubmitted] = useState(false);
   // Edited from another kind's list (D26), a category keeps its own kind.
-  const formKind = category?.kind ?? kind;
+  const formKind = ownKind ?? kind;
   const list = useQuery(categoriesQuery).data ?? [];
   const system = useQuery(systemCategoriesQuery).data ?? list;
-  const holders = (category ? kindsOf(category, system) : [formKind]).flatMap((each) => ofKind(system, each));
+  const holders = (category ? kindsOf({ ...category, kind: formKind }, system) : [formKind]).flatMap((each) =>
+    ofKind(system, each),
+  );
   const [color, setColor] = useState(category?.color);
   const [target, setTarget] = useState(category?.target ?? "");
   const [deadline, setDeadline] = useState(category?.deadline ?? "");
@@ -134,7 +179,35 @@ const CategoryForm = ({ kind, category, parentId: presetParent, onChangeParent, 
   const fixedParent = category?.is_savings || list.find((each) => each.id === presetParent)?.is_savings;
   const create = useCreateCategory();
   const update = useUpdateCategory();
+  const move = useUpdateCategory();
   const mutation = category ? update : create;
+  // The API refuses a kind on Economia, its cofrinhos, Resgate and income categories.
+  const kindChangeable =
+    category &&
+    formKind !== "income" &&
+    !category.is_savings &&
+    !list.find((each) => each.id === category.parent_id)?.is_savings;
+
+  const askKind = (next: Kind | "") => {
+    if (!next) return;
+    setNextKind(next);
+    move.reset();
+    setAsking(true);
+  };
+
+  const changeKind = (id: string) => (event: { preventDefault: () => void }) => {
+    event.preventDefault();
+    move.mutate(
+      { id, kind: nextKind },
+      {
+        onSuccess: () => {
+          setOwnKind(nextKind);
+          setAsking(false);
+          onKindChange?.(nextKind);
+        },
+      },
+    );
+  };
   const trimmed = name.trim();
   const nameError = submitted && !trimmed ? "Informe o nome." : undefined;
   const problem = problemOf(mutation.error, Boolean(category));
@@ -198,6 +271,50 @@ const CategoryForm = ({ kind, category, parentId: presetParent, onChangeParent, 
         />
         {nameError && <FieldError>{nameError}</FieldError>}
       </Field>
+      {kindChangeable && (
+        <div className="flex flex-col gap-1.5">
+          <FieldTitle id="category-kind">Tipo</FieldTitle>
+          <ToggleGroup
+            type="single"
+            spacing={0}
+            value={formKind}
+            onValueChange={askKind}
+            aria-labelledby="category-kind"
+            className="grid w-full grid-cols-2 rounded-2xl bg-muted p-1"
+          >
+            {OUTFLOW_KINDS.map(([value, label]) => (
+              <ToggleGroupItem key={value} value={value} className={kindChip}>
+                {label}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+          <AlertDialog open={asking} onOpenChange={setAsking}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>{`Mudar para ${kindLabel(nextKind)}?`}</AlertDialogTitle>
+                <AlertDialogDescription>
+                  {`Todos os lançamentos de ${category.name} passam a ser ${kindLabel(nextKind)}. O saldo não muda.`}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              {move.error && (
+                <p role="alert" className="text-destructive text-sm">
+                  {kindProblemOf(move.error)}
+                </p>
+              )}
+              <AlertDialogFooter>
+                <AlertDialogCancel className="min-h-11 text-base">Cancelar</AlertDialogCancel>
+                <AlertDialogAction
+                  className="min-h-11 text-base"
+                  disabled={move.isPending}
+                  onClick={changeKind(category.id)}
+                >
+                  Mudar tipo
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
+      )}
       {cofrinho && !category && (
         <fieldset aria-label="Sugestões" className="-mt-2 flex flex-wrap gap-2">
           {SUGGESTIONS.map(([suggestion, suggestedIcon]) => (
@@ -342,7 +459,8 @@ type CategorySheetProps = Omit<FormProps, "onSaved" | "onArchive"> & {
 };
 
 /**
- * `Nova categoria` or `Editar categoria`: name, optional parent, any lucide icon and a palette color; the kind is fixed.
+ * `Nova categoria` or `Editar categoria`: name, optional parent, any lucide icon and a palette color.
+ * Editing a Diário or Saída category offers `Tipo`, which moves it and its entries after a confirmation.
  * Under Economia it is a cofrinho: `Novo cofrinho` or `Editar cofrinho`, with an optional goal and deadline.
  */
 export const CategorySheet = ({
