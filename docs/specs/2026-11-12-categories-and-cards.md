@@ -128,7 +128,7 @@ D24 cut "credit cards and fatura"; the owner reverses that cut (D28).
 
 - `recurring_bills.closing_day smallint NULL CHECK (1..31)`. A bill with a closing day **is a card**. Its `amount` is `NULL` (a card has no fixed amount): `CHECK ((closing_day IS NULL) = (amount IS NOT NULL))`.
 - The card reuses everything a conta fixa has: name, `due_day`, `category_id` (a Saída category such as `Cartão › Porto`, which gives its icon and color), active/archived, `active_since`, one payment a month (`transactions_bill_month_idx`), pay and unpay endpoints, D17's landing rule.
-- `transactions.card_id uuid NULL`, `FOREIGN KEY (user_id, card_id) REFERENCES recurring_bills (user_id, id)`, `CHECK (card_id IS NULL OR kind = 'daily')`, index `(user_id, card_id, date) WHERE card_id IS NOT NULL`.
+- `transactions.card_id uuid NULL`, `FOREIGN KEY (user_id, card_id) REFERENCES recurring_bills (user_id, id)`, `CHECK (card_id IS NULL OR kind = 'daily')`, index `(user_id, card_id, date) WHERE card_id IS NOT NULL`. The foreign key only proves the row is one of the user's bills; that it is a card (`closing_day IS NOT NULL`), not a conta fixa, is checked by the app alone.
 - A **spend on a card** is a Diário entry with `card_id`. A **fatura payment** is the usual bill payment row: `kind = 'bill'`, the card's category, `recurring_bill_id = card`, `card_id IS NULL`.
 
 ### Which fatura a spend lands in
@@ -173,7 +173,7 @@ Trade-off: a payment above its itemized spends (interest, annual fee, a spend ne
 ### Spending on a card
 
 - `CreateTransaction.card_id: Option<Uuid>`, `UpdateTransaction.card_id: Option<Option<Uuid>>` (`null` clears), `Transaction.card_id: Option<Uuid>`.
-- Only a Diário entry takes a card (422 `card_id`, `only a Diário entry goes on a card`). The card must be the caller's unarchived card (422 `card_id`, `must be one of your cards`); an edit that keeps an archived card's id is allowed.
+- Only a Diário entry takes a card (422 `card_id`, `only a Diário entry goes on a card`). The card must be the caller's unarchived card (422 `card_id`, `must be one of your cards`); an edit that keeps an archived card's id is allowed, unless it writes the card on new or later rows (`repeat_months`, a growing resize, `scope=following`).
 - Series: `repeat_months` and `installments` copy `card_id` to every member; each member lands in the fatura of its own date (a 10x parcela on Porto shows in ten faturas). `scope=following` writes `card_id` like it writes kind and category.
 - An entry change to Saída while it carries a card → 422 `card_id` unless the same patch clears the card.
 - `Posso comprar isso?` with a card: the draft lands on its fatura's due date (web mirror of `fatura_due`, same cases).
@@ -201,9 +201,9 @@ Every existing bill has an amount and no closing day; every existing entry has n
 ```sql
 DROP INDEX transactions_card_idx;
 ALTER TABLE transactions DROP COLUMN card_id;  -- card spends then count on their own date
+ALTER TABLE recurring_bills DROP CONSTRAINT recurring_bills_card_amount;
 UPDATE recurring_bills SET amount = 0.01, active = false WHERE closing_day IS NOT NULL;
-ALTER TABLE recurring_bills DROP CONSTRAINT recurring_bills_card_amount,
-    DROP COLUMN closing_day, ALTER COLUMN amount SET NOT NULL;
+ALTER TABLE recurring_bills DROP COLUMN closing_day, ALTER COLUMN amount SET NOT NULL;
 ```
 
 ### Web

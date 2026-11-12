@@ -281,17 +281,74 @@ async fn credit_cards_keep_every_bill_and_entry(pool: PgPool) {
         .await
         .unwrap();
     assert_eq!(card, None);
-    let refused = sqlx::query(
-        "INSERT INTO recurring_bills (user_id, name, amount, due_day, category_id, closing_day)
-         VALUES ($1, 'Porto', 10, 10, $2, 3)",
-    )
-    .bind(ana)
-    .bind(luz)
+
+    let bia = user(&pool, "bia@example.com").await;
+    let feira = category(&pool, bia, "Feira", "daily", "cat-3", None, false).await;
+    let porto: Uuid = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
+        "INSERT INTO recurring_bills (user_id, name, due_day, category_id, closing_day)
+         VALUES ('{ana}', 'Porto', 10, '{luz}', 3) RETURNING id"
+    )))
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    for (sql, constraint) in [
+        (
+            format!(
+                "INSERT INTO recurring_bills (user_id, name, amount, due_day, category_id, closing_day)
+                 VALUES ('{ana}', 'Porto', 10, 10, '{luz}', 3)"
+            ),
+            "recurring_bills_card_amount",
+        ),
+        (
+            format!(
+                "INSERT INTO recurring_bills (user_id, name, due_day, category_id)
+                 VALUES ('{ana}', 'Porto', 10, '{luz}')"
+            ),
+            "recurring_bills_card_amount",
+        ),
+        (
+            format!(
+                "INSERT INTO transactions (user_id, date, amount, kind, category_id, card_id)
+                 VALUES ('{ana}', '2026-11-05', 10, 'bill', '{luz}', '{porto}')"
+            ),
+            "transactions_card_daily",
+        ),
+        (
+            format!(
+                "INSERT INTO transactions (user_id, date, amount, kind, category_id, card_id)
+                 VALUES ('{bia}', '2026-11-05', 10, 'daily', '{feira}', '{porto}')"
+            ),
+            "transactions_card_fk",
+        ),
+    ] {
+        let refused = sqlx::query(sqlx::AssertSqlSafe(sql.clone())).execute(&pool).await.unwrap_err();
+        assert_eq!(
+            refused.as_database_error().unwrap().constraint(),
+            Some(constraint),
+            "{sql}"
+        );
+    }
+
+    sqlx::query(sqlx::AssertSqlSafe(format!(
+        "INSERT INTO transactions (user_id, date, amount, kind, category_id, card_id)
+         VALUES ('{ana}', '2026-11-06', 30, 'daily', '{mercado}', '{porto}')"
+    )))
     .execute(&pool)
     .await
-    .unwrap_err();
-    assert_eq!(
-        refused.as_database_error().unwrap().constraint(),
-        Some("recurring_bills_card_amount")
-    );
+    .unwrap();
+    let spec = include_str!("../../../docs/specs/2026-11-12-categories-and-cards.md");
+    let revert = spec
+        .split("the revert, if ever needed, is:")
+        .nth(1)
+        .and_then(|rest| rest.split("```").nth(1))
+        .unwrap()
+        .trim_start_matches("sql");
+    sqlx::raw_sql(revert).execute(&pool).await.unwrap();
+    let (amount, active): (rust_decimal::Decimal, bool) =
+        sqlx::query_as("SELECT amount, active FROM recurring_bills WHERE id = $1")
+            .bind(porto)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!((amount, active), ("0.01".parse().unwrap(), false));
 }
