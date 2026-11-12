@@ -262,7 +262,7 @@ describe("AppShell", () => {
     },
   );
 
-  it.each(["/ajustes", "/ajustes/categorias", "/ajustes/conta"])(
+  it.each(["/ajustes", "/ajustes/conta"])(
     "hides the month switcher on %s, a page that does not read the month",
     (path) => {
       setPathname(path);

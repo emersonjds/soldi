@@ -615,7 +615,7 @@ describe("Cofrinhos", () => {
       await menu("Reserva");
       await userEvent.click(screen.getByRole("menuitem", { name: "Editar" }));
       const sheet = await screen.findByRole("dialog", { name: "Editar cofrinho" });
-      expect(within(sheet).getByLabelText("Nome")).toHaveValue("Reserva");
+      expect(within(sheet).getByLabelText("Nome do agrupador")).toHaveValue("Reserva");
       await userEvent.click(within(sheet).getByRole("button", { name: "Excluir" }));
 
       expect(await screen.findByText("Resgate tudo antes de excluir")).toBeInTheDocument();

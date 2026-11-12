@@ -78,7 +78,7 @@ const PAGE_NAMES = [
 ] as const;
 
 /** The pages that read `?m=`; the switcher shows only there. */
-const MONTH_PAGES = ["/mes", "/para-onde-vai", "/economia", "/ajustes/contas"];
+const MONTH_PAGES = ["/mes", "/para-onde-vai", "/economia", "/ajustes/contas", "/ajustes/categorias"];
 
 /** Month pages whose own hero carries the switcher below 1024 px; the rest get it in a card under the app bar. */
 const HERO_SWITCHER_PAGES = ["/mes", "/para-onde-vai"];
