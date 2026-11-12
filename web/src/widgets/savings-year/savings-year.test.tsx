@@ -41,6 +41,8 @@ const asked = (requests: Request[]) =>
 const month = (key: string, saved: string, rest: Partial<Schemas["SavingsMonth"]> = {}): Schemas["SavingsMonth"] => ({
   month: key,
   income: "100.00",
+  deposited: saved.startsWith("-") ? "0.00" : saved,
+  withdrawn: saved.startsWith("-") ? saved.slice(1) : "0.00",
   saved,
   rate_pct: "1.0",
   forecast: false,
@@ -95,6 +97,20 @@ describe("SavingsYear", () => {
     expect(summary).toHaveTextContent("8,4% das entradas");
     expect(text(within(summary).getByText("Entradas no ano").parentElement)).toBe("Entradas no anoR$ 64.482,80");
     expect(text(within(summary).getByText("Meses no Azul").parentElement)).toBe("Meses no Azul2 / 4");
+    expect(text(within(summary).getByText(/^Guardado/))).toBe("Guardado R$ 5.716,53 · Resgatado R$ 300,00");
+  });
+
+  it("leaves the Guardado and Resgatado line out of a year without resgates", async () => {
+    show({
+      "GET /api/reports/savings": year([month("2026-11", "10.00")], {
+        deposited_total: "10.00",
+        withdrawn_total: "0.00",
+        saved_total: "10.00",
+      }),
+    });
+    await list();
+
+    expect(within(section()).getByRole("region", { name: "Total do ano" })).not.toHaveTextContent("Resgatado");
   });
 
   it("counts the run of saving months up to today's and names the largest aporte", async () => {
@@ -202,6 +218,16 @@ describe("SavingsYear", () => {
     expect(within(section()).queryByText(/^Consistência/)).not.toBeInTheDocument();
   });
 
+  it("shows a year whose resgates matched its deposits, with no income", async () => {
+    show({
+      "GET /api/reports/savings": year([
+        month("2026-11", "0.00", { income: "0.00", rate_pct: null, deposited: "500.00", withdrawn: "500.00" }),
+      ]),
+    });
+
+    expect(await row("Novembro de 2026")).toHaveTextContent("Resgatado R$ 500,00");
+  });
+
   it("keeps the band for an older account with nothing yet this year and reaches past years", async () => {
     const requests = show(
       {
@@ -261,11 +287,17 @@ describe("SavingsYear", () => {
     expect(december).toHaveTextContent("Previsto");
     expect(within(december).getByText("previsto").previousElementSibling).toHaveClass("bg-muted-foreground/40");
     expect(within(december).queryByRole("link")).not.toBeInTheDocument();
-    expect(text(await tableRow("Agosto"))).toContain("R$ 53.982,80R$ 4.840,40faixa alta15,1%");
-    expect(within(await tableRow("Outubro")).getByText("faixa baixa").previousElementSibling).toHaveClass(
-      "bg-tier-red",
-    );
-    expect(within(await tableRow("Setembro")).getByText("—")).toBeInTheDocument();
+    expect(
+      within(await table())
+        .getAllByRole("columnheader")
+        .map((each) => each.textContent),
+    ).toEqual(["MÊS", "ENTRADAS", "GUARDADO", "RESGATADO", "% GUARDADO", "STATUS / OBSERVAÇÃO", "AÇÃO"]);
+    expect(text(await tableRow("Agosto"))).toContain("R$ 53.982,80R$ 4.840,40—faixa alta15,1%");
+    const october = await tableRow("Outubro");
+    expect(text(october)).toContain("R$ 4.000,00R$ 100,00- R$ 300,00faixa baixa-5,0%");
+    expect(within(october).getByText("- R$ 300,00")).toHaveClass("text-expense-text");
+    expect(within(october).getByText("faixa baixa").previousElementSibling).toHaveClass("bg-tier-red");
+    expect(within(await tableRow("Setembro")).getAllByText("—")).toHaveLength(2);
   });
 
   it("says Fecha hoje on the month's last day", async () => {
@@ -300,12 +332,12 @@ describe("SavingsYear", () => {
     if (!(blob instanceof Blob)) throw new Error("no blob");
     expect(new TextDecoder().decode(new Uint8Array(await blob.arrayBuffer()))).toBe(
       [
-        "Mês;Entradas;Guardado;% Guardado;Situação",
-        "2026-08;53982,80;4840,40;15,1;",
-        "2026-09;0,00;0,00;;",
-        "2026-10;4000,00;-200,00;-5,0;",
-        "2026-11;6500,00;776,13;11,9;Atual",
-        "2026-12;3000,00;0,00;0,0;Previsto",
+        "Mês;Entradas;Guardado;Resgatado;% Guardado;Situação",
+        "2026-08;53982,80;4840,40;0,00;15,1;",
+        "2026-09;0,00;0,00;0,00;;",
+        "2026-10;4000,00;100,00;300,00;-5,0;",
+        "2026-11;6500,00;776,13;0,00;11,9;Atual",
+        "2026-12;3000,00;0,00;0,00;0,0;Previsto",
         "",
       ].join("\r\n"),
     );
@@ -317,7 +349,7 @@ describe("SavingsYear", () => {
     const links = within(await list()).getAllByRole("link");
     expect(links.map((link) => link.getAttribute("aria-label")?.replace(/\s/g, " "))).toEqual([
       "Novembro de 2026: guardou R$ 776,13, 11,9% das entradas, faixa média, ajustar",
-      "Outubro de 2026: guardou -R$ 200,00, -5,0% das entradas, faixa baixa",
+      "Outubro de 2026: guardou R$ 100,00, resgatou R$ 300,00, -5,0% das entradas, faixa baixa",
       "Setembro de 2026: guardou R$ 0,00, sem entradas",
       "Agosto de 2026: guardou R$ 4.840,40, 15,1% das entradas, faixa alta",
     ]);
@@ -332,7 +364,8 @@ describe("SavingsYear", () => {
     expect(november).toHaveClass("bg-primary/5");
     expect(november).toHaveTextContent("NovembroAtualEntradas: R$ 6.500,00R$ 776,13faixa média11,9%");
     expect(await row("Agosto")).not.toHaveAttribute("aria-current");
-    expect(within(await row("Outubro")).getByText("-R$ 200,00")).toHaveClass("text-expense");
+    expect(text(await row("Outubro"))).toContain("R$ 100,00Resgatado R$ 300,00faixa baixa-5,0%");
+    expect(await row("Agosto")).not.toHaveTextContent("Resgatado");
     expect(within(section()).getByText("4 meses")).toHaveClass("lg:hidden");
     expect(within(section()).getByText("5 registros")).toHaveClass("max-lg:hidden");
     expect(section()).toHaveTextContent("< 5%5% – 15%> 15%");

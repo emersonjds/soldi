@@ -104,12 +104,13 @@ const exportCsv = (year: number, months: Month[], current: string) => {
     [
       month.month,
       commaDecimal(month.income),
-      commaDecimal(month.saved),
+      commaDecimal(month.deposited),
+      commaDecimal(month.withdrawn),
       month.rate_pct ? commaDecimal(month.rate_pct) : "",
       situation(month, current),
     ].join(";"),
   );
-  downloadCsv(`soldi-economia-${year}.csv`, ["Mês;Entradas;Guardado;% Guardado;Situação", ...lines]);
+  downloadCsv(`soldi-economia-${year}.csv`, ["Mês;Entradas;Guardado;Resgatado;% Guardado;Situação", ...lines]);
 };
 
 const Rate = ({ month }: { month: Month }) => {
@@ -178,14 +179,21 @@ const TableMonth = ({ month, current, today }: { month: Month; current: boolean;
         {current ? (
           <Link
             href={adjustHref(month.month)}
-            aria-label={`Ajustar o guardado de ${name}: ${formatMoney(month.saved, currency)}`}
+            aria-label={`Ajustar o guardado de ${name}: ${formatMoney(month.deposited, currency)}`}
             className="inline-flex min-h-11 items-center gap-1.5 rounded-lg bg-card px-3 font-semibold text-primary shadow-sm hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"
           >
-            <Money amount={month.saved} />
+            <Money amount={month.deposited} />
             <Pencil aria-hidden className="size-4" />
           </Link>
         ) : (
-          <Money amount={month.saved} className="font-semibold" />
+          <Money amount={month.deposited} className="font-semibold" />
+        )}
+      </TableCell>
+      <TableCell className="text-right">
+        {cents(month.withdrawn) > 0 ? (
+          <Money amount={month.withdrawn} outflow className="font-semibold text-expense-text" />
+        ) : (
+          <span className="text-muted-foreground">—</span>
         )}
       </TableCell>
       <TableCell className="text-center">
@@ -206,11 +214,12 @@ const ListMonth = ({ month, current }: { month: Month; current: boolean }) => {
   const name = monthTitle(month.month);
   const share = month.rate_pct ? `${formatPct(month.rate_pct)} das entradas` : "sem entradas";
   const level = month.rate_pct ? levelOf(month.rate_pct) : undefined;
+  const withdrawn = cents(month.withdrawn) > 0 ? `resgatou ${formatMoney(month.withdrawn, currency)}, ` : "";
   return (
     <li>
       <Link
         href={current ? adjustHref(month.month) : `/mes?m=${month.month}`}
-        aria-label={`${name} de ${month.month.slice(0, 4)}: guardou ${formatMoney(month.saved, currency)}, ${share}${level ? `, ${level.word}` : ""}${current ? ", ajustar" : ""}`}
+        aria-label={`${name} de ${month.month.slice(0, 4)}: guardou ${formatMoney(month.deposited, currency)}, ${withdrawn}${share}${level ? `, ${level.word}` : ""}${current ? ", ajustar" : ""}`}
         aria-current={current ? "date" : undefined}
         className={cn(
           "flex min-h-11 items-center justify-between gap-3 rounded-xl px-3 py-3 hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring",
@@ -232,9 +241,14 @@ const ListMonth = ({ month, current }: { month: Month; current: boolean }) => {
         </span>
         <span className="flex shrink-0 flex-col items-end">
           <span className="flex items-center gap-1.5">
-            <Money amount={month.saved} className="font-semibold" />
+            <Money amount={month.deposited} className="font-semibold" />
             {current && <Pencil aria-hidden className="size-4 text-muted-foreground" />}
           </span>
+          {withdrawn && (
+            <span className="text-expense-text text-sm">
+              Resgatado <Money amount={month.withdrawn} />
+            </span>
+          )}
           <span className="flex items-center gap-1.5 text-muted-foreground text-sm tabular-nums">
             {level && (
               <>
@@ -283,6 +297,11 @@ const YearBody = ({ data, year, today }: { data: Schemas["SavingsYear"]; year: n
             <p className={cn(caption, "max-lg:hidden")}>TOTAL CONSOLIDADO</p>
             <p className="text-muted-foreground text-sm lg:hidden">Total Guardado no Ano</p>
             <Money amount={data.saved_total} size="figure" />
+            {cents(data.withdrawn_total) > 0 && (
+              <p className="text-muted-foreground text-sm">
+                Guardado <Money amount={data.deposited_total} /> · Resgatado <Money amount={data.withdrawn_total} />
+              </p>
+            )}
           </div>
           {data.rate_pct && (
             <span className="flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 font-semibold text-primary text-sm tabular-nums">
@@ -385,6 +404,7 @@ const YearBody = ({ data, year, today }: { data: Schemas["SavingsYear"]; year: n
               <TableHead className="pl-6">MÊS</TableHead>
               <TableHead className="text-right">ENTRADAS</TableHead>
               <TableHead className="text-right">GUARDADO</TableHead>
+              <TableHead className="text-right">RESGATADO</TableHead>
               <TableHead className="text-center">% GUARDADO</TableHead>
               <TableHead>STATUS / OBSERVAÇÃO</TableHead>
               <TableHead className="pr-6 text-right">AÇÃO</TableHead>
@@ -406,7 +426,8 @@ const YearBody = ({ data, year, today }: { data: Schemas["SavingsYear"]; year: n
   );
 };
 
-const hasMoney = (month: Month) => cents(month.income) !== 0 || cents(month.saved) !== 0;
+const hasMoney = (month: Month) =>
+  cents(month.income) !== 0 || cents(month.deposited) !== 0 || cents(month.withdrawn) !== 0;
 
 /** Spec 2026-11-11 §7: the year's Economia month by month, between the opening year and this one. */
 export const SavingsYear = () => {

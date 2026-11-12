@@ -164,10 +164,10 @@ test("Economia do ano lists each month's saving and opens it on Mês, unclipped 
   await expect(current).toContainText("Entradas: R$ 64.482,80");
   await expect(current).toHaveAttribute("href", `/para-onde-vai?m=${today.slice(0, 7)}&g=economia`);
   if (previous.slice(0, 4) !== today.slice(0, 4)) await card.getByRole("button", { name: "Ano anterior" }).click();
-  const last = card
-    .getByRole("list", { name: "Meses" })
-    .getByRole("link", { name: `${name(previous)}: guardou -R$ 200,00, -0,3% das entradas` });
-  await expect(last).toContainText("-R$ 200,00");
+  const last = card.getByRole("list", { name: "Meses" }).getByRole("link", {
+    name: `${name(previous)}: guardou R$ 5.000,00, resgatou R$ 5.200,00, -0,3% das entradas`,
+  });
+  await expect(last).toContainText("Resgatado R$ 5.200,00");
 
   for (const width of [375, 1024, 1280, 1440]) {
     await page.setViewportSize({ width, height: 900 });

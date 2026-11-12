@@ -45,11 +45,12 @@ pub fn percent(part: Decimal, whole: Decimal) -> Option<Decimal> {
     Some(pct)
 }
 
-/// One month's income without resgates and savings net of resgates; `month` is its first day.
+/// One month's income without resgates, its Economia deposits and its resgates; `month` is its first day.
 pub struct MonthSaving {
     pub month: NaiveDate,
     pub income: Decimal,
-    pub saved: Decimal,
+    pub deposited: Decimal,
+    pub withdrawn: Decimal,
 }
 
 /// A year from 2000 to 2100 (SOL-30's bound).
@@ -87,14 +88,17 @@ pub fn savings_year(
     if let Some((from, to)) = range {
         let mut month = first_of(to);
         while month >= first_of(from) {
-            let (income, saved) = sums
+            let (income, deposited, withdrawn) = sums
                 .get(&month)
-                .map_or((Decimal::ZERO, Decimal::ZERO), |sum| {
-                    (sum.income, sum.saved)
+                .map_or((Decimal::ZERO, Decimal::ZERO, Decimal::ZERO), |sum| {
+                    (sum.income, sum.deposited, sum.withdrawn)
                 });
+            let saved = deposited - withdrawn;
             months.push(SavingsMonth {
                 month: month.format("%Y-%m").to_string(),
                 income,
+                deposited,
+                withdrawn,
                 saved,
                 rate_pct: percent(saved, income),
                 forecast: month > first_of(today),
@@ -104,10 +108,14 @@ pub fn savings_year(
     }
     let past = || months.iter().filter(|month| !month.forecast);
     let income_total: Decimal = past().map(|month| month.income).sum();
-    let saved_total: Decimal = past().map(|month| month.saved).sum();
+    let deposited_total: Decimal = past().map(|month| month.deposited).sum();
+    let withdrawn_total: Decimal = past().map(|month| month.withdrawn).sum();
+    let saved_total = deposited_total - withdrawn_total;
     SavingsYear {
         year,
         income_total,
+        deposited_total,
+        withdrawn_total,
         saved_total,
         rate_pct: percent(saved_total, income_total),
         months,
@@ -450,11 +458,12 @@ mod tests {
         assert_eq!(percent(money("1"), money("2")).unwrap().to_string(), "50.0");
     }
 
-    fn saving(month: &str, income: &str, saved: &str) -> MonthSaving {
+    fn saving(month: &str, income: &str, deposited: &str, withdrawn: &str) -> MonthSaving {
         MonthSaving {
             month: date(&format!("{month}-01")),
             income: money(income),
-            saved: money(saved),
+            deposited: money(deposited),
+            withdrawn: money(withdrawn),
         }
     }
 
@@ -503,8 +512,8 @@ mod tests {
             Some((date("2026-03-15"), date("2026-06-30"))),
             date("2026-06-30"),
             vec![
-                saving("2026-03", "1000", "100"),
-                saving("2026-05", "5921.20", "610"),
+                saving("2026-03", "1000", "100", "0"),
+                saving("2026-05", "5921.20", "610", "0"),
             ],
         );
 
@@ -541,8 +550,8 @@ mod tests {
             Some((date("2025-01-01"), date("2025-02-28"))),
             date("2026-11-11"),
             vec![
-                saving("2025-02", "0", "100"),
-                saving("2025-01", "1000", "-50"),
+                saving("2025-02", "0", "100", "0"),
+                saving("2025-01", "1000", "100", "150"),
             ],
         );
 
@@ -553,14 +562,35 @@ mod tests {
     }
 
     #[test]
+    fn a_month_saved_is_its_deposits_minus_its_resgates() {
+        let year = savings_year(
+            2025,
+            Some((date("2025-05-01"), date("2025-05-31"))),
+            date("2026-11-11"),
+            vec![saving("2025-05", "1000", "100", "300")],
+        );
+
+        let may = &year.months[0];
+        assert_eq!(
+            (may.deposited, may.withdrawn, may.saved),
+            (money("100"), money("300"), money("-200"))
+        );
+        assert_eq!(may.rate_pct.unwrap().to_string(), "-20.0");
+        assert_eq!(
+            (year.deposited_total, year.withdrawn_total, year.saved_total),
+            (money("100"), money("300"), money("-200"))
+        );
+    }
+
+    #[test]
     fn rates_round_half_to_even_with_one_decimal() {
         let year = savings_year(
             2025,
             Some((date("2025-01-01"), date("2025-02-28"))),
             date("2026-11-11"),
             vec![
-                saving("2025-02", "100", "0.25"),
-                saving("2025-01", "100", "0.35"),
+                saving("2025-02", "100", "0.25", "0"),
+                saving("2025-01", "100", "0.35", "0"),
             ],
         );
 
@@ -576,9 +606,9 @@ mod tests {
             Some((date("2026-09-15"), date("2026-12-31"))),
             date("2026-11-11"),
             vec![
-                saving("2026-12", "500", "400"),
-                saving("2026-11", "1000", "100"),
-                saving("2026-09", "1000", "50"),
+                saving("2026-12", "500", "450", "50"),
+                saving("2026-11", "1000", "300", "200"),
+                saving("2026-09", "1000", "50", "0"),
             ],
         );
 
@@ -622,6 +652,8 @@ mod tests {
         );
         assert_eq!(year.income_total, money("2000"));
         assert_eq!(year.saved_total, money("150"));
+        assert_eq!(year.deposited_total, money("350"));
+        assert_eq!(year.withdrawn_total, money("200"));
         assert_eq!(year.rate_pct.unwrap().to_string(), "7.5");
     }
 
@@ -631,7 +663,7 @@ mod tests {
             2025,
             Some((date("2025-01-01"), date("2025-12-31"))),
             date("2026-01-05"),
-            vec![saving("2025-12", "100", "10")],
+            vec![saving("2025-12", "100", "10", "0")],
         );
 
         assert_eq!(year.months.len(), 12);
