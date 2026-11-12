@@ -51,7 +51,7 @@ const more = (name: string, index: number): Schemas["Category"] => ({
   name,
 });
 /** Nine top-level Diário, one more than the row holds. */
-const NINE_DAILY = [...SIX_DAILY, more("Saúde", 1), more("Casa", 2), more("Viagem", 3), more("Roupas", 4)];
+const NINE_DAILY = [...SIX_DAILY, more("Saúde", 1), more("Casa", 2), more("Gasto", 3), more("Roupas", 4)];
 
 const entry = (category: Schemas["Category"], date: string, id: string): Schemas["Transaction"] => ({
   id,
@@ -133,7 +133,7 @@ describe("CategoryChips", () => {
     setup({}, NINE_DAILY);
 
     const row = await screen.findByRole("radiogroup", { name: "Categoria" });
-    expect(chips()).toEqual(["Mercado", "Comida fora", "Pets", "Carro", "Lazer", "Saúde", "Casa", "Viagem"]);
+    expect(chips()).toEqual(["Gasto", "Comida fora", "Mercado", "Pets", "Carro", "Lazer", "Saúde", "Casa"]);
     expect(row).toHaveClass("overflow-x-auto", "snap-x");
     expect(within(row).queryByRole("radio", { checked: true })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Ver todas" })).toHaveAttribute("aria-expanded", "false");
@@ -164,7 +164,7 @@ describe("CategoryChips", () => {
     setup();
 
     await screen.findByRole("radiogroup", { name: "Categoria" });
-    expect(chips()).toEqual(["Mercado", "Comida fora"]);
+    expect(chips()).toEqual(["Comida fora", "Mercado"]);
   });
 
   it("checks a tapped chip and moves along the row with the arrow keys", async () => {
@@ -174,7 +174,7 @@ describe("CategoryChips", () => {
     await userEvent.click(mercado);
     expect(mercado).toHaveAttribute("aria-checked", "true");
     expect(mercado).toHaveFocus();
-    await userEvent.keyboard("{ArrowRight}");
+    await userEvent.keyboard("{ArrowLeft}");
     const comida = screen.getByRole("radio", { name: "Comida fora" });
     expect(comida).toHaveFocus();
     await userEvent.keyboard(" ");
@@ -195,23 +195,12 @@ describe("CategoryChips", () => {
       within(sheet)
         .getAllByRole("option")
         .map((option) => option.getAttribute("aria-label")),
-    ).toEqual([
-      "Mercado",
-      "Comida fora",
-      "Pets",
-      "Pets › Ração",
-      "Carro",
-      "Lazer",
-      "Saúde",
-      "Casa",
-      "Viagem",
-      "Roupas",
-    ]);
+    ).toEqual(["Gasto", "Comida fora", "Mercado", "Pets", "Pets › Ração", "Carro", "Lazer", "Saúde", "Casa", "Roupas"]);
     await userEvent.type(within(sheet).getByRole("combobox"), "roup");
     await userEvent.click(within(sheet).getByRole("option", { name: "Roupas" }));
 
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-    expect(chips()).toEqual(["Comida fora", "Carro", "Pets", "Mercado", "Lazer", "Saúde", "Casa", "Roupas"]);
+    expect(chips()).toEqual(["Comida fora", "Carro", "Pets", "Gasto", "Mercado", "Lazer", "Saúde", "Roupas"]);
     const roupas = screen.getByRole("radio", { name: "Roupas" });
     expect(roupas).toHaveAttribute("aria-checked", "true");
     await waitFor(() => expect(roupas).toHaveFocus());

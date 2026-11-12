@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO categories (user_id, name, kind, icon, color, parent_id)\n         SELECT $1, s.name, s.kind, s.icon, p.color, p.id\n         FROM UNNEST($2::text[], $3::text[], $4::text[], $5::text[]) AS s (parent, name, kind, icon)\n         JOIN categories p ON p.user_id = $1 AND p.parent_id IS NULL AND p.name = s.parent",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray",
+        "TextArray",
+        "TextArray",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4e6315d72a832a44f747726238a47280c11cb93d2e0223678bfac2b4a629dcdf"
+}

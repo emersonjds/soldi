@@ -457,7 +457,7 @@ async fn the_next_contribution_is_the_earliest_future_member_of_the_users_series
     let (_, casa) = user
         .post(
             "/api/categories",
-            json!({ "name": "Casa", "kind": "bill", "parent_id": economia }),
+            json!({ "name": "Reforma", "kind": "bill", "parent_id": economia }),
         )
         .await;
     repeat(&user, &first.to_string(), &reserva, "100").await;
@@ -477,16 +477,16 @@ async fn the_next_contribution_is_the_earliest_future_member_of_the_users_series
     let bia = user.another_user("bia@example.com").await;
     bia.open_at("0", &first.to_string()).await;
     let bia_economia = bia.category_id("Economia").await;
-    let (_, bia_casa) = bia
+    let (_, bia_reforma) = bia
         .post(
             "/api/categories",
-            json!({ "name": "Casa", "kind": "bill", "parent_id": bia_economia }),
+            json!({ "name": "Reforma", "kind": "bill", "parent_id": bia_economia }),
         )
         .await;
     repeat(
         &bia,
         &first.to_string(),
-        bia_casa["id"].as_str().unwrap(),
+        bia_reforma["id"].as_str().unwrap(),
         "777",
     )
     .await;
@@ -502,7 +502,10 @@ async fn the_next_contribution_is_the_earliest_future_member_of_the_users_series
         item(&cofrinhos, "Viagem")["next_contribution"],
         json!({ "amount": "40.00", "day": in_a_month.day() })
     );
-    assert_eq!(item(&cofrinhos, "Casa")["next_contribution"], Value::Null);
+    assert_eq!(
+        item(&cofrinhos, "Reforma")["next_contribution"],
+        Value::Null
+    );
 }
 
 #[sqlx::test]

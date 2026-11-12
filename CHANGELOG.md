@@ -7,6 +7,18 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.46.0
+
+> Headline: new accounts start organized
+
+### Server
+
+- New accounts get grouped categories (D29): Alimentação (Mercado, Comer fora, iFood), Gasto, Transporte (Uber, Combustível), Saúde (Plano de saúde, Farmácia, Consultas), Lazer (Viagem), Casa (Aluguel, Financiamento, Condomínio, Luz, Água, Internet, Gás), Educação (Escola, Cursos, Material), Veículo (Parcela, Seguro, IPVA), Cartão, Assinaturas and Família (Pets, Presentes, Mesada), each with its icon and a color unique across outflow. Existing accounts keep theirs.
+
+### Web
+
+- Lançar leads with Gasto for Diário and Casa for Saída; onboarding names bills by group (`Casa › Aluguel`); the new default icons draw at once.
+
 ## 0.45.0
 
 > Headline: a category changes between Diário and Saída

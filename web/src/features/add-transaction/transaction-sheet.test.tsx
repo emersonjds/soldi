@@ -107,7 +107,7 @@ describe("TransactionSheet", () => {
     expect(dialog).toHaveAccessibleDescription(DESCRIPTION);
     expect(within(dialog).getByText(DESCRIPTION)).toHaveClass("sr-only");
     expect(within(dialog).getByRole("button", { name: "Salvar Lançamento" }).closest(FOOTER)).not.toBeNull();
-    expect(await screen.findByRole("radio", { name: "Mercado" })).toHaveAttribute("aria-checked", "true");
+    expect(await screen.findByRole("radio", { name: "Comida fora" })).toHaveAttribute("aria-checked", "true");
     expect(screen.getByRole("radio", { name: "Diário" })).toBeChecked();
     await userEvent.keyboard("35,90");
     expect(screen.getByLabelText("Valor do gasto")).toHaveValue("35,90");
@@ -121,7 +121,7 @@ describe("TransactionSheet", () => {
       date: "2026-11-05",
       amount: "35.90",
       kind: "daily",
-      category_id: MERCADO.id,
+      category_id: COMIDA.id,
       note: null,
     });
     expect(onOpenChange).toHaveBeenCalledWith(false);
@@ -186,7 +186,7 @@ describe("TransactionSheet", () => {
           .map((radio) => radio.textContent),
       ).toEqual(["Comida fora", "Mercado"]),
     );
-    expect(within(row).getByRole("radio", { name: "Mercado" })).toHaveAttribute("aria-checked", "true");
+    expect(within(row).getByRole("radio", { name: "Comida fora" })).toHaveAttribute("aria-checked", "true");
   });
 
   it("switches kind, preselects its first category and takes yesterday and a note", async () => {

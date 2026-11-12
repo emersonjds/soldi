@@ -21,4 +21,25 @@ describe("CategoryIcon", () => {
     const { container } = render(<CategoryIcon icon="users" color="cat-2" />);
     expect(container.querySelector("svg.lucide-users")).toBeInTheDocument();
   });
+
+  it.each([
+    "utensils-crossed",
+    "bike",
+    "bus",
+    "car-taxi-front",
+    "wallet",
+    "shield-plus",
+    "stethoscope",
+    "key-round",
+    "flame",
+    "school",
+    "pencil",
+    "receipt",
+    "file-text",
+    "users",
+    "hand-coins",
+  ])("draws the default category icon %s at once", (icon) => {
+    const { container } = render(<CategoryIcon icon={icon} color="cat-1" />);
+    expect(container.querySelector(`svg.lucide-${icon}`)).toBeInTheDocument();
+  });
 });

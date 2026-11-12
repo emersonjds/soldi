@@ -26,12 +26,13 @@ async fn rule_1_the_month_by_category_against_the_previous_month(pool: PgPool) {
     log(&ana, "2026-10-01", "daily", "60", "Mercado").await;
     log(&ana, "2026-11-01", "daily", "400", "Mercado").await;
     log(&ana, "2026-11-30", "daily", "500", "Mercado").await;
-    log(&ana, "2026-11-10", "daily", "300", "Comida fora").await;
+    log(&ana, "2026-11-10", "daily", "300", "Comer fora").await;
     log(&ana, "2026-11-05", "bill", "2259.56", "Aluguel").await;
     log(&ana, "2026-11-05", "income", "5000", "Salário").await;
     log(&ana, "2026-12-01", "daily", "99", "Mercado").await;
     log(&bia, "2026-11-02", "daily", "50", "Mercado").await;
     let market = ana.category_id("Mercado").await;
+    let alimentacao = ana.category_id("Alimentação").await;
 
     let (status, report) = ana.get("/api/reports/categories?month=2026-11").await;
 
@@ -44,12 +45,12 @@ async fn rule_1_the_month_by_category_against_the_previous_month(pool: PgPool) {
         .iter()
         .map(|row| row["name"].as_str().unwrap())
         .collect();
-    assert_eq!(names, ["Aluguel", "Mercado", "Comida fora"]);
+    assert_eq!(names, ["Aluguel", "Mercado", "Comer fora"]);
     assert_eq!(
         outflow[1],
         json!({
             "category_id": market, "name": "Mercado", "icon": "shopping-cart", "color": "cat-1",
-            "kind": "daily", "parent_id": null, "amount": "900.00", "pct": "26.0", "previous_amount": "760.00",
+            "kind": "daily", "parent_id": alimentacao, "amount": "900.00", "pct": "26.0", "previous_amount": "760.00",
             "delta_pct": "18.4"
         })
     );
@@ -101,40 +102,41 @@ async fn a_bad_month_is_422_none_is_400_and_no_session_401(pool: PgPool) {
 async fn subcategories_add_up_in_their_parents_group(pool: PgPool) {
     let ana = TestApp::signed_in(pool, "ana@example.com").await;
     ana.open_at("0", "2026-10-01").await;
-    let casa = ana.category_id("Casa").await;
+    let gasto = ana.category_id("Gasto").await;
     for name in ["Móveis", "Decoração"] {
         let (status, _) = ana
             .post(
                 "/api/categories",
-                json!({ "name": name, "kind": "daily", "parent_id": casa }),
+                json!({ "name": name, "kind": "daily", "parent_id": gasto }),
             )
             .await;
         assert_eq!(status, StatusCode::CREATED);
     }
-    log(&ana, "2026-11-02", "daily", "100", "Casa").await;
+    log(&ana, "2026-11-02", "daily", "100", "Gasto").await;
     log(&ana, "2026-11-03", "daily", "60", "Móveis").await;
     log(&ana, "2026-11-04", "daily", "40", "Decoração").await;
     log(&ana, "2026-11-05", "daily", "200", "Mercado").await;
     log(&ana, "2026-10-05", "daily", "50", "Móveis").await;
     let moveis = ana.category_id("Móveis").await;
     let decoracao = ana.category_id("Decoração").await;
+    let mercado = ana.category_id("Mercado").await;
 
     let (status, report) = ana.get("/api/reports/categories?month=2026-11").await;
 
     assert_eq!(status, StatusCode::OK, "{report}");
     assert_eq!(report["outflow"][2]["name"], "Móveis");
-    assert_eq!(report["outflow"][2]["parent_id"], casa.as_str());
+    assert_eq!(report["outflow"][2]["parent_id"], gasto.as_str());
     assert_eq!(report["outflow"][2]["pct"], "15.0");
     assert_eq!(
-        report["groups"][0],
+        report["groups"][1],
         json!({
-            "category_id": casa, "name": "Casa", "icon": "sofa", "color": "cat-9",
+            "category_id": gasto, "name": "Gasto", "icon": "wallet", "color": "cat-2",
             "kind": "daily", "amount": "200.00", "pct": "50.0", "previous_amount": "50.00",
             "delta_pct": "300.0", "children": [moveis, decoracao]
         })
     );
-    assert_eq!(report["groups"][1]["name"], "Mercado");
-    assert_eq!(report["groups"][1]["children"], json!([]));
+    assert_eq!(report["groups"][0]["name"], "Alimentação");
+    assert_eq!(report["groups"][0]["children"], json!([mercado]));
     assert_eq!(report["groups"].as_array().unwrap().len(), 2);
 }
 
@@ -142,34 +144,37 @@ async fn subcategories_add_up_in_their_parents_group(pool: PgPool) {
 async fn a_mixed_group_sums_both_outflow_kinds_and_reports_its_own_kind(pool: PgPool) {
     let ana = TestApp::signed_in(pool, "ana@example.com").await;
     ana.open_at("0", "2026-10-01").await;
-    let (_, veiculo) = ana
+    let (_, moto) = ana
         .post(
             "/api/categories",
-            json!({ "name": "Veículo", "kind": "bill", "color": "cat-16" }),
+            json!({ "name": "Moto", "kind": "bill", "color": "cat-16" }),
         )
         .await;
-    for (name, kind) in [("Parcela", "bill"), ("Gasolina", "daily")] {
+    for (name, kind) in [("Prestação", "bill"), ("Gasolina", "daily")] {
         let (status, _) = ana
             .post(
                 "/api/categories",
-                json!({ "name": name, "kind": kind, "parent_id": veiculo["id"] }),
+                json!({ "name": name, "kind": kind, "parent_id": moto["id"] }),
             )
             .await;
         assert_eq!(status, StatusCode::CREATED);
     }
     log(&ana, "2026-11-02", "daily", "300", "Gasolina").await;
-    log(&ana, "2026-11-03", "bill", "100", "Parcela").await;
-    let parcela = ana.category_id("Parcela").await;
+    log(&ana, "2026-11-03", "bill", "100", "Prestação").await;
+    let prestacao = ana.category_id("Prestação").await;
     let gasolina = ana.category_id("Gasolina").await;
 
     let (status, report) = ana.get("/api/reports/categories?month=2026-11").await;
 
     assert_eq!(status, StatusCode::OK, "{report}");
     assert_eq!(report["groups"].as_array().unwrap().len(), 1);
-    assert_eq!(report["groups"][0]["name"], "Veículo");
+    assert_eq!(report["groups"][0]["name"], "Moto");
     assert_eq!(report["groups"][0]["kind"], "bill");
     assert_eq!(report["groups"][0]["amount"], "400.00");
-    assert_eq!(report["groups"][0]["children"], json!([gasolina, parcela]));
+    assert_eq!(
+        report["groups"][0]["children"],
+        json!([gasolina, prestacao])
+    );
 }
 
 async fn savings(user: &TestApp, year: &str) -> (StatusCode, serde_json::Value) {
