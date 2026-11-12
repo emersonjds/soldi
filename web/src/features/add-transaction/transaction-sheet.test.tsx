@@ -27,7 +27,10 @@ import { TransactionSheet } from "./transaction-sheet";
 
 const MERCADO_ROW = TRANSACTIONS[0];
 const ALUGUEL_ROW = TRANSACTIONS[1];
-const MEMBER = { ...ALUGUEL_ROW, series: { id: "s1", position: 3, total: 12, last_date: "2027-09-04" } };
+const MEMBER = {
+  ...ALUGUEL_ROW,
+  series: { id: "s1", position: 3, total: 12, last_date: "2027-09-04", every: "month" as const },
+};
 
 const PETS: Schemas["Category"] = {
   id: "c1000000-0000-4000-8000-000000000010",
@@ -592,7 +595,7 @@ describe("TransactionSheet", () => {
     const first = {
       ...MEMBER,
       date: "2026-03-04",
-      series: { id: "s1", position: 1, total: 12, last_date: "2027-02-04" },
+      series: { id: "s1", position: 1, total: 12, last_date: "2027-02-04", every: "month" as const },
     };
     setup({ transaction: first }, { [`PATCH /api/transactions/${MEMBER.id}`]: { status: 200, body: first } });
 

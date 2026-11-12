@@ -352,7 +352,7 @@ describe("Cofrinhos", () => {
     });
 
     it("shows the balance, the goal caption and the automatic deposit", async () => {
-      open(items([{ ...COFRINHO_RESERVA, next_contribution: { amount: "500.00", day: 5 } }]));
+      open(items([{ ...COFRINHO_RESERVA, next_contribution: { amount: "500.00", day: 5, every: "month" } }]));
 
       const reserva = await region("Reserva");
       expect(reserva).toHaveTextContent("R$ 300,00 de R$ 10.000,00");

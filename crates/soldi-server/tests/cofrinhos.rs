@@ -474,6 +474,15 @@ async fn the_next_contribution_is_the_earliest_future_member_of_the_users_series
     assert_eq!(status, StatusCode::OK, "{edited}");
     let next = (first + Months::new(1)).to_string();
     deposit(&user, &next, casa["id"].as_str().unwrap(), "5").await;
+    let later = (first + Months::new(2)).to_string();
+    let (status, weekly) = user
+        .post(
+            "/api/transactions",
+            json!({ "date": later, "amount": "9", "kind": "bill", "category_id": casa["id"],
+                    "repeat_months": 3, "repeat_every": "week" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{weekly}");
     let bia = user.another_user("bia@example.com").await;
     bia.open_at("0", &first.to_string()).await;
     let bia_economia = bia.category_id("Economia").await;
@@ -496,15 +505,15 @@ async fn the_next_contribution_is_the_earliest_future_member_of_the_users_series
     let in_a_month = today.parse::<NaiveDate>().unwrap() + Months::new(1);
     assert_eq!(
         item(&cofrinhos, "Reserva")["next_contribution"],
-        json!({ "amount": "100.00", "day": 1 })
+        json!({ "amount": "100.00", "day": 1, "every": "month" })
     );
     assert_eq!(
         item(&cofrinhos, "Viagem")["next_contribution"],
-        json!({ "amount": "40.00", "day": in_a_month.day() })
+        json!({ "amount": "40.00", "day": in_a_month.day(), "every": "month" })
     );
     assert_eq!(
         item(&cofrinhos, "Reforma")["next_contribution"],
-        Value::Null
+        json!({ "amount": "9.00", "day": 1, "every": "week" })
     );
 }
 

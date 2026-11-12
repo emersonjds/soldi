@@ -33,7 +33,8 @@ pub struct Cofrinho {
     pub next_contribution: Option<NextContribution>,
 }
 
-/// A repeated entry's next deposit: its amount and the day of the month it falls on.
+/// A repeated entry's next deposit: its amount, the day of the month it falls on and its series'
+/// step (D32).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct NextContribution {
     #[serde(serialize_with = "crate::money")]
@@ -41,6 +42,7 @@ pub struct NextContribution {
     pub amount: Decimal,
     #[schema(minimum = 1, maximum = 31)]
     pub day: i16,
+    pub every: crate::transactions::RepeatEvery,
 }
 
 /// `total_saved` sums every balance; `saved_this_month` is the requested month view's `totals.saved`.
