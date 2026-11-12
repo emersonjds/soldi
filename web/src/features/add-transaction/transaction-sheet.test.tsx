@@ -1165,4 +1165,39 @@ describe("TransactionSheet", () => {
       ).toBeInTheDocument();
     });
   });
+
+  describe("Toda a série from a middle member", () => {
+    it("asks first: Cancelar saves nothing, confirming sends scope=all", async () => {
+      const { requests } = setup({ transaction: MEMBER }, resize);
+
+      await userEvent.click(await screen.findByRole("radio", { name: "Toda a série (12 lançamentos)" }));
+      const amount = screen.getByLabelText("Valor por parcela");
+      await userEvent.clear(amount);
+      await userEvent.type(amount, "9990");
+      await userEvent.click(screen.getByRole("button", { name: "Salvar Alterações na Série" }));
+      const ask = await screen.findByRole("alertdialog", { name: "Alterar toda a série?" });
+      expect(ask).toHaveTextContent("2 lançamentos anteriores a este também mudam, inclusive em meses já fechados.");
+      await userEvent.click(within(ask).getByRole("button", { name: "Cancelar" }));
+      expect(requests.filter((request) => request.method === "PATCH")).toHaveLength(0);
+
+      await userEvent.click(screen.getByRole("button", { name: "Salvar Alterações na Série" }));
+      await userEvent.click(
+        within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Alterar toda a série" }),
+      );
+
+      await waitFor(() => expect(requests.some((request) => request.method === "PATCH")).toBe(true));
+      const patch = requests.find((request) => request.method === "PATCH");
+      expect(new URL(patch?.url ?? "").searchParams.get("scope")).toBe("all");
+      expect(await screen.findByText("Série atualizada")).toBeInTheDocument();
+    });
+
+    it("says the whole series moves under Toda a série", async () => {
+      setup({ transaction: MEMBER });
+
+      await userEvent.click(await screen.findByRole("radio", { name: "Toda a série (12 lançamentos)" }));
+      await pickDate("Outra data", "2026-11-10");
+
+      expect(screen.getByText("Toda a série vai para o dia 10.")).toBeInTheDocument();
+    });
+  });
 });

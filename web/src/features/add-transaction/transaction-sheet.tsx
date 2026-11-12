@@ -33,6 +33,7 @@ import { type BillPrefill, useCards, useCreateBill } from "@/entities/bill/bill-
 import { CategoryChips, useCategoryChips } from "@/entities/category/category-chips";
 import { useSettings } from "@/entities/settings/settings-query";
 import { ScopeRadio } from "@/entities/transaction/scope-radio";
+import { SeriesAllDialog } from "@/entities/transaction/series-all-dialog";
 import { type Every, repeatSummary, resizeLine, UNITS } from "@/entities/transaction/series-step";
 import {
   type NewTransaction,
@@ -132,6 +133,7 @@ const TransactionForm = ({
 }) => {
   const [draft, setDraft] = useState(initial);
   const [submitted, setSubmitted] = useState(false);
+  const [asking, setAsking] = useState(false);
   const currency = useCurrency();
   const categories = useCategoryChips(draft.kind);
   const keypad = useKeypad();
@@ -212,9 +214,12 @@ const TransactionForm = ({
     };
   };
 
-  const save = () => {
+  const save = (confirmed = false) => {
     const valid = fields();
-    if (valid) onSave(valid, series ? draft.scope : undefined, moving);
+    if (!valid) return;
+    // D33: asked here, before onSave closes the sheet and this dialog with it.
+    if (series && draft.scope === "all" && !confirmed) return setAsking(true);
+    onSave(valid, series ? draft.scope : undefined, moving);
   };
 
   const submit = (event: FormEvent) => {
@@ -507,6 +512,14 @@ const TransactionForm = ({
             date={transaction.date}
             value={draft.scope}
             onChange={(scope) => set({ scope })}
+          />
+          <SeriesAllDialog
+            mode="edit"
+            position={series.position}
+            total={series.total}
+            open={asking}
+            onOpenChange={setAsking}
+            onConfirm={() => save(true)}
           />
           {amountField}
           {monthsField}
