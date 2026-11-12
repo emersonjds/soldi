@@ -99,7 +99,7 @@ pub async fn delete_transactions(
         (status = 201, body = Transaction, description = "The entry; with `repeat_months` or `installments`, the first of its series (parcela 1), the rest written in the same database transaction"),
         (status = 401, body = Problem, content_type = "application/problem+json"),
         (status = 404, body = Problem, content_type = "application/problem+json", description = "The category is missing, archived or another user's"),
-        (status = 422, body = Problem, content_type = "application/problem+json", description = "Amount not above zero or with more than two places, note over 500 characters, `card_id` on a non-`daily` entry or not one of the caller's unarchived cards, a kind other than the category's (`category_id`), `repeat_months` not 2 to 60, `installments` not 2 to 60, with `repeat_months`, or leaving a parcela at zero, a date outside 2000 to 2100, or a date before the opening date (`before-opening-date`)")))]
+        (status = 422, body = Problem, content_type = "application/problem+json", description = "Amount not above zero or with more than two places, note over 500 characters, `card_id` on a non-`daily` entry or not one of the caller's unarchived cards, a kind other than the category's (`category_id`), `repeat_months` not 2 to 60, `installments` not 2 to 60, with `repeat_months`, or leaving a parcela at zero, a date outside 2000 to 2100, a date before the opening date (`before-opening-date`), or `fatura-paid` when a spend on a card lands in an already paid fatura (D30b)")))]
 pub async fn create_transaction(
     State(state): State<AppState>,
     user: CurrentUser,
@@ -118,7 +118,7 @@ pub async fn create_transaction(
         (status = 400, body = Problem, content_type = "application/problem+json", description = "`scope` is not `this` or `following`"),
         (status = 401, body = Problem, content_type = "application/problem+json"),
         (status = 404, body = Problem, content_type = "application/problem+json", description = "The entry is missing or another user's, or the new category is missing, archived or another user's"),
-        (status = 422, body = Problem, content_type = "application/problem+json", description = "Same rules as create, on the entry after the change, `before-opening-date` included (an archived card it already carries stays allowed); with `repeat_months`, `repeat-not-allowed-on-bill-payment` or `repeat-not-allowed-on-cofrinho-withdrawal` on an entry outside a series, `validation` on `repeat_months` outside 2..60 or below this member's position, on `date` when the series would pass 2100; with `following` on a series member, `validation` on `date` when the new date leaves this entry's month (`must stay in this entry's month when the series moves`) or when two of the moved members share a month (`must not move a series with two entries in one month`); `archived-cofrinho` when the entry, or with `following` a later series member, is a deposit into or a resgate from a deleted cofrinho; nothing is written")))]
+        (status = 422, body = Problem, content_type = "application/problem+json", description = "Same rules as create, on the entry after the change, `before-opening-date` included (an archived card it already carries stays allowed); with `repeat_months`, `repeat-not-allowed-on-bill-payment` or `repeat-not-allowed-on-cofrinho-withdrawal` on an entry outside a series, `validation` on `repeat_months` outside 2..60 or below this member's position, on `date` when the series would pass 2100; with `following` on a series member, `validation` on `date` when the new date leaves this entry's month (`must stay in this entry's month when the series moves`) or when two of the moved members share a month (`must not move a series with two entries in one month`); `archived-cofrinho` when the entry, or with `following` a later series member, is a deposit into or a resgate from a deleted cofrinho; `fatura-paid` when the amount, date or card changes on a card spend whose fatura (or, with `following`, a later member's) is paid, or the change lands it in a paid fatura (D30b); nothing is written")))]
 pub async fn update_transaction(
     State(state): State<AppState>,
     user: CurrentUser,
@@ -140,7 +140,7 @@ pub async fn update_transaction(
         (status = 400, body = Problem, content_type = "application/problem+json", description = "`scope` is not `this` or `following`"),
         (status = 401, body = Problem, content_type = "application/problem+json"),
         (status = 404, body = Problem, content_type = "application/problem+json", description = "Missing or another user's"),
-        (status = 422, body = Problem, content_type = "application/problem+json", description = "`archived-cofrinho`: the entry, or with `following` a later series member, is a deposit into or a resgate from a deleted cofrinho; nothing is deleted")))]
+        (status = 422, body = Problem, content_type = "application/problem+json", description = "`archived-cofrinho`: the entry, or with `following` a later series member, is a deposit into or a resgate from a deleted cofrinho; `fatura-paid`: the entry, or with `following` a later series member, is a card spend of a paid fatura (D30b); nothing is deleted")))]
 pub async fn delete_transaction(
     State(state): State<AppState>,
     user: CurrentUser,

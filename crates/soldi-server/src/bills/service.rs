@@ -1,3 +1,4 @@
+use chrono::NaiveDate;
 use soldi_types::bills::{Bill, CreateBill, PayBill, UpdateBill};
 use soldi_types::categories::CategoryKind;
 use soldi_types::transactions::{CreateTransaction, Transaction};
@@ -7,7 +8,7 @@ use uuid::Uuid;
 use super::{domain, repo};
 use crate::error::AppError;
 use crate::extract::CurrentUser;
-use crate::months::domain::{month_end, parse_month};
+use crate::months::domain::{first_of, month_end, parse_month};
 use crate::transactions;
 
 pub async fn list(
@@ -53,6 +54,45 @@ async fn check_bill_kind(
     Ok(())
 }
 
+/// D28: a card never pays into `Economia` or a cofrinho.
+async fn check_card_category(
+    conn: &mut PgConnection,
+    user: &CurrentUser,
+    category_id: Uuid,
+) -> Result<(), AppError> {
+    if repo::is_savings_category(conn, user.id, category_id).await? {
+        return Err(AppError::invalid(
+            "category_id",
+            "a card never pays into Economia or a cofrinho",
+        ));
+    }
+    Ok(())
+}
+
+/// D30b: refuses when a spend on `card_id` dated one of `dates` would change a paid fatura.
+pub async fn check_fatura_open(
+    conn: &mut PgConnection,
+    user: &CurrentUser,
+    card_id: Option<Uuid>,
+    dates: &[NaiveDate],
+) -> Result<(), AppError> {
+    let Some(id) = card_id else {
+        return Ok(());
+    };
+    let Some(card) = repo::find_any_card(conn, user.id, id).await? else {
+        return Ok(());
+    };
+    let closing_day = card.closing_day.unwrap_or_default();
+    let months: Vec<NaiveDate> = dates
+        .iter()
+        .map(|date| first_of(domain::fatura_due(*date, closing_day, card.due_day)))
+        .collect();
+    if repo::paid_in(conn, user.id, card.id, &months).await? {
+        return Err(domain::fatura_paid());
+    }
+    Ok(())
+}
+
 /// R8 (SOL-21): with `transaction_id`, that entry becomes the new bill's payment, in the
 /// same database transaction.
 pub async fn create(
@@ -76,6 +116,9 @@ pub async fn create(
         transactions::domain::check_convertible(&entry)?;
     }
     check_category(&mut tx, user, input.category_id, "category_id").await?;
+    if input.closing_day.is_some() {
+        check_card_category(&mut tx, user, input.category_id).await?;
+    }
     let bill = repo::insert(&mut tx, user.id, &input).await?;
     if let Some(id) = transaction_id
         && !transactions::repo::link_bill(&mut tx, user.id, id, bill.id, bill.category_id).await?
@@ -122,6 +165,15 @@ pub async fn update(
     // A bill keeps an archived category until the user picks another one.
     if let Some(category_id) = patch.category_id.filter(|id| *id != current.category_id) {
         check_category(&mut conn, user, category_id, "category_id").await?;
+        if next.closing_day.is_some() {
+            check_card_category(&mut conn, user, category_id).await?;
+        }
+    }
+    if current.closing_day.is_some()
+        && next.closing_day != current.closing_day
+        && repo::paid_since(&mut conn, user.id, id, first_of(crate::today_sao_paulo())).await?
+    {
+        return Err(domain::fatura_paid());
     }
     let active = patch.active.unwrap_or(current.active);
     if active && !current.active {

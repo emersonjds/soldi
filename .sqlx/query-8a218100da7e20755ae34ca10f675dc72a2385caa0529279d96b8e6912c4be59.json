@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS (SELECT 1 FROM transactions\n           WHERE user_id = $1 AND recurring_bill_id = $2\n             AND date_trunc('month', date)::date = ANY($3)) AS \"exists!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "exists!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "DateArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "8a218100da7e20755ae34ca10f675dc72a2385caa0529279d96b8e6912c4be59"
+}

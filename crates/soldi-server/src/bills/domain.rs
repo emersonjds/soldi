@@ -72,6 +72,11 @@ pub fn fatura_due(on: NaiveDate, closing_day: i16, due_day: i16) -> NaiveDate {
     )
 }
 
+/// D30b: a paid fatura is frozen.
+pub fn fatura_paid() -> AppError {
+    AppError::rule("fatura-paid", "This fatura is already paid.")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

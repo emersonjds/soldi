@@ -200,6 +200,78 @@ pub async fn insert_all(
     Ok(())
 }
 
+/// Whether the bill has an entry dated in one of `months` (each a first day).
+pub async fn paid_in(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    id: Uuid,
+    months: &[chrono::NaiveDate],
+) -> Result<bool, sqlx::Error> {
+    sqlx::query_scalar!(
+        r#"SELECT EXISTS (SELECT 1 FROM transactions
+           WHERE user_id = $1 AND recurring_bill_id = $2
+             AND date_trunc('month', date)::date = ANY($3)) AS "exists!""#,
+        user_id,
+        id,
+        months
+    )
+    .fetch_one(&mut *conn)
+    .await
+}
+
+/// Whether the bill has an entry dated `from` or later.
+pub async fn paid_since(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    id: Uuid,
+    from: chrono::NaiveDate,
+) -> Result<bool, sqlx::Error> {
+    sqlx::query_scalar!(
+        r#"SELECT EXISTS (SELECT 1 FROM transactions
+           WHERE user_id = $1 AND recurring_bill_id = $2 AND date >= $3) AS "exists!""#,
+        user_id,
+        id,
+        from
+    )
+    .fetch_one(&mut *conn)
+    .await
+}
+
+/// `Economia` itself or one of its cofrinhos.
+pub async fn is_savings_category(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    id: Uuid,
+) -> Result<bool, sqlx::Error> {
+    sqlx::query_scalar!(
+        r#"SELECT EXISTS (SELECT 1 FROM categories c
+           LEFT JOIN categories p ON p.user_id = c.user_id AND p.id = c.parent_id
+           WHERE c.user_id = $1 AND c.id = $2 AND (c.is_savings OR COALESCE(p.is_savings, false)))
+           AS "exists!""#,
+        user_id,
+        id
+    )
+    .fetch_one(&mut *conn)
+    .await
+}
+
+/// A card of the user, archived or not (D28).
+pub async fn find_any_card(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    id: Uuid,
+) -> Result<Option<Bill>, sqlx::Error> {
+    sqlx::query_as!(
+        Bill,
+        "SELECT id, category_id, name, amount, due_day, active, closing_day FROM recurring_bills
+         WHERE user_id = $1 AND id = $2 AND closing_day IS NOT NULL",
+        user_id,
+        id
+    )
+    .fetch_optional(&mut *conn)
+    .await
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

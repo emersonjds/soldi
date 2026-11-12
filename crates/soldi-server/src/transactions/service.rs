@@ -7,8 +7,10 @@ use sqlx::{PgConnection, PgPool};
 use uuid::Uuid;
 
 use super::{domain, repo};
+use crate::bills::service::check_fatura_open;
 use crate::error::AppError;
 use crate::extract::CurrentUser;
+use crate::months::domain::first_of;
 use crate::{categories, months, settings};
 
 pub async fn list(
@@ -130,6 +132,12 @@ pub async fn create(
     }
     check_opening(&mut tx, user, input.date).await?;
     let count = input.repeat_months.or(input.installments);
+    let copies = match count {
+        Some(count) => domain::repeat_dates(input.date, count)?,
+        None => vec![],
+    };
+    let dates = [&[input.date], copies.as_slice()].concat();
+    check_fatura_open(&mut tx, user, input.card_id, &dates).await?;
     let amounts = match input.installments {
         Some(parcelas) => domain::installment_amounts(input.amount, parcelas),
         None => vec![input.amount; usize::try_from(count.unwrap_or(1)).unwrap_or(1)],
@@ -142,13 +150,12 @@ pub async fn create(
     let id = repo::insert(&mut tx, user.id, &first, None, None, series_id).await?;
     let mut series = None;
     if let (Some(count), Some(series_id)) = (count, series_id) {
-        let dates = domain::repeat_dates(first.date, count)?;
-        repo::insert_copies(&mut tx, user.id, &first, series_id, &dates, &amounts[1..]).await?;
+        repo::insert_copies(&mut tx, user.id, &first, series_id, &copies, &amounts[1..]).await?;
         series = Some(TransactionSeries {
             id: series_id,
             position: 1,
             total: count.into(),
-            last_date: dates.last().copied().unwrap_or(first.date),
+            last_date: copies.last().copied().unwrap_or(first.date),
         });
     }
     tx.commit().await?;
@@ -207,6 +214,22 @@ pub async fn update(
         domain::check_day_move(current.date, next.date)?;
     }
     check_opening(&mut tx, user, next.date).await?;
+    if next.amount != current.amount || next.date != current.date || next.card_id != current.card_id
+    {
+        let mut dates = vec![current.date];
+        if let Some(series) = current.series.as_ref().filter(|_| spreads) {
+            dates = repo::members_from(&mut tx, user.id, series.id, first_of(current.date))
+                .await?
+                .into_iter()
+                .map(|(_, date)| date)
+                .collect();
+        }
+        check_fatura_open(&mut tx, user, current.card_id, &dates).await?;
+        if let Some(first) = dates.first_mut() {
+            *first = next.date;
+        }
+        check_fatura_open(&mut tx, user, next.card_id, &dates).await?;
+    }
     if !repo::update(&mut tx, user.id, id, &next)
         .await
         .map_err(paid_once)?
@@ -238,6 +261,7 @@ pub async fn update(
                 return Err(domain::already_repeated());
             }
             let dates = domain::repeat_dates(next.date, months)?;
+            check_fatura_open(&mut tx, user, next.card_id, &dates).await?;
             let amounts = vec![next.amount; dates.len()];
             repo::insert_copies(&mut tx, user.id, &next, series_id, &dates, &amounts).await?;
         }
@@ -277,6 +301,7 @@ async fn resize(
         let day = domain::series_day(last, end.get(1).copied());
         let count = u32::try_from(i64::from(months) - total).unwrap_or(0);
         let added = domain::following_dates(day, last, count)?;
+        check_fatura_open(conn, user, next.card_id, &added).await?;
         let amounts = vec![next.amount; added.len()];
         repo::insert_copies(conn, user.id, next, series_id, &added, &amounts).await?;
     }
@@ -302,6 +327,15 @@ pub async fn delete(
             .ok_or(AppError::NotFound)?;
     }
     check_cofrinho_active(&mut tx, user, &current, scope).await?;
+    let mut dates = vec![current.date];
+    if let (Scope::Following, Some(series)) = (scope, &current.series) {
+        dates = repo::members_from(&mut tx, user.id, series.id, first_of(current.date))
+            .await?
+            .into_iter()
+            .map(|(_, date)| date)
+            .collect();
+    }
+    check_fatura_open(&mut tx, user, current.card_id, &dates).await?;
     match (scope, current.series) {
         (Scope::Following, Some(series)) => {
             repo::delete_following(&mut tx, user.id, series.id, current.date).await?;

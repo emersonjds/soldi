@@ -698,3 +698,141 @@ async fn d28_an_entry_never_becomes_a_card(pool: PgPool) {
     assert_eq!(problem["errors"][0]["field"], "transaction_id");
     assert_eq!(ana.get("/api/bills").await.1, json!([]));
 }
+
+fn entry_uri(entry: &serde_json::Value) -> String {
+    format!("/api/transactions/{}", entry["id"].as_str().unwrap())
+}
+
+#[sqlx::test]
+async fn d30b_a_paid_fatura_is_frozen_and_an_unpaid_one_still_changes(pool: PgPool) {
+    let ana = TestApp::signed_in(pool, "ana@example.com").await;
+    ana.open_at("1000", "2026-10-01").await;
+    let card = create(&ana, porto(&ana.category_id("Cartão").await)).await;
+    let other = create(
+        &ana,
+        json!({ "name": "Nubank", "due_day": 10, "closing_day": 3,
+                "category_id": ana.category_id("Cartão").await }),
+    )
+    .await;
+    let mercado = ana.category_id("Mercado").await;
+    let spend = |date: &str, card: &serde_json::Value| {
+        json!({ "date": date, "amount": "50", "kind": "daily",
+                "category_id": mercado, "card_id": card["id"] })
+    };
+    let paid = entry(&ana, spend("2026-11-02", &card)).await;
+    let open = entry(&ana, spend("2026-11-05", &card)).await;
+    let plain = entry(
+        &ana,
+        json!({ "date": "2026-11-02", "amount": "10", "kind": "daily", "category_id": mercado }),
+    )
+    .await;
+    let (status, payment) = ana
+        .post(
+            &format!("{}?month=2026-11", pay_uri(&card)),
+            json!({ "date": "2026-11-10", "amount": "50" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{payment}");
+    let (status, older) = ana
+        .post(
+            &format!("{}?month=2026-10", pay_uri(&other)),
+            json!({ "date": "2026-10-10", "amount": "5" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{older}");
+
+    for (uri, body) in [
+        (entry_uri(&paid), json!({ "amount": "60" })),
+        (entry_uri(&paid), json!({ "date": "2026-11-01" })),
+        (entry_uri(&paid), json!({ "card_id": null })),
+        (entry_uri(&paid), json!({ "card_id": other["id"] })),
+        (entry_uri(&open), json!({ "date": "2026-11-02" })),
+        (entry_uri(&plain), json!({ "card_id": card["id"] })),
+    ] {
+        let (status, problem) = ana.patch(&uri, body.clone()).await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{uri} {body}");
+        assert_eq!(problem["type"], "urn:soldi:error:fatura-paid", "{body}");
+    }
+    let (status, problem) = ana
+        .post("/api/transactions", spend("2026-11-01", &card))
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+    assert_eq!(problem["type"], "urn:soldi:error:fatura-paid");
+    let (status, problem) = ana.delete(&entry_uri(&paid)).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+    assert_eq!(problem["type"], "urn:soldi:error:fatura-paid");
+
+    for (uri, body) in [
+        (entry_uri(&paid), json!({ "note": "feira" })),
+        (entry_uri(&open), json!({ "amount": "45" })),
+        (entry_uri(&plain), json!({ "card_id": other["id"] })),
+    ] {
+        let (status, changed) = ana.patch(&uri, body.clone()).await;
+        assert_eq!(status, StatusCode::OK, "{uri} {body} {changed}");
+    }
+    entry(&ana, spend("2026-11-05", &card)).await;
+    assert_eq!(
+        ana.delete(&entry_uri(&open)).await.0,
+        StatusCode::NO_CONTENT
+    );
+}
+
+#[sqlx::test]
+async fn d28_a_card_never_pays_into_economia(pool: PgPool) {
+    let ana = TestApp::signed_in(pool, "ana@example.com").await;
+    let economia = ana.category_id("Economia").await;
+
+    let (status, problem) = ana.post("/api/bills", porto(&economia)).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+    assert_eq!(problem["errors"][0]["field"], "category_id");
+    let card = create(&ana, porto(&ana.category_id("Cartão").await)).await;
+    let (status, problem) = ana
+        .patch(&bill_uri(&card), json!({ "category_id": economia }))
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+    assert_eq!(problem["errors"][0]["field"], "category_id");
+    let saving = create(
+        &ana,
+        json!({ "name": "Reserva", "amount": "100", "due_day": 5, "category_id": economia }),
+    )
+    .await;
+    assert_eq!(saving["category_id"], economia.as_str());
+}
+
+#[sqlx::test]
+async fn d30b_a_card_paid_this_month_or_later_keeps_its_closing_day(pool: PgPool) {
+    use chrono::{Datelike, Months};
+    let ana = TestApp::signed_in(pool, "ana@example.com").await;
+    let today = soldi_server::today_sao_paulo();
+    let last_month = today.with_day(1).unwrap() - Months::new(1);
+    ana.open_at("1000", &last_month.to_string()).await;
+    let cards = ana.category_id("Cartão").await;
+    let paid = create(&ana, porto(&cards)).await;
+    let earlier = create(&ana, porto(&cards)).await;
+    for (card, on) in [(&paid, today), (&earlier, last_month)] {
+        let (status, payment) = ana
+            .post(
+                &format!("{}?month={}", pay_uri(card), on.format("%Y-%m")),
+                json!({ "date": on.to_string(), "amount": "5" }),
+            )
+            .await;
+        assert_eq!(status, StatusCode::CREATED, "{payment}");
+    }
+
+    let (status, problem) = ana
+        .patch(&bill_uri(&paid), json!({ "closing_day": 28 }))
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+    assert_eq!(problem["type"], "urn:soldi:error:fatura-paid");
+    let (status, moved) = ana
+        .patch(
+            &bill_uri(&paid),
+            json!({ "name": "Porto Seguro", "due_day": 12 }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{moved}");
+    let (status, moved) = ana
+        .patch(&bill_uri(&earlier), json!({ "closing_day": 28 }))
+        .await;
+    assert_eq!(status, StatusCode::OK, "{moved}");
+}

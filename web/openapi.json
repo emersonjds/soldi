@@ -405,7 +405,7 @@
             }
           },
           "422": {
-            "description": "Name not 1 to 100 characters, amount not above zero or with more than two places, missing on a conta fixa or present on a card (`amount`), `closing_day` not 1 to 31, due day not 1 to 31, `category_id` not one of the caller's active bill categories, or `cannot-become-bill` when the entry is not a `bill` entry, already a bill's payment, a resgate or a series member",
+            "description": "Name not 1 to 100 characters, amount not above zero or with more than two places, missing on a conta fixa or present on a card (`amount`), `closing_day` not 1 to 31, due day not 1 to 31, `category_id` not one of the caller's active bill categories or, on a card, `Economia` or a cofrinho, or `cannot-become-bill` when the entry is not a `bill` entry, already a bill's payment, a resgate or a series member",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -518,7 +518,7 @@
             }
           },
           "422": {
-            "description": "Same rules as create, on the bill after the change; `closing_day` on a conta fixa, `active: false` on a card",
+            "description": "Same rules as create, on the bill after the change; `closing_day` on a conta fixa, `active: false` on a card; `fatura-paid` when a card's `closing_day` changes while a fatura from this month on is paid (D30b)",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -1800,7 +1800,7 @@
             }
           },
           "422": {
-            "description": "Amount not above zero or with more than two places, note over 500 characters, `card_id` on a non-`daily` entry or not one of the caller's unarchived cards, a kind other than the category's (`category_id`), `repeat_months` not 2 to 60, `installments` not 2 to 60, with `repeat_months`, or leaving a parcela at zero, a date outside 2000 to 2100, or a date before the opening date (`before-opening-date`)",
+            "description": "Amount not above zero or with more than two places, note over 500 characters, `card_id` on a non-`daily` entry or not one of the caller's unarchived cards, a kind other than the category's (`category_id`), `repeat_months` not 2 to 60, `installments` not 2 to 60, with `repeat_months`, or leaving a parcela at zero, a date outside 2000 to 2100, a date before the opening date (`before-opening-date`), or `fatura-paid` when a spend on a card lands in an already paid fatura (D30b)",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -1973,7 +1973,7 @@
             }
           },
           "422": {
-            "description": "`archived-cofrinho`: the entry, or with `following` a later series member, is a deposit into or a resgate from a deleted cofrinho; nothing is deleted",
+            "description": "`archived-cofrinho`: the entry, or with `following` a later series member, is a deposit into or a resgate from a deleted cofrinho; `fatura-paid`: the entry, or with `following` a later series member, is a card spend of a paid fatura (D30b); nothing is deleted",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -2061,7 +2061,7 @@
             }
           },
           "422": {
-            "description": "Same rules as create, on the entry after the change, `before-opening-date` included (an archived card it already carries stays allowed); with `repeat_months`, `repeat-not-allowed-on-bill-payment` or `repeat-not-allowed-on-cofrinho-withdrawal` on an entry outside a series, `validation` on `repeat_months` outside 2..60 or below this member's position, on `date` when the series would pass 2100; with `following` on a series member, `validation` on `date` when the new date leaves this entry's month (`must stay in this entry's month when the series moves`) or when two of the moved members share a month (`must not move a series with two entries in one month`); `archived-cofrinho` when the entry, or with `following` a later series member, is a deposit into or a resgate from a deleted cofrinho; nothing is written",
+            "description": "Same rules as create, on the entry after the change, `before-opening-date` included (an archived card it already carries stays allowed); with `repeat_months`, `repeat-not-allowed-on-bill-payment` or `repeat-not-allowed-on-cofrinho-withdrawal` on an entry outside a series, `validation` on `repeat_months` outside 2..60 or below this member's position, on `date` when the series would pass 2100; with `following` on a series member, `validation` on `date` when the new date leaves this entry's month (`must stay in this entry's month when the series moves`) or when two of the moved members share a month (`must not move a series with two entries in one month`); `archived-cofrinho` when the entry, or with `following` a later series member, is a deposit into or a resgate from a deleted cofrinho; `fatura-paid` when the amount, date or card changes on a card spend whose fatura (or, with `following`, a later member's) is paid, or the change lands it in a paid fatura (D30b); nothing is written",
             "content": {
               "application/problem+json": {
                 "schema": {
