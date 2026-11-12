@@ -1,5 +1,5 @@
 import { act, waitFor } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { renderHookWithQuery } from "@/test/render";
 import { COFRINHOS, MONTH, MOVEMENTS, problem, RESERVA, stubApi } from "@/test/stub-api";
@@ -15,15 +15,31 @@ describe("useCofrinhos", () => {
 
     await waitFor(() => expect(result.current.data).toEqual(COFRINHOS));
   });
+
+  it("keys this month's cofrinhos the same with or without the month, asking for it only when given", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 10, 5, 12));
+    const requests = stubApi({ "GET /api/cofrinhos": { status: 200, body: COFRINHOS } });
+    const { client, result } = renderHookWithQuery(() => useCofrinhos());
+    await waitFor(() => expect(result.current.data).toEqual(COFRINHOS));
+
+    expect(client.getQueryData(["cofrinhos", "2026-11"])).toEqual(COFRINHOS);
+    expect(new URL(requests[0].url).searchParams.has("month")).toBe(false);
+    const given = renderHookWithQuery(() => useCofrinhos("2026-11"), client);
+    expect(given.result.current.data).toEqual(COFRINHOS);
+    await waitFor(() => expect(requests).toHaveLength(2));
+    expect(new URL(requests[1].url).searchParams.get("month")).toBe("2026-11");
+    vi.useRealTimers();
+  });
 });
 
 describe("useMovements", () => {
-  it("lists one cofrinho's deposits and resgates, fifty at most", async () => {
+  it("lists one cofrinho's deposits and resgates, as many as the API gives", async () => {
     const requests = stubApi({ [`GET /api/cofrinhos/${RESERVA.id}/movements`]: { status: 200, body: MOVEMENTS } });
     const { result } = renderHookWithQuery(() => useMovements(RESERVA.id));
 
     await waitFor(() => expect(result.current.data).toEqual(MOVEMENTS));
-    expect(new URL(requests[0].url).searchParams.get("limit")).toBe("50");
+    expect(new URL(requests[0].url).searchParams.get("limit")).toBe("200");
   });
 });
 

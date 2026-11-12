@@ -247,7 +247,19 @@ describe("AppShell", () => {
     expect(within(screen.getByRole("main")).queryByRole("group", { name: "Mês" })).not.toBeInTheDocument();
   });
 
-  it.each(["/economia", "/ajustes", "/ajustes/contas", "/ajustes/categorias", "/ajustes/conta"])(
+  it("shows the month switcher on Economia in the top bar and, below 1024 px, in a card under the app bar", () => {
+    setPathname("/economia");
+    renderWithQuery(<AppShell>conteúdo</AppShell>);
+
+    expect(within(screen.getByRole("banner")).getByRole("group", { name: "Mês" }).parentElement).toHaveClass(
+      "hidden",
+      "lg:block",
+    );
+    const card = within(screen.getByRole("main")).getByRole("group", { name: "Mês" }).parentElement;
+    expect(card).toHaveClass("rounded-2xl", "bg-card", "lg:hidden");
+  });
+
+  it.each(["/ajustes", "/ajustes/contas", "/ajustes/categorias", "/ajustes/conta"])(
     "hides the month switcher on %s, a page that does not read the month",
     (path) => {
       setPathname(path);

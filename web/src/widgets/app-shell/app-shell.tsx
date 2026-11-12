@@ -78,7 +78,10 @@ const PAGE_NAMES = [
 ] as const;
 
 /** The pages that read `?m=`; the switcher shows only there. */
-const MONTH_PAGES = ["/mes", "/para-onde-vai"];
+const MONTH_PAGES = ["/mes", "/para-onde-vai", "/economia"];
+
+/** Month pages whose own hero carries the switcher below 1024 px; the rest get it in a card under the app bar. */
+const HERO_SWITCHER_PAGES = ["/mes", "/para-onde-vai"];
 
 /** The month of `?m=`, moved in place; `hero` on Mês's indigo hero. */
 export const ShellMonthSwitcher = ({ pathname, tone = "surface" }: { pathname: string; tone?: "hero" | "surface" }) => {
@@ -151,6 +154,7 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
     .sort((a, b) => b.href.length - a.href.length)[0];
   const pageName = PAGE_NAMES.find(([href]) => isAt(href))?.[1];
   const readsMonth = MONTH_PAGES.some(isAt);
+  const switcherCard = readsMonth && !HERO_SWITCHER_PAGES.some(isAt);
 
   return (
     <SettingsCurrency>
@@ -248,6 +252,13 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
             </Link>
           </header>
           <main className="mx-auto w-full max-w-6xl flex-1 px-4 pt-4 pb-(--tabbar-space) lg:px-6 lg:pt-6 lg:pb-10">
+            {switcherCard && (
+              <Suspense>
+                <div className="mb-4 rounded-2xl bg-card p-2 shadow-sm lg:hidden">
+                  <ShellMonthSwitcher pathname={pathname} />
+                </div>
+              </Suspense>
+            )}
             {children}
           </main>
         </div>

@@ -21,15 +21,25 @@ pub fn router() -> OpenApiRouter<AppState> {
         .routes(routes!(list_movements))
 }
 
+#[derive(Deserialize)]
+pub struct ListQuery {
+    month: Option<String>,
+}
+
 #[utoipa::path(get, path = "/api/cofrinhos", tag = "cofrinhos",
+    params(("month" = Option<String>, Query, description = "The month of `saved_this_month`, `YYYY-MM`; this month in São Paulo when absent", example = "2026-11")),
     responses(
-        (status = 200, body = Cofrinhos, description = "Every cofrinho with its balance and goal; this month in São Paulo"),
-        (status = 401, body = Problem, content_type = "application/problem+json")))]
+        (status = 200, body = Cofrinhos, description = "Every cofrinho with its balance, goal and next repeated deposit"),
+        (status = 401, body = Problem, content_type = "application/problem+json"),
+        (status = 422, body = Problem, content_type = "application/problem+json", description = "`month` is not `YYYY-MM`")))]
 pub async fn list_cofrinhos(
     State(state): State<AppState>,
     user: CurrentUser,
+    QueryParams(query): QueryParams<ListQuery>,
 ) -> Result<Json<Cofrinhos>, AppError> {
-    Ok(Json(service::list(&state.pool, &user).await?))
+    Ok(Json(
+        service::list(&state.pool, &user, query.month.as_deref()).await?,
+    ))
 }
 
 #[utoipa::path(post, path = "/api/cofrinhos/{category_id}/withdraw", tag = "cofrinhos", request_body = Withdraw,
@@ -64,7 +74,7 @@ fn fifty() -> i64 {
         ("category_id" = Uuid, Path, description = "`Economia` or one of its subcategories"),
         ("limit" = Option<i64>, Query, description = "1 to 200; 50 when absent", minimum = 1, maximum = 200)),
     responses(
-        (status = 200, body = Vec<Transaction>, description = "Its entries and resgates, newest date first, then newest entry first"),
+        (status = 200, body = Vec<Transaction>, description = "Its entries and resgates, `Economia`'s with its subcategories', newest date first, then newest entry first"),
         (status = 400, body = Problem, content_type = "application/problem+json", description = "`limit` is not a number"),
         (status = 401, body = Problem, content_type = "application/problem+json"),
         (status = 404, body = Problem, content_type = "application/problem+json", description = "Missing, archived or another user's"),
