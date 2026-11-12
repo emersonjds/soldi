@@ -133,6 +133,34 @@ pub fn growth_dates(
     }
 }
 
+/// D36: open series are written through the forecast horizon, or `viewed` when later, never past
+/// 60 months from today nor 2100.
+pub fn open_until(today: NaiveDate, viewed: NaiveDate) -> NaiveDate {
+    use crate::months::domain::horizon_end;
+    let cap = horizon_end(today.checked_add_months(Months::new(48)).unwrap_or(today));
+    let until = horizon_end(today).max(viewed).min(cap);
+    NaiveDate::from_ymd_opt(2100, 12, 31).map_or(until, |end| until.min(end))
+}
+
+/// D36: the members an open series still needs after `end` (its last members, last first) to reach `until`.
+pub fn open_dates(
+    every: RepeatEvery,
+    end: &[NaiveDate],
+    until: NaiveDate,
+) -> Result<Vec<NaiveDate>, AppError> {
+    use crate::months::domain::month_index;
+    let Some(&last) = end.first() else {
+        return Ok(Vec::new());
+    };
+    let steps = match every {
+        RepeatEvery::Month => month_index(until) - month_index(last),
+        RepeatEvery::Week => i32::try_from((until - last).num_days() / 7).unwrap_or(0),
+        RepeatEvery::Year => until.year() - last.year(),
+    };
+    let dates = growth_dates(every, end, u32::try_from(steps).unwrap_or(0))?;
+    Ok(dates.into_iter().filter(|date| *date <= until).collect())
+}
+
 /// M3 for a yearly series: a last member clamped on its month's last day takes the largest day of
 /// the earlier members in that month, so 28 February returns to 29 in a leap year.
 pub fn yearly_day(last: NaiveDate, earlier: &[NaiveDate]) -> u32 {
@@ -918,6 +946,40 @@ mod tests {
         assert_eq!(
             field(check_kind(CategoryKind::Bill, &market)),
             "category_id"
+        );
+    }
+
+    #[test]
+    fn d36_open_series_reach_the_horizon_or_the_viewed_month_within_60_months() {
+        let today = date("2026-11-12");
+        assert_eq!(open_until(today, date("2026-11-30")), date("2027-10-31"));
+        assert_eq!(open_until(today, date("2028-03-31")), date("2028-03-31"));
+        assert_eq!(open_until(today, date("2040-01-31")), date("2031-10-31"));
+        assert_eq!(
+            open_until(date("2099-06-01"), date("2099-06-30")),
+            date("2100-05-31")
+        );
+    }
+
+    #[test]
+    fn d36_open_dates_fill_up_to_until_by_step() {
+        let until = date("2027-10-31");
+        let none: Vec<NaiveDate> = vec![];
+        assert_eq!(
+            open_dates(RepeatEvery::Month, &[date("2027-08-15")], until).unwrap(),
+            [date("2027-09-15"), date("2027-10-15")]
+        );
+        assert_eq!(
+            open_dates(RepeatEvery::Month, &[date("2027-10-15")], until).unwrap(),
+            none
+        );
+        assert_eq!(
+            open_dates(RepeatEvery::Week, &[date("2027-10-15")], until).unwrap(),
+            [date("2027-10-22"), date("2027-10-29")]
+        );
+        assert_eq!(
+            open_dates(RepeatEvery::Year, &[date("2026-12-01")], until).unwrap(),
+            none
         );
     }
 }

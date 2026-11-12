@@ -103,6 +103,11 @@ pub fn first_of(date: NaiveDate) -> NaiveDate {
     date.with_day(1).unwrap_or(date)
 }
 
+/// Months since year 0; two of them subtract to their distance.
+pub fn month_index(date: NaiveDate) -> i32 {
+    date.year() * 12 + i32::try_from(date.month0()).unwrap_or(0)
+}
+
 /// (card id, first day of the due month) → the fatura's sum (D28).
 pub type Faturas = HashMap<(Uuid, NaiveDate), Decimal>;
 

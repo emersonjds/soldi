@@ -2,7 +2,7 @@ use chrono::{Datelike, Months, NaiveDate};
 use soldi_types::bills::CreateBill;
 
 use crate::error::{AppError, reject_nul};
-use crate::months::domain::first_of;
+use crate::months::domain::{first_of, month_index};
 use crate::settings::domain::check_money;
 
 /// The bill with its name trimmed; error fields start with `prefix` (`"bills[2]."`). D28: a
@@ -75,6 +75,24 @@ pub fn fatura_due(on: NaiveDate, closing_day: i16, due_day: i16) -> NaiveDate {
 /// D30b: a paid fatura is frozen.
 pub fn fatura_paid() -> AppError {
     AppError::rule("fatura-paid", "This fatura is already paid.")
+}
+
+/// D35: the parcela `month` holds when parcela `installments` falls in `last_month`.
+pub fn installment_of(month: NaiveDate, last_month: NaiveDate, installments: i16) -> Option<i16> {
+    let k = i32::from(installments) - (month_index(last_month) - month_index(month));
+    i16::try_from(k)
+        .ok()
+        .filter(|k| (1..=installments).contains(k))
+}
+
+/// D35: Parar ends after this month, or after a month already paid ahead.
+pub fn stop_month(today: NaiveDate, last_paid: Option<NaiveDate>) -> NaiveDate {
+    let this = first_of(today);
+    last_paid.map_or(this, |paid| this.max(first_of(paid)))
+}
+
+pub fn bill_ended() -> AppError {
+    AppError::rule("bill-ended", "This bill ended before that month.")
 }
 
 #[cfg(test)]
@@ -184,5 +202,32 @@ mod tests {
                 "{on} {closing} {due}"
             );
         }
+    }
+
+    fn d(text: &str) -> NaiveDate {
+        text.parse().unwrap()
+    }
+
+    #[test]
+    fn d35_a_parcela_counts_back_from_the_last_month() {
+        let last = d("2027-01-01");
+        assert_eq!(installment_of(d("2027-01-01"), last, 6), Some(6));
+        assert_eq!(installment_of(d("2026-12-01"), last, 6), Some(5));
+        assert_eq!(installment_of(d("2026-08-01"), last, 6), Some(1));
+        assert_eq!(installment_of(d("2026-07-01"), last, 6), None);
+        assert_eq!(installment_of(d("2027-02-01"), last, 6), None);
+    }
+
+    #[test]
+    fn d35_parar_keeps_this_month_or_a_month_paid_ahead() {
+        assert_eq!(stop_month(d("2026-11-12"), None), d("2026-11-01"));
+        assert_eq!(
+            stop_month(d("2026-11-12"), Some(d("2026-10-05"))),
+            d("2026-11-01")
+        );
+        assert_eq!(
+            stop_month(d("2026-11-12"), Some(d("2026-12-03"))),
+            d("2026-12-01")
+        );
     }
 }
