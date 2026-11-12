@@ -44,7 +44,7 @@ pub async fn create(
     let conn = &mut *tx;
     let parent = match input.parent_id {
         Some(parent_id) => Some(
-            repo::find_active_shared(conn, user.id, parent_id)
+            repo::find_active_locked(conn, user.id, parent_id)
                 .await?
                 .ok_or(AppError::NotFound)?,
         ),
@@ -108,7 +108,7 @@ pub async fn update(
     }
     let parent_id = input.parent_id.unwrap_or(category.parent_id);
     let parent = match parent_id {
-        Some(parent_id) => repo::find_active_shared(conn, user.id, parent_id).await?,
+        Some(parent_id) => repo::find_active_locked(conn, user.id, parent_id).await?,
         None => None,
     };
     let color = match (&parent, parent_id) {
@@ -150,12 +150,14 @@ pub async fn update(
 
 /// D26: a group that shows in a kind where its color is taken moves to the lowest token free
 /// in every kind it shows in, or keeps its color when none is.
+// ponytail: cross-kind uniqueness lives here only (`categories_top_color_idx` is per kind); two
+// concurrent writes in different kinds can share a color. Upgrade: a per-user advisory lock.
 pub async fn fit_group_color(
     conn: &mut PgConnection,
     user: &CurrentUser,
     parent_id: Uuid,
 ) -> Result<(), AppError> {
-    let parent = repo::find_active_shared(conn, user.id, parent_id)
+    let parent = repo::find_active_locked(conn, user.id, parent_id)
         .await?
         .ok_or(AppError::NotFound)?;
     let kinds = repo::group_kinds(conn, user.id, parent_id).await?;

@@ -193,7 +193,10 @@ pub fn check_parent(
     let same_side = (parent.kind == CategoryKind::Income) == (kind == CategoryKind::Income);
     let cofrinho_ok = !parent.is_savings || kind == CategoryKind::Bill;
     if !same_side || !cofrinho_ok {
-        return Err(AppError::invalid("parent_id", "must be of the same kind"));
+        return Err(AppError::invalid(
+            "parent_id",
+            "must be on the same side (income or outflow), and only a Saída goes under Economia",
+        ));
     }
     if id == Some(parent.id) {
         return Err(AppError::invalid("parent_id", "must be another category"));

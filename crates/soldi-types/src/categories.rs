@@ -76,8 +76,10 @@ pub struct CreateCategory {
 
 /// Absent fields stay as they are; the kind never changes; `"parent_id": null` makes it top-level,
 /// with `color` or the lowest token free in the kind. For a subcategory `color` is validated, then
-/// ignored: it wears its parent's; a parent's new color reaches its subcategories. `null` clears `target` or
-/// `deadline`, which only a subcategory of `Economia` may set. Leaving `Economia` clears both.
+/// ignored: it wears its parent's; a parent's new color reaches its subcategories. A move under a
+/// group can recolor that group and its subcategories to a color free in every kind it shows in.
+/// `null` clears `target` or `deadline`, which only a subcategory of `Economia` may set. Leaving
+/// `Economia` clears both.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct UpdateCategory {

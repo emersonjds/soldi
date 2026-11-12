@@ -712,7 +712,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Active categories, flat: income, bills, then daily; within a kind by parent name, each parent followed by its subcategories by name",
+            "description": "Active categories, flat: income, bills, then daily; within a kind by parent name, each parent followed by its subcategories by name; a subcategory of another kind than its parent sits in its own kind's section",
             "content": {
               "application/json": {
                 "schema": {
@@ -800,7 +800,7 @@
             }
           },
           "422": {
-            "description": "A bad field, a parent of another kind, `nested-subcategory` when the parent is a subcategory, `savings-category` under `Resgate`, `not-a-cofrinho` for a target or deadline outside `Economia`, `color-taken` when another active top-level category of the kind has the color, or `palette-full` when no color is given and all 24 are taken in the kind",
+            "description": "A bad field, a parent on the other side (income vs outflow) or a non-bill under `Economia`, `nested-subcategory` when the parent is a subcategory, `savings-category` under `Resgate`, `not-a-cofrinho` for a target or deadline outside `Economia`, `color-taken` when the color is taken in any kind the group shows in, or `palette-full` when no color is given and all 24 are taken in the kind",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -932,7 +932,7 @@
             }
           },
           "422": {
-            "description": "A bad field, a parent of another kind or itself, `nested-subcategory` when the parent is a subcategory or this category has subcategories, `savings-category` when moving `Economia` or `Resgate` or under `Resgate`, `not-a-cofrinho` for a target or deadline outside `Economia`, `color-taken` when another active top-level category of the kind has the color, or `palette-full` when moving to top-level without a color and all 24 are taken in the kind",
+            "description": "A bad field, a parent on the other side (income vs outflow) or a non-bill under `Economia` or itself, `nested-subcategory` when the parent is a subcategory or this category has subcategories, `savings-category` when moving `Economia` or `Resgate` or under `Resgate`, `not-a-cofrinho` for a target or deadline outside `Economia`, `color-taken` when the color is taken in any kind the group shows in, or `palette-full` when moving to top-level without a color and all 24 are taken in the kind",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -3354,7 +3354,7 @@
       },
       "UpdateCategory": {
         "type": "object",
-        "description": "Absent fields stay as they are; the kind never changes; `\"parent_id\": null` makes it top-level,\nwith `color` or the lowest token free in the kind. For a subcategory `color` is validated, then\nignored: it wears its parent's; a parent's new color reaches its subcategories. `null` clears `target` or\n`deadline`, which only a subcategory of `Economia` may set. Leaving `Economia` clears both.",
+        "description": "Absent fields stay as they are; the kind never changes; `\"parent_id\": null` makes it top-level,\nwith `color` or the lowest token free in the kind. For a subcategory `color` is validated, then\nignored: it wears its parent's; a parent's new color reaches its subcategories. A move under a\ngroup can recolor that group and its subcategories to a color free in every kind it shows in.\n`null` clears `target` or `deadline`, which only a subcategory of `Economia` may set. Leaving\n`Economia` clears both.",
         "properties": {
           "color": {
             "type": [

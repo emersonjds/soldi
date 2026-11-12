@@ -845,6 +845,7 @@ async fn a_mixed_groups_color_is_taken_in_every_kind_it_shows_in(pool: PgPool) {
 async fn a_daily_category_moves_under_a_bill_group_which_takes_a_color_free_in_both(pool: PgPool) {
     let user = TestApp::signed_in(pool, "ana@example.com").await;
     let veiculo = veiculo(&user, "cat-15").await;
+    create_child(&user, "Parcela", "bill", &veiculo).await;
     let combustivel = user.category_id("Combustível").await;
 
     let (status, moved) = user
@@ -858,4 +859,61 @@ async fn a_daily_category_moves_under_a_bill_group_which_takes_a_color_free_in_b
     assert_eq!(moved["parent_id"], veiculo.as_str());
     assert_eq!(moved["color"], "cat-16");
     assert_eq!(color_of(&user, "Veículo").await, "cat-16");
+    assert_eq!(color_of(&user, "Parcela").await, "cat-16");
+}
+
+#[sqlx::test]
+async fn a_move_stays_on_its_side_and_only_a_bill_goes_under_economia(pool: PgPool) {
+    let user = TestApp::signed_in(pool, "ana@example.com").await;
+    let casa = user.category_id("Casa").await;
+    let lazer = user.category_id("Lazer").await;
+    let salario = user.category_id("Salário").await;
+    let economia = user.category_id("Economia").await;
+
+    for (id, parent) in [(&salario, &casa), (&lazer, &salario), (&lazer, &economia)] {
+        let (status, problem) = user
+            .patch(
+                &format!("/api/categories/{id}"),
+                json!({ "parent_id": parent }),
+            )
+            .await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+        assert_eq!(problem["errors"][0]["field"], "parent_id", "{problem}");
+    }
+}
+
+#[sqlx::test]
+async fn a_subcategory_moving_out_no_longer_shows_its_old_group_in_its_kind(pool: PgPool) {
+    let user = TestApp::signed_in(pool, "ana@example.com").await;
+    let veiculo = veiculo(&user, "cat-16").await;
+    let (_, gasolina) = create_child(&user, "Gasolina", "daily", &veiculo).await;
+
+    let (status, moved) = user
+        .patch(
+            &format!("/api/categories/{}", gasolina["id"].as_str().unwrap()),
+            json!({ "parent_id": null, "color": "cat-16" }),
+        )
+        .await;
+
+    assert_eq!(status, StatusCode::OK, "{moved}");
+    assert_eq!(moved["color"], "cat-16");
+    assert_eq!(color_of(&user, "Veículo").await, "cat-16");
+}
+
+#[sqlx::test]
+async fn an_archived_daily_subcategory_does_not_keep_its_bill_group_in_daily(pool: PgPool) {
+    let user = TestApp::signed_in(pool, "ana@example.com").await;
+    let veiculo = veiculo(&user, "cat-16").await;
+    let (_, gasolina) = create_child(&user, "Gasolina", "daily", &veiculo).await;
+    let uri = format!("/api/categories/{}", gasolina["id"].as_str().unwrap());
+    assert_eq!(user.delete(&uri).await.0, StatusCode::NO_CONTENT);
+
+    let (status, feira) = create(
+        &user,
+        json!({ "name": "Feira", "kind": "daily", "color": "cat-16" }),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::CREATED, "{feira}");
+    assert_eq!(feira["color"], "cat-16");
 }

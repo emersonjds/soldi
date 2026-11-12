@@ -32,7 +32,8 @@ pub async fn seed(
 }
 
 /// Active categories: income, then bills, then daily; within a kind by parent name, each parent
-/// followed by its subcategories by name. `Resgate` only with `include_system`.
+/// followed by its subcategories by name. A subcategory of another kind than its parent sits in
+/// its own kind's section. `Resgate` only with `include_system`.
 pub async fn list(
     conn: &mut PgConnection,
     user_id: Uuid,
@@ -72,8 +73,9 @@ pub async fn find_active(
     .await
 }
 
-/// `find_active` holding a share lock: a concurrent recolor of this parent waits or is seen.
-pub async fn find_active_shared(
+/// `find_active` locking the row against other writers: a concurrent child create, move or
+/// recolor of this parent waits, and a later recolor of it cannot deadlock on a share lock.
+pub async fn find_active_locked(
     conn: &mut PgConnection,
     user_id: Uuid,
     id: Uuid,
@@ -83,7 +85,7 @@ pub async fn find_active_shared(
         r#"SELECT id, name, kind AS "kind: CategoryKind", icon, color, parent_id, is_savings,
                   target, deadline
            FROM categories WHERE user_id = $1 AND id = $2 AND archived_at IS NULL
-           FOR SHARE"#,
+           FOR NO KEY UPDATE"#,
         user_id,
         id
     )
@@ -125,7 +127,7 @@ pub async fn has_children(
 }
 
 /// D26: colors of the user's active top-levels that show in any of `kinds` (own kind or an
-/// active subcategory's), but `except`.
+/// active subcategory's), `except` left out both as a top-level and as a subcategory.
 pub async fn top_colors(
     conn: &mut PgConnection,
     user_id: Uuid,
@@ -140,7 +142,7 @@ pub async fn top_colors(
            AND (c.kind = ANY($2) OR EXISTS (
                 SELECT 1 FROM categories s
                 WHERE s.user_id = $1 AND s.parent_id = c.id AND s.archived_at IS NULL
-                  AND s.kind = ANY($2)))",
+                  AND s.id IS DISTINCT FROM $3 AND s.kind = ANY($2)))",
         user_id,
         &kinds as &[&str],
         except
