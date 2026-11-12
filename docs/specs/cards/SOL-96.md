@@ -25,15 +25,18 @@ Rejected: a `purpose` column on `password_resets` (one table, two lifetimes and 
 ## Rules
 
 - **V1.** `POST /api/me/email-verification` (session required): already verified → 422 `email-already-verified` (`"Este e-mail já foi verificado."`). Otherwise 202; after answering, in one transaction, lock `email_verifications:{user_id}`, delete the user's pending rows, insert the new hash; then mail `{public_url}/verificar-email#token={token}` (fragment: the token never reaches server logs or `Referer`).
-- **V2.** Budget `EMAIL_VERIFY_USER`: 3 per hour, key the user id. Over it → 429 with `Retry-After`.
+- **V2.** Budgets, checked in this order before the already-verified check: `EMAIL_VERIFY_IP` 10 per hour by client IP (`limits::client_ip`), then `EMAIL_VERIFY_USER` 3 per hour by user id. The first one over its budget answers 429 with `Retry-After` and leaves the later one unspent.
 - **V3.** `POST /api/auth/email-verification/confirm { token }` (no session): budget `EMAIL_VERIFY_CONFIRM_IP` 20 per hour by client IP. In one transaction `DELETE FROM email_verifications WHERE token_hash = $1 AND expires_at > now() RETURNING user_id`; none → 422 `invalid-verification-link` (`"Este link de verificação é inválido ou expirou."`). Else `UPDATE users SET email_verified_at = COALESCE(email_verified_at, now())`, delete the user's other pending rows. 204. Signs nobody in, ends no session.
 - **V4.** Token: `domain::new_reset_token()`; stored as `domain::hash_token(&token)`; expiry `now() + 24 hours` by column default.
-- **V5.** `confirm_password_reset` also sets `email_verified_at = COALESCE(email_verified_at, now())`.
+- **V5.** `confirm_password_reset` also sets `email_verified_at = COALESCE(email_verified_at, now())` and deletes the user's pending `email_verifications` rows. A refused confirm (invalid token, weak password) leaves `email_verified_at` untouched.
 - **V6.** E-mail never changes in Soldi (`UpdateMe` is name only), so verification never resets.
-- **V7.** Mail (`mail.rs`, `email_verification(to, name, link)`), HTML-escaped like the reset:
+- **V7.** Mail (`mail.rs`, `email_verification(to, link)`), link HTML-escaped like the reset. No name: the account owner chose it and, with no verification at sign-up, the address may belong to someone else, so the greeting carries no attacker-chosen text:
   - subject `Confirme seu e-mail no Soldi`;
-  - text `Olá, {nome}.\n\nConfirme que este e-mail é seu para concluir a verificação da sua conta no Soldi. Use o link abaixo em até 24 horas:\n\n{link}\n\nSe não foi você, ignore este e-mail.\n`;
+  - text `Olá!\n\nConfirme que este e-mail é seu para concluir a verificação da sua conta no Soldi. Use o link abaixo em até 24 horas:\n\n{link}\n\nSe não foi você, ignore este e-mail.\n`;
   - `Mailer::Log` logs `email verification link for a user` with the link, never the address.
+
+- **V8.** The token is minted and stored (voiding older links) before the mail is sent; a failed send leaves the user with no working link until the next request. Accepted: the user retries within the budget.
+- **V9.** The log mailer is dev-only. When `PORT` or `RAILWAY_ENVIRONMENT` is set the server refuses to boot without an explicit, non-blank `SOLDI_PUBLIC_URL` (`SOLDI_PUBLIC_URL is required when PORT or RAILWAY_ENVIRONMENT is set`). With no `RESEND_API_KEY`, `Mailer::Log` is chosen only when the parsed URL is `http` with host exactly `localhost` or `127.0.0.1` (`mail::public_url`, `Mailer::from_env`); anything else refuses to boot.
 
 ## Contract
 

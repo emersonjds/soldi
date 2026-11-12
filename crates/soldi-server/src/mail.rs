@@ -13,6 +13,18 @@ pub struct Message {
     pub html: String,
 }
 
+/// A hosted run (`PORT` or `RAILWAY_ENVIRONMENT` set) must name its public URL; a local one
+/// defaults to `http://localhost:8080`.
+pub fn public_url(explicit: Option<String>, hosted: bool) -> Result<String, String> {
+    match explicit.filter(|url| !url.trim().is_empty()) {
+        Some(url) => Ok(url.trim().trim_end_matches('/').to_string()),
+        None if hosted => {
+            Err("SOLDI_PUBLIC_URL is required when PORT or RAILWAY_ENVIRONMENT is set".into())
+        }
+        None => Ok("http://localhost:8080".into()),
+    }
+}
+
 #[derive(Clone)]
 pub enum Mailer {
     /// No `RESEND_API_KEY` (local runs): the link goes to the log, the address does not.
@@ -65,9 +77,9 @@ impl Mailer {
         public_url: &str,
     ) -> Result<Self, String> {
         let Some(api_key) = api_key else {
-            let local = ["http://localhost", "http://127.0.0.1"]
-                .iter()
-                .any(|prefix| public_url.starts_with(prefix));
+            let local = reqwest::Url::parse(public_url).is_ok_and(|url| {
+                url.scheme() == "http" && matches!(url.host_str(), Some("localhost" | "127.0.0.1"))
+            });
             return if local {
                 Ok(Mailer::Log)
             } else {
@@ -90,22 +102,38 @@ impl Mailer {
         name: &str,
         link: &str,
     ) -> reqwest::Result<()> {
+        let message = password_reset(to, name, link);
+        self.deliver(message, "password reset link for a user", link)
+            .await
+    }
+
+    pub async fn send_email_verification(&self, to: &str, link: &str) -> reqwest::Result<()> {
+        let message = email_verification(to, link);
+        self.deliver(message, "email verification link for a user", link)
+            .await
+    }
+
+    async fn deliver(
+        &self,
+        message: Message,
+        log: &'static str,
+        link: &str,
+    ) -> reqwest::Result<()> {
         match self {
-            Mailer::Log => tracing::info!(%link, "password reset link for a user"),
+            Mailer::Log => tracing::info!(%link, "{log}"),
             Mailer::Resend {
                 client,
                 api_key,
                 from,
             } => {
-                let request =
-                    resend_request(client, api_key, from, &password_reset(to, name, link))?;
+                let request = resend_request(client, api_key, from, &message)?;
                 client.execute(request).await?.error_for_status()?;
             }
             Mailer::Recording(recording) => recording
                 .sent
                 .lock()
                 .unwrap_or_else(PoisonError::into_inner)
-                .push(password_reset(to, name, link)),
+                .push(message),
         }
         Ok(())
     }
@@ -157,6 +185,23 @@ fn password_reset(to: &str, name: &str, link: &str) -> Message {
     }
 }
 
+/// No name: the account owner chose it and the address may be someone else's.
+fn email_verification(to: &str, link: &str) -> Message {
+    let intro = "Confirme que este e-mail é seu para concluir a verificação da sua conta no Soldi. \
+                 Use o link abaixo em até 24 horas:";
+    let outro = "Se não foi você, ignore este e-mail.";
+    let html_link = escape_html(link);
+    Message {
+        to: to.to_string(),
+        subject: "Confirme seu e-mail no Soldi".into(),
+        text: format!("Olá!\n\n{intro}\n\n{link}\n\n{outro}\n"),
+        html: format!(
+            "<p>Olá!</p><p>{intro}</p>\
+             <p><a href=\"{html_link}\">{html_link}</a></p><p>{outro}</p>"
+        ),
+    }
+}
+
 fn escape_html(text: &str) -> String {
     text.replace('&', "&amp;")
         .replace('<', "&lt;")
@@ -196,6 +241,51 @@ mod tests {
                 .contains(&format!("<a href=\"{link}\">{link}</a>"))
         );
         assert!(!message.html.contains("<Ana"));
+    }
+
+    #[test]
+    fn the_verification_message_carries_the_escaped_link_and_no_name() {
+        let link = "https://getsoldi.app/verificar-email#token=abc&x";
+
+        let message = email_verification("ana@example.com", link);
+
+        assert_eq!(message.to, "ana@example.com");
+        assert_eq!(message.subject, "Confirme seu e-mail no Soldi");
+        assert_eq!(
+            message.text,
+            "Olá!\n\n\
+             Confirme que este e-mail é seu para concluir a verificação da sua conta no Soldi. \
+             Use o link abaixo em até 24 horas:\n\n\
+             https://getsoldi.app/verificar-email#token=abc&x\n\n\
+             Se não foi você, ignore este e-mail.\n"
+        );
+        assert!(message.html.starts_with("<p>Olá!</p>"), "{}", message.html);
+        let html_link = "https://getsoldi.app/verificar-email#token=abc&amp;x";
+        assert!(
+            message
+                .html
+                .contains(&format!("<a href=\"{html_link}\">{html_link}</a>"))
+        );
+    }
+
+    #[tokio::test]
+    async fn without_a_key_the_verification_link_goes_to_the_log_without_the_address() {
+        let buffer = Buffer::default();
+        let writer = buffer.clone();
+        let subscriber = tracing_subscriber::fmt()
+            .with_writer(move || writer.clone())
+            .finish();
+        let _guard = tracing::subscriber::set_default(subscriber);
+
+        Mailer::Log
+            .send_email_verification("ana@example.com", "http://x/verificar-email#token=t")
+            .await
+            .unwrap();
+
+        let log = String::from_utf8(buffer.0.lock().unwrap().clone()).unwrap();
+        assert!(log.contains("email verification link for a user"), "{log}");
+        assert!(log.contains("http://x/verificar-email#token=t"), "{log}");
+        assert!(!log.contains("ana@example.com"), "{log}");
     }
 
     #[test]
@@ -273,9 +363,30 @@ mod tests {
             "https://getsoldi.app",
             "http://getsoldi.app",
             "https://localhost",
+            "http://localhost.evil.tld",
+            "http://127.0.0.1.evil.tld",
+            "http://localhost@evil.tld",
+            "http://localhostevil.tld",
+            "not a url",
         ] {
             assert!(from_env(None, None, url).is_err(), "{url}");
         }
+    }
+
+    #[test]
+    fn a_local_run_defaults_the_public_url_and_a_hosted_one_must_name_it() {
+        assert_eq!(public_url(None, false).unwrap(), "http://localhost:8080");
+        let required = "SOLDI_PUBLIC_URL is required when PORT or RAILWAY_ENVIRONMENT is set";
+        assert_eq!(public_url(None, true).unwrap_err(), required);
+        assert_eq!(public_url(Some(" ".into()), true).unwrap_err(), required);
+        assert_eq!(
+            public_url(Some("https://getsoldi.app/".into()), true).unwrap(),
+            "https://getsoldi.app"
+        );
+        assert_eq!(
+            public_url(Some("http://localhost:3000".into()), false).unwrap(),
+            "http://localhost:3000"
+        );
     }
 
     #[derive(Clone, Default)]

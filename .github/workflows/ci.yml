@@ -165,7 +165,7 @@ jobs:
       - if: steps.suite.outputs.present == 'true'
         name: Start the server with the web export
         run: |
-          PORT=8089 SOLDI_WEB_DIR=web/out SOLDI_IP_LIMITS=off target/debug/soldi-server > server.log 2>&1 &
+          PORT=8089 SOLDI_PUBLIC_URL=http://localhost:8089 SOLDI_WEB_DIR=web/out SOLDI_IP_LIMITS=off target/debug/soldi-server > server.log 2>&1 &
           for _ in $(seq 60); do curl -sf http://127.0.0.1:8089/api/health && exit 0; sleep 1; done
           cat server.log
           exit 1

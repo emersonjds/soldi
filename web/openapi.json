@@ -7,9 +7,52 @@
       "name": "AGPL-3.0-only",
       "identifier": "AGPL-3.0-only"
     },
-    "version": "0.56.0"
+    "version": "0.57.0"
   },
   "paths": {
+    "/api/auth/email-verification/confirm": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "operationId": "confirm_email_verification",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmEmailVerification"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "E-mail verified; every pending verification link of the user ends. Signs nobody in"
+          },
+          "422": {
+            "description": "`invalid-verification-link` for an unknown, expired or used token",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited; wait `Retry-After` seconds",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/auth/me": {
       "get": {
         "tags": [
@@ -1376,6 +1419,48 @@
         }
       }
     },
+    "/api/me/email-verification": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "operationId": "request_email_verification",
+        "responses": {
+          "202": {
+            "description": "A verification link valid for 24 hours is e-mailed to the caller; older links stop working"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`email-already-verified`; nothing is sent",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited; wait `Retry-After` seconds",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/me/password": {
       "post": {
         "tags": [
@@ -2728,6 +2813,19 @@
           }
         }
       },
+      "ConfirmEmailVerification": {
+        "type": "object",
+        "required": [
+          "token"
+        ],
+        "properties": {
+          "token": {
+            "type": "string",
+            "description": "The `token` of the link in the e-mail."
+          }
+        },
+        "additionalProperties": false
+      },
       "ConfirmPasswordReset": {
         "type": "object",
         "required": [
@@ -3957,11 +4055,16 @@
           "email",
           "name",
           "onboarded",
-          "tour_seen"
+          "tour_seen",
+          "email_verified"
         ],
         "properties": {
           "email": {
             "type": "string"
+          },
+          "email_verified": {
+            "type": "boolean",
+            "description": "False until a link from `POST /api/me/email-verification` or a password reset is confirmed."
           },
           "id": {
             "type": "string",

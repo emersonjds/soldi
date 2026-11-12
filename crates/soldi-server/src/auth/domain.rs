@@ -102,6 +102,17 @@ pub fn invalid_reset_link() -> AppError {
     )
 }
 
+pub fn email_already_verified() -> AppError {
+    AppError::rule("email-already-verified", "Este e-mail já foi verificado.")
+}
+
+pub fn invalid_verification_link() -> AppError {
+    AppError::rule(
+        "invalid-verification-link",
+        "Este link de verificação é inválido ou expirou.",
+    )
+}
+
 pub fn hash_token(token: &str) -> Vec<u8> {
     Sha256::digest(token.as_bytes()).to_vec()
 }

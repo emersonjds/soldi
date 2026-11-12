@@ -14,8 +14,8 @@ vi.mock("next/navigation", () => import("@/test/next-navigation"));
 
 type Reply = { status: number; body?: unknown };
 
-const open = (replies: Record<string, Reply> = {}) => {
-  const requests = signedIn(replies);
+const open = (replies: Record<string, Reply> = {}, user = ANA) => {
+  const requests = signedIn(replies, user);
   const { client } = renderWithQuery(
     <>
       <AccountSection />
@@ -47,6 +47,8 @@ const fillDeletion = async (dialog: HTMLElement, password = "minha-senha-longa")
   await userEvent.type(within(dialog).getByLabelText("Digite EXCLUIR para confirmar"), "EXCLUIR");
   await userEvent.click(within(dialog).getByRole("button", { name: "Excluir para sempre" }));
 };
+
+const UNVERIFIED = { ...ANA, email_verified: false };
 
 const WARNING =
   "Apaga sua conta e todos os seus lançamentos, categorias, contas fixas e cofrinhos. Não dá para desfazer.";
@@ -382,6 +384,69 @@ describe("AccountSection", () => {
     expect(screen.getByRole("button", { name: "Sair da conta (Logout)" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Sair de todos os aparelhos" })).toBeInTheDocument();
     expect(screen.queryByLabelText("Nome")).not.toBeInTheDocument();
+  });
+
+  it("marks a verified e-mail with the word Verificado and offers no link", async () => {
+    open();
+
+    const badge = await screen.findByText("Verificado");
+    expect(badge.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
+    expect(screen.queryByText("Não verificado")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Verificar e-mail" })).not.toBeInTheDocument();
+  });
+
+  it("sends a verification link, disabled while on its way", async () => {
+    open({}, UNVERIFIED);
+    expect(await screen.findByText("Não verificado")).toBeInTheDocument();
+    let release = (): void => undefined;
+    const requests: Request[] = [];
+    vi.stubGlobal(
+      "fetch",
+      (request: Request) =>
+        new Promise<Response>((resolve) => {
+          requests.push(request);
+          release = () => resolve(new Response(null, { status: 202 }));
+        }),
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "Verificar e-mail" }));
+
+    expect(screen.getByRole("button", { name: "Enviando…" })).toBeDisabled();
+    release();
+    expect(
+      await screen.findByText("Enviamos um link para ana@example.com. Ele vale por 24 horas."),
+    ).toBeInTheDocument();
+    expect(posts(requests, "/api/me/email-verification")).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "Verificar e-mail" })).toBeEnabled();
+  });
+
+  it.each([
+    [429, "Muitas tentativas. Tente de novo mais tarde."],
+    [500, "Não foi possível enviar o link."],
+  ])("explains a %i on the verification link", async (status, message) => {
+    open({ "POST /api/me/email-verification": { status, body: problem(status, "x") } }, UNVERIFIED);
+
+    await userEvent.click(await screen.findByRole("button", { name: "Verificar e-mail" }));
+
+    expect(await screen.findByText(message)).toBeInTheDocument();
+  });
+
+  it("reloads the user without a toast when the e-mail was already verified", async () => {
+    open({}, UNVERIFIED);
+    await screen.findByText("Não verificado");
+    const requests = signedIn({
+      "POST /api/me/email-verification": {
+        status: 422,
+        body: { ...problem(422, "x"), type: "urn:soldi:error:email-already-verified" },
+      },
+    });
+
+    await userEvent.click(screen.getByRole("button", { name: "Verificar e-mail" }));
+
+    expect(await screen.findByText("Verificado")).toBeInTheDocument();
+    expect(sent(requests, "GET", "/api/auth/me")).toHaveLength(1);
+    expect(screen.queryByText("Não foi possível enviar o link.")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Enviamos um link/)).not.toBeInTheDocument();
   });
 
   it("offers a retry and still signs out when the account does not load", async () => {

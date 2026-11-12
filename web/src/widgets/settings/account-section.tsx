@@ -2,6 +2,9 @@
 
 import type { ReactNode } from "react";
 
+import { BadgeCheck } from "lucide-react";
+
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useMe } from "@/entities/user/session";
@@ -10,6 +13,7 @@ import { PasswordForm } from "@/features/edit-account/password-form";
 import { ProfileForm } from "@/features/edit-account/profile-form";
 import { SignOutButton } from "@/features/sign-out/sign-out-button";
 import { SignOutEverywhereButton } from "@/features/sign-out/sign-out-everywhere-button";
+import { VerifyEmailButton } from "@/features/verify-email/request-button";
 import { PageError } from "@/shared/ui/page-state";
 
 const Tile = ({ label, value, children }: { label: string; value: string; children?: ReactNode }) => (
@@ -51,7 +55,19 @@ export const AccountSection = () => {
               <ProfileForm user={me.data} />
             </FormDialog>
           </Tile>
-          <Tile label="E-MAIL CADASTRADO" value={me.data.email} />
+          <Tile label="E-MAIL CADASTRADO" value={me.data.email}>
+            {me.data.email_verified ? (
+              <Badge className="h-6 bg-income-soft text-income-text">
+                <BadgeCheck aria-hidden />
+                Verificado
+              </Badge>
+            ) : (
+              <>
+                <span className="text-muted-foreground text-sm">Não verificado</span>
+                <VerifyEmailButton email={me.data.email} />
+              </>
+            )}
+          </Tile>
           <Tile label="SENHA DE ACESSO" value="••••••••••••">
             <FormDialog action="Trocar senha">
               <PasswordForm />
