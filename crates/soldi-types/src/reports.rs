@@ -138,8 +138,9 @@ pub struct YearCard {
 
 /// The year's Entradas and Gastos by purchase date (D31), over whole months from the opening month
 /// or January to today's month or December. `totals` has the month view's shape, Economia deposits
-/// inside `bills`; `spent` (Gastos) leaves deposits and fatura payments out. `first_month` and
-/// `last_month` are null when nothing is counted.
+/// inside `bills`, but follows D31: `bills` leaves fatura payments out and `daily` holds card
+/// purchases, so it does not equal the sum of the month views. `spent` (Gastos) leaves deposits and
+/// fatura payments out. `first_month` and `last_month` are null when nothing is counted.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct YearReport {
     #[schema(example = 2026)]
