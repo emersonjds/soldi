@@ -1,5 +1,5 @@
 use chrono::Months;
-use soldi_types::reports::{CategoryReport, SavingsYear};
+use soldi_types::reports::{CategoryReport, SavingsYear, YearReport};
 use sqlx::PgPool;
 
 use super::{domain, repo};
@@ -36,4 +36,20 @@ pub async fn savings(
         None => Vec::new(),
     };
     Ok(domain::savings_year(year, range, today, sums))
+}
+
+/// 3 queries: the opening date, then one row per month and card, then one per top-level category.
+pub async fn year(pool: &PgPool, user: &CurrentUser, year: &str) -> Result<YearReport, AppError> {
+    let year = domain::parse_year(year)?;
+    let mut conn = pool.acquire().await?;
+    let opening = settings::repo::find(&mut conn, user.id).await?.opening_date;
+    let range = domain::counted_range(year, opening, crate::today_sao_paulo());
+    let (flows, groups) = match range {
+        Some((from, to)) => (
+            repo::year_flows(&mut conn, user.id, from, to).await?,
+            repo::year_groups(&mut conn, user.id, from, to).await?,
+        ),
+        None => (Vec::new(), Vec::new()),
+    };
+    Ok(domain::year_report(year, range, flows, groups))
 }
