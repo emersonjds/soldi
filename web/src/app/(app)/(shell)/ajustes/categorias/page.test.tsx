@@ -1,6 +1,7 @@
+import { QueryClientProvider } from "@tanstack/react-query";
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { Toaster } from "sonner";
+import { Toaster, toast } from "sonner";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Schemas } from "@/shared/api/client";
@@ -8,15 +9,18 @@ import { router, setSearch } from "@/test/next-navigation";
 import { renderWithQuery } from "@/test/render";
 import {
   ALUGUEL,
+  COMBUSTIVEL,
   COMIDA,
   ECONOMIA,
   EXTRA,
   LUZ,
   MERCADO,
+  PARCELA,
   problem,
   RESERVA,
   SALARIO,
   signedIn,
+  VEICULO,
   VIAGEM,
 } from "@/test/stub-api";
 
@@ -38,7 +42,7 @@ const PETS: Category = {
 const RACAO: Category = { ...PETS, id: "c1000000-0000-4000-8000-000000000011", name: "Ração", parent_id: PETS.id };
 const VET: Category = { ...PETS, id: "c1000000-0000-4000-8000-000000000012", name: "Veterinário", parent_id: PETS.id };
 const IMPORTADO: Category = {
-  id: "c1000000-0000-4000-8000-000000000020",
+  id: "c1000000-0000-4000-8000-000000000040",
   name: "Importado (diário)",
   kind: "daily",
   icon: "circle-dashed",
@@ -66,6 +70,36 @@ const REPORT = {
   ],
 };
 
+const share = (category: Category, amount: string, pct: string) => ({
+  ...category,
+  category_id: category.id,
+  amount,
+  pct,
+  previous_amount: "0",
+});
+const group = (category: Category, amount: string, pct: string, children: string[]) => ({
+  ...share(category, amount, pct),
+  delta_pct: null,
+  children,
+});
+/** Veículo is Fixa with a Diário and a Fixa subcategory (D26). */
+const MIXED_REPORT = {
+  ...EMPTY_REPORT,
+  outflow_total: "580.00",
+  outflow: [share(COMBUSTIVEL, "80.00", "13.8"), share(PARCELA, "500.00", "86.2")],
+  groups: [group(VEICULO, "580.00", "100.0", [COMBUSTIVEL.id, PARCELA.id])],
+};
+
+const page = () => (
+  <>
+    <CategoriasPage />
+    <Toaster />
+  </>
+);
+let rendered: ReturnType<typeof renderWithQuery>;
+/** Renders again with the current `?k=`/`?m=`; the stand-in router changes nothing by itself. */
+const rerender = () => rendered.rerender(<QueryClientProvider client={rendered.client}>{page()}</QueryClientProvider>);
+
 const open = (replies: Record<string, Reply> = {}) => {
   const requests = signedIn({
     "GET /api/categories": { status: 200, body: LIST },
@@ -73,12 +107,7 @@ const open = (replies: Record<string, Reply> = {}) => {
     "GET /api/transactions": { status: 200, body: [] },
     ...replies,
   });
-  renderWithQuery(
-    <>
-      <CategoriasPage />
-      <Toaster />
-    </>,
-  );
+  rendered = renderWithQuery(page());
   return requests;
 };
 
@@ -143,22 +172,82 @@ describe("Ajustes › Categorias", () => {
   });
 
   it("shows the month's totals, entry counts and the largest group", async () => {
-    setSearch("m=2026-11");
-    const entry = { id: "t1", date: "2026-11-05", amount: "300.00", kind: "daily", note: "", category: RACAO };
-    open({
+    setSearch("m=2026-09");
+    const entry = { id: "t1", date: "2026-09-05", amount: "300.00", kind: "daily", note: "", category: RACAO };
+    const requests = open({
       "GET /api/reports/categories": { status: 200, body: REPORT },
       "GET /api/transactions": { status: 200, body: [entry] },
     });
 
     const top = await screen.findByRole("region", { name: "MAIOR CONCENTRAÇÃO" });
     expect(top).toHaveTextContent("Pets(Ração)");
-    expect(within(top).getByText("53,1% dos gastos de Nov")).toBeInTheDocument();
+    expect(within(top).getByText("53,1% dos gastos de Set")).toBeInTheDocument();
+    for (const path of ["/api/reports/categories", "/api/transactions"])
+      expect(sent(requests, "GET").find((request) => request.url.includes(path))?.url).toContain("month=2026-09");
     const pets = await card("Pets");
     expect(within(pets).getByText("Total no mês").nextSibling).toHaveTextContent(/300,00/);
     const racao = within(pets).getByRole("button", { name: "Editar Ração" });
     expect(racao).toHaveTextContent(/1 lanç\..*300,00/);
     expect(within(pets).getByRole("button", { name: "Editar Veterinário" })).toHaveTextContent(/^Veterinário.*0,00$/);
     expect(within(await card("Mercado")).getByText("Total no mês").nextSibling).toHaveTextContent(/0,00/);
+  });
+
+  it("counts one parent and one subcategory in the singular, with no largest group from income alone", async () => {
+    open({
+      "GET /api/categories": { status: 200, body: [PETS, RACAO] },
+      "GET /api/reports/categories": {
+        status: 200,
+        body: { ...EMPTY_REPORT, income_total: "900.00", groups: [group(SALARIO, "900.00", "100.0", [])] },
+      },
+    });
+
+    const tile = await screen.findByRole("region", { name: "ESTRUTURA ATIVA" });
+    expect(tile).toHaveTextContent("1categoria principal");
+    expect(within(tile).getByText("1 subcategoria vinculada")).toBeInTheDocument();
+    await waitFor(async () =>
+      expect(within(await card("Pets")).getByText("Total no mês").nextSibling).toHaveTextContent(/0,00/),
+    );
+    expect(screen.queryByRole("region", { name: "MAIOR CONCENTRAÇÃO" })).not.toBeInTheDocument();
+  });
+
+  it("shows a group of another kind as a header over this tab's children, totalling only them", async () => {
+    open({
+      "GET /api/categories": { status: 200, body: [...LIST, VEICULO, COMBUSTIVEL, PARCELA] },
+      "GET /api/reports/categories": { status: 200, body: MIXED_REPORT },
+    });
+
+    expect(await screen.findByRole("radio", { name: "Gastos Diários (5)" })).toBeChecked();
+    const daily = await card("Veículo");
+    expect(within(daily).getByText("Fixa · 1 subcategoria")).toBeInTheDocument();
+    expect(names(within(daily).getByRole("list", { name: "Subcategorias de Veículo" }))).toEqual([
+      "Editar Combustível",
+    ]);
+    await waitFor(() => expect(within(daily).getByText("Total no mês").nextSibling).toHaveTextContent(/(^|\D)80,00/));
+
+    setSearch("k=bill");
+    rerender();
+    expect(screen.getByRole("radio", { name: "Contas Fixas (4)" })).toBeChecked();
+    const bills = await card("Veículo");
+    expect(within(bills).getByText("Fixa · 1 subcategoria")).toBeInTheDocument();
+    expect(names(within(bills).getByRole("list", { name: "Subcategorias de Veículo" }))).toEqual(["Editar Parcela"]);
+    expect(within(bills).getByText("Total no mês").nextSibling).toHaveTextContent(/580,00/);
+  });
+
+  it.each([
+    ["the report", "GET /api/reports/categories"],
+    ["the entries", "GET /api/transactions"],
+  ])("offers to retry the month's totals when %s fail", async (_what, route) => {
+    const requests = open({ [route]: { status: 500, body: problem(500, "Falhou.") } });
+    const path = route.slice(4);
+    const asked = () => sent(requests, "GET").filter((request) => request.url.includes(path)).length;
+
+    await list();
+    const retry = await screen.findByRole("button", { name: "Tentar de novo" });
+    expect(screen.getByText("Não foi possível carregar os totais do mês.")).toBeInTheDocument();
+    const before = asked();
+    await userEvent.click(retry);
+
+    await waitFor(() => expect(asked()).toBeGreaterThan(before));
   });
 
   it("filters parents and children ignoring case and accents", async () => {
@@ -319,6 +408,75 @@ describe("Ajustes › Categorias", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
+  describe("with the side panel (1440 px)", () => {
+    beforeEach(() => {
+      window.innerWidth = 1440;
+    });
+
+    const nameField = (panel: HTMLElement) => within(panel).getByLabelText("Nome do agrupador");
+
+    it("focuses the name on Editar, saves, clears the panel and gives focus back to the row", async () => {
+      const requests = open({
+        [`PATCH /api/categories/${RACAO.id}`]: { status: 200, body: { ...RACAO, name: "Ração premium" } },
+      });
+
+      const row = within(await list()).getByRole("button", { name: "Editar Ração" });
+      await userEvent.click(row);
+      const panel = await screen.findByRole("complementary", { name: "Editar Categoria" });
+      await waitFor(() => expect(nameField(panel)).toHaveFocus());
+      await userEvent.type(nameField(panel), " premium{Enter}");
+
+      expect(await screen.findByText("Categoria salva")).toBeInTheDocument();
+      expect(await sent(requests, "PATCH")[0].json()).toMatchObject({ name: "Ração premium" });
+      expect(await screen.findByRole("complementary", { name: "Nova Categoria" })).toBeInTheDocument();
+      await waitFor(() => expect(row).toHaveFocus());
+    });
+
+    it("focuses the name on Adicionar subcategoria and on Nova Categoria, which starts over", async () => {
+      open();
+
+      await userEvent.click(within(await card("Pets")).getByRole("button", { name: "Adicionar subcategoria" }));
+      const panel = () => screen.getByRole("complementary", { name: "Nova Categoria" });
+      await waitFor(() => expect(within(panel()).getByRole("radio", { name: "Subcategoria" })).toBeChecked());
+      await waitFor(() => expect(nameField(panel())).toHaveFocus());
+
+      await userEvent.click(screen.getByRole("button", { name: "Nova Categoria" }));
+      await waitFor(() => expect(within(panel()).getByRole("radio", { name: "Categoria Pai" })).toBeChecked());
+      await waitFor(() => expect(nameField(panel())).toHaveFocus());
+    });
+
+    it("deletes from the panel, which starts over", async () => {
+      open();
+
+      await userEvent.click(within(await list()).getByRole("button", { name: "Editar Mercado" }));
+      const panel = await screen.findByRole("complementary", { name: "Editar Categoria" });
+      await userEvent.click(within(panel).getByRole("button", { name: "Excluir" }));
+
+      expect(await screen.findByText("Categoria excluída")).toBeInTheDocument();
+      expect(await screen.findByRole("complementary", { name: "Nova Categoria" })).toBeInTheDocument();
+      expect(within(await list()).queryByRole("button", { name: "Editar Mercado" })).not.toBeInTheDocument();
+    });
+
+    it("changes the kind once and keeps showing the new one in its tab", async () => {
+      const requests = open({
+        [`PATCH /api/categories/${MERCADO.id}`]: { status: 200, body: { ...MERCADO, kind: "bill" } },
+      });
+
+      await userEvent.click(within(await list()).getByRole("button", { name: "Editar Mercado" }));
+      const panel = await screen.findByRole("complementary", { name: "Editar Categoria" });
+      await userEvent.click(within(panel).getByRole("radio", { name: "Fixa" }));
+      const confirm = await screen.findByRole("alertdialog", { name: "Mudar para Saída?" });
+      await userEvent.click(within(confirm).getByRole("button", { name: "Mudar tipo" }));
+      await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/ajustes/categorias?k=bill", { scroll: false }));
+
+      setSearch("k=bill");
+      rerender();
+      const moved = await screen.findByRole("complementary", { name: "Editar Categoria" });
+      expect(within(moved).getByRole("radio", { name: "Fixa" })).toHaveAttribute("data-state", "on");
+      expect(sent(requests, "PATCH")).toHaveLength(1);
+    });
+  });
+
   describe("deleting", () => {
     beforeEach(() => {
       vi.useFakeTimers({ shouldAdvanceTime: true });
@@ -352,6 +510,20 @@ describe("Ajustes › Categorias", () => {
       await user.click(screen.getByRole("button", { name: "Desfazer" }));
       expect(await screen.findByRole("button", { name: "Editar Veterinário" })).toBeInTheDocument();
       act(() => vi.advanceTimersByTime(6000));
+      expect(sent(requests, "DELETE")).toHaveLength(0);
+    });
+
+    it("sends nothing when the toast is dismissed after Desfazer", async () => {
+      const requests = open({ [`DELETE /api/categories/${PETS.id}`]: { status: 204 } });
+
+      const user = await archive("Pets");
+      await screen.findByText("Categoria excluída");
+      await user.click(screen.getByRole("button", { name: "Desfazer" }));
+      act(() => {
+        toast.dismiss();
+        vi.advanceTimersByTime(6000);
+      });
+
       expect(sent(requests, "DELETE")).toHaveLength(0);
     });
 
