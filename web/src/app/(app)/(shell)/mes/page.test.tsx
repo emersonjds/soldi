@@ -720,8 +720,8 @@ describe("Mês", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Criar como Conta Fixa" }));
 
     const bill = await screen.findByRole("dialog", { name: "Nova conta" });
-    expect(within(bill).getByLabelText("Nome")).toHaveValue("Aluguel");
-    expect(within(bill).getByLabelText("Vence dia")).toHaveValue("4");
+    expect(within(bill).getByLabelText("Nome da conta fixa")).toHaveValue("Aluguel");
+    expect(within(bill).getByLabelText("Dia do vencimento recorrente")).toHaveValue("4");
   });
 
   it("warns above the cards of the first red day and its two largest outflows; Ver o dia jumps, rings it for 2 s and names the cause", async () => {
