@@ -79,6 +79,28 @@ pub async fn check_opening(
     Ok(())
 }
 
+/// SOL-102: a deleted cofrinho's deposits and resgates are read-only; with `following`, any
+/// later series member in one refuses the whole call.
+async fn check_cofrinho_active(
+    conn: &mut PgConnection,
+    user: &CurrentUser,
+    current: &Transaction,
+    scope: Scope,
+) -> Result<(), AppError> {
+    let series_id = current
+        .series
+        .as_ref()
+        .filter(|_| scope == Scope::Following)
+        .map(|series| series.id);
+    if repo::moves_archived_cofrinho(conn, user.id, current.id, series_id, current.date).await? {
+        return Err(AppError::rule(
+            "archived-cofrinho",
+            "This cofrinho was deleted; its deposits and resgates can no longer change.",
+        ));
+    }
+    Ok(())
+}
+
 /// R2, R9: with `repeat_months` or `installments`, the series in one database transaction.
 pub async fn create(
     pool: &PgPool,
@@ -138,6 +160,7 @@ pub async fn update(
             .await?
             .ok_or(AppError::NotFound)?;
     }
+    check_cofrinho_active(&mut tx, user, &current, scope).await?;
     if patch.repeat_months.is_some() {
         domain::check_repeatable(&current)?;
     }
@@ -248,6 +271,7 @@ pub async fn delete(
             .await?
             .ok_or(AppError::NotFound)?;
     }
+    check_cofrinho_active(&mut tx, user, &current, scope).await?;
     match (scope, current.series) {
         (Scope::Following, Some(series)) => {
             repo::delete_following(&mut tx, user.id, series.id, current.date).await?;

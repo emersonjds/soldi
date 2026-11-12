@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS (\n             SELECT 1 FROM transactions t\n             LEFT JOIN categories c ON c.user_id = t.user_id AND c.id = t.category_id\n             LEFT JOIN categories p ON p.user_id = c.user_id AND p.id = c.parent_id\n             LEFT JOIN categories w ON w.user_id = t.user_id AND w.id = t.cofrinho_id\n             WHERE t.user_id = $1 AND (t.id = $2 OR (t.series_id = $3 AND t.date >= $4))\n               AND ((t.kind = 'bill' AND c.archived_at IS NOT NULL\n                     AND p.is_savings AND p.kind = 'bill')\n                    OR w.archived_at IS NOT NULL)) AS \"archived!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "archived!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Date"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "2309e50bd457edd779fc75f58cf626b7a660a53d265f5b30cb854f586306ca89"
+}

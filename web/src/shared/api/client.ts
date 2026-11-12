@@ -51,3 +51,9 @@ export const hasStatus = (error: unknown, status: number) => error instanceof Ap
 /** A refused business rule by its slug (`insufficient-cofrinho`). */
 export const hasProblem = (error: unknown, slug: string) =>
   error instanceof ApiError && error.type === `urn:soldi:error:${slug}`;
+
+/** The pt-BR copy of a refused rule more than one screen can meet; otherwise the screen's own. */
+export const problemMessage = (error: unknown) =>
+  hasProblem(error, "archived-cofrinho")
+    ? "Esse cofrinho foi excluído; os movimentos dele não podem mais ser alterados."
+    : undefined;
