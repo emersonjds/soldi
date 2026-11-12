@@ -1,3 +1,4 @@
+import { QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Toaster } from "sonner";
@@ -68,7 +69,7 @@ const open = (replies: Record<string, Reply> = {}, hanging?: string) => {
       new URL(request.url).pathname === hanging ? new Promise<Response>(() => undefined) : answer(request),
     );
   }
-  renderWithQuery(
+  view = renderWithQuery(
     <>
       <EconomiaPage />
       <Toaster />
@@ -76,6 +77,7 @@ const open = (replies: Record<string, Reply> = {}, hanging?: string) => {
   );
   return requests;
 };
+let view: ReturnType<typeof renderWithQuery>;
 
 const items = (list: Schemas["Cofrinho"][], rest: Partial<Schemas["Cofrinhos"]> = {}) => ({
   "GET /api/cofrinhos": { status: 200, body: { ...COFRINHOS, items: list, ...rest } },
@@ -125,6 +127,58 @@ describe("Cofrinhos", () => {
 
       expect(await hero()).toHaveTextContent("-R$ 50,00 este mês.");
       expect(requests.some((request) => request.url.endsWith("/api/cofrinhos?month=2026-10"))).toBe(true);
+    });
+
+    it("asks for the cofrinhos again when the month changes", async () => {
+      const requests = open();
+      await hero();
+
+      setSearch("m=2026-10");
+      view.rerender(
+        <QueryClientProvider client={view.client}>
+          <EconomiaPage />
+        </QueryClientProvider>,
+      );
+
+      await waitFor(() =>
+        expect(requests.some((request) => request.url.endsWith("/api/cofrinhos?month=2026-10"))).toBe(true),
+      );
+    });
+
+    it("signs a month's resgate when nothing is left, instead of the first-use line", async () => {
+      open(items([], { total_saved: "0.00", saved_this_month: "-50.00" }));
+
+      const total = await hero();
+      expect(total).toHaveTextContent("-R$ 50,00 este mês.");
+      expect(total).not.toHaveTextContent("Nada guardado ainda.");
+    });
+
+    it("rounds the Meta Global half to even: 1 of 400 is 0,2%", async () => {
+      open(items([{ ...COFRINHO_RESERVA, target: "400.00", balance: "1.00" }]));
+
+      expect(await hero()).toHaveTextContent("0,2% concluído");
+    });
+
+    it("says the categories failed in Movimentos, and loads them again", async () => {
+      const requests = open({ "GET /api/categories": { status: 500, body: problem(500, "Falhou.") } });
+      const fetched = () => requests.filter((request) => new URL(request.url).pathname === "/api/categories");
+
+      await userEvent.click(within(await hero()).getByRole("button", { name: "Movimentos" }));
+      const sheet = await screen.findByRole("dialog", { name: "Movimentos" });
+      expect(await within(sheet).findByText("Não foi possível carregar as categorias.")).toBeInTheDocument();
+      const before = fetched().length;
+      await userEvent.click(within(sheet).getByRole("button", { name: "Tentar de novo" }));
+
+      await waitFor(() => expect(fetched().length).toBeGreaterThan(before));
+    });
+
+    it("shows nothing in Movimentos while the categories load", async () => {
+      open({}, "/api/categories");
+
+      await userEvent.click(within(await hero()).getByRole("button", { name: "Movimentos" }));
+      const sheet = await screen.findByRole("dialog", { name: "Movimentos" });
+      expect(within(sheet).queryByRole("list", { name: "Movimentos" })).not.toBeInTheDocument();
+      expect(within(sheet).queryByRole("button", { name: "Tentar de novo" })).not.toBeInTheDocument();
     });
 
     it("says nothing went in this month at zero", async () => {
@@ -225,9 +279,7 @@ describe("Cofrinhos", () => {
       open();
 
       const pick = async (label: string) => {
-        await userEvent.click(
-          within(await region("Seus Cofrinhos")).getByRole("button", { name: "Filtrar cofrinhos" }),
-        );
+        await userEvent.click(within(await region("Seus Cofrinhos")).getByRole("button", { name: /^Filtrar: / }));
         await userEvent.click(await screen.findByRole("menuitemradio", { name: label }));
       };
       const shown = () =>
@@ -235,8 +287,12 @@ describe("Cofrinhos", () => {
           .getAllByRole("heading")
           .map((heading) => heading.textContent);
 
+      expect(
+        within(await region("Seus Cofrinhos")).getByRole("button", { name: "Filtrar: Todos" }),
+      ).toBeInTheDocument();
       await pick("Meta batida");
       expect(shown()).toEqual(["Carro", "Criar novo objetivo ou sonho"]);
+      expect(screen.getByRole("button", { name: "Filtrar: Meta batida" })).toHaveTextContent("Meta batida");
       await pick("Em andamento");
       expect(shown()).toEqual(["Reserva", "Criar novo objetivo ou sonho"]);
       await pick("Sem meta");
@@ -245,26 +301,54 @@ describe("Cofrinhos", () => {
       expect(shown()).toEqual(["Reserva", "Viagem", "Carro", "Reserva Livre", "Criar novo objetivo ou sonho"]);
     });
 
-    it("badges each state, one Foco atual on the nearest deadline even on a tie", async () => {
+    it.each([
+      ["Meta batida", [COFRINHO_RESERVA], "Nenhum cofrinho com meta batida."],
+      ["Em andamento", [CARRO], "Nenhum cofrinho em andamento."],
+      ["Sem meta", [COFRINHO_RESERVA], "Nenhum cofrinho sem meta."],
+    ])("says the %s filter left no cofrinho", async (label, list, line) => {
+      open(items(list));
+
+      await userEvent.click(within(await region("Seus Cofrinhos")).getByRole("button", { name: "Filtrar: Todos" }));
+      await userEvent.click(await screen.findByRole("menuitemradio", { name: label }));
+
+      expect(within(screen.getByRole("region", { name: /^Seus Cofrinhos/ })).getByText(line)).toBeInTheDocument();
+    });
+
+    it("badges each state, one Foco atual on the nearest deadline, the first in API order on a tie", async () => {
       open(
         items([
-          goal("41", "Casa", "2027-03-01", { progress_pct: "44.3" }),
+          CARRO,
           goal("42", "Barco", "2027-03-01"),
+          goal("41", "Casa", "2027-03-01", { progress_pct: "44.3" }),
           COFRINHO_RESERVA,
           goal("43", "Sítio", "2028-01-10", { balance: "0.00", progress_pct: "0.0" }),
           COFRINHO_VIAGEM,
-          CARRO,
         ]),
       );
 
-      expect(await region("Casa")).toHaveTextContent("Foco atual · 44%");
+      expect(await region("Barco")).toHaveTextContent("Foco atual · 3%");
       expect(screen.getAllByText(/Foco atual/)).toHaveLength(1);
-      expect(screen.getByRole("region", { name: "Barco" })).toHaveTextContent("Em andamento · 3%");
+      expect(screen.getByRole("region", { name: "Casa" })).toHaveTextContent("Em andamento · 44%");
       expect(screen.getByRole("region", { name: "Reserva" })).toHaveTextContent("Em andamento · 3%");
       expect(screen.getByRole("region", { name: "Sítio" })).toHaveTextContent("Longo prazo · 0%");
       expect(screen.getByRole("region", { name: "Sítio" })).toHaveTextContent("Prazo: 14 meses");
-      expect(screen.getByRole("region", { name: "Viagem" })).toHaveTextContent("Sem meta");
+      expect(screen.getByRole("region", { name: "Viagem" })).toHaveTextContent("Longo prazo");
+      expect(screen.getByRole("region", { name: "Viagem" })).not.toHaveTextContent("Sem meta");
       expect(screen.getByRole("region", { name: "Carro" })).toHaveTextContent("Meta batida");
+    });
+
+    it("counts Prazo in whole months, at least one, and drops it once the deadline passed", async () => {
+      open(
+        items([
+          goal("44", "Moto", "2026-11-20", { balance: "0.00", progress_pct: "0.0" }),
+          goal("45", "Bike", "2026-10-01", { balance: "0.00", progress_pct: "0.0" }),
+          goal("46", "Sofá", "2026-11-05", { balance: "0.00", progress_pct: "0.0" }),
+        ]),
+      );
+
+      expect(await region("Moto")).toHaveTextContent("Prazo: 1 mês");
+      expect(screen.getByRole("region", { name: "Bike" })).not.toHaveTextContent("Prazo");
+      expect(screen.getByRole("region", { name: "Sofá" })).not.toHaveTextContent("Prazo");
     });
 
     it("shows the balance, the goal caption and the automatic deposit", async () => {
@@ -450,6 +534,17 @@ describe("Cofrinhos", () => {
       expect(rows[2]).toHaveTextContent("R$ 200,00");
     });
 
+    it("leaves Resgatar out of an empty cofrinho's sheet", async () => {
+      open({
+        ...items([COFRINHO_RESERVA, EMPTY_VIAGEM]),
+        [`GET /api/cofrinhos/${VIAGEM.id}/movements`]: { status: 200, body: [] },
+      });
+
+      const sheet = await detail("Viagem");
+      expect(within(sheet).getByRole("button", { name: "Guardar" })).toBeInTheDocument();
+      expect(within(sheet).queryByRole("button", { name: "Resgatar" })).not.toBeInTheDocument();
+    });
+
     it("says when nothing went in yet", async () => {
       open({ [MOVES]: { status: 200, body: [] } });
       expect(await within(await detail("Reserva")).findByText("Nada guardado aqui ainda")).toBeInTheDocument();
@@ -581,6 +676,19 @@ describe("Cofrinhos", () => {
       expect(screen.queryByRole("region", { name: "Viagem" })).not.toBeInTheDocument();
       act(() => vi.advanceTimersByTime(6000));
       await waitFor(() => expect(sent(requests, "DELETE")).toHaveLength(1));
+    });
+
+    it("takes it out of the Meta Global at once", async () => {
+      open({
+        ...replies({ status: 204 }),
+        ...items([COFRINHO_RESERVA, { ...EMPTY_VIAGEM, target: "1000.00", progress_pct: "0.0" }]),
+      });
+
+      expect(await hero()).toHaveTextContent("R$ 300,00 de R$ 11.000,00");
+      await archive();
+
+      await screen.findByText("Cofrinho excluído");
+      expect(await hero()).toHaveTextContent("R$ 300,00 de R$ 10.000,00");
     });
 
     it("brings it back when undone", async () => {

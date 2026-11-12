@@ -124,15 +124,17 @@ const CofrinhoDetail = ({
           />
         ) : (
           <>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid auto-cols-fr grid-flow-col gap-2">
               <BrandButton disabled={saveDisabled} onClick={() => onSave(cofrinho)}>
                 <ArrowDownToLine className="size-5" />
                 Guardar
               </BrandButton>
-              <Button variant="outline" className="min-h-12 text-base" onClick={() => setWithdrawing(true)}>
-                <ArrowUpFromLine className="size-5" />
-                Resgatar
-              </Button>
+              {cents(cofrinho.balance) > 0 && (
+                <Button variant="outline" className="min-h-12 text-base" onClick={() => setWithdrawing(true)}>
+                  <ArrowUpFromLine className="size-5" />
+                  Resgatar
+                </Button>
+              )}
             </div>
             <section aria-labelledby="movements-title" className="flex flex-col gap-1">
               <h3 id="movements-title" className={caption}>
@@ -188,54 +190,67 @@ type Editing = { open: boolean; category?: Schemas["Category"] };
 
 type Filter = "all" | "progress" | "done" | "none";
 
-const FILTERS: { key: Filter; label: string; keep: (item: Cofrinho) => boolean }[] = [
+const FILTERS: { key: Filter; label: string; empty?: string; keep: (item: Cofrinho) => boolean }[] = [
   { key: "all", label: "Todos", keep: () => true },
-  { key: "progress", label: "Em andamento", keep: (item) => Boolean(item.target) && !item.done },
-  { key: "done", label: "Meta batida", keep: (item) => item.done },
-  { key: "none", label: "Sem meta", keep: (item) => !item.target },
+  {
+    key: "progress",
+    label: "Em andamento",
+    empty: "Nenhum cofrinho em andamento.",
+    keep: (item) => Boolean(item.target) && !item.done,
+  },
+  { key: "done", label: "Meta batida", empty: "Nenhum cofrinho com meta batida.", keep: (item) => item.done },
+  { key: "none", label: "Sem meta", empty: "Nenhum cofrinho sem meta.", keep: (item) => !item.target },
 ];
 
 const RESERVA_LIVRE = "Reserva Livre";
 
 type ControlsProps = { filter: Filter; list: boolean; onFilter: (filter: Filter) => void; onList: () => void };
 
-const GridControls = ({ filter, list, onFilter, onList }: ControlsProps) => (
-  <div className="ml-auto flex items-center">
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          aria-label="Filtrar cofrinhos"
-          className="size-11 rounded-full text-muted-foreground"
-        >
-          <ListFilter className="size-5" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-auto">
-        <DropdownMenuRadioGroup value={filter}>
-          {FILTERS.map(({ key, label }) => (
-            <DropdownMenuRadioItem key={key} value={key} className="min-h-11 text-base" onSelect={() => onFilter(key)}>
-              {label}
-            </DropdownMenuRadioItem>
-          ))}
-        </DropdownMenuRadioGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
-    <Button
-      type="button"
-      variant="ghost"
-      size="icon"
-      aria-label="Ver em lista"
-      aria-pressed={list}
-      className="size-11 rounded-full text-muted-foreground"
-      onClick={onList}
-    >
-      {list ? <LayoutGrid className="size-5" /> : <List className="size-5" />}
-    </Button>
-  </div>
-);
+const GridControls = ({ filter, list, onFilter, onList }: ControlsProps) => {
+  const active = FILTERS.find(({ key }) => key === filter)?.label;
+  return (
+    <div className="ml-auto flex items-center">
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            aria-label={`Filtrar: ${active}`}
+            className="min-h-11 min-w-11 rounded-full px-3 text-base text-muted-foreground"
+          >
+            <ListFilter className="size-5" />
+            {filter !== "all" && active}
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-auto">
+          <DropdownMenuRadioGroup value={filter}>
+            {FILTERS.map(({ key, label }) => (
+              <DropdownMenuRadioItem
+                key={key}
+                value={key}
+                className="min-h-11 text-base"
+                onSelect={() => onFilter(key)}
+              >
+                {label}
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        aria-label="Ver em lista"
+        aria-pressed={list}
+        className="size-11 rounded-full text-muted-foreground"
+        onClick={onList}
+      >
+        {list ? <LayoutGrid className="size-5" /> : <List className="size-5" />}
+      </Button>
+    </div>
+  );
+};
 
 /** `Cofrinhos`: the total, one card per goal, Reserva Livre, the create tile, and the sheets to fill, empty and archive them. */
 export const CofrinhosView = ({ month }: { month?: string }) => {
@@ -268,7 +283,8 @@ export const CofrinhosView = ({ month }: { month?: string }) => {
   };
   const withdrawable = [...goals, livre].filter((item) => cents(item.balance) > 0);
   const selected = [...goals, livre].find((item) => item.category_id === selectedId);
-  const keep = FILTERS.find(({ key }) => key === filter)?.keep ?? (() => true);
+  const { keep, empty } = FILTERS.find(({ key }) => key === filter) ?? FILTERS[0];
+  const shown = goals.filter(keep);
   const today = todayISO();
   const focus = focusOf(goals, today);
 
@@ -337,8 +353,12 @@ export const CofrinhosView = ({ month }: { month?: string }) => {
     return (
       <>
         <CofrinhosHero
-          data={cofrinhos.data}
-          firstUse={goals.length === 0 && cents(cofrinhos.data.total_saved) === 0}
+          data={{ ...cofrinhos.data, items }}
+          firstUse={
+            goals.length === 0 &&
+            cents(cofrinhos.data.total_saved) === 0 &&
+            cents(cofrinhos.data.saved_this_month) === 0
+          }
           saveDisabled={categories.isPending}
           withdrawDisabled={withdrawable.length === 0}
           onSave={() => setPicking("save")}
@@ -357,8 +377,9 @@ export const CofrinhosView = ({ month }: { month?: string }) => {
             </h2>
             <GridControls filter={filter} list={list} onFilter={setFilter} onList={() => setList(!list)} />
           </div>
+          {empty && shown.length === 0 && <p className="text-muted-foreground">{empty}</p>}
           <ul aria-label="Cofrinhos" className={cn("grid gap-4", !list && "lg:grid-cols-2 xl:grid-cols-3")}>
-            {goals.filter(keep).map((item) => (
+            {shown.map((item) => (
               <CofrinhoCard
                 key={item.category_id}
                 cofrinho={item}
@@ -417,7 +438,11 @@ export const CofrinhosView = ({ month }: { month?: string }) => {
         title="Movimentos"
         description="Os movimentos de todos os cofrinhos."
       >
-        {economia && <Movements categoryId={economia.id} nameOf={nameOf} />}
+        {categories.isError ? (
+          <PageError message="Não foi possível carregar as categorias." onRetry={() => categories.refetch()} />
+        ) : (
+          economia && <Movements categoryId={economia.id} nameOf={nameOf} />
+        )}
       </ResponsiveSheet>
       <CofrinhoDetail
         cofrinho={selected}

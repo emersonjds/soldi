@@ -86,7 +86,6 @@ const Badge = ({ cofrinho, focus, today }: { cofrinho: Cofrinho; focus: boolean;
         Meta batida
       </span>
     );
-  if (!cofrinho.target) return <span className={cn(badge, "bg-muted text-muted-foreground")}>Sem meta</span>;
   if (focus)
     return (
       <span className={cn(badge, "bg-secondary text-primary")}>
@@ -94,7 +93,7 @@ const Badge = ({ cofrinho, focus, today }: { cofrinho: Cofrinho; focus: boolean;
         Foco atual{pct}
       </span>
     );
-  if (!cofrinho.deadline || cofrinho.deadline > yearOut)
+  if (!cofrinho.target || !cofrinho.deadline || cofrinho.deadline > yearOut)
     return <span className={cn(badge, "bg-muted text-muted-foreground")}>Longo prazo{pct}</span>;
   return (
     <span className={cn(badge, "bg-income-soft text-income-text")}>
@@ -116,8 +115,8 @@ const InfoChip = ({ cofrinho, today }: { cofrinho: Cofrinho; today: string }) =>
         Aporte automático: {formatMoney(next.amount, currency)} todo dia {String(next.day).padStart(2, "0")}
       </p>
     );
-  if (cents(cofrinho.balance) !== 0 || !cofrinho.deadline) return null;
-  const months = monthsBetween(today, cofrinho.deadline);
+  if (cents(cofrinho.balance) !== 0 || !cofrinho.deadline || cofrinho.deadline <= today) return null;
+  const months = Math.max(1, monthsBetween(today, cofrinho.deadline));
   return (
     <p className={chip}>
       <CalendarDays className="size-4 shrink-0" aria-hidden />
