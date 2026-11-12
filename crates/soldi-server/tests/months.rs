@@ -1069,3 +1069,113 @@ async fn p6_a_month_note_needs_a_session(pool: PgPool) {
         StatusCode::UNAUTHORIZED
     );
 }
+
+/// `months` months after today's, as `YYYY-MM`.
+fn month_ahead(months: u32) -> String {
+    let today = soldi_server::today_sao_paulo();
+    (today + chrono::Months::new(months))
+        .format("%Y-%m")
+        .to_string()
+}
+
+async fn fixo_salario(user: &TestApp) -> Value {
+    let salary = user.category_id("Salário").await;
+    let today = soldi_server::today_sao_paulo().to_string();
+    let (status, created) = user
+        .post(
+            "/api/transactions",
+            json!({ "date": today, "amount": "1000", "kind": "income", "category_id": salary,
+                    "open_ended": true }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{created}");
+    created
+}
+
+/// The user's entries and the distinct months they fall in.
+async fn rows_and_months(pool: &PgPool, email: &str) -> (i64, i64) {
+    sqlx::query_as(
+        "SELECT count(*), count(DISTINCT date_trunc('month', t.date))
+         FROM transactions t JOIN users u ON u.id = t.user_id WHERE u.email = $1",
+    )
+    .bind(email)
+    .fetch_one(pool)
+    .await
+    .unwrap()
+}
+
+#[sqlx::test]
+async fn d36_a_fixo_salario_counts_in_every_month_ahead_without_typing(pool: PgPool) {
+    let ana = TestApp::signed_in(pool.clone(), "ana@example.com").await;
+    let bia = ana.another_user("bia@example.com").await;
+    let first = format!("{}-01", month_ahead(0));
+    for user in [&ana, &bia] {
+        open_at(user, "0", &first).await;
+        fixo_salario(user).await;
+    }
+    // A series written long ago: its members stop a month after today.
+    sqlx::query(
+        "DELETE FROM transactions t USING users u
+         WHERE u.id = t.user_id AND u.email = 'ana@example.com'
+           AND t.date > (now() AT TIME ZONE 'America/Sao_Paulo')::date + interval '1 month'",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert!(rows_and_months(&pool, "ana@example.com").await.0 <= 2);
+
+    let (status, forecast) = ana.get("/api/forecast").await;
+
+    assert_eq!(status, StatusCode::OK, "{forecast}");
+    assert_eq!(rows_and_months(&pool, "ana@example.com").await, (12, 12));
+    let days = forecast["days"].as_array().unwrap();
+    assert_eq!(days.last().unwrap()["projected_balance"], "12000.00");
+    assert_eq!(rows_and_months(&pool, "bia@example.com").await, (12, 12));
+
+    let (status, view) = ana.get(&format!("/api/months/{}", month_ahead(24))).await;
+    assert_eq!(status, StatusCode::OK, "{view}");
+    assert_eq!(view["totals"]["income"], "1000.00");
+    assert_eq!(rows_and_months(&pool, "ana@example.com").await, (25, 25));
+
+    let (status, ledger) = ana
+        .get(&format!("/api/transactions?month={}", month_ahead(30)))
+        .await;
+    assert_eq!(status, StatusCode::OK, "{ledger}");
+    assert_eq!(ledger.as_array().unwrap().len(), 1);
+    assert_eq!(rows_and_months(&pool, "ana@example.com").await, (31, 31));
+
+    let (status, far) = ana.get(&format!("/api/months/{}", month_ahead(80))).await;
+    assert_eq!(status, StatusCode::OK, "{far}");
+    assert_eq!(far["totals"]["income"], "0.00");
+    assert_eq!(rows_and_months(&pool, "ana@example.com").await, (60, 60));
+    assert_eq!(rows_and_months(&pool, "bia@example.com").await, (12, 12));
+}
+
+#[sqlx::test]
+async fn d36_a_read_with_nothing_behind_takes_no_series_lock(pool: PgPool) {
+    let ana = TestApp::signed_in(pool.clone(), "ana@example.com").await;
+    open_at(&ana, "0", &format!("{}-01", month_ahead(0))).await;
+    let created = fixo_salario(&ana).await;
+    let mut lock = pool.begin().await.unwrap();
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))")
+        .bind(created["series"]["id"].as_str().unwrap())
+        .execute(&mut *lock)
+        .await
+        .unwrap();
+
+    let read = tokio::time::timeout(std::time::Duration::from_secs(10), async {
+        (
+            ana.get("/api/forecast").await.0,
+            ana.get(&format!("/api/months/{}", month_ahead(11))).await.0,
+            ana.get(&format!("/api/transactions?month={}", month_ahead(5)))
+                .await
+                .0,
+        )
+    })
+    .await
+    .expect("a read waited on the series lock");
+
+    assert_eq!(read, (StatusCode::OK, StatusCode::OK, StatusCode::OK));
+    lock.commit().await.unwrap();
+    assert_eq!(rows_and_months(&pool, "ana@example.com").await, (12, 12));
+}

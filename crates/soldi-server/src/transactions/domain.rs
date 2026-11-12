@@ -441,6 +441,23 @@ pub fn transaction(
     }
 }
 
+/// The entry as a draft to copy: same day, amount, kind, category, note and card.
+pub fn copy_of(entry: &Transaction) -> CreateTransaction {
+    CreateTransaction {
+        date: entry.date,
+        amount: entry.amount,
+        kind: entry.kind,
+        category_id: entry.category.id,
+        note: entry.note.clone(),
+        repeat_months: None,
+        repeat_every: None,
+        installments: None,
+        first_installment: None,
+        open_ended: false,
+        card_id: entry.card_id,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

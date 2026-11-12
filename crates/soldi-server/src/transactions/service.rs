@@ -21,9 +21,54 @@ pub async fn list(
     category_id: Option<Uuid>,
 ) -> Result<Vec<Transaction>, AppError> {
     let first = months::domain::parse_month(month)?;
-    let mut conn = pool.acquire().await?;
     let to = months::domain::month_end(first);
+    let until = domain::open_until(crate::today_sao_paulo(), to);
+    extend_open_series(pool, user, until).await?;
+    let mut conn = pool.acquire().await?;
     Ok(repo::list(&mut conn, user.id, first, to, category_id).await?)
+}
+
+/// D36: grows the user's open series through `until`, copying each one's last member under its lock.
+pub async fn extend_open_series(
+    pool: &PgPool,
+    user: &CurrentUser,
+    until: NaiveDate,
+) -> Result<(), AppError> {
+    let behind = repo::open_series_behind(&mut *pool.acquire().await?, user.id, until).await?;
+    for id in behind {
+        let mut tx = pool.begin().await?;
+        let Some(series) = repo::find(&mut tx, user.id, id)
+            .await?
+            .and_then(|last| last.series)
+        else {
+            continue;
+        };
+        repo::lock_series(&mut tx, series.id).await?;
+        let end = repo::series_end(&mut tx, user.id, series.id).await?;
+        // Re-read under the lock: a concurrent read may have grown it, or Parar série closed it.
+        let Some(last) = repo::find(&mut tx, user.id, id)
+            .await?
+            .filter(|last| last.series.as_ref().is_some_and(|s| s.open_ended))
+        else {
+            continue;
+        };
+        let dates = domain::open_dates(series.every, &end, until)?;
+        if !dates.is_empty() {
+            let amounts = vec![last.amount; dates.len()];
+            repo::insert_copies(
+                &mut tx,
+                user.id,
+                &domain::copy_of(&last),
+                series.id,
+                series.every,
+                &dates,
+                &amounts,
+            )
+            .await?;
+        }
+        tx.commit().await?;
+    }
+    Ok(())
 }
 
 pub async fn count(pool: &PgPool, user: &CurrentUser, period: &str) -> Result<i64, AppError> {

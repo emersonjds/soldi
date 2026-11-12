@@ -2592,3 +2592,108 @@ async fn d36_open_ended_is_for_entradas_and_diario_off_card_alone(pool: PgPool) 
     let total = i64::try_from(dates.len()).unwrap();
     assert_eq!(place(entries.last().unwrap()), (total, total));
 }
+
+/// Deletes the series' members after next month: a series written long ago.
+async fn trim(pool: &PgPool, series: &Value) {
+    sqlx::query(
+        "DELETE FROM transactions WHERE series_id = $1::uuid
+           AND date > (now() AT TIME ZONE 'America/Sao_Paulo')::date + interval '1 month'",
+    )
+    .bind(series["series"]["id"].as_str().unwrap())
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+async fn members(pool: &PgPool, series: &Value) -> i64 {
+    sqlx::query_scalar("SELECT count(*) FROM transactions WHERE series_id = $1::uuid")
+        .bind(series["series"]["id"].as_str().unwrap())
+        .fetch_one(pool)
+        .await
+        .unwrap()
+}
+
+/// A transaction holding the series' advisory lock, as `repo::lock_series` takes it.
+async fn hold_series(pool: &PgPool, series: &Value) -> sqlx::Transaction<'static, sqlx::Postgres> {
+    let mut lock = pool.begin().await.unwrap();
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))")
+        .bind(series["series"]["id"].as_str().unwrap())
+        .execute(&mut *lock)
+        .await
+        .unwrap();
+    lock
+}
+
+#[sqlx::test]
+async fn d36_concurrent_reads_grow_an_open_series_once(pool: PgPool) {
+    let ana = opened(pool.clone(), "ana@example.com").await;
+    let bia = opened(pool.clone(), "bia@example.com").await;
+    let created = fixo(&ana, "income", "Salário", json!({})).await;
+    let hers = fixo(&bia, "income", "Salário", json!({})).await;
+    trim(&pool, &created).await;
+    trim(&pool, &hers).await;
+    let behind_hers = members(&pool, &hers).await;
+    let lock = hold_series(&pool, &created).await;
+
+    let both = async { tokio::join!(ana.get("/api/forecast"), ana.get("/api/forecast")) };
+    let release = async {
+        tokio::time::timeout(std::time::Duration::from_secs(10), waiting(&pool, 2))
+            .await
+            .expect("both reads wait on the series lock");
+        lock.commit().await.unwrap();
+    };
+    let ((first, second), ()) = tokio::join!(both, release);
+
+    assert_eq!(first.0, StatusCode::OK, "{}", first.1);
+    assert_eq!(second.0, StatusCode::OK, "{}", second.1);
+    assert_eq!(members(&pool, &created).await, 12);
+    let entries = run(&ana, &this_month(), 12).await;
+    assert_eq!(place(&entries[11]), (12, 12));
+    assert_eq!(members(&pool, &hers).await, behind_hers);
+}
+
+#[sqlx::test]
+async fn d36_weekly_and_yearly_open_series_grow_by_their_step(pool: PgPool) {
+    let ana = opened(pool.clone(), "ana@example.com").await;
+    let bia = opened(pool.clone(), "bia@example.com").await;
+    let weekly = fixo(&ana, "daily", "Mercado", json!({ "repeat_every": "week" })).await;
+    let yearly = fixo(&ana, "income", "Salário", json!({ "repeat_every": "year" })).await;
+    let hers = fixo(&bia, "daily", "Mercado", json!({ "repeat_every": "week" })).await;
+    trim(&pool, &weekly).await;
+    trim(&pool, &hers).await;
+    let behind_hers = members(&pool, &hers).await;
+    assert_eq!(members(&pool, &yearly).await, 1);
+
+    let (status, forecast) = ana.get("/api/forecast").await;
+    assert_eq!(status, StatusCode::OK, "{forecast}");
+    let dates: Vec<chrono::NaiveDate> = sqlx::query_scalar(
+        "SELECT date FROM transactions WHERE series_id = $1::uuid ORDER BY date",
+    )
+    .bind(weekly["series"]["id"].as_str().unwrap())
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(dates[0], today());
+    assert!(
+        dates
+            .windows(2)
+            .all(|pair| (pair[1] - pair[0]).num_days() == 7)
+    );
+    let last = *dates.last().unwrap();
+    assert!(last <= horizon_end() && horizon_end() < last + chrono::Days::new(7));
+    assert_eq!(members(&pool, &yearly).await, 1);
+
+    let three_years = (today() + chrono::Months::new(36))
+        .format("%Y-%m")
+        .to_string();
+    let (status, view) = ana.get(&format!("/api/months/{three_years}")).await;
+    assert_eq!(status, StatusCode::OK, "{view}");
+    let entry = month(&ana, &three_years)
+        .await
+        .into_iter()
+        .find(|entry| entry["series"]["id"] == yearly["series"]["id"])
+        .unwrap();
+    assert_eq!(place(&entry), (4, 4));
+    assert_eq!(entry["amount"], "30.00");
+    assert_eq!(members(&pool, &hers).await, behind_hers);
+}

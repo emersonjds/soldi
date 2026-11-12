@@ -359,6 +359,27 @@ pub async fn lock_series(conn: &mut PgConnection, series_id: Uuid) -> Result<(),
     Ok(())
 }
 
+/// D36: the last member of each of the user's open series whose next member falls by `until`, a
+/// month's last day: one step after the last member lands in the next member's month.
+pub async fn open_series_behind(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    until: NaiveDate,
+) -> Result<Vec<Uuid>, sqlx::Error> {
+    sqlx::query_scalar!(
+        r#"SELECT id AS "id!" FROM (
+               SELECT DISTINCT ON (series_id) id, date, series_every FROM transactions
+               WHERE user_id = $1 AND series_open ORDER BY series_id, date DESC, id DESC) last
+           WHERE last.date + CASE last.series_every WHEN 'week' THEN interval '7 days'
+                                                    WHEN 'year' THEN interval '1 year'
+                                                    ELSE interval '1 month' END <= $2::date"#,
+        user_id,
+        until
+    )
+    .fetch_all(&mut *conn)
+    .await
+}
+
 /// M3 (D32): the dates of the series' last four members, last first.
 pub async fn series_end(
     conn: &mut PgConnection,

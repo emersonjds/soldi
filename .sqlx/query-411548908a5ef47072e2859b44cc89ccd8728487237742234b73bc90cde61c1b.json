@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id AS \"id!\" FROM (\n               SELECT DISTINCT ON (series_id) id, date, series_every FROM transactions\n               WHERE user_id = $1 AND series_open ORDER BY series_id, date DESC, id DESC) last\n           WHERE last.date + CASE last.series_every WHEN 'week' THEN interval '7 days'\n                                                    WHEN 'year' THEN interval '1 year'\n                                                    ELSE interval '1 month' END <= $2::date",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "transactions",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Date"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "411548908a5ef47072e2859b44cc89ccd8728487237742234b73bc90cde61c1b"
+}
