@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { addMonths, dayMonth, monthName, monthYear, repeatDates } from "./date";
+import { addMonths, dayMonth, isMonth, monthName, monthYear, repeatDates } from "./date";
 
 describe("monthYear", () => {
   it("writes a deadline as the month and year", () => {
@@ -28,5 +28,18 @@ describe("monthYear", () => {
     expect(repeatDates("2027-01-31", 4)).toEqual(["2027-02-28", "2027-03-31", "2027-04-30"]);
     expect(repeatDates("2028-01-31", 2)).toEqual(["2028-02-29"]);
     expect(repeatDates("2026-11-05", 1)).toEqual([]);
+  });
+});
+
+describe("isMonth", () => {
+  it("takes YYYY-MM from 2000 to 2100 only", () => {
+    expect(isMonth("2026-11")).toBe(true);
+    expect(isMonth("2000-01")).toBe(true);
+    expect(isMonth("2100-12")).toBe(true);
+    expect(isMonth("1999-12")).toBe(false);
+    expect(isMonth("2101-01")).toBe(false);
+    expect(isMonth("9999-01")).toBe(false);
+    expect(isMonth("2026-13")).toBe(false);
+    expect(isMonth(null)).toBe(false);
   });
 });
