@@ -1,0 +1,60 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT COALESCE(p.id, c.id) AS \"category_id!\", COALESCE(p.name, c.name) AS \"name!\",\n                  COALESCE(p.icon, c.icon) AS \"icon!\", COALESCE(p.color, c.color) AS \"color!\",\n                  t.kind = 'income' AS \"income!\", SUM(t.amount) AS \"amount!\"\n           FROM transactions t JOIN categories c ON c.user_id = t.user_id AND c.id = t.category_id\n           LEFT JOIN categories p ON p.user_id = c.user_id AND p.id = c.parent_id\n           LEFT JOIN recurring_bills b ON b.user_id = t.user_id AND b.id = t.recurring_bill_id\n           WHERE t.user_id = $1 AND t.date BETWEEN $2 AND $3\n             AND t.cofrinho_id IS NULL AND b.closing_day IS NULL\n             AND NOT (t.kind = 'bill' AND (c.is_savings OR COALESCE(p.is_savings, false)))\n           GROUP BY 1, 2, 3, 4, 5",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "category_id!",
+        "type_info": "Uuid",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 1,
+        "name": "name!",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "icon!",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 3,
+        "name": "color!",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 4,
+        "name": "income!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 5,
+        "name": "amount!",
+        "type_info": "Numeric",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Date",
+        "Date"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "7e91ed1c346b6ea961d5e5e49fd60baa84348f7fc13662e892d3442c3d0d3d85"
+}

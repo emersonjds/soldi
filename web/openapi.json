@@ -1606,6 +1606,67 @@
         }
       }
     },
+    "/api/reports/year": {
+      "get": {
+        "tags": [
+          "reports"
+        ],
+        "operationId": "year_report",
+        "parameters": [
+          {
+            "name": "year",
+            "in": "query",
+            "description": "The year, `YYYY` from 2000 to 2100",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "2026"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The year's Entradas and Gastos by purchase date (D31), from the opening month or January to today's month or December; empty before the opening or after today's year",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/YearReport"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "No `year`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`year` is not a year from 2000 to 2100",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/settings": {
       "get": {
         "tags": [
@@ -3660,6 +3721,153 @@
           }
         },
         "additionalProperties": false
+      },
+      "YearCard": {
+        "type": "object",
+        "description": "A credit card's spends in the year by purchase date (D28, D31).",
+        "required": [
+          "card_id",
+          "name",
+          "amount"
+        ],
+        "properties": {
+          "amount": {
+            "type": "string"
+          },
+          "card_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "YearGroup": {
+        "type": "object",
+        "description": "A top-level category's total in the year, its subcategories rolled in; `pct` is its share of\n`spent` (outflow) or `totals.income` (income) with one decimal.",
+        "required": [
+          "category_id",
+          "name",
+          "icon",
+          "color",
+          "amount",
+          "pct"
+        ],
+        "properties": {
+          "amount": {
+            "type": "string"
+          },
+          "category_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "color": {
+            "type": "string"
+          },
+          "icon": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "pct": {
+            "type": "string",
+            "example": "26.0"
+          }
+        }
+      },
+      "YearMonth": {
+        "type": "object",
+        "description": "A month of the year and its `Gastos` (D31).",
+        "required": [
+          "month",
+          "spent"
+        ],
+        "properties": {
+          "month": {
+            "type": "string",
+            "example": "2026-03"
+          },
+          "spent": {
+            "type": "string"
+          }
+        }
+      },
+      "YearReport": {
+        "type": "object",
+        "description": "The year's Entradas and Gastos by purchase date (D31), over whole months from the opening month\nor January to today's month or December. `totals` has the month view's shape, Economia deposits\ninside `bills`, but follows D31: `bills` leaves fatura payments out and `daily` holds card\npurchases, so it does not equal the sum of the month views. `spent` (Gastos) leaves deposits and\nfatura payments out. `first_month` and `last_month` are null when nothing is counted.",
+        "required": [
+          "year",
+          "totals",
+          "spent",
+          "top_months",
+          "spending",
+          "income",
+          "card_spent",
+          "cards"
+        ],
+        "properties": {
+          "card_pct": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "example": "15.0"
+          },
+          "card_spent": {
+            "type": "string"
+          },
+          "cards": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/YearCard"
+            }
+          },
+          "first_month": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "example": "2026-01"
+          },
+          "income": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/YearGroup"
+            }
+          },
+          "last_month": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "example": "2026-11"
+          },
+          "spending": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/YearGroup"
+            }
+          },
+          "spent": {
+            "type": "string"
+          },
+          "top_months": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/YearMonth"
+            }
+          },
+          "totals": {
+            "$ref": "#/components/schemas/Totals"
+          },
+          "year": {
+            "type": "integer",
+            "format": "int32",
+            "example": 2026
+          }
+        }
       }
     }
   }

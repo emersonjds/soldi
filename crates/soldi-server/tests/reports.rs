@@ -1,6 +1,7 @@
 mod common;
 
 use axum::http::StatusCode;
+use chrono::Datelike;
 use common::TestApp;
 use serde_json::json;
 use sqlx::PgPool;
@@ -514,4 +515,402 @@ async fn d28_an_archived_cards_payment_stays_out_of_para_onde_vai(pool: PgPool) 
 
     assert_eq!(november["outflow"], json!([]));
     assert_eq!(november["outflow_total"], "0.00");
+}
+
+async fn year_report(user: &TestApp, year: &str) -> (StatusCode, serde_json::Value) {
+    user.get(&format!("/api/reports/year?year={year}")).await
+}
+
+async fn card(user: &TestApp, name: &str) -> String {
+    let cards = user.category_id("Cartão").await;
+    let (status, card) = user
+        .post(
+            "/api/bills",
+            json!({ "name": name, "due_day": 10, "closing_day": 3, "category_id": cards }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{card}");
+    card["id"].as_str().unwrap().to_string()
+}
+
+async fn spend(user: &TestApp, card: &str, date: &str, amount: &str) {
+    let mercado = user.category_id("Mercado").await;
+    let (status, created) = user
+        .post(
+            "/api/transactions",
+            json!({ "date": date, "amount": amount, "kind": "daily",
+                    "category_id": mercado, "card_id": card }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{created}");
+}
+
+/// Ana's 2025 per SOL-103's plan: income, Saída, Diário, a deposit, a resgate, card spends and a
+/// paid fatura. Bia logs the same dates.
+async fn a_year_of_entries(user: &TestApp) {
+    user.open_at("0", "2025-01-01").await;
+    let economia = user.category_id("Economia").await;
+    let (_, reserva) = user
+        .post(
+            "/api/categories",
+            json!({ "name": "Reserva", "kind": "bill", "parent_id": economia }),
+        )
+        .await;
+    let reserva = reserva["id"].as_str().unwrap().to_string();
+    log(user, "2025-01-05", "income", "1000", "Salário").await;
+    log(user, "2025-03-05", "income", "1000", "Salário").await;
+    log(user, "2025-03-06", "income", "300", "Extra").await;
+    log(user, "2025-01-10", "bill", "400", "Aluguel").await;
+    log(user, "2025-03-10", "bill", "400", "Aluguel").await;
+    log(user, "2025-01-12", "daily", "50", "Mercado").await;
+    log(user, "2025-03-15", "bill", "200", "Reserva").await;
+    withdraw(user, &reserva, "2025-03-20", "50").await;
+    let porto = card(user, "Porto").await;
+    spend(user, &porto, "2025-01-20", "30").await;
+    spend(user, &porto, "2025-03-02", "120").await;
+    let (status, paid) = user
+        .post(
+            &format!("/api/bills/{porto}/pay?month=2025-02"),
+            json!({ "date": "2025-02-10", "amount": "30" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{paid}");
+}
+
+fn amounts(rows: &serde_json::Value, field: &str) -> Vec<(String, String)> {
+    rows.as_array()
+        .unwrap()
+        .iter()
+        .map(|row| {
+            (
+                row[field].as_str().unwrap().into(),
+                row["amount"]
+                    .as_str()
+                    .unwrap_or_else(|| row["spent"].as_str().unwrap())
+                    .into(),
+            )
+        })
+        .collect()
+}
+
+fn cents(rows: &serde_json::Value) -> i64 {
+    rows.as_array()
+        .unwrap()
+        .iter()
+        .map(|row| {
+            row["amount"]
+                .as_str()
+                .unwrap()
+                .replace('.', "")
+                .parse::<i64>()
+                .unwrap()
+        })
+        .sum()
+}
+
+fn pair(name: &str, amount: &str) -> (String, String) {
+    (name.into(), amount.into())
+}
+
+#[sqlx::test]
+async fn the_year_counts_gastos_by_purchase_date_without_deposits_or_faturas(pool: PgPool) {
+    let ana = TestApp::signed_in(pool, "ana@example.com").await;
+    let bia = ana.another_user("bia@example.com").await;
+    a_year_of_entries(&ana).await;
+    let casa = ana.category_id("Casa").await;
+    let (_, colecoes) = ana
+        .post(
+            "/api/categories",
+            json!({ "name": "Coleções", "kind": "daily", "color": "cat-14" }),
+        )
+        .await;
+    let (_, bonus) = ana
+        .post(
+            "/api/categories",
+            json!({ "name": "Bônus", "kind": "income", "color": "cat-15" }),
+        )
+        .await;
+    for (name, parent) in [("Faxina", json!(casa)), ("Gibis", colecoes["id"].clone())] {
+        let (status, created) = ana
+            .post(
+                "/api/categories",
+                json!({ "name": name, "kind": "daily", "parent_id": parent }),
+            )
+            .await;
+        assert_eq!(status, StatusCode::CREATED, "{created}");
+    }
+    log(&ana, "2025-03-12", "daily", "100", "Faxina").await;
+    log(&ana, "2025-01-15", "daily", "60", "Gibis").await;
+    log(&ana, "2025-03-07", "income", "200", "Bônus").await;
+    for archived in [&colecoes, &bonus] {
+        let id = archived["id"].as_str().unwrap();
+        assert_eq!(
+            ana.delete(&format!("/api/categories/{id}")).await.0,
+            StatusCode::NO_CONTENT
+        );
+    }
+    bia.open_at("0", "2025-01-01").await;
+    log(&bia, "2025-03-10", "bill", "777", "Aluguel").await;
+    log(&bia, "2025-01-05", "income", "1", "Salário").await;
+    log(&bia, "2025-02-10", "daily", "9", "Mercado").await;
+    let porto = card(&bia, "Porto").await;
+    spend(&bia, &porto, "2025-03-02", "3").await;
+
+    let (status, report) = year_report(&ana, "2025").await;
+
+    assert_eq!(status, StatusCode::OK, "{report}");
+    assert_eq!(
+        (
+            &report["year"],
+            &report["first_month"],
+            &report["last_month"]
+        ),
+        (&json!(2025), &json!("2025-01"), &json!("2025-12"))
+    );
+    assert_eq!(
+        report["totals"],
+        json!({ "income": "2500.00", "bills": "1000.00", "daily": "360.00", "outflow": "1360.00",
+                "performance": "1140.00", "saved": "150.00", "withdrawn": "50.00" })
+    );
+    assert_eq!(report["spent"], "1160.00");
+    assert_eq!(
+        amounts(&report["top_months"], "month"),
+        [pair("2025-03", "620.00"), pair("2025-01", "540.00")]
+    );
+    assert_eq!(
+        amounts(&report["spending"], "name"),
+        [
+            pair("Casa", "900.00"),
+            pair("Alimentação", "200.00"),
+            pair("Coleções", "60.00")
+        ]
+    );
+    let pcts: Vec<&str> = report["spending"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|group| group["pct"].as_str().unwrap())
+        .collect();
+    assert_eq!(pcts, ["77.6", "17.2", "5.2"]);
+    assert_eq!(
+        report["spending"][0]["category_id"],
+        json!(ana.category_id("Casa").await)
+    );
+    assert_eq!(
+        amounts(&report["income"], "name"),
+        [
+            pair("Salário", "2000.00"),
+            pair("Extra", "300.00"),
+            pair("Bônus", "200.00")
+        ]
+    );
+    assert_eq!(cents(&report["spending"]), 116_000);
+    assert_eq!(cents(&report["income"]), 250_000);
+    assert_eq!(
+        (&report["card_spent"], &report["card_pct"]),
+        (&json!("150.00"), &json!("12.9"))
+    );
+    assert_eq!(amounts(&report["cards"], "name"), [pair("Porto", "150.00")]);
+
+    let (_, theirs) = year_report(&bia, "2025").await;
+    assert_eq!(theirs["spent"], "789.00");
+    assert_eq!(theirs["totals"]["income"], "1.00");
+    assert_eq!(amounts(&theirs["cards"], "name"), [pair("Porto", "3.00")]);
+}
+
+#[sqlx::test]
+async fn a_past_year_matches_economia_do_ano(pool: PgPool) {
+    let ana = TestApp::signed_in(pool, "ana@example.com").await;
+    a_year_of_entries(&ana).await;
+
+    let (_, report) = year_report(&ana, "2025").await;
+    let (_, savings) = savings(&ana, "2025").await;
+
+    assert_eq!(
+        (
+            &report["totals"]["income"],
+            &report["totals"]["saved"],
+            &report["totals"]["withdrawn"]
+        ),
+        (
+            &savings["income_total"],
+            &savings["saved_total"],
+            &savings["withdrawn_total"]
+        )
+    );
+}
+
+#[sqlx::test]
+async fn the_current_year_counts_up_to_the_end_of_todays_month(pool: PgPool) {
+    let ana = TestApp::signed_in(pool, "ana@example.com").await;
+    let today = soldi_server::today_sao_paulo();
+    let year = today.format("%Y").to_string();
+    let last = soldi_server::months::domain::month_end(today);
+    ana.open_at("0", &format!("{year}-01-01")).await;
+    log(&ana, &last.to_string(), "daily", "100", "Mercado").await;
+    if today.month() != 12 {
+        log(
+            &ana,
+            &(last + chrono::Days::new(1)).to_string(),
+            "daily",
+            "500",
+            "Mercado",
+        )
+        .await;
+    }
+
+    let (status, report) = year_report(&ana, &year).await;
+
+    assert_eq!(status, StatusCode::OK, "{report}");
+    assert_eq!(report["spent"], "100.00");
+    assert_eq!(report["first_month"], format!("{year}-01"));
+    assert_eq!(report["last_month"], today.format("%Y-%m").to_string());
+}
+
+#[sqlx::test]
+async fn a_year_report_before_the_opening_or_after_today_is_empty(pool: PgPool) {
+    let ana = TestApp::signed_in(pool, "ana@example.com").await;
+    ana.open_at("0", "2025-06-10").await;
+
+    for year in ["2024", "2100"] {
+        let (status, body) = year_report(&ana, year).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(
+            body,
+            json!({ "year": year.parse::<i32>().unwrap(), "first_month": null, "last_month": null,
+                    "totals": { "income": "0.00", "bills": "0.00", "daily": "0.00", "outflow": "0.00",
+                                "performance": "0.00", "saved": "0.00", "withdrawn": "0.00" },
+                    "spent": "0.00", "top_months": [], "spending": [], "income": [],
+                    "card_spent": "0.00", "card_pct": null, "cards": [] })
+        );
+    }
+}
+
+#[sqlx::test]
+async fn a_bad_year_report_is_422_none_is_400_and_no_session_401(pool: PgPool) {
+    let user = TestApp::signed_in(pool.clone(), "ana@example.com").await;
+
+    for bad in ["1999", "abcd"] {
+        let (status, problem) = year_report(&user, bad).await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{bad}");
+        assert_eq!(problem["errors"][0]["field"], "year");
+    }
+    assert_eq!(
+        user.get("/api/reports/year").await.0,
+        StatusCode::BAD_REQUEST
+    );
+    assert_eq!(
+        year_report(&TestApp::anonymous(pool), "2026").await.0,
+        StatusCode::UNAUTHORIZED
+    );
+}
+
+/// Two `GROUP BY` queries; the bound only catches a per-entry or per-month loop in a debug build.
+#[sqlx::test]
+async fn ten_thousand_entries_make_a_year_report_in_under_a_second(pool: PgPool) {
+    let ana = TestApp::signed_in(pool.clone(), "ana@example.com").await;
+    ana.open_at("0", "2025-01-01").await;
+    sqlx::query(
+        "INSERT INTO transactions (user_id, date, amount, kind, category_id)
+         SELECT u.id, DATE '2025-01-01' + (n % 365), 10, k.kind, c.id
+         FROM users u CROSS JOIN generate_series(0, 9999) n
+         CROSS JOIN LATERAL (SELECT (ARRAY['income', 'bill', 'daily'])[n % 3 + 1] AS kind,
+                                    (ARRAY['Salário', 'Economia', 'Mercado'])[n % 3 + 1] AS name) k
+         JOIN categories c ON c.user_id = u.id AND c.name = k.name
+         WHERE u.email = 'ana@example.com'",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let started = std::time::Instant::now();
+    let (status, report) = year_report(&ana, "2025").await;
+    let elapsed = started.elapsed();
+
+    assert_eq!(status, StatusCode::OK, "{report}");
+    assert_eq!(report["top_months"].as_array().unwrap().len(), 3);
+    assert_eq!(report["spent"], "33330.00");
+    assert_eq!(report["totals"]["income"], "33340.00");
+    assert_eq!(report["totals"]["saved"], "33330.00");
+    assert!(elapsed < std::time::Duration::from_secs(1), "{elapsed:?}");
+}
+
+#[sqlx::test]
+async fn an_archived_cards_spends_stay_in_the_year(pool: PgPool) {
+    let ana = TestApp::signed_in(pool, "ana@example.com").await;
+    ana.open_at("0", "2025-01-01").await;
+    let porto = card(&ana, "Porto").await;
+    spend(&ana, &porto, "2025-05-20", "70").await;
+    let (status, paid) = ana
+        .post(
+            &format!("/api/bills/{porto}/pay?month=2025-06"),
+            json!({ "date": "2025-06-10", "amount": "70" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{paid}");
+    assert_eq!(
+        ana.delete(&format!("/api/bills/{porto}")).await.0,
+        StatusCode::NO_CONTENT
+    );
+
+    let (_, report) = year_report(&ana, "2025").await;
+
+    assert_eq!(
+        report["cards"],
+        json!([{ "card_id": porto, "name": "Porto", "amount": "70.00" }])
+    );
+    assert_eq!(report["card_pct"], "100.0");
+    assert_eq!(report["spent"], "70.00");
+    assert_eq!(report["totals"]["bills"], "0.00");
+    assert_eq!(
+        amounts(&report["spending"], "name"),
+        [pair("Alimentação", "70.00")]
+    );
+}
+
+fn money_cents(value: &serde_json::Value) -> i64 {
+    value.as_str().unwrap().replace('.', "").parse().unwrap()
+}
+
+#[sqlx::test]
+async fn a_fatura_payment_edited_to_diario_or_entrada_never_counts(pool: PgPool) {
+    let ana = TestApp::signed_in(pool, "ana@example.com").await;
+    ana.open_at("0", "2025-01-01").await;
+    let porto = card(&ana, "Porto").await;
+    spend(&ana, &porto, "2025-01-20", "30").await;
+    let (status, paid) = ana
+        .post(
+            &format!("/api/bills/{porto}/pay?month=2025-02"),
+            json!({ "date": "2025-02-10", "amount": "30" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{paid}");
+    let uri = format!("/api/transactions/{}", paid["id"].as_str().unwrap());
+
+    let mercado = ana.category_id("Mercado").await;
+    let (status, edited) = ana
+        .patch(&uri, json!({ "kind": "daily", "category_id": mercado }))
+        .await;
+    assert_eq!(status, StatusCode::OK, "{edited}");
+    let (_, report) = year_report(&ana, "2025").await;
+
+    assert_eq!(report["spent"], "30.00");
+    assert_eq!(
+        amounts(&report["top_months"], "month"),
+        [pair("2025-01", "30.00")]
+    );
+    assert_eq!(cents(&report["spending"]), money_cents(&report["spent"]));
+
+    let salario = ana.category_id("Salário").await;
+    let (status, edited) = ana
+        .patch(&uri, json!({ "kind": "income", "category_id": salario }))
+        .await;
+    assert_eq!(status, StatusCode::OK, "{edited}");
+    let (_, report) = year_report(&ana, "2025").await;
+
+    assert_eq!(report["spent"], "30.00");
+    assert_eq!(
+        cents(&report["income"]),
+        money_cents(&report["totals"]["income"])
+    );
 }
