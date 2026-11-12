@@ -39,6 +39,7 @@ pub struct NextContribution {
     #[serde(serialize_with = "crate::money")]
     #[schema(value_type = String)]
     pub amount: Decimal,
+    #[schema(minimum = 1, maximum = 31)]
     pub day: i16,
 }
 

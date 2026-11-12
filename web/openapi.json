@@ -2887,7 +2887,9 @@
           },
           "day": {
             "type": "integer",
-            "format": "int32"
+            "format": "int32",
+            "maximum": 31,
+            "minimum": 1
           }
         }
       },
