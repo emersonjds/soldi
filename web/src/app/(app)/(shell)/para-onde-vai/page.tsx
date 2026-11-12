@@ -10,14 +10,15 @@ import { CategoryBreakdown } from "@/widgets/category-breakdown/category-breakdo
 import { PageHero } from "@/widgets/month-header/month-header";
 
 const ParaOndeVaiScreen = () => {
-  const month = monthParam(useSearchParams().get("m"));
+  const search = useSearchParams();
+  const month = monthParam(search.get("m"));
 
   return (
     <div className="flex flex-col gap-6">
       <PageHero eyebrow="FLUXO DE DESPESAS • CONSOLIDADO" title="Para onde vai" className="lg:hidden">
         <ShellMonthSwitcher pathname="/para-onde-vai" tone="hero" />
       </PageHero>
-      <CategoryBreakdown key={month} month={month} />
+      <CategoryBreakdown key={month} month={month} group={search.get("g") ?? undefined} />
     </div>
   );
 };

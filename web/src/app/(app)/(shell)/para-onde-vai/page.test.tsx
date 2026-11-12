@@ -6,6 +6,11 @@ import { router, setSearch } from "@/test/next-navigation";
 import { renderWithQuery } from "@/test/render";
 import { problem, REPORT, signedIn, TRANSACTIONS } from "@/test/stub-api";
 
+const WITH_ECONOMIA = {
+  ...REPORT,
+  groups: [...REPORT.groups, { ...REPORT.groups[1], category_id: "economia-id", name: "Economia" }],
+};
+
 import ParaOndeVaiPage from "./page";
 
 vi.mock("next/navigation", () => import("@/test/next-navigation"));
@@ -102,6 +107,15 @@ describe("Para onde vai", () => {
 
     await screen.findByText("Total gasto");
     expect(reportMonth(requests)).toBe("2026-12");
+  });
+
+  it("opens with the group named in the address picked", async () => {
+    setSearch("m=2026-11&g=economia");
+    open({ "GET /api/reports/categories": { status: 200, body: WITH_ECONOMIA } });
+
+    await screen.findByText("Total gasto");
+    expect(row("Economia")).toHaveAttribute("aria-pressed", "true");
+    expect(row("Mercado")).toHaveAttribute("aria-pressed", "false");
   });
 
   it("ignores a malformed month", async () => {

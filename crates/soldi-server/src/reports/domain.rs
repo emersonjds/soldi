@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use chrono::{Months, NaiveDate};
+use chrono::{Datelike, Months, NaiveDate};
 use rust_decimal::{Decimal, RoundingStrategy};
 use soldi_types::categories::CategoryKind;
 use soldi_types::reports::{
@@ -9,7 +9,7 @@ use soldi_types::reports::{
 use uuid::Uuid;
 
 use crate::error::AppError;
-use crate::months::domain::{first_of, month_end};
+use crate::months::domain::first_of;
 
 /// A category's total in one month; `month` is its first day. `group_*` describe its top-level
 /// category: its parent, or itself.
@@ -60,22 +60,24 @@ pub fn parse_year(text: &str) -> Result<i32, AppError> {
         .ok_or_else(|| AppError::invalid("year", "must be a year from 2000 to 2100"))
 }
 
-/// The dates `year` reads: from the opening date or January 1 to the end of today's month or
-/// December 31; none when the year is outside them. Later months are a forecast (D16).
+/// The dates `year` reads: from the opening date or January 1 to December 31; none before the
+/// opening or after today's year.
 pub fn year_range(
     year: i32,
     opening: NaiveDate,
     today: NaiveDate,
 ) -> Option<(NaiveDate, NaiveDate)> {
     let from = NaiveDate::from_ymd_opt(year, 1, 1)?.max(opening);
-    let to = NaiveDate::from_ymd_opt(year, 12, 31)?.min(month_end(today));
-    (from <= to).then_some((from, to))
+    let to = NaiveDate::from_ymd_opt(year, 12, 31)?;
+    (from <= to && year <= today.year()).then_some((from, to))
 }
 
-/// Every month of `range`, newest first, the ones without entries at zero.
+/// Every month of `range`, newest first, the ones without entries at zero. Months after today's
+/// are a forecast of the entries already dated there (D16), left out of the totals.
 pub fn savings_year(
     year: i32,
     range: Option<(NaiveDate, NaiveDate)>,
+    today: NaiveDate,
     sums: Vec<MonthSaving>,
 ) -> SavingsYear {
     let sums: HashMap<NaiveDate, MonthSaving> =
@@ -94,12 +96,14 @@ pub fn savings_year(
                 income,
                 saved,
                 rate_pct: percent(saved, income),
+                forecast: month > first_of(today),
             });
             month = month - Months::new(1);
         }
     }
-    let income_total: Decimal = months.iter().map(|month| month.income).sum();
-    let saved_total: Decimal = months.iter().map(|month| month.saved).sum();
+    let past = || months.iter().filter(|month| !month.forecast);
+    let income_total: Decimal = past().map(|month| month.income).sum();
+    let saved_total: Decimal = past().map(|month| month.saved).sum();
     SavingsYear {
         year,
         income_total,
@@ -472,7 +476,7 @@ mod tests {
     }
 
     #[test]
-    fn the_year_runs_from_the_opening_date_to_the_end_of_todays_month() {
+    fn the_year_runs_from_the_opening_date_to_december_up_to_todays_year() {
         let today = date("2026-11-11");
         assert_eq!(
             year_range(2025, date("2024-06-10"), today),
@@ -480,11 +484,11 @@ mod tests {
         );
         assert_eq!(
             year_range(2026, date("2026-03-15"), today),
-            Some((date("2026-03-15"), date("2026-11-30")))
+            Some((date("2026-03-15"), date("2026-12-31")))
         );
         assert_eq!(
             year_range(2028, date("2020-01-01"), date("2028-02-10")),
-            Some((date("2028-01-01"), date("2028-02-29")))
+            Some((date("2028-01-01"), date("2028-12-31")))
         );
         assert_eq!(year_range(2023, date("2024-06-10"), today), None);
         assert_eq!(year_range(2027, date("2024-06-10"), today), None);
@@ -495,6 +499,7 @@ mod tests {
         let year = savings_year(
             2026,
             Some((date("2026-03-15"), date("2026-06-30"))),
+            date("2026-06-30"),
             vec![
                 saving("2026-03", "1000", "100"),
                 saving("2026-05", "5921.20", "610"),
@@ -532,6 +537,7 @@ mod tests {
         let year = savings_year(
             2025,
             Some((date("2025-01-01"), date("2025-02-28"))),
+            date("2026-11-11"),
             vec![
                 saving("2025-02", "0", "100"),
                 saving("2025-01", "1000", "-50"),
@@ -549,6 +555,7 @@ mod tests {
         let year = savings_year(
             2025,
             Some((date("2025-01-01"), date("2025-02-28"))),
+            date("2026-11-11"),
             vec![
                 saving("2025-02", "100", "0.25"),
                 saving("2025-01", "100", "0.35"),
@@ -561,8 +568,78 @@ mod tests {
     }
 
     #[test]
+    fn months_after_todays_month_are_a_forecast_of_their_entries_left_out_of_the_totals() {
+        let year = savings_year(
+            2026,
+            Some((date("2026-09-15"), date("2026-12-31"))),
+            date("2026-11-11"),
+            vec![
+                saving("2026-12", "500", "400"),
+                saving("2026-11", "1000", "100"),
+                saving("2026-09", "1000", "50"),
+            ],
+        );
+
+        let rows: Vec<_> = year
+            .months
+            .iter()
+            .map(|month| (row(month), month.forecast))
+            .collect();
+        assert_eq!(
+            rows,
+            [
+                (
+                    (
+                        "2026-12".into(),
+                        "500".into(),
+                        "400".into(),
+                        Some("80.0".into())
+                    ),
+                    true
+                ),
+                (
+                    (
+                        "2026-11".into(),
+                        "1000".into(),
+                        "100".into(),
+                        Some("10.0".into())
+                    ),
+                    false
+                ),
+                (("2026-10".into(), "0".into(), "0".into(), None), false),
+                (
+                    (
+                        "2026-09".into(),
+                        "1000".into(),
+                        "50".into(),
+                        Some("5.0".into())
+                    ),
+                    false
+                ),
+            ]
+        );
+        assert_eq!(year.income_total, money("2000"));
+        assert_eq!(year.saved_total, money("150"));
+        assert_eq!(year.rate_pct.unwrap().to_string(), "7.5");
+    }
+
+    #[test]
+    fn a_past_year_has_no_forecast() {
+        let year = savings_year(
+            2025,
+            Some((date("2025-01-01"), date("2025-12-31"))),
+            date("2026-01-05"),
+            vec![saving("2025-12", "100", "10")],
+        );
+
+        assert_eq!(year.months.len(), 12);
+        assert!(year.months.iter().all(|month| !month.forecast));
+        assert_eq!(year.saved_total, money("10"));
+    }
+
+    #[test]
     fn a_year_outside_the_opening_and_today_is_empty() {
-        let year = savings_year(2023, None, Vec::new());
+        let year = savings_year(2023, None, date("2026-11-11"), Vec::new());
 
         assert_eq!(year.year, 2023);
         assert!(year.months.is_empty());

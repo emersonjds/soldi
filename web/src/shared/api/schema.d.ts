@@ -803,9 +803,12 @@ export interface components {
         /**
          * @description A month of the savings year: `income` without resgates and `saved` (Economia and its
          *     cofrinhos minus resgates), as the month view's `totals.income` and `savings.saved`.
-         *     `rate_pct` is `saved` over `income` with one decimal, null when `income` is 0.
+         *     `rate_pct` is `saved` over `income` with one decimal, null when `income` is 0. `forecast`
+         *     marks a month after today's: only the entries already dated there, out of the year's totals.
          */
         SavingsMonth: {
+            /** @example false */
+            forecast: boolean;
             income: string;
             /** @example 2026-11 */
             month: string;
@@ -814,8 +817,8 @@ export interface components {
             saved: string;
         };
         /**
-         * @description A year's savings month by month, newest first, from the opening month (or January) to today's
-         *     month (or December); totals and `rate_pct` are over the listed months.
+         * @description A year's savings month by month, newest first, from the opening month (or January) to
+         *     December; totals and `rate_pct` are over the months up to today's, not the forecast ones.
          */
         SavingsYear: {
             income_total: string;
@@ -2322,7 +2325,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Each month's income and savings, as the month view, from the opening month to today's month, newest first; empty outside them */
+            /** @description Each month's income and savings, as the month view, from the opening month to December, newest first; months after today's are a `forecast` of their entries, out of the totals; empty before the opening or after today's year */
             200: {
                 headers: {
                     [name: string]: unknown;

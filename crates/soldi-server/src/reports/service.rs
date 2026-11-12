@@ -29,10 +29,11 @@ pub async fn savings(
     let year = domain::parse_year(year)?;
     let mut conn = pool.acquire().await?;
     let opening = settings::repo::find(&mut conn, user.id).await?.opening_date;
-    let range = domain::year_range(year, opening, crate::today_sao_paulo());
+    let today = crate::today_sao_paulo();
+    let range = domain::year_range(year, opening, today);
     let sums = match range {
         Some((from, to)) => repo::savings_by_month(&mut conn, user.id, from, to).await?,
         None => Vec::new(),
     };
-    Ok(domain::savings_year(year, range, sums))
+    Ok(domain::savings_year(year, range, today, sums))
 }
