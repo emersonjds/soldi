@@ -32,8 +32,7 @@ type MonthChipsProps = {
   neutral?: boolean;
   /** `YYYY-MM` on screen, ringed. */
   current?: string;
-  /** Absent: static chips, as in the Simular preview. */
-  onOpen?: (month: string) => void;
+  onOpen: (month: string) => void;
   /** The same months without the draft: a moved low reads `antes`. */
   before?: MonthAhead[];
 };
@@ -82,12 +81,6 @@ export const MonthChips = ({ months, neutral = false, current, onOpen, before }:
           </>
         );
         const name = nameOf(ahead, neutral, prior, currency);
-        if (!onOpen)
-          return (
-            <li key={month} aria-label={name} className={style}>
-              {body}
-            </li>
-          );
         return (
           <li key={month} className="min-w-0">
             <button

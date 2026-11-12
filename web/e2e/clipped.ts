@@ -89,7 +89,7 @@ export const clippedOffenders = (page: Page) =>
 
       if (!own.some((node) => digit.test(node.textContent ?? ""))) continue;
       const label = element.closest("[aria-label]")?.getAttribute("aria-label") ?? "";
-      const intentional = squash(element.title) === text || squash(label).includes(text);
+      const intentional = squash(element.getAttribute("title") ?? "") === text || squash(label).includes(text);
       let overflows = element.scrollWidth > element.clientWidth + 1;
       if (getComputedStyle(element).display === "inline") {
         let block = element.parentElement;

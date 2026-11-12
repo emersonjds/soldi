@@ -31,7 +31,6 @@ const MonthScreen = () => {
   const transactions = useTransactions(month);
   const [launching, setLaunching] = useState<"income" | "bill" | "daily" | null>(fromTour ? "income" : null);
   const [hint, setHint] = useState(fromTour);
-  const [simulating, setSimulating] = useState(false);
   const [highlight, setHighlight] = useState<{ date: string } | null>(null);
   const [expandedMonth, setExpandedMonth] = useState<string | null>(null);
   const [filter, setFilter] = useState<LedgerFilter>("all");
@@ -40,10 +39,7 @@ const MonthScreen = () => {
     setFilterMonth(month);
     setFilter("all");
   }
-  const launch = (kind: "income" | "bill" | "daily", simulate = false) => {
-    setSimulating(simulate);
-    setLaunching(kind);
-  };
+  const launch = (kind: "income" | "bill" | "daily") => setLaunching(kind);
 
   useEffect(() => {
     if (fromTour) window.history.replaceState(null, "", "/mes");
@@ -128,7 +124,6 @@ const MonthScreen = () => {
           {view.data && <ThermometerCard view={view.data} className="max-lg:order-2" />}
           <MonthsAhead
             viewing={month}
-            onSimulate={() => launch("daily", true)}
             onOpen={(next) => {
               router.replace(`/mes?m=${next}`, { scroll: false });
               window.scrollTo({ top: 0 });
@@ -147,7 +142,6 @@ const MonthScreen = () => {
           setHint(false);
         }}
         initialKind={launching ?? "daily"}
-        initialSimulate={simulating}
         hint={hint ? "Comece pela sua primeira entrada do mês" : undefined}
         billSheet={(props) => <EditBillSheet open {...props} />}
       />

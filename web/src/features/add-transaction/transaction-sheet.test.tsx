@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Toaster } from "sonner";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -13,8 +13,6 @@ import {
   CATEGORIES,
   COMIDA,
   EXTRA,
-  FORECAST,
-  FORECAST_FLAT,
   MERCADO,
   problem,
   RESERVA,
@@ -368,25 +366,6 @@ describe("TransactionSheet", () => {
       await userEvent.click(screen.getByRole("button", { name: "Salvar Lançamento" }));
 
       expect(await sent("PATCH")).toMatchObject({ card_id: null });
-    });
-
-    it("simulates the spend on the fatura's due date", async () => {
-      setup(
-        {},
-        {
-          "GET /api/bills": { status: 200, body: [{ ...PORTO, closing_day: 6, due_day: 12 }] },
-          "GET /api/forecast": { status: 200, body: FORECAST },
-          "GET /api/settings": { status: 200, body: SETTINGS },
-        },
-      );
-
-      await userEvent.selectOptions(await cardField(), "Porto");
-      await userEvent.click(screen.getByRole("switch", { name: "Simular" }));
-      await userEvent.click(screen.getByLabelText(/^Valor d/));
-      await userEvent.keyboard("6700,00");
-
-      const simulation = await screen.findByRole("region", { name: "Simulação" });
-      await waitFor(() => expect(simulation).toHaveTextContent(/^12\/11.*Com essa compra, dia 12 fica no vermelho/));
     });
   });
 
@@ -895,90 +874,15 @@ describe("TransactionSheet", () => {
     expect(screen.queryByRole("button", { name: "Criar como Conta Fixa" })).not.toBeInTheDocument();
   });
 
-  const simulated = (forecast = FORECAST) => ({
-    "GET /api/forecast": { status: 200, body: forecast },
-    "GET /api/settings": { status: 200, body: SETTINGS },
-  });
-
-  it("simulates without writing: the verdict follows each keystroke, Descartar closes", async () => {
-    const { requests, onOpenChange } = setup({}, simulated());
-
-    await userEvent.click(await screen.findByRole("switch", { name: "Simular" }));
-    expect(screen.getByText("Digite um valor para simular.")).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("radio", { name: "Conta" }));
-    await userEvent.click(screen.getByLabelText(/^Valor d/));
-    await userEvent.keyboard("6700,00");
-
-    const simulation = await screen.findByRole("region", { name: "Simulação" });
-    expect(await within(simulation).findByRole("status")).toHaveTextContent(
-      "Com essa compra, hoje fica no vermelho: -R$ 550,00.",
-    );
-    const week = within(simulation).getByRole("list", { name: "Próximos 7 dias" });
-    expect(within(week).getAllByRole("listitem")).toHaveLength(7);
-    expect(within(week).getAllByRole("listitem")[0]).toHaveTextContent("10/11Crítico");
-    expect(screen.queryByRole("button", { name: "Salvar Lançamento" })).not.toBeInTheDocument();
-
-    await userEvent.click(screen.getByRole("switch", { name: "Simular" }));
-    expect(screen.queryByRole("region", { name: "Simulação" })).not.toBeInTheDocument();
-    await userEvent.click(screen.getByRole("switch", { name: "Simular" }));
-    await userEvent.click(screen.getByRole("button", { name: "Descartar" }));
-
-    expect(onOpenChange).toHaveBeenCalledWith(false);
-    expect(requests.filter((request) => request.method === "POST")).toHaveLength(0);
-    expect(requests.filter((request) => request.url.endsWith("/api/forecast"))).toHaveLength(1);
-  });
-
-  it("writes nothing on Enter while simulating, hides Transformar em conta fixa, and Lançar de verdade saves", async () => {
-    const { requests, sent } = setup({ billSheet }, simulated());
-
-    await userEvent.click(await screen.findByRole("switch", { name: "Simular" }));
-    await userEvent.click(screen.getByRole("radio", { name: "Conta" }));
-    await userEvent.click(screen.getByLabelText(/^Valor d/));
-    await userEvent.keyboard("50,00{Enter}");
-    fireEvent.submit(screen.getByRole("dialog").querySelector("form") as HTMLFormElement);
-
-    expect(await screen.findByRole("status")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Criar como Conta Fixa" })).not.toBeInTheDocument();
-    expect(requests.filter((request) => request.method === "POST")).toHaveLength(0);
-
-    await userEvent.click(screen.getByRole("button", { name: "Lançar de verdade" }));
-    expect(await sent("POST")).toMatchObject({ amount: "50.00", kind: "bill" });
-  });
-
-  it("saves on Enter in Valor when not simulating", async () => {
+  it("saves on Enter in Valor", async () => {
     const { sent } = setup();
     await screen.findByRole("radiogroup", { name: "Categoria" });
     await userEvent.keyboard("35,90{Enter}");
     expect(await sent("POST")).toMatchObject({ amount: "35.90", kind: "daily" });
   });
 
-  it("opens on Diário with Simular on when asked", async () => {
-    setup({ initialSimulate: true }, simulated());
-    expect(await screen.findByRole("switch", { name: "Simular" })).toBeChecked();
-    expect(screen.getByRole("radio", { name: "Diário" })).toBeChecked();
-    expect(screen.getByRole("region", { name: "Simulação" })).toHaveTextContent("Digite um valor para simular.");
-  });
-
-  it("says when red days were already there", async () => {
-    setup({}, simulated());
-    await userEvent.click(await screen.findByRole("switch", { name: "Simular" }));
-    await userEvent.click(screen.getByLabelText(/^Valor d/));
-    await userEvent.keyboard("100,00");
-    await pickDate("Outra data", "2026-11-24");
-    expect(await screen.findByRole("status")).toHaveTextContent("Essa compra não cria dia vermelho novo.");
-  });
-
-  it("is clear on a flat forecast", async () => {
-    setup({}, simulated(FORECAST_FLAT));
-    await userEvent.click(await screen.findByRole("switch", { name: "Simular" }));
-    await userEvent.click(screen.getByLabelText(/^Valor d/));
-    await userEvent.keyboard("50,00");
-    expect(await screen.findByRole("status")).toHaveTextContent("Nenhum dia vermelho com essa compra.");
-  });
-
-  it("parcela 1.000,01 em 10x: summary, the months strip, and Lançar de verdade posts the total once", async () => {
-    const { sent } = setup({}, simulated());
-    await userEvent.click(await screen.findByRole("switch", { name: "Simular" }));
+  it("parcela 1.000,01 em 10x: summary and Salvar posts the total once", async () => {
+    const { sent } = setup();
     await userEvent.click(screen.getByLabelText(/^Valor d/));
     await userEvent.keyboard("1000,01");
     await userEvent.click(screen.getByRole("switch", { name: "Repetir lançamento (Série)" }));
@@ -994,10 +898,8 @@ describe("TransactionSheet", () => {
     expect(
       screen.getByText("Última parcela será ajustada para R$ 100,01 devido a centavos residuais."),
     ).toBeInTheDocument();
-    expect(await screen.findByRole("heading", { name: "Meses com essa compra" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Lançar de verdade" }).closest(FOOTER)).not.toBeNull();
-    expect(screen.getByRole("button", { name: "Descartar" }).closest(FOOTER)).not.toBeNull();
-    await userEvent.click(screen.getByRole("button", { name: "Lançar de verdade" }));
+    expect(screen.getByRole("button", { name: "Salvar Lançamento" }).closest(FOOTER)).not.toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Salvar Lançamento" }));
 
     const body = await sent("POST");
     expect(body).toMatchObject({ amount: "1000.01", installments: 10 });
@@ -1047,25 +949,6 @@ describe("TransactionSheet", () => {
     expect(screen.queryByRole("switch", { name: "Parcelar compra" })).not.toBeInTheDocument();
   });
 
-  it("describes Simular with its helper", async () => {
-    setup();
-    expect(await screen.findByRole("switch", { name: "Simular" })).toHaveAccessibleDescription(
-      "Veja o efeito antes de lançar.",
-    );
-  });
-
-  it("asks for 2 to 60 parcelas to simulate when the count is missing", async () => {
-    setup({}, simulated());
-    await userEvent.click(await screen.findByRole("switch", { name: "Simular" }));
-    await userEvent.click(screen.getByLabelText(/^Valor d/));
-    await userEvent.keyboard("300,00");
-    await userEvent.click(screen.getByRole("switch", { name: "Parcelar compra" }));
-    await userEvent.click(screen.getByRole("radio", { name: "Outro" }));
-    const simulation = screen.getByRole("region", { name: "Simulação" });
-    expect(simulation).toHaveTextContent("Escolha de 2 a 60 parcelas para simular.");
-    expect(simulation).not.toHaveTextContent("Digite um valor para simular.");
-  });
-
   it("drops Parcelar on Entrada", async () => {
     setup();
     await userEvent.click(await screen.findByRole("switch", { name: "Parcelar compra" }));
@@ -1074,10 +957,9 @@ describe("TransactionSheet", () => {
     expect(screen.getByRole("switch", { name: "Parcelar compra" })).not.toBeChecked();
   });
 
-  it("offers no Simular nor Parcelar when editing", async () => {
+  it("offers no Parcelar when editing", async () => {
     setup({ transaction: MERCADO_ROW });
     await screen.findByRole("dialog", { name: "Editar lançamento" });
-    expect(screen.queryByRole("switch", { name: "Simular" })).not.toBeInTheDocument();
     expect(screen.queryByRole("switch", { name: "Parcelar compra" })).not.toBeInTheDocument();
   });
 
@@ -1142,17 +1024,6 @@ describe("TransactionSheet", () => {
     expect(erase.closest(FOOTER)).toBe(save.closest(FOOTER));
     expect(erase.compareDocumentPosition(save) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(repeat.compareDocumentPosition(erase) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-  });
-
-  it("keeps the docked keypad above Lançar de verdade while simulating", async () => {
-    coarse();
-    setup();
-
-    await userEvent.click(await screen.findByRole("switch", { name: "Simular" }));
-    const erase = screen.getByRole("button", { name: "Apagar" });
-    const launch = screen.getByRole("button", { name: "Lançar de verdade" });
-    expect(erase.closest(FOOTER)).toBe(launch.closest(FOOTER));
-    expect(erase.compareDocumentPosition(launch) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it("sums a series: 12× de R$ 39,90 · repete todo dia 10 até out 2027", async () => {

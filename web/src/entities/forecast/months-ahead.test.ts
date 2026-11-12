@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { FORECAST, FORECAST_FLAT, FORECAST_LATE_OPENING, forecastFixture, SETTINGS } from "@/test/stub-api";
 
-import { type DraftRow, draftVerdict, isFlat, monthsAhead, withDraft } from "./months-ahead";
+import { isFlat, monthsAhead, withDraft } from "./months-ahead";
 
 describe("monthsAhead", () => {
   it("gives the owner's next six months by their lowest tier and red days", () => {
@@ -78,26 +78,5 @@ describe("withDraft", () => {
   it("shifts every day for a draft dated before the forecast starts", () => {
     const after = withDraft(FORECAST_FLAT.days, [{ date: "2026-11-05", cents: -5_000 }], SETTINGS);
     expect(after.every((day) => day.projected_balance === "1792.10")).toBe(true);
-  });
-});
-
-describe("draftVerdict", () => {
-  const verdictOf = (rows: DraftRow[], forecast = FORECAST) =>
-    draftVerdict(forecast.days, withDraft(forecast.days, rows, SETTINGS));
-
-  it("names the first day the draft turns red and its balance after the draft", () => {
-    expect(verdictOf([{ date: "2026-11-10", cents: -670_000 }])).toEqual({
-      kind: "turns-red",
-      date: "2026-11-10",
-      balance: "-550.00",
-    });
-  });
-
-  it("says when red days were already there", () => {
-    expect(verdictOf([{ date: "2026-11-24", cents: -10_000 }])).toEqual({ kind: "already-red" });
-  });
-
-  it("is clear when no day is red", () => {
-    expect(verdictOf([{ date: "2026-11-10", cents: -5_000 }], FORECAST_FLAT)).toEqual({ kind: "clear" });
   });
 });

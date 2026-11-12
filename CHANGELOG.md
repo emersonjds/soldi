@@ -7,6 +7,16 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.52.0
+
+> Headline: Posso comprar isso? has its own page
+
+### Web
+
+- `/posso-comprar`, from the sidebar and Próximos meses: value, parcelas, first due date (up to 11 months ahead), category and card, then `Calcular Projeção` shows the verdict, the balance curve with the zero line, month cards with `CRÍTICO` on red months, and actions (`Ver Detalhe`, `Testar em {n}x`, `Criar Cofrinho para juntar à vista`). Nothing is written.
+- Parcelas split like the server's; a card purchase lands on each fatura's day; a paid fatura is refused; parcelas past the forecast are named instead of passing for green.
+- Lançar no longer has the Simular switch.
+
 ## 0.51.0
 
 > Headline: Ajustes looks like Stitch

@@ -51,6 +51,7 @@ const SIDEBAR = [
       { href: "/mes", label: "Mês", icon: Calendar },
       { href: "/para-onde-vai", label: "Para onde vai", icon: PieChart },
       { href: "/economia", label: "Cofrinhos", icon: PiggyBank },
+      { href: "/posso-comprar", label: "Posso comprar isso?", icon: Sparkles },
     ],
   },
   {
@@ -70,6 +71,7 @@ const PAGE_NAMES = [
   ["/economia", "Economia"],
   ["/para-onde-vai", "Para Onde Vai"],
   ["/mes", "Mês"],
+  ["/posso-comprar", "Posso comprar?"],
 ] as const;
 
 /** The pages that read `?m=`; the switcher shows only there. */
@@ -143,13 +145,9 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
   const isAt = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
   const me = useMe();
   const [launching, setLaunching] = useState(false);
-  const [simulating, setSimulating] = useState(false);
   const name = me.data?.name ?? "";
   const email = me.data?.email ?? "";
-  const launch = (simulate = false) => {
-    setSimulating(simulate);
-    setLaunching(true);
-  };
+  const launch = () => setLaunching(true);
   const current = SIDEBAR.flatMap((group) => group.items)
     .filter((item) => isAt(item.href))
     .sort((a, b) => b.href.length - a.href.length)[0];
@@ -187,14 +185,6 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
                           </SidebarMenuItem>
                         );
                       })}
-                      {group.label === "Menu" && (
-                        <SidebarMenuItem>
-                          <SidebarMenuButton className="h-11 gap-3 px-3 text-base" onClick={() => launch(true)}>
-                            <Sparkles className="size-5!" aria-hidden />
-                            Posso comprar isso?
-                          </SidebarMenuButton>
-                        </SidebarMenuItem>
-                      )}
                     </SidebarMenu>
                   </SidebarGroup>
                 ))}
@@ -288,7 +278,6 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
         <TransactionSheet
           open={launching}
           onOpenChange={setLaunching}
-          initialSimulate={simulating}
           billSheet={(props) => <EditBillSheet open {...props} />}
         />
       </SidebarProvider>
