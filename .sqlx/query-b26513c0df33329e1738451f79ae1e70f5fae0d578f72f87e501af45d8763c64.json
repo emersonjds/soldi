@@ -1,0 +1,136 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT b.id, b.name, c.icon, c.color, b.amount, b.due_day, b.closing_day,\n                  b.active_since, b.last_month, b.installments\n           FROM recurring_bills b JOIN categories c ON c.user_id = b.user_id AND c.id = b.category_id\n           WHERE b.user_id = $1 AND (b.archived_at IS NULL OR b.closing_day IS NOT NULL)\n           ORDER BY b.due_day, lower(b.name), b.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "recurring_bills",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "recurring_bills",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "icon",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "categories",
+            "name": "icon"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "color",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "categories",
+            "name": "color"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "amount",
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "recurring_bills",
+            "name": "amount"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "due_day",
+        "type_info": "Int2",
+        "origin": {
+          "Table": {
+            "table": "recurring_bills",
+            "name": "due_day"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "closing_day",
+        "type_info": "Int2",
+        "origin": {
+          "Table": {
+            "table": "recurring_bills",
+            "name": "closing_day"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "active_since",
+        "type_info": "Date",
+        "origin": {
+          "Table": {
+            "table": "recurring_bills",
+            "name": "active_since"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "last_month",
+        "type_info": "Date",
+        "origin": {
+          "Table": {
+            "table": "recurring_bills",
+            "name": "last_month"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "installments",
+        "type_info": "Int2",
+        "origin": {
+          "Table": {
+            "table": "recurring_bills",
+            "name": "installments"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      true,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "b26513c0df33329e1738451f79ae1e70f5fae0d578f72f87e501af45d8763c64"
+}

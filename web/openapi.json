@@ -561,7 +561,7 @@
             }
           },
           "422": {
-            "description": "Same rules as create, on the bill after the change; `closing_day` on a conta fixa, `active: false` on a card; `fatura-paid` when a card's `closing_day` changes while a fatura from this month on is paid (D30b)",
+            "description": "Same rules as create, on the bill after the change; `closing_day` on a conta fixa, `active: false` on a card, `active` on a parcelado bill; `fatura-paid` when a card's `closing_day` changes while a fatura from this month on is paid (D30b)",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -632,7 +632,7 @@
             }
           },
           "404": {
-            "description": "Missing, paused, archived (a card stays payable) or another user's",
+            "description": "Missing, archived (a card stays payable) or another user's",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -652,7 +652,7 @@
             }
           },
           "422": {
-            "description": "`date` outside `month`, `month` not `YYYY-MM`, `amount` missing on a card, amount not above zero or with more than two places, or a date before the opening date (`before-opening-date`)",
+            "description": "`date` outside `month`, `month` not `YYYY-MM`, `amount` missing on a card, amount not above zero or with more than two places, or a date before the opening date (`before-opening-date`); `bill-ended` for a month after the bill's `last_month`",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -2364,7 +2364,8 @@
         ],
         "properties": {
           "active": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "False once Parar ended a bill without `installments`."
           },
           "amount": {
             "type": [
@@ -2392,6 +2393,22 @@
           "id": {
             "type": "string",
             "format": "uuid"
+          },
+          "installments": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Set on a parcelado bill: `last_month` holds parcela `installments`."
+          },
+          "last_month": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date",
+            "description": "The last month the bill owes (its first day); null: no end."
           },
           "name": {
             "type": "string"
@@ -3784,7 +3801,7 @@
       },
       "UpdateBill": {
         "type": "object",
-        "description": "Absent fields stay as they are. `active: false` keeps the bill out of the month; a card has\nno pause. `closing_day` changes only on a card.",
+        "description": "Absent fields stay as they are. `active: false` is Parar: the bill owes up to this month or its\nlatest paid month; `true` is Retomar. Refused on a card. `closing_day` changes only on a card.",
         "properties": {
           "active": {
             "type": [

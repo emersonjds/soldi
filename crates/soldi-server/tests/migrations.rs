@@ -20,6 +20,19 @@ async fn migrate_from(pool: &PgPool, version: i64) {
     }
 }
 
+/// Runs the migrations from `from` up to, not including, `before`.
+async fn migrate_between(pool: &PgPool, from: i64, before: i64) {
+    for migration in sqlx::migrate!()
+        .iter()
+        .filter(|m| (from..before).contains(&m.version))
+    {
+        sqlx::raw_sql(migration.sql.clone())
+            .execute(pool)
+            .await
+            .unwrap();
+    }
+}
+
 async fn user(pool: &PgPool, email: &str) -> Uuid {
     sqlx::query_scalar("INSERT INTO users (email, name) VALUES ($1, 'Ana') RETURNING id")
         .bind(email)
@@ -268,7 +281,7 @@ async fn credit_cards_keep_every_bill_and_entry(pool: PgPool) {
     .await
     .unwrap();
 
-    migrate_from(&pool, 20).await;
+    migrate_between(&pool, 20, 26).await;
 
     let (amount, closing): (Option<rust_decimal::Decimal>, Option<i16>) =
         sqlx::query_as("SELECT amount, closing_day FROM recurring_bills")
@@ -398,5 +411,99 @@ async fn d32_existing_series_rows_repeat_monthly_and_the_step_needs_a_series(poo
         .execute(&pool)
         .await;
         assert!(refused.is_err(), "{every:?}");
+    }
+}
+
+#[sqlx::test(migrations = false)]
+async fn d35_a_paused_bill_ends_at_its_last_paid_month_or_before_it_started(pool: PgPool) {
+    migrate_before(&pool, 26).await;
+    let ana = user(&pool, "ana@example.com").await;
+    let bia = user(&pool, "bia@example.com").await;
+    let luz = category(&pool, ana, "Luz", "bill", "cat-1", None, false).await;
+    let theirs = category(&pool, bia, "Luz", "bill", "cat-1", None, false).await;
+    let bill = |user: Uuid,
+                category: Uuid,
+                name: &'static str,
+                active: bool,
+                since: &'static str| {
+        let pool = pool.clone();
+        async move {
+            sqlx::query_scalar::<_, Uuid>(
+                "INSERT INTO recurring_bills (user_id, name, amount, due_day, category_id, active, active_since)
+                 VALUES ($1, $2, 100, 5, $3, $4, $5::date) RETURNING id",
+            )
+            .bind(user)
+            .bind(name)
+            .bind(category)
+            .bind(active)
+            .bind(since)
+            .fetch_one(&pool)
+            .await
+            .unwrap()
+        }
+    };
+    let pay = |user: Uuid, category: Uuid, bill: Uuid, date: &'static str| {
+        let pool = pool.clone();
+        async move {
+            sqlx::query(
+                "INSERT INTO transactions (user_id, date, amount, kind, category_id, recurring_bill_id)
+                 VALUES ($1, $2::date, 100, 'bill', $3, $4)",
+            )
+            .bind(user)
+            .bind(date)
+            .bind(category)
+            .bind(bill)
+            .execute(&pool)
+            .await
+            .unwrap();
+        }
+    };
+    let paga = bill(ana, luz, "Paga", false, "2026-08-01").await;
+    pay(ana, luz, paga, "2026-09-05").await;
+    pay(ana, luz, paga, "2026-10-05").await;
+    let nunca = bill(ana, luz, "Nunca", false, "2026-11-05").await;
+    let ativa = bill(ana, luz, "Ativa", true, "2026-01-01").await;
+    let deles = bill(bia, theirs, "Paga", false, "2026-01-01").await;
+    pay(bia, theirs, deles, "2026-07-05").await;
+
+    migrate_from(&pool, 26).await;
+
+    let last: Vec<(Uuid, Option<chrono::NaiveDate>)> =
+        sqlx::query_as("SELECT id, last_month FROM recurring_bills")
+            .fetch_all(&pool)
+            .await
+            .unwrap();
+    let month = |id: Uuid| last.iter().find(|row| row.0 == id).unwrap().1;
+    let first = |text: &str| Some(text.parse::<chrono::NaiveDate>().unwrap());
+    assert_eq!(month(paga), first("2026-10-01"));
+    assert_eq!(month(nunca), first("2026-10-01"));
+    assert_eq!(month(ativa), None);
+    assert_eq!(month(deles), first("2026-07-01"));
+    let columns: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM information_schema.columns
+         WHERE table_name = 'recurring_bills' AND column_name = 'active'",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(columns, 0);
+    for (set, constraint) in [
+        (
+            "last_month = '2026-10-05'",
+            "recurring_bills_last_month_check",
+        ),
+        ("installments = 6", "recurring_bills_installments_end"),
+    ] {
+        let refused = sqlx::query(sqlx::AssertSqlSafe(format!(
+            "UPDATE recurring_bills SET {set} WHERE id = '{ativa}'"
+        )))
+        .execute(&pool)
+        .await
+        .unwrap_err();
+        assert_eq!(
+            refused.as_database_error().unwrap().constraint(),
+            Some(constraint),
+            "{set}"
+        );
     }
 }

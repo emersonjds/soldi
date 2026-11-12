@@ -17,7 +17,8 @@ pub async fn list(
     include_inactive: bool,
 ) -> Result<Vec<Bill>, AppError> {
     let mut conn = pool.acquire().await?;
-    Ok(repo::list(&mut conn, user.id, include_inactive).await?)
+    let this_month = first_of(crate::today_sao_paulo());
+    Ok(repo::list(&mut conn, user.id, include_inactive, this_month).await?)
 }
 
 /// Rule 11: one of the caller's active `bill` categories.
@@ -175,11 +176,32 @@ pub async fn update(
     {
         return Err(domain::fatura_paid());
     }
-    let active = patch.active.unwrap_or(current.active);
-    if active && !current.active {
-        check_bill_kind(&mut conn, user, next.category_id).await?;
+    if current.installments.is_some() && patch.active.is_some() {
+        return Err(AppError::invalid(
+            "active",
+            "a parcelado bill ends on its last parcela",
+        ));
     }
-    repo::update(&mut conn, user.id, id, &next, active)
+    let this_month = first_of(crate::today_sao_paulo());
+    // D35: Parar keeps this month and any month paid ahead; Retomar after the end restarts D17.
+    let (last_month, restart) = match patch.active {
+        Some(false) if current.active => {
+            let paid = repo::last_paid(&mut conn, user.id, id).await?;
+            (
+                Some(domain::stop_month(crate::today_sao_paulo(), paid)),
+                false,
+            )
+        }
+        Some(true) if !current.active => {
+            check_bill_kind(&mut conn, user, next.category_id).await?;
+            (
+                None,
+                current.last_month.is_some_and(|last| last < this_month),
+            )
+        }
+        _ => (current.last_month, false),
+    };
+    repo::update(&mut conn, user.id, id, &next, last_month, restart)
         .await?
         .ok_or(AppError::NotFound)
 }
@@ -192,7 +214,8 @@ pub async fn archive(pool: &PgPool, user: &CurrentUser, id: Uuid) -> Result<(), 
     }
 }
 
-/// Rules 2 to 4 and 12: one bill entry a month, inside `month` when given. D28: a card's
+/// Rules 2 to 4 and 12: one bill entry a month, inside `month` when given; D35: none after
+/// `last_month`. D28: a card's
 /// fatura needs its amount and stays payable once the card is archived.
 pub async fn pay(
     pool: &PgPool,
@@ -205,7 +228,6 @@ pub async fn pay(
     let mut conn = pool.acquire().await?;
     let bill = repo::find_payable(&mut conn, user.id, id)
         .await?
-        .filter(|bill| bill.active)
         .ok_or(AppError::NotFound)?;
     check_bill_kind(&mut conn, user, bill.category_id).await?;
     let amount = input
@@ -225,6 +247,10 @@ pub async fn pay(
     })?;
     if month.is_some_and(|first| !(first..=month_end(first)).contains(&entry.date)) {
         return Err(AppError::invalid("date", "must be in the month"));
+    }
+    let paid_month = month.unwrap_or(first_of(entry.date));
+    if bill.last_month.is_some_and(|last| paid_month > last) {
+        return Err(domain::bill_ended());
     }
     transactions::service::check_opening(&mut conn, user, entry.date).await?;
     let transaction_id =

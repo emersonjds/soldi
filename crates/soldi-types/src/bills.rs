@@ -15,9 +15,14 @@ pub struct Bill {
     #[schema(value_type = Option<String>)]
     pub amount: Option<Decimal>,
     pub due_day: i16,
+    /// False once Parar ended a bill without `installments`.
     pub active: bool,
     /// Set only on a card: a spend dated before it (clamped) closes this month's fatura.
     pub closing_day: Option<i16>,
+    /// The last month the bill owes (its first day); null: no end.
+    pub last_month: Option<chrono::NaiveDate>,
+    /// Set on a parcelado bill: `last_month` holds parcela `installments`.
+    pub installments: Option<i16>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
@@ -40,8 +45,8 @@ pub struct CreateBill {
     pub closing_day: Option<i16>,
 }
 
-/// Absent fields stay as they are. `active: false` keeps the bill out of the month; a card has
-/// no pause. `closing_day` changes only on a card.
+/// Absent fields stay as they are. `active: false` is Parar: the bill owes up to this month or its
+/// latest paid month; `true` is Retomar. Refused on a card. `closing_day` changes only on a card.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct UpdateBill {

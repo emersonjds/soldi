@@ -308,31 +308,45 @@ async fn rules_6_8_and_9_due_dates_clamp_and_past_months_stay_overdue(pool: PgPo
 }
 
 #[sqlx::test]
-async fn rule_10_paused_and_archived_bills_leave_the_month_but_keep_their_entries(pool: PgPool) {
-    let user = TestApp::signed_in(pool, "ana@example.com").await;
+async fn d35_a_stopped_bill_keeps_its_paid_month_and_leaves_the_next(pool: PgPool) {
+    let user = TestApp::signed_in(pool.clone(), "ana@example.com").await;
     let bia = user.another_user("bia@example.com").await;
     open_at(&user, "1000", "2026-11-01").await;
-    let paused = add_bill(&user, "Internet", "100", 10, "Internet").await;
+    bia.open_at("0", "2026-11-01").await;
+    let stopped = add_bill(&user, "Internet", "100", 10, "Internet").await;
     let archived = add_bill(&user, "Luz", "50", 10, "Luz").await;
-    add_bill(&bia, "Aluguel", "999", 1, "Aluguel").await;
-    user.post(
-        &format!("/api/bills/{}/pay", archived["id"].as_str().unwrap()),
-        json!({ "date": "2026-11-10" }),
-    )
-    .await;
-    user.patch(
-        &format!("/api/bills/{}", paused["id"].as_str().unwrap()),
-        json!({ "active": false }),
-    )
-    .await;
+    add_bill(&bia, "Internet", "999", 10, "Internet").await;
+    owing_since(&pool, "2026-11-01").await;
+    for bill in [&stopped, &archived] {
+        user.post(
+            &format!("/api/bills/{}/pay", bill["id"].as_str().unwrap()),
+            json!({ "date": "2026-11-10" }),
+        )
+        .await;
+    }
     user.delete(&format!("/api/bills/{}", archived["id"].as_str().unwrap()))
         .await;
+    sqlx::query("UPDATE recurring_bills SET last_month = '2026-11-01' WHERE id = $1::uuid")
+        .bind(stopped["id"].as_str().unwrap())
+        .execute(&pool)
+        .await
+        .unwrap();
 
-    let (_, view) = user.get("/api/months/2026-11").await;
+    let (_, november) = user.get("/api/months/2026-11").await;
+    let (_, december) = user.get("/api/months/2026-12").await;
+    let (_, theirs) = bia.get("/api/months/2026-12").await;
 
-    assert_eq!(view["bills_of_month"], json!([]));
-    assert_eq!(view["totals"]["bills"], "50.00");
-    assert_eq!(view["projected_balance"], "950.00");
+    let listed = november["bills_of_month"].as_array().unwrap();
+    assert_eq!(listed.len(), 1, "{november}");
+    assert_eq!(
+        (&listed[0]["name"], &listed[0]["paid"], &listed[0]["amount"]),
+        (&json!("Internet"), &json!(true), &json!("100.00"))
+    );
+    assert_eq!(november["totals"]["bills"], "150.00");
+    assert_eq!(november["projected_balance"], "850.00");
+    assert_eq!(december["bills_of_month"], json!([]));
+    assert_eq!(december["projected_balance"], "850.00");
+    assert_eq!(theirs["bills_of_month"][0]["amount"], "999.00");
 }
 
 #[sqlx::test]
