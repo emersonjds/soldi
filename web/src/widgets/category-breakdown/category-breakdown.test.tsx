@@ -96,14 +96,14 @@ const LAST_MONTH = [
   entry("p5", RESERVA, "70.00", "Quarto aporte", "2026-10-02"),
 ];
 
-const show = ({ month = "2026-11", report = REPORT, categories = WITH_COFRINHOS } = {}) => {
+const show = ({ month = "2026-11", report = REPORT, categories = WITH_COFRINHOS, group = "" } = {}) => {
   const requests = stubApi({
     "GET /api/reports/categories": { status: 200, body: report },
     "GET /api/transactions": { status: 200, body: ENTRIES },
     "GET /api/transactions?month=2026-10": { status: 200, body: LAST_MONTH },
     "GET /api/categories": { status: 200, body: categories },
   });
-  renderWithQuery(<CategoryBreakdown month={month} />);
+  renderWithQuery(<CategoryBreakdown month={month} group={group || undefined} />);
   return requests;
 };
 
@@ -429,6 +429,25 @@ describe("CategoryBreakdown", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Criar como Conta Fixa" }));
 
     expect(await screen.findByRole("dialog", { name: "Nova conta" })).toBeInTheDocument();
+  });
+
+  it("starts with the savings group picked for economia, even renamed, and lets it go", async () => {
+    const renamed = REPORT.groups.map((each) =>
+      each.category_id === ECONOMIA.id ? { ...each, name: "Poupança" } : each,
+    );
+    show({ group: "economia", report: { ...REPORT, groups: renamed } });
+
+    expect(await screen.findByRole("region", { name: "Lançamentos: Poupança" })).toBeInTheDocument();
+    await userEvent.click(pick("Poupança"));
+    expect(pick("Poupança")).toHaveAttribute("aria-pressed", "false");
+    await userEvent.click(pick("Mercado"));
+    expect(panel("Mercado")).toBeInTheDocument();
+  });
+
+  it("ignores a group the month does not have", async () => {
+    show({ group: "viagem" });
+    await screen.findByText("Total gasto");
+    expect(screen.queryByRole("region", { name: /^Lançamentos/ })).not.toBeInTheDocument();
   });
 
   it("picks a group from its donut slice", async () => {
