@@ -7,6 +7,21 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.43.0
+
+> Headline: Economia do ano looks like Stitch
+
+### Server
+
+- `GET /api/reports/savings?year=` runs to December; months after today's are `forecast: true` with only the entries already dated there, and the year's totals still stop at today's month.
+
+### Web
+
+- Economia do ano opens with the Evolução e Poupança band and its year switcher, a summary with `% das entradas`, Entradas no ano and Meses no Azul, and the Consistência and Maior Aporte Único tiles (each absent at zero).
+- Detalhamento Mensal is a January-first table from 1024 px, with MÊS ATUAL, a pencil that opens Para onde vai on Economia, `(Previsto)` months, a `…` menu with Abrir no Mês and Exportar (CSV); below 1024 it stays a newest-first list.
+- Para onde vai accepts `g=` to open with a group picked.
+- An account opened before this year keeps the band and the year switcher even before this year's first entry.
+
 ## 0.42.1
 
 > Headline: a resgate leaves Guardado
