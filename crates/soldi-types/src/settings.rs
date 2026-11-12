@@ -31,7 +31,8 @@ impl Currency {
 
 /// Money is a decimal string with up to two places (`"-500.00"`). The tiers are the lower
 /// bounds of the thermometer colors and are strictly increasing:
-/// `tier_red < tier_zero < tier_yellow < tier_green`.
+/// `tier_red < tier_zero < tier_yellow < tier_green`. `savings_target_pct` is the yearly savings
+/// target as a percent of the year's income, above 0 and at most 100; null when unset.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct Settings {
     #[serde(serialize_with = "crate::money")]
@@ -46,9 +47,12 @@ pub struct Settings {
     #[serde(serialize_with = "crate::money")]
     pub tier_green: Decimal,
     pub currency: Currency,
+    #[serde(serialize_with = "crate::optional_money")]
+    #[schema(value_type = Option<String>, example = "20.00")]
+    pub savings_target_pct: Option<Decimal>,
 }
 
-/// Absent fields stay as they are.
+/// Absent fields stay as they are; `"savings_target_pct": null` clears the target.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct UpdateSettings {
@@ -71,4 +75,8 @@ pub struct UpdateSettings {
     pub tier_green: Option<Decimal>,
     #[serde(default)]
     pub currency: Option<Currency>,
+    /// Above 0 and at most 100, up to two decimal places.
+    #[serde(default, deserialize_with = "crate::nullable_money")]
+    #[schema(value_type = Option<String>, nullable, example = "20")]
+    pub savings_target_pct: Option<Option<Decimal>>,
 }

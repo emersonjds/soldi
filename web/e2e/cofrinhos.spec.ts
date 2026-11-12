@@ -33,11 +33,14 @@ test("a cofrinho fills from a Saída in Economia and empties with a resgate", as
   const create = page.getByRole("dialog", { name: "Novo cofrinho" });
   await create.getByLabel("Nome").fill("Reserva");
   await create.getByLabel("Meta").fill("1.000,00");
+  await create.getByLabel("Descrição (opcional)").fill("Início planejado após consolidar a Reserva de Emergência.");
+  await expect(create.getByText("57/140")).toBeVisible();
   await create.getByRole("button", { name: "Criar" }).click();
   await expect(page.getByText("Cofrinho criado")).toBeVisible();
 
   await expect(page.getByRole("region", { name: "Seus Cofrinhos" })).toContainText("1 ativo");
   const reserva = page.getByRole("region", { name: "Reserva", exact: true });
+  await expect(reserva).toContainText("Início planejado após consolidar a Reserva de Emergência.");
   await expect(reserva.getByRole("button", { name: /^Resgatar/ })).toHaveCount(0);
   await reserva.getByRole("button", { name: "Guardar primeiro valor" }).click();
   const lancar = page.getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ });
@@ -169,10 +172,33 @@ test("Economia do ano lists each month's saving and opens it on Mês, unclipped 
   });
   await expect(last).toContainText("Resgatado R$ 5.200,00");
 
+  await card.getByRole("button", { name: "Definir meta anual" }).click();
+  const target = page.getByRole("dialog", { name: "Meta anual de economia" });
+  await target.getByLabel("Percentual das entradas").fill("101");
+  await target.getByRole("button", { name: "Salvar meta" }).click();
+  await expect(target.getByText("Use um valor acima de 0 e até 100.")).toBeVisible();
+  await target.getByLabel("Percentual das entradas").fill("20");
+  await target.getByRole("button", { name: "Salvar meta" }).click();
+  await expect(page.getByText("Meta salva")).toBeVisible();
+  await expect(card.getByRole("region", { name: "Meta Anual (20%)" })).toContainText("Faltam");
+
+  const note = "1ª parcela do 13º salário, guardada inteira para a reserva de emergência da família";
+  await card
+    .getByRole("list", { name: "Meses" })
+    .getByRole("button", { name: `Ações de ${name(previous).split(" de ")[0]}` })
+    .click();
+  await page.getByRole("menuitem", { name: "Adicionar observação" }).click();
+  const noteDialog = page.getByRole("dialog", { name: `Observação de ${name(previous)}` });
+  await noteDialog.getByRole("textbox", { name: "Observação" }).fill(note);
+  await noteDialog.getByRole("button", { name: "Salvar" }).click();
+  await expect(page.getByText("Observação salva")).toBeVisible();
+  await expect(last).toHaveAccessibleName(new RegExp(`, observação: ${note}$`));
+
   for (const width of [375, 1024, 1280, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     await expectNoClipped(page);
   }
+  await expect(card.getByRole("table")).toContainText(note);
 
   // The month list is the mobile layout; from 1024 the table takes its place.
   await page.setViewportSize({ width: 375, height: 812 });

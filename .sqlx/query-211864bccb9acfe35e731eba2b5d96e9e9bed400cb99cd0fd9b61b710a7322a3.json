@@ -1,0 +1,42 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT month, note FROM month_notes WHERE user_id = $1 AND month BETWEEN $2 AND $3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "month",
+        "type_info": "Date",
+        "origin": {
+          "Table": {
+            "table": "month_notes",
+            "name": "month"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "note",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "month_notes",
+            "name": "note"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Date",
+        "Date"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "211864bccb9acfe35e731eba2b5d96e9e9bed400cb99cd0fd9b61b710a7322a3"
+}

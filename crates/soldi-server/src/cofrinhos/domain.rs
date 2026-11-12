@@ -16,6 +16,7 @@ pub struct Balance {
     pub color: String,
     pub target: Option<Decimal>,
     pub deadline: Option<NaiveDate>,
+    pub note: Option<String>,
     pub parent: bool,
     pub balance: Decimal,
 }
@@ -51,6 +52,7 @@ pub fn cofrinho(row: Balance, today: NaiveDate) -> Cofrinho {
         color: row.color,
         target: row.target,
         deadline: row.deadline,
+        note: row.note,
         balance: row.balance,
         progress_pct,
         done,
@@ -130,6 +132,7 @@ mod tests {
             color: "cat-3".into(),
             target: target.map(money),
             deadline: deadline.map(date),
+            note: None,
             parent: false,
             balance: money(balance),
         }

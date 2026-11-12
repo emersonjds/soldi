@@ -19,7 +19,7 @@ pub async fn balances(
     sqlx::query_as!(
         Balance,
         r#"SELECT c.id AS "category_id!", c.name AS "name!", c.icon AS "icon!",
-                  c.color AS "color!", c.target, c.deadline, c.is_savings AS "parent!",
+                  c.color AS "color!", c.target, c.deadline, c.note, c.is_savings AS "parent!",
                   COALESCE((SELECT SUM(t.amount) FROM transactions t
                             WHERE t.user_id = $1 AND t.category_id = c.id AND t.date >= $2), 0)
                   - COALESCE((SELECT SUM(t.amount) FROM transactions t

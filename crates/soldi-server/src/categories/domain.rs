@@ -268,11 +268,12 @@ pub fn category_has_card_entries() -> AppError {
     )
 }
 
-/// `target` and `deadline` are set only on a cofrinho; a target is money greater than zero.
+/// `target`, `deadline` and a `note` are set only on a cofrinho; a target is money greater than zero.
 pub fn check_goal(
     cofrinho: bool,
     target: Option<Decimal>,
     deadline: Option<NaiveDate>,
+    note: bool,
 ) -> Result<(), AppError> {
     if let Some(target) = target {
         if target <= Decimal::ZERO {
@@ -280,10 +281,10 @@ pub fn check_goal(
         }
         check_money("target", target)?;
     }
-    if !cofrinho && (target.is_some() || deadline.is_some()) {
+    if !cofrinho && (target.is_some() || deadline.is_some() || note) {
         return Err(AppError::rule(
             "not-a-cofrinho",
-            "Only a subcategory of Economia has a target or a deadline.",
+            "Only a subcategory of Economia has a target, a deadline or a note.",
         ));
     }
     Ok(())
@@ -370,15 +371,18 @@ mod tests {
         assert!(is_cofrinho_parent(Some(&economia)));
         assert!(!is_cofrinho_parent(Some(&resgate)));
         assert!(!is_cofrinho_parent(None));
-        assert!(check_goal(true, Some(Decimal::new(1000000, 2)), deadline).is_ok());
-        assert!(check_goal(false, None, None).is_ok());
-        assert_eq!(slug(check_goal(false, None, deadline)), "not-a-cofrinho");
+        assert!(check_goal(true, Some(Decimal::new(1000000, 2)), deadline, false).is_ok());
+        assert!(check_goal(false, None, None, false).is_ok());
         assert_eq!(
-            slug(check_goal(false, Some(Decimal::ONE), None)),
+            slug(check_goal(false, None, deadline, false)),
+            "not-a-cofrinho"
+        );
+        assert_eq!(
+            slug(check_goal(false, Some(Decimal::ONE), None, false)),
             "not-a-cofrinho"
         );
         for target in [Decimal::ZERO, Decimal::NEGATIVE_ONE, Decimal::new(1001, 3)] {
-            assert_eq!(field(check_goal(true, Some(target), None)), "target");
+            assert_eq!(field(check_goal(true, Some(target), None, false)), "target");
         }
         assert_eq!(slug(check_not_savings(&economia)), "savings-category");
         assert_eq!(
@@ -386,6 +390,8 @@ mod tests {
             "savings-category"
         );
         assert!(check_not_savings(&category(3, CategoryKind::Daily, None)).is_ok());
+        assert_eq!(slug(check_goal(false, None, None, true)), "not-a-cofrinho");
+        assert!(check_goal(true, None, None, true).is_ok());
     }
 
     #[test]

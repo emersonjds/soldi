@@ -340,6 +340,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/months/{month}/note": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["put_month_note"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/onboarding": {
         parameters: {
             query?: never;
@@ -614,7 +630,8 @@ export interface components {
          *     with one decimal, capped at 100, null without a target; `done` is a balance at or above the
          *     target; `monthly_suggestion` is what is left over the months to the deadline, this one
          *     included, null without a deadline or when done; `next_contribution` is the earliest member
-         *     dated after today of a repeated entry into it, null without one.
+         *     dated after today of a repeated entry into it, null without one; `note` is its description,
+         *     null without one and on `Sem objetivo`.
          */
         Cofrinho: {
             balance: string;
@@ -628,6 +645,7 @@ export interface components {
             monthly_suggestion?: string | null;
             name: string;
             next_contribution?: components["schemas"]["NextContribution"] | null;
+            note?: string | null;
             parent: boolean;
             /** @example 3.0 */
             progress_pct?: string | null;
@@ -687,6 +705,8 @@ export interface components {
             icon?: string | null;
             kind: components["schemas"]["CategoryKind"];
             name: string;
+            /** @description Up to 140 characters, trimmed; blank means none. Only for a subcategory of `Economia`. */
+            note?: string | null;
             /** Format: uuid */
             parent_id?: string | null;
             /** @description Greater than zero; only for a subcategory of `Economia`. */
@@ -859,6 +879,7 @@ export interface components {
          *     view's `totals.income` and `savings.saved`.
          *     `rate_pct` is `saved` over `income` with one decimal, null when `income` is 0. `forecast`
          *     marks a month after today's: only the entries already dated there, out of the year's totals.
+         *     `note` is the month's note (`PUT /api/months/{month}/note`), null without one.
          */
         SavingsMonth: {
             deposited: string;
@@ -867,10 +888,26 @@ export interface components {
             income: string;
             /** @example 2026-11 */
             month: string;
+            note?: string | null;
             /** @example 11.9 */
             rate_pct?: string | null;
             saved: string;
             withdrawn: string;
+        };
+        /**
+         * @description The yearly savings target over the year's totals so far: `amount` is `pct` of `income_total`,
+         *     `remaining` what `saved_total` still lacks (never below 0) and `progress_pct` how far it got
+         *     with one decimal, floored at 0, never capped, null when `amount` is 0; `done` is an `amount`
+         *     above 0 reached.
+         */
+        SavingsTarget: {
+            amount: string;
+            done: boolean;
+            /** @example 20.00 */
+            pct: string;
+            /** @example 42.5 */
+            progress_pct?: string | null;
+            remaining: string;
         };
         /**
          * @description A year's savings month by month, newest first, from the opening month (or January) to
@@ -883,6 +920,7 @@ export interface components {
             /** @example 8.4 */
             rate_pct?: string | null;
             saved_total: string;
+            target?: components["schemas"]["SavingsTarget"] | null;
             withdrawn_total: string;
             /**
              * Format: int32
@@ -898,13 +936,16 @@ export interface components {
         /**
          * @description Money is a decimal string with up to two places (`"-500.00"`). The tiers are the lower
          *     bounds of the thermometer colors and are strictly increasing:
-         *     `tier_red < tier_zero < tier_yellow < tier_green`.
+         *     `tier_red < tier_zero < tier_yellow < tier_green`. `savings_target_pct` is the yearly savings
+         *     target as a percent of the year's income, above 0 and at most 100; null when unset.
          */
         Settings: {
             currency: components["schemas"]["Currency"];
             opening_balance: string;
             /** Format: date */
             opening_date: string;
+            /** @example 20.00 */
+            savings_target_pct?: string | null;
             tier_green: string;
             tier_red: string;
             tier_yellow: string;
@@ -1014,8 +1055,8 @@ export interface components {
          *     lowest token free in the kind. For a subcategory `color` is validated, then ignored: it wears
          *     its parent's; a parent's new color reaches its subcategories. A move under a group can recolor
          *     that group and its subcategories to a color free in every kind it shows in. `null` clears
-         *     `target` or `deadline`, which only a subcategory of `Economia` may set. Leaving `Economia`
-         *     clears both.
+         *     `target`, `deadline` or `note`, which only a subcategory of `Economia` may set; a blank `note`
+         *     clears it too. Leaving `Economia` clears all three.
          */
         UpdateCategory: {
             color?: string | null;
@@ -1024,6 +1065,7 @@ export interface components {
             icon?: string | null;
             kind?: components["schemas"]["CategoryKind"] | null;
             name?: string | null;
+            note?: string | null;
             /** Format: uuid */
             parent_id?: string | null;
             target?: string | null;
@@ -1032,12 +1074,22 @@ export interface components {
             /** @description Trimmed; 1 to 60 characters. */
             name: string;
         };
-        /** @description Absent fields stay as they are. */
+        /** @description A month's free note (P6): up to 140 characters, trimmed; blank deletes it. */
+        UpdateMonthNote: {
+            /** @example 1ª parcela do 13º salário */
+            note: string;
+        };
+        /** @description Absent fields stay as they are; `"savings_target_pct": null` clears the target. */
         UpdateSettings: {
             currency?: components["schemas"]["Currency"] | null;
             opening_balance?: string | null;
             /** Format: date */
             opening_date?: string | null;
+            /**
+             * @description Above 0 and at most 100, up to two decimal places.
+             * @example 20
+             */
+            savings_target_pct?: string | null;
             tier_green?: string | null;
             tier_red?: string | null;
             tier_yellow?: string | null;
@@ -2335,6 +2387,51 @@ export interface operations {
                 };
             };
             /** @description `month` is not `YYYY-MM` from 2000 to 2100 (`validation`), or is before the opening date's month (`month-before-opening`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    put_month_note: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description The month, `YYYY-MM`
+                 * @example 2026-06
+                 */
+                month: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateMonthNote"];
+            };
+        };
+        responses: {
+            /** @description The month's note is stored or replaced; a blank note deletes it */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description `month` is not `YYYY-MM` from 2000 to 2100, or `note` has more than 140 characters (`validation`) */
             422: {
                 headers: {
                     [name: string]: unknown;

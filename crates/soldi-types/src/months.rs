@@ -134,6 +134,14 @@ pub struct Forecast {
     pub days: Vec<ForecastDay>,
 }
 
+/// A month's free note (P6): up to 140 characters, trimmed; blank deletes it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct UpdateMonthNote {
+    #[schema(example = "1ª parcela do 13º salário")]
+    pub note: String,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

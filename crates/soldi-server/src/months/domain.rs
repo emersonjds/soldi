@@ -526,6 +526,7 @@ mod tests {
             tier_yellow: money("1000"),
             tier_green: money("2000"),
             currency: soldi_types::settings::Currency::Brl,
+            savings_target_pct: None,
         }
     }
 

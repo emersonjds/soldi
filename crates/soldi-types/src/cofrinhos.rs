@@ -9,7 +9,8 @@ use uuid::Uuid;
 /// with one decimal, capped at 100, null without a target; `done` is a balance at or above the
 /// target; `monthly_suggestion` is what is left over the months to the deadline, this one
 /// included, null without a deadline or when done; `next_contribution` is the earliest member
-/// dated after today of a repeated entry into it, null without one.
+/// dated after today of a repeated entry into it, null without one; `note` is its description,
+/// null without one and on `Sem objetivo`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct Cofrinho {
     pub category_id: Uuid,
@@ -20,6 +21,7 @@ pub struct Cofrinho {
     #[schema(value_type = Option<String>)]
     pub target: Option<Decimal>,
     pub deadline: Option<NaiveDate>,
+    pub note: Option<String>,
     #[serde(serialize_with = "crate::money")]
     #[schema(value_type = String)]
     pub balance: Decimal,
