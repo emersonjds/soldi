@@ -874,7 +874,7 @@ fn money_cents(value: &serde_json::Value) -> i64 {
 
 #[sqlx::test]
 async fn a_fatura_payment_edited_to_diario_or_entrada_never_counts(pool: PgPool) {
-    let ana = TestApp::signed_in(pool, "ana@example.com").await;
+    let ana = TestApp::signed_in(pool.clone(), "ana@example.com").await;
     ana.open_at("0", "2025-01-01").await;
     let porto = card(&ana, "Porto").await;
     spend(&ana, &porto, "2025-01-20", "30").await;
@@ -887,11 +887,24 @@ async fn a_fatura_payment_edited_to_diario_or_entrada_never_counts(pool: PgPool)
     assert_eq!(status, StatusCode::CREATED, "{paid}");
     let uri = format!("/api/transactions/{}", paid["id"].as_str().unwrap());
 
+    let id: uuid::Uuid = paid["id"].as_str().unwrap().parse().unwrap();
+    // The API refuses these edits since SOL-113; the year must hold even if a row got there.
+    let force = async |kind: &str, category: &str| {
+        let category: uuid::Uuid = category.parse().unwrap();
+        sqlx::query("UPDATE transactions SET kind = $1, category_id = $2 WHERE id = $3")
+            .bind(kind)
+            .bind(category)
+            .bind(id)
+            .execute(&pool)
+            .await
+            .unwrap();
+    };
     let mercado = ana.category_id("Mercado").await;
-    let (status, edited) = ana
+    let (status, refused) = ana
         .patch(&uri, json!({ "kind": "daily", "category_id": mercado }))
         .await;
-    assert_eq!(status, StatusCode::OK, "{edited}");
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{refused}");
+    force("daily", &mercado).await;
     let (_, report) = year_report(&ana, "2025").await;
 
     assert_eq!(report["spent"], "30.00");
@@ -902,10 +915,7 @@ async fn a_fatura_payment_edited_to_diario_or_entrada_never_counts(pool: PgPool)
     assert_eq!(cents(&report["spending"]), money_cents(&report["spent"]));
 
     let salario = ana.category_id("Salário").await;
-    let (status, edited) = ana
-        .patch(&uri, json!({ "kind": "income", "category_id": salario }))
-        .await;
-    assert_eq!(status, StatusCode::OK, "{edited}");
+    force("income", &salario).await;
     let (_, report) = year_report(&ana, "2025").await;
 
     assert_eq!(report["spent"], "30.00");
