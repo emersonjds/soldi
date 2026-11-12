@@ -239,3 +239,20 @@ The seeds become the owner's organized tree: Casa, Veículo, Saúde, Educação 
 ## D30 — Partial payments and paid faturas (2026-11-12, owner, SOL-106 QA)
 
 (a) A fatura paid below its total carries `max(0, fatura − paid)` into the same card's fatura of the next month, with no interest; an overpayment stays as D28 says (the balance drops by the payment, nothing is carried). (b) A paid fatura is frozen: changing the `amount`, `date` or `card_id` of a card spend whose fatura is paid, putting a spend into a paid cycle (create, card set, date move) or deleting a spend of a paid fatura is refused 422 `fatura-paid` ("Essa fatura já foi paga."); changing a card's `closing_day` is refused the same way while any fatura of that card from the current month on is paid. Trade-off: the carry is derived from payments and spends on every read (D8), never stored. Detail: `docs/specs/2026-11-12-categories-and-cards.md` §4 "Partial payments and paid faturas".
+
+## D31 — Year views count spending by purchase date; Gastos leave out savings and fatura payments (2026-11-12, SOL-103 panel, architect arbitrated)
+
+`Gastos` = Saída entries except deposits into Economia and fatura payments, plus every Diário entry (card spends on their own date). Year insights (`GET /api/reports/year`, Meu ano) use it. A card purchase belongs to the month and year it was made: paying the fatura is moving money, and a deposit is saving. Totals keep the month view's `Totals` shape, so `splitOf` reads a year the same way it reads a month: Economia deposits inside `bills`, `saved` = deposited − withdrawn. The year runs in whole months, from the opening month or January to today's month or December, the same cut as Economia do ano (D23). Entries in later months never count, and there are no averages (D16).
+
+Trade-offs:
+
+- With cards or deposits, a month's `Gastos` differs from Mês `Saídas`. Mês counts the fatura payment and the deposits, as the balance does (D28). The screen says `Gastos`, never `Saídas`.
+- A fatura paid above its itemized spends is left out (the D28 trade-off).
+
+Rejected:
+
+- counting fatura payments (they pull last December's purchases into the year, leave this December's out, and carry D30's carries);
+- counting both spends and payments (double count);
+- cutting the year at today (it would disagree with Economia do ano).
+
+Detail: `docs/specs/cards/SOL-103.md`.
