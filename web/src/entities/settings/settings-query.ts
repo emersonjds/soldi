@@ -15,8 +15,8 @@ export const useUpdateSettings = () => {
     mutationFn: async (body: Schemas["UpdateSettings"]) => dataOrThrow(await api.PATCH("/api/settings", { body })),
     onSuccess: (settings) => {
       client.setQueryData(settingsQuery.queryKey, settings);
-      // Tiers and the opening balance color and move every month.
-      return client.invalidateQueries({ queryKey: ["month"] });
+      // Tiers and the opening balance color and move every month; the savings target lives in the report.
+      return Promise.all(["month", "report"].map((key) => client.invalidateQueries({ queryKey: [key] })));
     },
   });
 };

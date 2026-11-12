@@ -38,6 +38,8 @@ import { Switcher } from "@/shared/ui/month-switcher";
 import { PageError } from "@/shared/ui/page-state";
 import { PageHero } from "@/widgets/month-header/month-header";
 
+import { SavingsTarget } from "./savings-target";
+
 type Month = Schemas["SavingsMonth"];
 
 const LEVELS = [
@@ -327,6 +329,8 @@ const YearBody = ({ data, year, today }: { data: Schemas["SavingsYear"]; year: n
           </div>
         </div>
       </section>
+
+      <SavingsTarget year={data} />
 
       {(run > 0 || best) && (
         <div

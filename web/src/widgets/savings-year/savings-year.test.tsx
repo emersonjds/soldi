@@ -100,6 +100,20 @@ describe("SavingsYear", () => {
     expect(text(within(summary).getByText(/^Guardado/))).toBe("Guardado R$ 5.716,53 · Resgatado R$ 300,00");
   });
 
+  it("offers to set a yearly target when there is none", async () => {
+    show();
+    await list();
+    expect(within(section()).getByRole("button", { name: "Definir meta anual" })).toBeInTheDocument();
+  });
+
+  it("shows the yearly target's card when one is set", async () => {
+    const target = { pct: "20.00", amount: "12896.56", remaining: "7480.03", progress_pct: "42.0", done: false };
+    show({ "GET /api/reports/savings": { status: 200, body: { ...SAVINGS_YEAR, target } } });
+    await list();
+
+    expect(within(section()).getByRole("region", { name: /^Meta Anual/ })).toHaveTextContent("Faltam R$ 7.480,03");
+  });
+
   it("leaves the Guardado and Resgatado line out of a year without resgates", async () => {
     show({
       "GET /api/reports/savings": year([month("2026-11", "10.00")], {

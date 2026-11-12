@@ -2,7 +2,7 @@ import { act, waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { renderHookWithQuery } from "@/test/render";
-import { MONTH, problem, SETTINGS, stubApi } from "@/test/stub-api";
+import { MONTH, problem, SAVINGS_YEAR, SETTINGS, stubApi } from "@/test/stub-api";
 
 import { useSettings, useUpdateSettings } from "./settings-query";
 
@@ -19,12 +19,14 @@ describe("settings", () => {
     const requests = stubApi({ "PATCH /api/settings": { status: 200, body: saved } });
     const { result, client } = renderHookWithQuery(() => useUpdateSettings());
     client.setQueryData(["month", "2026-11"], MONTH);
+    client.setQueryData(["report", "savings", 2026], SAVINGS_YEAR);
 
     await act(() => result.current.mutateAsync({ tier_green: "3000.00" }));
 
     expect(await requests[0].json()).toEqual({ tier_green: "3000.00" });
     expect(client.getQueryData(["settings"])).toEqual(saved);
     expect(client.getQueryState(["month", "2026-11"])?.isInvalidated).toBe(true);
+    expect(client.getQueryState(["report", "savings", 2026])?.isInvalidated).toBe(true);
   });
 
   it("surfaces the server's refusal", async () => {
