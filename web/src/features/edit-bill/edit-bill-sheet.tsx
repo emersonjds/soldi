@@ -41,7 +41,7 @@ const BillForm = ({
     from
       ? {
           name: from.name,
-          amount: from.amount,
+          amount: from.amount ?? "",
           dueDay: String(from.due_day),
           categoryId: from.category_id,
           active: bill?.active ?? true,

@@ -59,7 +59,7 @@ const Rows = ({
                   {category && ` · ${categoryLabel(category, categories.data)}`}
                 </span>
               </span>
-              <Money amount={bill.amount} className="font-bold text-sm sm:text-base" />
+              <Money amount={bill.amount ?? "0"} className="font-bold text-sm sm:text-base" />
             </button>
             <Switch
               aria-label={`Ativa: ${bill.name}`}
@@ -103,7 +103,7 @@ const Summary = ({ active }: { active: Bill[] }) => {
   const today = todayISO();
   const month = today.slice(0, 7);
   const view = useMonth(month);
-  const total = active.reduce((sum, bill) => sum + cents(bill.amount), 0);
+  const total = active.reduce((sum, bill) => sum + cents(bill.amount ?? "0"), 0);
   const income = view.data ? cents(view.data.totals.income) : 0;
   const name = monthName(`${month}-01`, month);
 
