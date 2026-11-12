@@ -23,11 +23,17 @@ const lowest = (days: ForecastDay[]) =>
 const monthsBetween = (from: string, to: string) =>
   (Number(to.slice(0, 4)) - Number(from.slice(0, 4))) * 12 + Number(to.slice(5, 7)) - Number(from.slice(5, 7));
 
-/** Today's month through the last parcela's, at most 12, each before and after `rows`. */
+/** The forecast's last month when a parcela lands after it; null when every parcela lands inside. */
+export const projectedUntil = ({ days }: Forecast, rows: DraftRow[]) => {
+  const last = days.at(-1)?.date.slice(0, 7);
+  return last && rows.some((row) => row.date.slice(0, 7) > last) ? last : null;
+};
+
+/** Today's month through the last parcela's, inside the forecast, each before and after `rows`. */
 export const projectMonths = ({ today, days }: Forecast, rows: DraftRow[], bounds: TierBounds): MonthProjection[] => {
   const after = withDraft(days, rows, bounds);
   const first = today.slice(0, 7);
-  const count = Math.min(12, monthsBetween(first, rows[rows.length - 1].date) + 1);
+  const count = monthsBetween(first, rows[rows.length - 1].date) + 1;
   return Array.from({ length: count }, (_, offset) => addMonths(first, offset)).flatMap((month) => {
     const at = days.flatMap((day, position) => (day.date.startsWith(month) ? [position] : []));
     if (at.length === 0) return [];

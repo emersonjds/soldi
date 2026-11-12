@@ -10,11 +10,12 @@ import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useCards } from "@/entities/bill/bill-queries";
 import { CategoryChips, useCategoryChips } from "@/entities/category/category-chips";
+import { useForecast } from "@/entities/forecast/forecast-query";
 import { useMonth } from "@/entities/month/month-query";
 import { useTransactions } from "@/entities/transaction/transaction-queries";
 import type { Schemas } from "@/shared/api/client";
 import { useCurrency } from "@/shared/lib/currency";
-import { monthName, monthSlashYear, todayISO } from "@/shared/lib/date";
+import { addMonths, lastDay, monthName, monthSlashYear, todayISO } from "@/shared/lib/date";
 import { formatMoney, positiveAmount } from "@/shared/lib/money";
 import { formatPct, wholeShare } from "@/shared/lib/percent";
 import { cents, fromCents } from "@/shared/lib/tier";
@@ -40,14 +41,17 @@ const longDate = (date: string) => `${Number(date.slice(8))} de ${monthOnly(date
 
 type Inputs = { amount: string; count: number; date: string; cardId: string; category?: Schemas["Category"] };
 
-const blank = (): Inputs => ({ amount: "", count: 1, date: todayISO(), cardId: "" });
+/** `date` empty: the forecast's today. */
+const blank = (): Inputs => ({ amount: "", count: 1, date: "", cardId: "" });
 
 /** Posso comprar isso? (D16): a purchase over the forecast, nothing written; results only after Calcular Projeção. */
 export const PurchaseSimulator = () => {
   const [inputs, setInputs] = useState(blank);
   const [shown, setShown] = useState(false);
   const currency = useCurrency();
-  const today = todayISO();
+  const today = useForecast().data?.today ?? todayISO();
+  const lastMonth = addMonths(today.slice(0, 7), 11);
+  const date = inputs.date || today;
   const thisMonth = useTransactions(today.slice(0, 7));
   const income = useMonth(today.slice(0, 7)).data?.totals.income;
   const cards = useCards().data ?? [];
@@ -55,12 +59,13 @@ export const PurchaseSimulator = () => {
   const category = inputs.category ?? chips.data?.[0];
   const card = cards.find(({ id }) => id === inputs.cardId);
   const amount = positiveAmount(inputs.amount);
-  const plan = inputs.count === 1 ? "once" : "installments";
-  const drafted = amount
-    ? draftRows({ kind: "daily", amount, date: inputs.date, plan, count: inputs.count, card })
-    : null;
+  const drafted = amount ? draftRows({ amount, date, count: inputs.count, card }) : null;
   // A parcela at zero cents is no purchase.
   const rows = drafted?.every((row) => row.cents < 0) ? drafted : null;
+  const fatura = useMonth(card && rows ? rows[0].date.slice(0, 7) : today.slice(0, 7));
+  const paid = Boolean(
+    card && rows && fatura.data?.bills_of_month.some((bill) => bill.is_card && bill.bill_id === card.id && bill.paid),
+  );
   const parcela = rows ? -rows[0].cents : 0;
   const money = (value: number) => formatMoney(fromCents(value), currency);
 
@@ -71,7 +76,7 @@ export const PurchaseSimulator = () => {
 
   const infoOf = () => {
     if (!rows) return null;
-    if (plan === "once") return `Pagamento único em ${longDate(rows[0].date)}.`;
+    if (inputs.count === 1) return `Pagamento único em ${longDate(rows[0].date)}.`;
     return `${inputs.count} parcelas de ${money(parcela)} a partir de ${monthSlashYear(rows[0].date)}.`;
   };
   const info = infoOf();
@@ -171,9 +176,10 @@ export const PurchaseSimulator = () => {
             <span className={label}>Primeiro vencimento</span>
             <DateField
               label="Primeiro vencimento"
-              value={inputs.date}
-              onChange={(date) => set({ date })}
+              value={date}
+              onChange={(picked) => set({ date: picked })}
               min={today}
+              max={`${lastMonth}-${lastDay(lastMonth)}`}
               format={longDate}
               className="h-12 rounded-xl border-0 bg-muted"
             />
@@ -198,6 +204,7 @@ export const PurchaseSimulator = () => {
                   </NativeSelectOption>
                 ))}
               </NativeSelect>
+              {paid && <p className="text-expense-text text-sm">Essa fatura já foi paga.</p>}
             </Field>
           )}
 
@@ -206,6 +213,7 @@ export const PurchaseSimulator = () => {
             chosen={category}
             onChoose={(chosen) => set({ category: chosen })}
             entries={thisMonth.isError ? [] : thisMonth.data}
+            label="Categoria do bem ou serviço"
           />
 
           {share !== null && (
@@ -228,7 +236,12 @@ export const PurchaseSimulator = () => {
             >
               <RotateCcw aria-hidden className="size-5" />
             </Button>
-            <BrandButton type="button" disabled={!rows} onClick={() => setShown(true)}>
+            <BrandButton
+              type="button"
+              disabled={!rows || paid}
+              onClick={() => setShown(true)}
+              className="min-w-0 flex-1"
+            >
               <Calculator aria-hidden />
               Calcular Projeção
             </BrandButton>
@@ -251,8 +264,8 @@ export const PurchaseSimulator = () => {
           </div>
         </aside>
 
-        {shown && rows && amount && (
-          <div className="lg:col-start-2 lg:row-span-2 lg:row-start-1">
+        <div aria-live="polite" className="empty:hidden lg:col-start-2 lg:row-span-2 lg:row-start-1">
+          {shown && rows && amount && (
             <Results
               rows={rows}
               count={inputs.count}
@@ -263,8 +276,8 @@ export const PurchaseSimulator = () => {
                 setShown(true);
               }}
             />
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );

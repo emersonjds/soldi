@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Schemas } from "@/shared/api/client";
+import { pickDate } from "@/test/pick-date";
 import { renderWithQuery } from "@/test/render";
 import {
   BILL_ALUGUEL,
@@ -24,14 +25,14 @@ const forecast = (march: string) =>
     ["2027-03-25", "3000.00"],
   ]);
 
-const outflow = (name: string, amount: string): Schemas["BillOfMonth"] => ({
+const outflow = (name: string, amount: string, on = "2027-03-15"): Schemas["BillOfMonth"] => ({
   amount,
   bill_id: BILL_ALUGUEL.id,
   color: "cat-1",
-  due_date: "2027-03-15",
+  due_date: on,
   icon: "receipt",
   is_card: false,
-  lands_on: "2027-03-15",
+  lands_on: on,
   name,
   overdue: false,
   paid: false,
@@ -41,7 +42,12 @@ const outflow = (name: string, amount: string): Schemas["BillOfMonth"] => ({
 const MARCH: Schemas["MonthView"] = {
   ...MONTH,
   month: "2027-03",
-  bills_of_month: [outflow("Luz", "80.00"), outflow("IPVA 2027", "1000.00"), outflow("Seguro Auto", "500.00")],
+  bills_of_month: [
+    outflow("Luz", "80.00"),
+    outflow("IPVA 2027", "1000.00"),
+    outflow("Seguro Auto", "500.00"),
+    outflow("Escola", "2000.00", "2027-03-20"),
+  ],
 };
 
 const NUBANK: Schemas["Bill"] = {
@@ -99,7 +105,7 @@ describe("Posso comprar isso?", () => {
     expect(screen.getByText(/^O Soldi cruza seus lançamentos futuros/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Calcular Projeção" })).toBeDisabled();
     expect(screen.queryByText("Comprometimento de Renda")).not.toBeInTheDocument();
-    expect(await screen.findByRole("radiogroup", { name: "Categoria" })).toBeInTheDocument();
+    expect(await screen.findByRole("radiogroup", { name: "Categoria do bem ou serviço" })).toBeInTheDocument();
   });
 
   it("6× R$ 2.400,00 over a red March: the verdict, the curve, six months and the actions; Testar em 10x fits", async () => {
@@ -113,6 +119,8 @@ describe("Posso comprar isso?", () => {
     const verdict = await calculate();
     expect(verdict).toHaveTextContent("VEREDITO DO ORÇAMENTO • ALERTA CRÍTICO");
     expect(verdict).toHaveTextContent("Déficit Projetado");
+    expect(verdict.closest("[aria-live='polite']")).not.toBeNull();
+    expect(within(verdict).getByRole("heading", { level: 2 })).toHaveFocus();
     expect(
       within(verdict).getByRole("heading", { name: /^Em Março você fica no vermelho: -R\$\s500,00$/ }),
     ).toBeInTheDocument();
@@ -131,12 +139,12 @@ describe("Posso comprar isso?", () => {
     expect(months).toHaveLength(6);
     expect(screen.getByText("Vencimento no dia 10 de cada mês")).toBeInTheDocument();
     expect(months[0]).toHaveTextContent(
-      /^Novembro 2026.*Saldo Atual:R\$\s3\.000,00Saldo Projetado:R\$\s2\.600,00Parcela 1\/6- R\$\s400,00$/,
+      /^Novembro 2026Saldo Atual:R\$\s3\.000,00Saldo Projetado:R\$\s2\.600,00Parcela 1\/6- R\$\s400,00$/,
     );
     expect(months[4]).toHaveTextContent("CRÍTICO");
     expect(months[4]).toHaveTextContent(/Saldo Atual Original:R\$\s3\.000,00Saldo com Compra:R\$\s1\.000,00/);
     expect(months[4]).toHaveTextContent("Parcela 5/6 (+ IPVA 2027/Seguro Auto)");
-    expect(months[3]).not.toHaveTextContent("CRÍTICO");
+    expect(months[3]).toHaveTextContent(/^Fevereiro 2027Saldo Atual:/);
 
     expect(screen.getByRole("heading", { name: "O que você gostaria de fazer agora?" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Ver Detalhe de Março" })).toHaveAttribute("href", "/mes?m=2027-03");
@@ -190,6 +198,8 @@ describe("Posso comprar isso?", () => {
     expect(verdict).toHaveTextContent(
       /Março já estava no vermelho sem a compra; com ela, o menor saldo vai a -R\$\s2\.100,00\./,
     );
+    const months = within(screen.getByRole("list", { name: /^Projeção Mensal/ })).getAllByRole("listitem");
+    expect(months[4]).toHaveTextContent(/^Março 2027CRÍTICO/);
   });
 
   it("hides the results when an input changes, and Limpar simulação clears the form", async () => {
@@ -219,6 +229,82 @@ describe("Posso comprar isso?", () => {
     const months = within(screen.getByRole("list", { name: /^Projeção Mensal/ })).getAllByRole("listitem");
     expect(months[0]).toHaveTextContent(/Parcela 0\/1Sem alteração$/);
     expect(months[1]).toHaveTextContent(/Parcela 1\/1- R\$\s600,00$/);
+  });
+
+  it("10× R$ 1.000,01: the last parcela takes the remainder cent", async () => {
+    setup();
+    await typeAmount("1000,01");
+    await userEvent.click(screen.getByRole("radio", { name: "10x" }));
+    await calculate();
+
+    const months = within(screen.getByRole("list", { name: /^Projeção Mensal/ })).getAllByRole("listitem");
+    expect(months).toHaveLength(10);
+    expect(months[8]).toHaveTextContent(/Parcela 9\/10- R\$\s100,00$/);
+    expect(months[9]).toHaveTextContent(/Parcela 10\/10- R\$\s100,01$/);
+  });
+
+  it("12× on a card past the forecast: names the last month projected and fits only until it", async () => {
+    setup({ "GET /api/bills": { status: 200, body: [NUBANK] } });
+    await userEvent.selectOptions(await screen.findByRole("combobox", { name: "Cartão" }), "Nubank");
+    await typeAmount("1200,00");
+    await userEvent.click(screen.getByRole("radio", { name: "12x" }));
+
+    const verdict = await calculate();
+    expect(
+      within(verdict).getByRole("heading", { name: "Até Outubro/2027, nenhum mês fica no vermelho." }),
+    ).toBeInTheDocument();
+    expect(verdict).toHaveTextContent("As parcelas depois de Outubro/2027 ficam fora da projeção.");
+    expect(within(screen.getByRole("list", { name: /^Projeção Mensal/ })).getAllByRole("listitem")).toHaveLength(12);
+  });
+
+  it("caps Primeiro vencimento at the end of the 11th month after today's", async () => {
+    setup();
+    await pickDate("Primeiro vencimento", "2027-10-31");
+
+    expect(screen.getByRole("button", { name: "Primeiro vencimento, 31 de Outubro, 2027" })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Primeiro vencimento, 31 de Outubro, 2027" }));
+    const years = await screen.findByRole("combobox", { name: "Escolha o ano" });
+    expect(within(years).queryByRole("option", { name: "2028" })).not.toBeInTheDocument();
+  });
+
+  it("refuses a card spend into a fatura already paid", async () => {
+    setup({
+      "GET /api/bills": { status: 200, body: [NUBANK] },
+      "GET /api/months/2026-12": {
+        status: 200,
+        body: {
+          ...MONTH,
+          month: "2026-12",
+          bills_of_month: [
+            {
+              ...outflow("Nubank", "600.00", "2026-12-15"),
+              bill_id: NUBANK.id,
+              is_card: true,
+              paid: true,
+              lands_on: null,
+            },
+          ],
+        },
+      },
+    });
+    await userEvent.selectOptions(await screen.findByRole("combobox", { name: "Cartão" }), "Nubank");
+    await typeAmount("600,00");
+
+    expect(await screen.findByText("Essa fatura já foi paga.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Calcular Projeção" })).toBeDisabled();
+  });
+
+  it("starts on the forecast's today and offers Tentar de novo when no month is left to project", async () => {
+    setup({ "GET /api/forecast": { status: 200, body: { today: "2026-11-12", days: [] } } });
+
+    expect(
+      await screen.findByRole("button", { name: "Primeiro vencimento, 12 de Novembro, 2026" }),
+    ).toBeInTheDocument();
+    await typeAmount("100,00");
+    await userEvent.click(screen.getByRole("button", { name: "Calcular Projeção" }));
+
+    expect(await screen.findByText("Sem meses para projetar agora. Tente de novo.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Tentar de novo" })).toBeInTheDocument();
   });
 
   it("offers Tentar de novo when the forecast fails", async () => {

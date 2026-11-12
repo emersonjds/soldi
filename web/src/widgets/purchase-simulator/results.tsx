@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 
 import Link from "next/link";
 
@@ -25,9 +25,8 @@ import { cents, fromCents } from "@/shared/lib/tier";
 import { BrandButton } from "@/shared/ui/brand-button";
 import { Money } from "@/shared/ui/money";
 import { PageError } from "@/shared/ui/page-state";
-import { TierPill } from "@/shared/ui/tier-pill";
 
-import { type MonthProjection, projectMonths } from "./projection";
+import { type MonthProjection, projectedUntil, projectMonths } from "./projection";
 
 /** `2027-03` → `Março`. */
 export const monthOnly = (month: string) => monthSlashYear(month).slice(0, -5);
@@ -37,10 +36,10 @@ const COUNTS = [6, 10, 12];
 const card = "flex flex-col gap-4 rounded-2xl bg-card p-4 shadow-sm lg:p-6";
 const eyebrow = "font-semibold text-xs uppercase tracking-wider";
 
-/** The month's two largest outflows still to land. */
-const outflowsOf = (view?: Schemas["MonthView"]) =>
+/** The month's two largest outflows landing by `day`, its red day. */
+const outflowsOf = (day: string, view?: Schemas["MonthView"]) =>
   (view?.bills_of_month ?? [])
-    .filter((bill) => !bill.paid && bill.lands_on)
+    .filter((bill) => bill.lands_on && bill.lands_on <= day)
     .sort((a, b) => cents(b.amount) - cents(a.amount))
     .slice(0, 2)
     .map((bill) => bill.name);
@@ -64,7 +63,15 @@ export const Results = ({ rows, count, total, name, onRetest }: Props) => {
   const months = forecast.data && settings.data ? projectMonths(forecast.data, rows, settings.data) : [];
   const reds = months.filter((month) => month.red);
   const views = useQueries({ queries: reds.map((month) => monthQuery(month.month)) });
-  const outflows = (month: string) => outflowsOf(views[reds.findIndex((red) => red.month === month)]?.data);
+  const outflows = (month: string) => {
+    const at = reds.findIndex((red) => red.month === month);
+    return at < 0 ? [] : outflowsOf(reds[at].low.date, views[at].data);
+  };
+  const focusVerdict = useCallback((heading: HTMLHeadingElement | null) => {
+    if (!heading) return;
+    heading.focus();
+    if (!window.matchMedia("(min-width: 1024px)").matches) heading.scrollIntoView({ block: "start" });
+  }, []);
 
   if (forecast.isError || settings.isError)
     return (
@@ -73,17 +80,23 @@ export const Results = ({ rows, count, total, name, onRetest }: Props) => {
         onRetry={() => Promise.all([forecast.refetch(), settings.refetch()])}
       />
     );
-  if (months.length === 0) return null;
+  if (!forecast.data || !settings.data) return null;
+  if (months.length === 0)
+    return <PageError message="Sem meses para projetar agora. Tente de novo." onRetry={() => forecast.refetch()} />;
 
   const first = reds[0];
+  const until = projectedUntil(forecast.data, rows);
+  const fits = until
+    ? `Até ${monthSlashYear(until)}, nenhum mês fica no vermelho.`
+    : "Cabe no orçamento: nenhum mês fica no vermelho.";
   const next = COUNTS.find((each) => each > count);
   const body = () => {
     if (!first) return null;
-    const fits = months.filter((month) => month.month < first.month && month.index > 0 && !month.alreadyRed);
+    const roomy = months.filter((month) => month.month < first.month && month.index > 0 && !month.alreadyRed);
     const names = outflows(first.month);
     const opening =
-      fits.length > 0
-        ? `A compra cabe com folga em ${list.format(fits.map((month) => monthOnly(month.month)))}, mas a`
+      roomy.length > 0
+        ? `A compra cabe com folga em ${list.format(roomy.map((month) => monthOnly(month.month)))}, mas a`
         : "A";
     const scheduled = names.length > 0 ? ` (${list.format(names)})` : "";
     return `${opening} soma da ${first.index}ª parcela (${money(fromCents(first.parcela))}) com as despesas já agendadas${scheduled} deixará seu saldo negativo em ${money(fromCents(-cents(first.low.projected_balance)))} no dia ${Number(first.low.date.slice(8))} de ${monthOnly(first.month)}.`;
@@ -106,10 +119,10 @@ export const Results = ({ rows, count, total, name, onRetest }: Props) => {
               <p className={cn(eyebrow, first ? "text-expense-text" : "text-income-text")}>
                 {first ? "VEREDITO DO ORÇAMENTO • ALERTA CRÍTICO" : "VEREDITO DO ORÇAMENTO • CABE NO ORÇAMENTO"}
               </p>
-              <h2 className="font-bold text-xl leading-7 lg:text-2xl">
+              <h2 ref={focusVerdict} tabIndex={-1} className="font-bold text-xl leading-7 outline-none lg:text-2xl">
                 {first
                   ? `Em ${monthOnly(first.month)} você fica no vermelho: ${money(first.low.projected_balance)}`
-                  : "Cabe no orçamento: nenhum mês fica no vermelho."}
+                  : fits}
               </h2>
             </div>
           </div>
@@ -123,6 +136,7 @@ export const Results = ({ rows, count, total, name, onRetest }: Props) => {
           </span>
         </div>
         {first && <p className="rounded-xl bg-card p-4 text-expense-text text-sm leading-6">{body()}</p>}
+        {until && <p className="text-sm">{`As parcelas depois de ${monthSlashYear(until)} ficam fora da projeção.`}</p>}
         {months
           .filter((month) => month.alreadyRed)
           .map((month) => (
@@ -155,13 +169,13 @@ export const Results = ({ rows, count, total, name, onRetest }: Props) => {
             </li>
           </ul>
         </div>
-        <ChartContainer config={{}} aria-hidden className="aspect-[2/1] w-full">
+        <ChartContainer config={{}} aria-hidden className="aspect-[2/1] w-full overflow-hidden">
           <LineChart
             data={months.map((month) => ({
               label: monthShort(month.month),
               before: cents(month.endBefore),
               after: cents(month.endAfter),
-              alert: month.red ? cents(month.endAfter) : null,
+              alert: month.red ? cents(month.low.projected_balance) : null,
             }))}
             margin={{ top: 8, right: 8, bottom: 0, left: 8 }}
           >
@@ -169,6 +183,7 @@ export const Results = ({ rows, count, total, name, onRetest }: Props) => {
             <YAxis hide domain={["auto", "auto"]} />
             <ReferenceLine
               y={0}
+              ifOverflow="extendDomain"
               stroke="var(--color-expense)"
               label={{ value: `${money("0")} (Linha Zero)`, position: "insideTopLeft", fill: "var(--color-expense)" }}
             />
@@ -257,10 +272,8 @@ const MonthCard = ({ month, count, outflows }: { month: MonthProjection; count: 
         {month.red && <CircleAlert aria-hidden className="size-4 shrink-0 text-expense-text" />}
         {monthTitle(month.month)}
       </h3>
-      {month.red ? (
+      {(month.red || month.alreadyRed) && (
         <span className="rounded-full bg-card px-2 py-0.5 font-bold text-expense-text text-xs">CRÍTICO</span>
-      ) : (
-        <TierPill tier={month.low.projected_tier} size="sm" />
       )}
     </div>
     <dl className="grid gap-1 text-sm">
