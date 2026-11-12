@@ -153,8 +153,8 @@ describe("visibleDays", () => {
     ]);
   });
 
-  it("keeps the first 3 scheduled days of a future month", () => {
-    expect(datesOf(visibleDays(november, "2026-10-20", false))).toEqual(["2026-11-04", "2026-11-02", "2026-11-01"]);
+  it("keeps every scheduled day of a future month", () => {
+    expect(visibleDays(november, "2026-10-20", false)).toEqual(november);
   });
 
   it("keeps a short month whole", () => {
