@@ -399,6 +399,22 @@ pub async fn has_bills(
     .await
 }
 
+/// D28: whether any entry of the category itself sits on a card.
+pub async fn has_card_entries(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    id: Uuid,
+) -> Result<bool, sqlx::Error> {
+    sqlx::query_scalar!(
+        r#"SELECT EXISTS (SELECT 1 FROM transactions
+           WHERE user_id = $1 AND category_id = $2 AND card_id IS NOT NULL) AS "exists!""#,
+        user_id,
+        id
+    )
+    .fetch_one(&mut *conn)
+    .await
+}
+
 /// Moves the category and every entry of its own to `kind`, wearing `color` when given; its
 /// subcategories keep theirs. Kind and color change in one row write so the per-kind color index
 /// never sees the old color in the new kind.

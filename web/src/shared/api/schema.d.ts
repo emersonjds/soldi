@@ -456,12 +456,21 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        /** @description A recurring bill. `due_day` 29 to 31 falls on the last day of a shorter month. */
+        /**
+         * @description A recurring bill, or with `closing_day` a credit card (D28). `due_day` 29 to 31 falls on the
+         *     last day of a shorter month.
+         */
         Bill: {
             active: boolean;
-            amount: string;
+            /** @description Always set on a conta fixa, never on a card. */
+            amount?: string | null;
             /** Format: uuid */
             category_id: string;
+            /**
+             * Format: int32
+             * @description Set only on a card: a spend dated before it (clamped) closes this month's fatura.
+             */
+            closing_day?: number | null;
             /** Format: int32 */
             due_day: number;
             /** Format: uuid */
@@ -473,6 +482,8 @@ export interface components {
          *     unpaid; `due_date` clamps a late due day to the month's last day; `overdue` is unpaid with
          *     `due_date` before today in São Paulo. In the current month, a bill still unpaid in an earlier
          *     month is listed again first, with that month's `due_date`, `overdue` and `lands_on` today (D17).
+         *     A card's row is its fatura (D28): unpaid, `amount` sums the spends due that month; a card
+         *     month without spends or payment is not listed.
          */
         BillOfMonth: {
             amount: string;
@@ -484,6 +495,8 @@ export interface components {
             due_date: string;
             /** @description The category's lucide icon. */
             icon: string;
+            /** @description A credit card's fatura (D28). */
+            is_card: boolean;
             /**
              * Format: date
              * @description The day an unpaid bill enters the projection: its due date, or today once due; null when
@@ -620,13 +633,18 @@ export interface components {
             token: string;
         };
         CreateBill: {
-            /** @description Greater than zero, up to two decimal places. */
-            amount: string;
+            /** @description A conta fixa's: greater than zero, up to two decimal places. Absent on a card. */
+            amount?: string | null;
             /**
              * Format: uuid
              * @description One of the caller's active `bill` categories.
              */
             category_id: string;
+            /**
+             * Format: int32
+             * @description 1 to 31; makes the bill a card, which then has no `amount`.
+             */
+            closing_day?: number | null;
             /**
              * Format: int32
              * @description 1 to 31.
@@ -661,6 +679,11 @@ export interface components {
         CreateTransaction: {
             /** @description Greater than zero, up to two decimal places; never rounded. */
             amount: string;
+            /**
+             * Format: uuid
+             * @description One of the caller's unarchived cards; only on a `daily` entry.
+             */
+            card_id?: string | null;
             /**
              * Format: uuid
              * @description One of the caller's active categories.
@@ -786,7 +809,7 @@ export interface components {
             /** Format: date */
             opening_date: string;
         };
-        /** @description `amount` defaults to the bill's amount; the bill itself never changes. */
+        /** @description `amount` defaults to the bill's amount and is required for a card; the bill never changes. */
         PayBill: {
             amount?: string | null;
             /** Format: date */
@@ -889,6 +912,11 @@ export interface components {
         /** @description `category` is the entry's category as it is now, archived or not. */
         Transaction: {
             amount: string;
+            /**
+             * Format: uuid
+             * @description The card a Diário spend went on; it weighs on the balance with the card's fatura (D28).
+             */
+            card_id?: string | null;
             category: components["schemas"]["Category"];
             /**
              * Format: uuid
@@ -930,12 +958,17 @@ export interface components {
             /** Format: int64 */
             total: number;
         };
-        /** @description Absent fields stay as they are. `active: false` keeps the bill out of the month. */
+        /**
+         * @description Absent fields stay as they are. `active: false` keeps the bill out of the month; a card has
+         *     no pause. `closing_day` changes only on a card.
+         */
         UpdateBill: {
             active?: boolean | null;
             amount?: string | null;
             /** Format: uuid */
             category_id?: string | null;
+            /** Format: int32 */
+            closing_day?: number | null;
             /** Format: int32 */
             due_day?: number | null;
             name?: string | null;
@@ -978,9 +1011,14 @@ export interface components {
             tier_yellow?: string | null;
             tier_zero?: string | null;
         };
-        /** @description Absent fields stay as they are; `"note": null` clears the note. */
+        /** @description Absent fields stay as they are; `"note": null` clears the note, `"card_id": null` the card. */
         UpdateTransaction: {
             amount?: string | null;
+            /**
+             * Format: uuid
+             * @description A new card must be one of the caller's unarchived cards; keeping an archived one is fine.
+             */
+            card_id?: string | null;
             /** Format: uuid */
             category_id?: string | null;
             /** Format: date */
@@ -1371,7 +1409,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Name not 1 to 100 characters, amount not above zero or with more than two places, due day not 1 to 31, `category_id` not one of the caller's active bill categories, or `cannot-become-bill` when the entry is not a `bill` entry, already a bill's payment, a resgate or a series member */
+            /** @description Name not 1 to 100 characters, amount not above zero or with more than two places, missing on a conta fixa or present on a card (`amount`), `closing_day` not 1 to 31, due day not 1 to 31, `category_id` not one of the caller's active bill categories or, on a card, `Economia` or a cofrinho, or `cannot-become-bill` when the entry is not a `bill` entry, already a bill's payment, a resgate or a series member */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -1462,7 +1500,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Same rules as create, on the bill after the change */
+            /** @description Same rules as create, on the bill after the change; `closing_day` on a conta fixa, `active: false` on a card; `fatura-paid` when a card's `closing_day` changes while a fatura from this month on is paid (D30b) */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -1512,7 +1550,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Missing, paused, archived or another user's */
+            /** @description Missing, paused, archived (a card stays payable) or another user's */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -1530,7 +1568,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description `date` outside `month`, `month` not `YYYY-MM`, amount not above zero or with more than two places, or a date before the opening date (`before-opening-date`) */
+            /** @description `date` outside `month`, `month` not `YYYY-MM`, `amount` missing on a card, amount not above zero or with more than two places, or a date before the opening date (`before-opening-date`) */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -1799,7 +1837,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description A bad field, `kind-locked` for a `kind` on `Economia`, a cofrinho, `Resgate` or an income category or a `kind` of `income`, `category-has-bills` when moving to `daily` a category an unarchived conta fixa (active or paused) uses, a parent on the other side (income vs outflow) or a non-bill under `Economia` or itself, `nested-subcategory` when the parent is a subcategory or this category has subcategories, `savings-category` when moving `Economia` or `Resgate` or under `Resgate`, `not-a-cofrinho` for a target or deadline outside `Economia`, `color-taken` when the color is taken in any kind the group shows in, or `palette-full` when moving to top-level without a color, or changing a top-level's `kind`, and all 24 are taken in the kind */
+            /** @description A bad field, `kind-locked` for a `kind` on `Economia`, a cofrinho, `Resgate` or an income category or a `kind` of `income`, `category-has-bills` when moving to `daily` a category an unarchived conta fixa (active or paused) uses, `category-has-card-entries` when moving to `bill` a category with entries on a card, a parent on the other side (income vs outflow) or a non-bill under `Economia` or itself, `nested-subcategory` when the parent is a subcategory or this category has subcategories, `savings-category` when moving `Economia` or `Resgate` or under `Resgate`, `not-a-cofrinho` for a target or deadline outside `Economia`, `color-taken` when the color is taken in any kind the group shows in, or `palette-full` when moving to top-level without a color, or changing a top-level's `kind`, and all 24 are taken in the kind */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -2535,7 +2573,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Amount not above zero or with more than two places, note over 500 characters, a kind other than the category's (`category_id`), `repeat_months` not 2 to 60, `installments` not 2 to 60, with `repeat_months`, or leaving a parcela at zero, a date outside 2000 to 2100, or a date before the opening date (`before-opening-date`) */
+            /** @description Amount not above zero or with more than two places, note over 500 characters, `card_id` on a non-`daily` entry or not one of the caller's unarchived cards, a kind other than the category's (`category_id`), `repeat_months` not 2 to 60, `installments` not 2 to 60, with `repeat_months`, or leaving a parcela at zero, a date outside 2000 to 2100, a date before the opening date (`before-opening-date`), or `fatura-paid` when a spend on a card lands in an already paid fatura (D30b) */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -2680,7 +2718,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description `archived-cofrinho`: the entry, or with `following` a later series member, is a deposit into or a resgate from a deleted cofrinho; nothing is deleted */
+            /** @description `archived-cofrinho`: the entry, or with `following` a later series member, is a deposit into or a resgate from a deleted cofrinho; `fatura-paid`: the entry, or with `following` a later series member, is a card spend of a paid fatura (D30b); nothing is deleted */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -2745,7 +2783,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Same rules as create, on the entry after the change, `before-opening-date` included; with `repeat_months`, `repeat-not-allowed-on-bill-payment` or `repeat-not-allowed-on-cofrinho-withdrawal` on an entry outside a series, `validation` on `repeat_months` outside 2..60 or below this member's position, on `date` when the series would pass 2100; with `following` on a series member, `validation` on `date` when the new date leaves this entry's month (`must stay in this entry's month when the series moves`) or when two of the moved members share a month (`must not move a series with two entries in one month`); `archived-cofrinho` when the entry, or with `following` a later series member, is a deposit into or a resgate from a deleted cofrinho; nothing is written */
+            /** @description Same rules as create, on the entry after the change, `before-opening-date` included (an archived card it already carries stays allowed); with `repeat_months`, `repeat-not-allowed-on-bill-payment` or `repeat-not-allowed-on-cofrinho-withdrawal` on an entry outside a series, `validation` on `repeat_months` outside 2..60 or below this member's position, on `date` when the series would pass 2100; with `following` on a series member, `validation` on `date` when the new date leaves this entry's month (`must stay in this entry's month when the series moves`) or when two of the moved members share a month (`must not move a series with two entries in one month`); `archived-cofrinho` when the entry, or with `following` a later series member, is a deposit into or a resgate from a deleted cofrinho; `fatura-paid` when the amount, date or card changes on a card spend whose fatura (or, with `following`, a later member's) is paid, or the change lands it in a paid fatura (D30b); nothing is written */
             422: {
                 headers: {
                     [name: string]: unknown;

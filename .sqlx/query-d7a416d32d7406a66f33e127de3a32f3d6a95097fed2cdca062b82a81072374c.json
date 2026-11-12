@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS (SELECT 1 FROM categories c\n           LEFT JOIN categories p ON p.user_id = c.user_id AND p.id = c.parent_id\n           WHERE c.user_id = $1 AND c.id = $2 AND (c.is_savings OR COALESCE(p.is_savings, false)))\n           AS \"exists!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "exists!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "d7a416d32d7406a66f33e127de3a32f3d6a95097fed2cdca062b82a81072374c"
+}

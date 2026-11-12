@@ -19,6 +19,7 @@ pub fn check(input: CreateTransaction) -> Result<CreateTransaction, AppError> {
     let note = input.note.as_deref().map(check_note).transpose()?.flatten();
     input.repeat_months.map(check_repeat).transpose()?;
     check_installments(&input, amount)?;
+    check_card(input.kind, input.card_id)?;
     Ok(CreateTransaction {
         amount,
         note,
@@ -198,6 +199,17 @@ pub fn check_kind(kind: CategoryKind, category: &Category) -> Result<(), AppErro
     Ok(())
 }
 
+/// D28: only a Diário entry goes on a card.
+pub fn check_card(kind: CategoryKind, card_id: Option<Uuid>) -> Result<(), AppError> {
+    match card_id.is_some() && kind != CategoryKind::Daily {
+        true => Err(AppError::invalid(
+            "card_id",
+            "only a Diário entry goes on a card",
+        )),
+        false => Ok(()),
+    }
+}
+
 /// SOL-30: the inclusive dates of a `YYYY-MM` or a `YYYY` (years 2000 to 2100) or `all` (none).
 pub fn period(text: &str) -> Result<Option<(NaiveDate, NaiveDate)>, AppError> {
     if text == "all" {
@@ -237,6 +249,7 @@ pub fn transaction(
         recurring_bill_id,
         cofrinho_id: None,
         series: None,
+        card_id: input.card_id,
     }
 }
 
@@ -254,6 +267,7 @@ mod tests {
             note: note.map(String::from),
             repeat_months: None,
             installments: None,
+            card_id: None,
         }
     }
 

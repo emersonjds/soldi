@@ -236,6 +236,31 @@ describe("usePayBill and useUnpayBill", () => {
     expect(isStale(view, ["transactions", "2026-11"])).toBe(true);
   });
 
+  it("puts a card's fatura back when its payment is undone, not the paid amount", async () => {
+    const fatura = { ...BILLS_OF_MONTH[1], bill_id: "card-porto", amount: "450.00", is_card: true };
+    stubApi({
+      "POST /api/bills/card-porto/pay": { status: 201, body: PAYMENT },
+      "DELETE /api/bills/card-porto/pay": { status: 204 },
+    });
+    const view = seeded();
+    view.client.setQueryData(["month", "2026-11"], { ...WITH_BILLS, bills_of_month: [fatura] });
+    await act(() =>
+      view.result.current.pay.mutateAsync({
+        billId: "card-porto",
+        month: "2026-11",
+        date: "2026-11-05",
+        amount: "400.00",
+      }),
+    );
+    expect(rowOf(view, "card-porto")).toMatchObject({ paid: true, amount: "400.00" });
+
+    const release = gated();
+    act(() => view.result.current.unpay.mutate({ billId: "card-porto", month: "2026-11" }));
+
+    await waitFor(() => expect(rowOf(view, "card-porto")).toMatchObject({ paid: false, amount: "450.00" }));
+    release();
+  });
+
   it("unpays a bill not yet due without marking it overdue, and leaves an unloaded month alone", async () => {
     stubApi({
       [`DELETE /api/bills/${BILL_ALUGUEL.id}/pay`]: { status: 204 },

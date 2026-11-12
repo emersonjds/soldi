@@ -177,6 +177,9 @@ async fn change_kind(
     if kind == CategoryKind::Daily && repo::has_bills(conn, user.id, category.id).await? {
         return Err(domain::category_has_bills());
     }
+    if kind != CategoryKind::Daily && repo::has_card_entries(conn, user.id, category.id).await? {
+        return Err(domain::category_has_card_entries());
+    }
     if let Some(parent_id) = category.parent_id {
         repo::change_kind(conn, user.id, category.id, kind, None).await?;
         return fit_group_color(conn, user, parent_id).await;

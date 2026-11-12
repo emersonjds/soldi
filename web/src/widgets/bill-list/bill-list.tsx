@@ -22,6 +22,9 @@ import { DashCard } from "@/shared/ui/dash-card";
 import { Money } from "@/shared/ui/money";
 import { PageError, PageLoading } from "@/shared/ui/page-state";
 
+/** A card (D28) has no amount: Contas fixas shows its days instead and leaves it out of the total. */
+const hasAmount = (bill: Bill): bill is Bill & { amount: string } => bill.amount != null;
+
 const Rows = ({
   label,
   bills,
@@ -44,6 +47,7 @@ const Rows = ({
     <ul aria-label={label} className="flex flex-col rounded-2xl bg-card p-2 shadow-sm">
       {bills.map((bill) => {
         const category = categoryOf(bill);
+        const label = category && categoryLabel(category, categories.data);
         return (
           <li key={bill.id} className="flex items-center">
             <button
@@ -55,19 +59,26 @@ const Rows = ({
               <span className="flex min-w-0 flex-1 flex-col">
                 <span className="truncate font-medium text-base">{bill.name}</span>
                 <span className="text-muted-foreground text-xs">
-                  Dia {bill.due_day}
-                  {category && ` · ${categoryLabel(category, categories.data)}`}
+                  {hasAmount(bill) ? [`Dia ${bill.due_day}`, label].filter(Boolean).join(" · ") : label}
                 </span>
               </span>
-              <Money amount={bill.amount} className="font-bold text-sm sm:text-base" />
+              {hasAmount(bill) ? (
+                <Money amount={bill.amount} className="font-bold text-sm sm:text-base" />
+              ) : (
+                <span className="shrink-0 text-muted-foreground text-xs sm:text-sm">
+                  Fecha dia {bill.closing_day} · vence dia {bill.due_day}
+                </span>
+              )}
             </button>
-            <Switch
-              aria-label={`Ativa: ${bill.name}`}
-              checked={isActive(bill)}
-              disabled={isSaving(bill)}
-              onCheckedChange={(active) => onToggle(bill, active)}
-              className="mx-3 shrink-0 after:-inset-y-3.5"
-            />
+            {hasAmount(bill) && (
+              <Switch
+                aria-label={`Ativa: ${bill.name}`}
+                checked={isActive(bill)}
+                disabled={isSaving(bill)}
+                onCheckedChange={(active) => onToggle(bill, active)}
+                className="mx-3 shrink-0 after:-inset-y-3.5"
+              />
+            )}
           </li>
         );
       })}
@@ -75,7 +86,8 @@ const Rows = ({
   );
 };
 
-const NextDue = ({ rows, today }: { rows: Schemas["BillOfMonth"][]; today: string }) => {
+const NextDue = ({ rows: month, today }: { rows: Schemas["BillOfMonth"][]; today: string }) => {
+  const rows = month.filter((row) => !row.is_card);
   const next = nextDue(rows, today);
   return (
     <DashCard title="Próximo vencimento">
@@ -99,7 +111,7 @@ const NextDue = ({ rows, today }: { rows: Schemas["BillOfMonth"][]; today: strin
 };
 
 /** Spec SOL-72 §9: the active bills' total against this month's income (never the viewed one), and the next bill due. */
-const Summary = ({ active }: { active: Bill[] }) => {
+const Summary = ({ active }: { active: (Bill & { amount: string })[] }) => {
   const today = todayISO();
   const month = today.slice(0, 7);
   const view = useMonth(month);
@@ -227,7 +239,7 @@ export const BillList = () => {
 
   return (
     <div className="flex flex-col gap-6">
-      {visible.length > 0 && <Summary active={active} />}
+      {visible.length > 0 && <Summary active={active.filter(hasAmount)} />}
       {visible.length === 0 ? (
         <div className="flex flex-col items-center gap-3 rounded-2xl bg-card px-4 py-10 text-center shadow-sm">
           <span className="flex size-12 items-center justify-center rounded-full bg-secondary text-primary">

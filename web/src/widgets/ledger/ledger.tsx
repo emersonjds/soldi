@@ -3,12 +3,13 @@
 import { useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
-import { ArrowRight, Pencil, Trash2 } from "lucide-react";
+import { ArrowRight, CreditCard, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { useCards } from "@/entities/bill/bill-queries";
 import { categoriesQuery, categoryLabel } from "@/entities/category/categories-query";
 import { billKey } from "@/entities/month/forecast-alert";
 import { visibleDays } from "@/entities/month/schedule";
@@ -39,7 +40,8 @@ const dayLabel = ({ date, is_future }: Schemas["Day"]) => {
   return short;
 };
 
-type Entry = { label: string; caption: string };
+/** `card`: the name of the card the entry went on (D28). */
+type Entry = { label: string; caption: string; card?: string };
 
 /** Money put in a cofrinho: a bill under Economia or one of its children. */
 const isSaved = ({ kind, category }: Transaction, categories: Schemas["Category"][] = []) =>
@@ -123,6 +125,12 @@ const Row = ({ transaction, entry, cause, onOpen }: RowProps) => (
         <span className="truncate font-medium text-base">{titleOf(transaction, entry)}</span>
         <span className="flex items-center gap-1 text-muted-foreground text-xs">
           {entry.caption}
+          {entry.card && (
+            <span className="flex min-w-0 items-center gap-1">
+              <CreditCard aria-hidden className="size-3.5 shrink-0" />
+              <span className="truncate">{entry.card}</span>
+            </span>
+          )}
           {transaction.series && (
             <>
               <span aria-hidden className="rounded-full bg-muted px-2 font-medium text-foreground">
@@ -186,7 +194,11 @@ export const Ledger = ({
   className,
 }: LedgerProps) => {
   const categories = useQuery(categoriesQuery).data;
-  const describe = (transaction: Transaction) => entryOf(transaction, categories);
+  const cards = useCards({ includeInactive: true }).data;
+  const describe = (transaction: Transaction): Entry => ({
+    ...entryOf(transaction, categories),
+    card: cards?.find(({ id }) => id === transaction.card_id)?.name,
+  });
   const [selected, setSelected] = useState<Transaction>();
   const [acting, setActing] = useState(false);
   const [editing, setEditing] = useState(false);

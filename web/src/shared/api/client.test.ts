@@ -66,6 +66,9 @@ describe("api results", () => {
     expect(problemMessage(new ApiError(422, "Locked.", [], "urn:soldi:error:kind-locked"))).toBe(
       "O tipo dessa categoria não pode mudar.",
     );
+    expect(problemMessage(new ApiError(422, "Paid.", [], "urn:soldi:error:fatura-paid"))).toBe(
+      "Essa fatura já foi paga.",
+    );
     expect(problemMessage(new ApiError(422, "No.", [], "urn:soldi:error:before-opening-date"))).toBeUndefined();
     expect(problemMessage(new Error("offline"))).toBeUndefined();
   });

@@ -1930,3 +1930,165 @@ async fn sol67_a_period_delete_queues_behind_a_following_edit_of_a_series_it_cut
     assert_ranked(&entries, 3);
     assert_eq!(entries[2]["note"], "fibra");
 }
+
+async fn card(user: &TestApp, name: &str) -> String {
+    let cards = user.category_id("Cartão").await;
+    let (status, card) = user
+        .post(
+            "/api/bills",
+            json!({ "name": name, "due_day": 10, "closing_day": 3, "category_id": cards }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{card}");
+    card["id"].as_str().unwrap().into()
+}
+
+fn on_card(date: &str, kind: &str, category_id: &str, card_id: &str) -> Value {
+    json!({ "date": date, "amount": "30", "kind": kind, "category_id": category_id, "card_id": card_id })
+}
+
+#[sqlx::test]
+async fn d28_only_a_daily_entry_goes_on_one_of_your_cards(pool: PgPool) {
+    let ana = opened(pool, "ana@example.com").await;
+    let bia = ana.another_user("bia@example.com").await;
+    let porto = card(&ana, "Porto").await;
+    let theirs = card(&bia, "Nubank").await;
+    let light = ana.category_id("Luz").await;
+    let (_, conta) = ana
+        .post(
+            "/api/bills",
+            json!({ "name": "Luz", "amount": "100", "due_day": 5, "category_id": light }),
+        )
+        .await;
+    let market = ana.category_id("Mercado").await;
+
+    for body in [
+        on_card("2026-11-05", "bill", &light, &porto),
+        on_card(
+            "2026-11-05",
+            "daily",
+            &market,
+            conta["id"].as_str().unwrap(),
+        ),
+        on_card("2026-11-05", "daily", &market, &theirs),
+    ] {
+        let (status, problem) = ana.post("/api/transactions", body.clone()).await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+        assert_eq!(problem["errors"][0]["field"], "card_id", "{body}");
+    }
+    let (status, spent) = ana
+        .post(
+            "/api/transactions",
+            on_card("2026-11-05", "daily", &market, &porto),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{spent}");
+    assert_eq!(spent["card_id"], porto);
+    let mut parcelas = on_card("2026-11-06", "daily", &market, &porto);
+    parcelas["installments"] = json!(3);
+    assert_eq!(
+        ana.post("/api/transactions", parcelas).await.0,
+        StatusCode::CREATED
+    );
+    for month in ["2026-12", "2027-01"] {
+        let (_, listed) = ana.get(&format!("/api/transactions?month={month}")).await;
+        assert_eq!(listed[0]["card_id"], porto, "{month}");
+    }
+    let (_, plain) = ana.get("/api/transactions?month=2026-11").await;
+    assert_eq!(plain[1]["card_id"], porto);
+}
+
+#[sqlx::test]
+async fn d28_card_entries_follow_their_series_and_outlive_an_archived_card(pool: PgPool) {
+    let ana = opened(pool, "ana@example.com").await;
+    let porto = card(&ana, "Porto").await;
+    let gasto = ana.category_id("Gasto").await;
+    let mut parcelas = on_card("2026-11-05", "daily", &gasto, &porto);
+    parcelas["installments"] = json!(3);
+    let (_, first) = ana.post("/api/transactions", parcelas).await;
+
+    let (status, cleared) = ana
+        .patch(
+            &format!("{}?scope=following", uri(&first)),
+            json!({ "card_id": null }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{cleared}");
+    assert_eq!(cleared["card_id"], Value::Null);
+    let (_, january) = ana.get("/api/transactions?month=2027-01").await;
+    assert_eq!(january[0]["card_id"], Value::Null);
+
+    let (_, spent) = ana
+        .post(
+            "/api/transactions",
+            on_card("2026-11-06", "daily", &gasto, &porto),
+        )
+        .await;
+    assert_eq!(
+        ana.delete(&format!("/api/bills/{porto}")).await.0,
+        StatusCode::NO_CONTENT
+    );
+    for patch in [json!({ "amount": "12" }), json!({ "card_id": porto })] {
+        let (status, kept) = ana.patch(&uri(&spent), patch).await;
+        assert_eq!(status, StatusCode::OK, "{kept}");
+        assert_eq!(kept["card_id"], porto);
+    }
+    let light = ana.category_id("Luz").await;
+    for (entry, patch) in [
+        (&first, json!({ "card_id": porto })),
+        (&spent, json!({ "kind": "bill", "category_id": light })),
+    ] {
+        let (status, problem) = ana.patch(&uri(entry), patch.clone()).await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{patch}");
+        assert_eq!(problem["errors"][0]["field"], "card_id", "{patch}");
+    }
+    let (status, problem) = ana
+        .patch(
+            &format!("/api/categories/{gasto}"),
+            json!({ "kind": "bill" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(problem["type"], "urn:soldi:error:category-has-card-entries");
+}
+
+#[sqlx::test]
+async fn d28_an_archived_card_reaches_no_new_or_later_entry(pool: PgPool) {
+    let ana = opened(pool, "ana@example.com").await;
+    let porto = card(&ana, "Porto").await;
+    let gasto = ana.category_id("Gasto").await;
+    let (_, single) = ana
+        .post(
+            "/api/transactions",
+            on_card("2026-11-05", "daily", &gasto, &porto),
+        )
+        .await;
+    let mut monthly = on_card("2026-11-06", "daily", &gasto, &porto);
+    monthly["repeat_months"] = json!(3);
+    let (_, series) = ana.post("/api/transactions", monthly).await;
+    assert_eq!(
+        ana.delete(&format!("/api/bills/{porto}")).await.0,
+        StatusCode::NO_CONTENT
+    );
+
+    for (uri, patch) in [
+        (uri(&single), json!({ "repeat_months": 3 })),
+        (uri(&series), json!({ "repeat_months": 5 })),
+        (
+            format!("{}?scope=following", uri(&series)),
+            json!({ "note": "Feira" }),
+        ),
+    ] {
+        let (status, problem) = ana.patch(&uri, patch.clone()).await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{patch}");
+        assert_eq!(problem["errors"][0]["field"], "card_id", "{patch}");
+    }
+    let (_, january) = ana.get("/api/transactions?month=2027-01").await;
+    assert_eq!(january.as_array().unwrap().len(), 1);
+    assert_eq!(january[0]["note"], Value::Null);
+    let (status, shrunk) = ana
+        .patch(&uri(&series), json!({ "repeat_months": 2 }))
+        .await;
+    assert_eq!(status, StatusCode::OK, "{shrunk}");
+    assert_eq!(shrunk["card_id"], porto);
+}

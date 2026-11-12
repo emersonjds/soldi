@@ -10,7 +10,7 @@ pub async fn list(
 ) -> Result<Vec<Bill>, sqlx::Error> {
     sqlx::query_as!(
         Bill,
-        "SELECT id, category_id, name, amount, due_day, active FROM recurring_bills
+        "SELECT id, category_id, name, amount, due_day, active, closing_day FROM recurring_bills
          WHERE user_id = $1 AND (active OR $2) AND archived_at IS NULL
          ORDER BY due_day, lower(name), id",
         user_id,
@@ -28,8 +28,42 @@ pub async fn find(
 ) -> Result<Option<Bill>, sqlx::Error> {
     sqlx::query_as!(
         Bill,
-        "SELECT id, category_id, name, amount, due_day, active FROM recurring_bills
+        "SELECT id, category_id, name, amount, due_day, active, closing_day FROM recurring_bills
          WHERE user_id = $1 AND id = $2 AND archived_at IS NULL",
+        user_id,
+        id
+    )
+    .fetch_optional(&mut *conn)
+    .await
+}
+
+/// A bill the user can pay: unarchived, or an archived card whose faturas still owe (D28).
+pub async fn find_payable(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    id: Uuid,
+) -> Result<Option<Bill>, sqlx::Error> {
+    sqlx::query_as!(
+        Bill,
+        "SELECT id, category_id, name, amount, due_day, active, closing_day FROM recurring_bills
+         WHERE user_id = $1 AND id = $2 AND (archived_at IS NULL OR closing_day IS NOT NULL)",
+        user_id,
+        id
+    )
+    .fetch_optional(&mut *conn)
+    .await
+}
+
+/// An unarchived card of the user (D28).
+pub async fn find_card(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    id: Uuid,
+) -> Result<Option<Bill>, sqlx::Error> {
+    sqlx::query_as!(
+        Bill,
+        "SELECT id, category_id, name, amount, due_day, active, closing_day FROM recurring_bills
+         WHERE user_id = $1 AND id = $2 AND archived_at IS NULL AND closing_day IS NOT NULL",
         user_id,
         id
     )
@@ -44,14 +78,15 @@ pub async fn insert(
 ) -> Result<Bill, sqlx::Error> {
     sqlx::query_as!(
         Bill,
-        "INSERT INTO recurring_bills (user_id, name, amount, due_day, category_id)
-         VALUES ($1, $2, $3, $4, $5)
-         RETURNING id, category_id, name, amount, due_day, active",
+        "INSERT INTO recurring_bills (user_id, name, amount, due_day, category_id, closing_day)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         RETURNING id, category_id, name, amount, due_day, active, closing_day",
         user_id,
         bill.name,
         bill.amount,
         bill.due_day,
-        bill.category_id
+        bill.category_id,
+        bill.closing_day
     )
     .fetch_one(&mut *conn)
     .await
@@ -69,20 +104,21 @@ pub async fn update(
     sqlx::query_as!(
         Bill,
         "UPDATE recurring_bills
-         SET name = $3, amount = $4, due_day = $5, category_id = $6, active = $7,
+         SET name = $3, amount = $4, due_day = $5, category_id = $6, active = $7, closing_day = $8,
              active_since = CASE WHEN $7 AND NOT active
                                  THEN (now() AT TIME ZONE 'America/Sao_Paulo')::date
                                  ELSE active_since END,
              updated_at = now()
          WHERE user_id = $1 AND id = $2 AND archived_at IS NULL
-         RETURNING id, category_id, name, amount, due_day, active",
+         RETURNING id, category_id, name, amount, due_day, active, closing_day",
         user_id,
         id,
         bill.name,
         bill.amount,
         bill.due_day,
         bill.category_id,
-        active
+        active,
+        bill.closing_day
     )
     .fetch_optional(&mut *conn)
     .await
@@ -143,21 +179,97 @@ pub async fn insert_all(
     bills: &[CreateBill],
 ) -> Result<(), sqlx::Error> {
     let names: Vec<&str> = bills.iter().map(|bill| bill.name.as_str()).collect();
-    let amounts: Vec<rust_decimal::Decimal> = bills.iter().map(|bill| bill.amount).collect();
+    let amounts: Vec<Option<rust_decimal::Decimal>> =
+        bills.iter().map(|bill| bill.amount).collect();
     let due_days: Vec<i16> = bills.iter().map(|bill| bill.due_day).collect();
     let category_ids: Vec<Uuid> = bills.iter().map(|bill| bill.category_id).collect();
+    let closing_days: Vec<Option<i16>> = bills.iter().map(|bill| bill.closing_day).collect();
     sqlx::query!(
-        "INSERT INTO recurring_bills (user_id, name, amount, due_day, category_id)
-         SELECT $1, * FROM UNNEST($2::text[], $3::numeric[], $4::smallint[], $5::uuid[])",
+        "INSERT INTO recurring_bills (user_id, name, amount, due_day, category_id, closing_day)
+         SELECT $1, * FROM UNNEST($2::text[], $3::numeric[], $4::smallint[], $5::uuid[],
+                                  $6::smallint[])",
         user_id,
         &names as &[&str],
-        &amounts,
+        &amounts as &[Option<rust_decimal::Decimal>],
         &due_days,
-        &category_ids
+        &category_ids,
+        &closing_days as &[Option<i16>]
     )
     .execute(&mut *conn)
     .await?;
     Ok(())
+}
+
+/// Whether the bill has an entry dated in one of `months` (each a first day).
+pub async fn paid_in(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    id: Uuid,
+    months: &[chrono::NaiveDate],
+) -> Result<bool, sqlx::Error> {
+    sqlx::query_scalar!(
+        r#"SELECT EXISTS (SELECT 1 FROM transactions
+           WHERE user_id = $1 AND recurring_bill_id = $2
+             AND date_trunc('month', date)::date = ANY($3)) AS "exists!""#,
+        user_id,
+        id,
+        months
+    )
+    .fetch_one(&mut *conn)
+    .await
+}
+
+/// Whether the bill has an entry dated `from` or later.
+pub async fn paid_since(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    id: Uuid,
+    from: chrono::NaiveDate,
+) -> Result<bool, sqlx::Error> {
+    sqlx::query_scalar!(
+        r#"SELECT EXISTS (SELECT 1 FROM transactions
+           WHERE user_id = $1 AND recurring_bill_id = $2 AND date >= $3) AS "exists!""#,
+        user_id,
+        id,
+        from
+    )
+    .fetch_one(&mut *conn)
+    .await
+}
+
+/// `Economia` itself or one of its cofrinhos.
+pub async fn is_savings_category(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    id: Uuid,
+) -> Result<bool, sqlx::Error> {
+    sqlx::query_scalar!(
+        r#"SELECT EXISTS (SELECT 1 FROM categories c
+           LEFT JOIN categories p ON p.user_id = c.user_id AND p.id = c.parent_id
+           WHERE c.user_id = $1 AND c.id = $2 AND (c.is_savings OR COALESCE(p.is_savings, false)))
+           AS "exists!""#,
+        user_id,
+        id
+    )
+    .fetch_one(&mut *conn)
+    .await
+}
+
+/// A card of the user, archived or not (D28).
+pub async fn find_any_card(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    id: Uuid,
+) -> Result<Option<Bill>, sqlx::Error> {
+    sqlx::query_as!(
+        Bill,
+        "SELECT id, category_id, name, amount, due_day, active, closing_day FROM recurring_bills
+         WHERE user_id = $1 AND id = $2 AND closing_day IS NOT NULL",
+        user_id,
+        id
+    )
+    .fetch_optional(&mut *conn)
+    .await
 }
 
 #[cfg(test)]
@@ -189,9 +301,10 @@ mod tests {
     fn bill(name: &str, amount: &str, due_day: i16, category_id: Uuid) -> CreateBill {
         CreateBill {
             name: name.into(),
-            amount: amount.parse().unwrap(),
+            amount: Some(amount.parse().unwrap()),
             due_day,
             category_id,
+            closing_day: None,
         }
     }
 
@@ -222,7 +335,7 @@ mod tests {
 
         let names: Vec<&str> = listed.iter().map(|bill| bill.name.as_str()).collect();
         assert_eq!(names, ["Aluguel", "Água", "Luz"]);
-        assert_eq!(listed[2].amount, "120.50".parse().unwrap());
+        assert_eq!(listed[2].amount, Some("120.50".parse().unwrap()));
         assert_eq!((listed[2].due_day, listed[2].category_id), (10, light));
         assert!(listed[2].active);
         assert_eq!(list(&mut conn, bia, false).await.unwrap().len(), 1);

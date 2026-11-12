@@ -24,6 +24,13 @@ type Reply = { status: number; body?: unknown };
 
 const PAYMENT = { ...TRANSACTIONS[1], id: "t-paid" };
 const PAID_RENT = { ...BILLS_OF_MONTH[1], paid: true, transaction_id: "t-paid" };
+const FATURA: Schemas["BillOfMonth"] = {
+  ...BILLS_OF_MONTH[1],
+  bill_id: "card-porto",
+  name: "Porto",
+  amount: "450.00",
+  is_card: true,
+};
 
 /** A month on the server that a test can move forward, as a payment would. */
 const show = (
@@ -468,5 +475,53 @@ describe("Contas a pagar", () => {
     signedIn();
     renderWithQuery(<BillsOfMonth view={{ ...MONTH, bills_of_month: [] }} />);
     expect(screen.queryByRole("region")).not.toBeInTheDocument();
+  });
+
+  describe("a card's fatura", () => {
+    it("reads Fatura Porto with the fatura; Pagar opens the sheet pre-filled with the hint and posts the amount", async () => {
+      const { requests } = show([FATURA], { "POST /api/bills/card-porto/pay": { status: 201, body: PAYMENT } });
+      await loaded();
+
+      expect(rowOf("Fatura Porto")).toHaveTextContent("Fatura Porto");
+      expect(rowOf("Fatura Porto")).toHaveTextContent("R$ 450,00");
+      await userEvent.click(within(rowOf("Fatura Porto")).getByRole("button", { name: "Pagar Fatura Porto" }));
+      const sheet = await screen.findByRole("dialog", { name: "Pagar Fatura Porto" });
+      expect(requests.some((request) => request.method === "POST")).toBe(false);
+      expect(within(sheet).getByLabelText("Valor")).toHaveValue("450,00");
+      expect(within(sheet).getByText("Confira com a fatura do banco.")).toBeInTheDocument();
+      await userEvent.click(within(sheet).getByRole("button", { name: "Confirmar" }));
+
+      await waitFor(() => expect(requests.some((request) => request.method === "POST")).toBe(true));
+      const post = requests.find((request) => request.method === "POST");
+      expect(await post?.json()).toEqual({ date: "2026-11-05", amount: "450.00" });
+    });
+
+    it("opens the sheet from the round check too, never paying a fatura without its amount", async () => {
+      const { requests } = show([FATURA]);
+      await loaded();
+
+      await userEvent.click(within(rowOf("Fatura Porto")).getByRole("button", { name: /^Marcar Fatura Porto/ }));
+
+      expect(await screen.findByRole("dialog", { name: "Pagar Fatura Porto" })).toBeInTheDocument();
+      expect(requests.some((request) => request.method === "POST")).toBe(false);
+    });
+
+    it("shows an overdue fatura carried from October and a paid one", async () => {
+      show([
+        { ...FATURA, due_date: "2026-10-10", overdue: true },
+        { ...FATURA, bill_id: "card-nubank", name: "Nubank", amount: "120.00", paid: true, transaction_id: "t" },
+      ]);
+      await loaded();
+
+      const late = rowOf("Fatura Porto de outubro");
+      expect(late).toHaveTextContent("Venceu dia 10/10");
+      expect(within(late).getByRole("button", { name: "Pagar Fatura Porto de outubro, vencida" })).toBeInTheDocument();
+      const paid = rowOf("Fatura Nubank");
+      expect(paid).toHaveTextContent("R$ 120,00");
+      expect(within(paid).getByRole("button", { name: "Desmarcar Fatura Nubank" })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      );
+    });
   });
 });

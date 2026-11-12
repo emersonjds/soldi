@@ -70,6 +70,7 @@ pub async fn withdraw(
         note: input.note,
         repeat_months: None,
         installments: None,
+        card_id: None,
     })?;
     transactions::service::check_opening(&mut tx, user, entry.date).await?;
     let balance = repo::balance(&mut tx, user.id, cofrinho.id, opening).await?;
