@@ -40,7 +40,7 @@ import {
 } from "@/entities/transaction/transaction-queries";
 import { useIsLg } from "@/hooks/use-lg";
 import { cn } from "@/lib/utils";
-import { ApiError, type Schemas } from "@/shared/api/client";
+import { ApiError, problemMessage, type Schemas } from "@/shared/api/client";
 import { useCurrency } from "@/shared/lib/currency";
 import { addMonths, monthSlashYear, monthYear, todayISO } from "@/shared/lib/date";
 import { installmentCents } from "@/shared/lib/installments";
@@ -642,7 +642,7 @@ export const TransactionSheet = ({
         onError: (error) =>
           error instanceof ApiError && error.errors.some(({ message }) => message === SHARED_MONTH)
             ? toast.error("Outro lançamento da série está no mesmo mês. Mova-o com Só este antes.")
-            : failed(),
+            : toast.error(problemMessage(error) ?? "Não foi possível salvar o lançamento."),
       },
     );
   };

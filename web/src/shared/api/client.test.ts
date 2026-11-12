@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { ApiError, dataOrThrow, hasProblem, hasStatus, okOrThrow } from "./client";
+import { ApiError, dataOrThrow, hasProblem, hasStatus, okOrThrow, problemMessage } from "./client";
 
 describe("api results", () => {
   it("hands back the data of a success", () => {
@@ -55,5 +55,15 @@ describe("api results", () => {
     expect(hasProblem(failure("urn:soldi:error:before-opening-date"), "insufficient-cofrinho")).toBe(false);
     expect(hasProblem(failure(), "insufficient-cofrinho")).toBe(false);
     expect(hasProblem(new Error("offline"), "insufficient-cofrinho")).toBe(false);
+  });
+
+  it("words a refused change to a deleted cofrinho's movement in pt-BR and leaves other failures to the screen", () => {
+    const refused = new ApiError(422, "Deleted.", [], "urn:soldi:error:archived-cofrinho");
+
+    expect(problemMessage(refused)).toBe(
+      "Esse cofrinho foi excluído; os movimentos dele não podem mais ser alterados.",
+    );
+    expect(problemMessage(new ApiError(422, "No.", [], "urn:soldi:error:before-opening-date"))).toBeUndefined();
+    expect(problemMessage(new Error("offline"))).toBeUndefined();
   });
 });

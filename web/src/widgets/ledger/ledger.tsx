@@ -22,7 +22,7 @@ import {
 import { TransactionSheet } from "@/features/add-transaction/transaction-sheet";
 import { EditBillSheet } from "@/features/edit-bill/edit-bill-sheet";
 import { cn } from "@/lib/utils";
-import type { Schemas } from "@/shared/api/client";
+import { problemMessage, type Schemas } from "@/shared/api/client";
 import { dayMonth, monthName, shortDay, todayISO, yesterdayISO } from "@/shared/lib/date";
 import { TIER_STYLE } from "@/shared/lib/tier";
 import { CategoryIcon } from "@/shared/ui/category-icon";
@@ -241,7 +241,7 @@ export const Ledger = ({
             },
           });
         },
-        onError: () => toast.error("Não foi possível excluir o lançamento."),
+        onError: (error) => toast.error(problemMessage(error) ?? "Não foi possível excluir o lançamento."),
       },
     );
   };

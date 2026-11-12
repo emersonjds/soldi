@@ -598,3 +598,191 @@ async fn economia_movements_include_its_childrens_with_their_category(pool: PgPo
         named(&[("Resgate", "200.00"), ("Reserva", "500.00")])
     );
 }
+
+/// Deposits `amount` into `cofrinho`, takes it all back, deletes the cofrinho; returns
+/// (deposit id, resgate id).
+async fn emptied_and_deleted(user: &TestApp, today: &str, cofrinho: &str) -> (String, String) {
+    let (status, deposit) = user
+        .post(
+            "/api/transactions",
+            json!({ "date": today, "amount": "3000", "kind": "bill", "category_id": cofrinho }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{deposit}");
+    let (status, resgate) =
+        withdraw(user, cofrinho, json!({ "date": today, "amount": "3000" })).await;
+    assert_eq!(status, StatusCode::CREATED, "{resgate}");
+    assert_eq!(
+        user.delete(&format!("/api/categories/{cofrinho}")).await.0,
+        StatusCode::NO_CONTENT
+    );
+    (
+        deposit["id"].as_str().unwrap().into(),
+        resgate["id"].as_str().unwrap().into(),
+    )
+}
+
+fn assert_archived(status: StatusCode, problem: &Value) {
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+    assert_eq!(problem["type"], "urn:soldi:error:archived-cofrinho");
+}
+
+#[sqlx::test]
+async fn the_movements_of_a_deleted_cofrinho_are_read_only(pool: PgPool) {
+    let Setup {
+        user,
+        today,
+        reserva,
+        ..
+    } = setup(pool).await;
+    let (deposit, resgate) = emptied_and_deleted(&user, &today, &reserva).await;
+
+    for id in [&resgate, &deposit] {
+        let uri = format!("/api/transactions/{id}");
+        let (status, problem) = user.delete(&uri).await;
+        assert_archived(status, &problem);
+        let (status, problem) = user.patch(&uri, json!({ "amount": "1" })).await;
+        assert_archived(status, &problem);
+        let (status, problem) = user.patch(&uri, json!({ "note": "x" })).await;
+        assert_archived(status, &problem);
+    }
+    let (_, movements) = user
+        .get(&format!("/api/transactions?month={}", &today[..7]))
+        .await;
+    let amounts: Vec<&str> = movements
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|entry| entry["amount"].as_str().unwrap())
+        .collect();
+    assert_eq!(amounts, ["3000.00", "3000.00"]);
+}
+
+#[sqlx::test]
+async fn the_movements_of_an_active_cofrinho_stay_editable(pool: PgPool) {
+    let Setup {
+        user,
+        today,
+        reserva,
+        ..
+    } = setup(pool).await;
+    let (status, deposit) = user
+        .post(
+            "/api/transactions",
+            json!({ "date": today, "amount": "300", "kind": "bill", "category_id": reserva }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{deposit}");
+    let (_, resgate) = withdraw(&user, &reserva, json!({ "date": today, "amount": "100" })).await;
+
+    for entry in [&resgate, &deposit] {
+        let uri = format!("/api/transactions/{}", entry["id"].as_str().unwrap());
+        let (status, body) = user.patch(&uri, json!({ "note": "ok" })).await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        assert_eq!(user.delete(&uri).await.0, StatusCode::NO_CONTENT);
+    }
+}
+
+#[sqlx::test]
+async fn following_on_a_series_with_a_deleted_cofrinho_member_writes_nothing(pool: PgPool) {
+    let Setup {
+        user,
+        today,
+        viagem,
+        ..
+    } = setup(pool).await;
+    let first = first_of(&today);
+    let (_, gym) = user
+        .post(
+            "/api/categories",
+            json!({ "name": "Academia", "kind": "bill" }),
+        )
+        .await;
+    let gym = gym["id"].as_str().unwrap();
+    let head = repeat(&user, &first.to_string(), gym, "90").await;
+    let series = head["series"]["id"].as_str().unwrap();
+    let (_, entries) = user
+        .get(&format!(
+            "/api/transactions?month={}",
+            (first + Months::new(2)).format("%Y-%m")
+        ))
+        .await;
+    let third = entries
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|entry| entry["series"]["id"] == series)
+        .unwrap()["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let (status, moved) = user
+        .patch(
+            &format!("/api/transactions/{third}"),
+            json!({ "category_id": viagem }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{moved}");
+    withdraw(&user, &viagem, json!({ "date": today, "amount": "90" })).await;
+    assert_eq!(
+        user.delete(&format!("/api/categories/{viagem}")).await.0,
+        StatusCode::NO_CONTENT
+    );
+    let head = format!("/api/transactions/{}", head["id"].as_str().unwrap());
+
+    let (status, problem) = user
+        .patch(&format!("{head}?scope=following"), json!({ "note": "x" }))
+        .await;
+    assert_archived(status, &problem);
+    let (status, problem) = user.delete(&format!("{head}?scope=following")).await;
+    assert_archived(status, &problem);
+    let (_, count) = user.get("/api/transactions/count?period=all").await;
+    assert_eq!(count["count"], 4);
+
+    let (status, body) = user.patch(&head, json!({ "note": "x" })).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(user.delete(&head).await.0, StatusCode::NO_CONTENT);
+}
+
+#[sqlx::test]
+async fn another_users_deleted_cofrinho_is_out_of_reach_and_a_period_wipe_still_clears_it(
+    pool: PgPool,
+) {
+    let Setup {
+        user,
+        today,
+        reserva,
+        ..
+    } = setup(pool).await;
+    let (deposit, resgate) = emptied_and_deleted(&user, &today, &reserva).await;
+    let bia = user.another_user("bia@example.com").await;
+    bia.open_at("0", &first_of(&today).to_string()).await;
+    for id in [&deposit, &resgate] {
+        let uri = format!("/api/transactions/{id}");
+        assert_eq!(bia.delete(&uri).await.0, StatusCode::NOT_FOUND);
+        assert_eq!(
+            bia.patch(&uri, json!({ "note": "x" })).await.0,
+            StatusCode::NOT_FOUND
+        );
+    }
+    let bia_economia = bia.category_id("Economia").await;
+    let (status, own) = bia
+        .post(
+            "/api/transactions",
+            json!({ "date": today, "amount": "10", "kind": "bill", "category_id": bia_economia }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{own}");
+    let own = format!("/api/transactions/{}", own["id"].as_str().unwrap());
+    assert_eq!(
+        bia.patch(&own, json!({ "note": "x" })).await.0,
+        StatusCode::OK
+    );
+    assert_eq!(bia.delete(&own).await.0, StatusCode::NO_CONTENT);
+
+    let (status, wiped) = user
+        .delete(&format!("/api/transactions?period={}", &today[..7]))
+        .await;
+    assert_eq!(status, StatusCode::OK, "{wiped}");
+    assert_eq!(wiped["deleted"], 2);
+}
