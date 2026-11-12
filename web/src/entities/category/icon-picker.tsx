@@ -17,6 +17,7 @@ const SUGGESTED = [
   "wifi",
   "smartphone",
   "heart-pulse",
+  "users",
   "graduation-cap",
   "gamepad-2",
   "plane",
