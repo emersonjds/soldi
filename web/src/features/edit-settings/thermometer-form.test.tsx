@@ -28,6 +28,12 @@ const retype = async (label: string, value: string) => {
   await userEvent.type(field(label), value);
 };
 
+const invalid = () =>
+  screen
+    .getAllByRole("textbox")
+    .filter((input) => input.getAttribute("aria-invalid") === "true")
+    .map((input) => input.closest("[data-slot=field]")?.querySelector("label")?.textContent);
+
 const activeTile = () => screen.getByRole("listitem", { current: true });
 
 describe("ThermometerForm", () => {
@@ -109,11 +115,24 @@ describe("ThermometerForm", () => {
     await retype("Atenção / Apertado", "-60000");
     expect(screen.getByRole("alert")).toHaveTextContent("Cada faixa precisa ser maior que a anterior.");
     expect(screen.getByRole("button", { name: "Salvar Novos Limites" })).toBeDisabled();
+    expect(invalid()).toEqual(["Atenção / Apertado"]);
 
     await retype("Atenção / Apertado", "abc");
     expect(screen.getByRole("alert")).toHaveTextContent("Informe valores como 1.250,00.");
+    expect(invalid()).toEqual(["Atenção / Apertado"]);
     expect(screen.getByRole("meter")).toHaveAttribute("aria-valuetext", "Apertado");
     expect(requests.some((request) => request.method === "PATCH")).toBe(false);
+  });
+
+  it("names no tier when today's balance fails to load, and retries it", async () => {
+    const requests = open({ "GET /api/months/2026-11": { status: 500, body: problem(500, "Falhou.") } });
+
+    await userEvent.click(await screen.findByRole("button", { name: "Tentar de novo" }));
+
+    expect(requests.filter((request) => request.url.endsWith("/api/months/2026-11"))).toHaveLength(2);
+    expect(screen.queryByText(/Faixa Ativa Atual/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("listitem", { current: true })).not.toBeInTheDocument();
+    expect(screen.queryByRole("meter")).not.toBeInTheDocument();
   });
 
   it("says so when saving fails", async () => {

@@ -14,9 +14,19 @@ import type { Schemas } from "@/shared/api/client";
 import { useCurrency } from "@/shared/lib/currency";
 import { todayISO } from "@/shared/lib/date";
 import { currencySymbol, formatMoney, formatWhole, parseBRL } from "@/shared/lib/money";
-import { boundsRise, TIER_LABEL, TIER_ORDER, TIER_STYLE, type Tier, type TierBounds, tierOf } from "@/shared/lib/tier";
+import {
+  boundsRise,
+  cents,
+  TIER_LABEL,
+  TIER_ORDER,
+  TIER_STYLE,
+  type Tier,
+  type TierBounds,
+  tierOf,
+} from "@/shared/lib/tier";
 import { AmountInput } from "@/shared/ui/amount-input";
 import { BrandButton } from "@/shared/ui/brand-button";
+import { PageError } from "@/shared/ui/page-state";
 import { ThermometerStrip } from "@/shared/ui/thermometer-strip";
 
 const FIELDS: { key: keyof TierBounds; label: string; caption: string; tiers: [Tier, Tier] }[] = [
@@ -58,6 +68,15 @@ const parseAll = (draft: TierBounds): TierBounds | null => {
   return Object.fromEntries(parsed) as TierBounds;
 };
 
+/** The first field that does not parse or does not rise above the one before it; -1 when all rise. */
+const firstWrong = (draft: TierBounds) => {
+  const values = FIELDS.map(({ key }) => parseBRL(draft[key]));
+  return values.findIndex((value, index) => {
+    const before = values[index - 1];
+    return value === null || (index > 0 && before !== null && cents(value) <= cents(before));
+  });
+};
+
 /** `-500.00` → `-R$ 500`: whole units after the symbol. */
 const whole = (amount: string, symbol: string) =>
   amount.startsWith("-") ? `-${symbol} ${formatWhole(amount.slice(1))}` : `${symbol} ${formatWhole(amount)}`;
@@ -89,7 +108,8 @@ export const ThermometerForm = ({ settings }: { settings: Schemas["Settings"] })
   const balance = month.data?.balance_today;
   const currency = useCurrency();
   const symbol = currencySymbol(currency);
-  const tier = balance === undefined ? "yellow" : tierOf(balance, shown);
+  const tier = balance === undefined ? undefined : tierOf(balance, shown);
+  const wrong = firstWrong(draft);
   const problem = bounds ? "Cada faixa precisa ser maior que a anterior." : "Informe valores como 1.250,00.";
 
   const submit = (event: FormEvent) => {
@@ -104,8 +124,8 @@ export const ThermometerForm = ({ settings }: { settings: Schemas["Settings"] })
   return (
     <form noValidate onSubmit={submit} className="flex flex-col gap-6">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {FIELDS.map(({ key, label, caption, tiers }) => (
-          <Field key={key} className="gap-2 rounded-2xl bg-muted p-3" data-invalid={!rising}>
+        {FIELDS.map(({ key, label, caption, tiers }, index) => (
+          <Field key={key} className="gap-2 rounded-2xl bg-muted p-3" data-invalid={index === wrong}>
             <FieldLabel htmlFor={key} className="gap-1.5 font-semibold text-xs">
               <span className="flex shrink-0 gap-0.5" aria-hidden>
                 {tiers.map((dot) => (
@@ -124,7 +144,7 @@ export const ThermometerForm = ({ settings }: { settings: Schemas["Settings"] })
                 value={draft[key]}
                 onValueChange={(value) => setDraft((current) => ({ ...current, [key]: value }))}
                 className="h-12 border-0 pl-0 font-bold text-base tabular-nums shadow-none md:text-base"
-                aria-invalid={!rising}
+                aria-invalid={index === wrong}
               />
             </div>
             <FieldDescription className="text-xs">{caption}</FieldDescription>
@@ -141,23 +161,30 @@ export const ThermometerForm = ({ settings }: { settings: Schemas["Settings"] })
           <h3 className="font-semibold text-[11px] text-muted-foreground tracking-[0.12em]">
             SIMULAÇÃO DE ESCALA TÉRMICA
           </h3>
-          <p className="text-muted-foreground text-xs">
-            Faixa Ativa Atual: <strong className={cn("font-bold", TIER_STYLE[tier].label)}>{TIER_LABEL[tier]}</strong>
-          </p>
-        </div>
-        <div className={cn("relative", balance !== undefined && "pt-8")}>
-          {balance !== undefined && (
-            <span
-              className={cn(
-                "absolute top-0 whitespace-nowrap rounded-md bg-foreground px-1.5 py-0.5 font-bold text-[11px] text-background tabular-nums",
-                MARKER_PLACE[TIER_ORDER.indexOf(tier)],
-              )}
-            >
-              {formatMoney(balance, currency)}
-            </span>
+          {tier && (
+            <p className="text-muted-foreground text-xs">
+              Faixa Ativa Atual: <strong className={cn("font-bold", TIER_STYLE[tier].label)}>{TIER_LABEL[tier]}</strong>
+            </p>
           )}
-          <ThermometerStrip tier={tier} />
         </div>
+        {month.isError ? (
+          <PageError message="Não foi possível carregar o saldo de hoje." onRetry={() => month.refetch()} />
+        ) : (
+          // The strip holds its place while today's balance loads, so a #section below does not move.
+          <div className={cn("relative pt-8", !tier && "invisible")}>
+            {balance !== undefined && tier && (
+              <span
+                className={cn(
+                  "absolute top-0 whitespace-nowrap rounded-md bg-foreground px-1.5 py-0.5 font-bold text-[11px] text-background tabular-nums",
+                  MARKER_PLACE[TIER_ORDER.indexOf(tier)],
+                )}
+              >
+                {formatMoney(balance, currency)}
+              </span>
+            )}
+            <ThermometerStrip tier={tier ?? "yellow"} />
+          </div>
+        )}
         <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
           {ranges(shown, symbol).map((range, index) => {
             const segment = TIER_ORDER[index];
