@@ -780,7 +780,7 @@ No bills: the header, then the shipped `Nenhuma conta fixa ainda` with `⊕ Nova
 ### 9.3 Kind tabs
 
 - `Gastos Diários ({n})` (bag), `Contas Fixas ({n})` (receipt), `Entradas & Receitas ({n})` (wallet), in that order.
-- The counts are parents. The shipped `?tipo=` keeps the choice.
+- The counts are parents. The shipped `?k=` keeps the choice.
 
 ### 9.4 Cards
 
