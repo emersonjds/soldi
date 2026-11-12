@@ -25,26 +25,38 @@ export const OpeningForm = ({ settings }: { settings: Schemas["Settings"] }) => 
   const [invalid, setInvalid] = useState(false);
   const save = useUpdateSettings();
 
-  const restore = (opening: Opening) => {
-    setAmount(opening.opening_balance);
-    setDate(opening.opening_date);
-    save.mutate(opening, { onError: failed });
-  };
+  const restore = (previous: Partial<Opening>) =>
+    save.mutate(previous, {
+      onSuccess: () => {
+        if (previous.opening_balance !== undefined) setAmount(previous.opening_balance);
+        if (previous.opening_date !== undefined) setDate(previous.opening_date);
+      },
+      onError: failed,
+    });
 
   const commit = (nextAmount: string, nextDate: string) => {
     const balance = parseBRL(nextAmount);
     setInvalid(balance === null);
     if (balance === null) return;
-    const saved = { opening_balance: settings.opening_balance, opening_date: settings.opening_date };
-    if (cents(balance) === cents(saved.opening_balance) && nextDate === saved.opening_date) return;
-    save.mutate(
-      { opening_balance: balance, opening_date: nextDate },
-      {
-        onSuccess: () =>
-          toast.success("Saldo inicial salvo", { action: { label: "Desfazer", onClick: () => restore(saved) } }),
-        onError: failed,
-      },
-    );
+    const changed: Partial<Opening> = {};
+    const previous: Partial<Opening> = {};
+    if (cents(balance) !== cents(settings.opening_balance)) {
+      changed.opening_balance = balance;
+      previous.opening_balance = settings.opening_balance;
+    }
+    if (nextDate !== settings.opening_date) {
+      changed.opening_date = nextDate;
+      previous.opening_date = settings.opening_date;
+    }
+    if (Object.keys(changed).length === 0) return;
+    save.mutate(changed, {
+      onSuccess: () =>
+        toast.success("Saldo inicial salvo", {
+          id: "opening-undo",
+          action: { label: "Desfazer", onClick: () => restore(previous) },
+        }),
+      onError: failed,
+    });
   };
 
   return (

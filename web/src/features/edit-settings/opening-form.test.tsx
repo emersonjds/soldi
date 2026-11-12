@@ -41,10 +41,7 @@ describe("OpeningForm", () => {
     await userEvent.click(screen.getByRole("button", { name: "Desfazer" }));
 
     await waitFor(async () =>
-      expect(await patches(requests)).toEqual([
-        { opening_balance: "-1250.50", opening_date: "2026-11-01" },
-        { opening_balance: "1842.10", opening_date: "2026-11-01" },
-      ]),
+      expect(await patches(requests)).toEqual([{ opening_balance: "-1250.50" }, { opening_balance: "1842.10" }]),
     );
     expect(amount()).toHaveValue("1.842,10");
   });
@@ -57,12 +54,52 @@ describe("OpeningForm", () => {
     expect(await screen.findByText("Saldo inicial salvo")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Desfazer" }));
     await waitFor(async () =>
-      expect(await patches(requests)).toEqual([
-        { opening_balance: "1842.10", opening_date: "2026-10-01" },
-        { opening_balance: "1842.10", opening_date: "2026-11-01" },
-      ]),
+      expect(await patches(requests)).toEqual([{ opening_date: "2026-10-01" }, { opening_date: "2026-11-01" }]),
     );
     expect(screen.getByRole("button", { name: "Data, 01/11/2026" })).toBeInTheDocument();
+  });
+
+  it("keeps the new balance when the undo fails", async () => {
+    let saves = 0;
+    signedIn({ "PATCH /api/settings": { status: 200, body: SETTINGS } });
+    const replies = globalThis.fetch;
+    vi.stubGlobal("fetch", async (request: Request) => {
+      if (request.method !== "PATCH") return replies(request);
+      saves += 1;
+      return saves === 1
+        ? new Response(JSON.stringify(SETTINGS), { status: 200, headers: { "content-type": "application/json" } })
+        : new Response(JSON.stringify(problem(500, "Falhou.")), {
+            status: 500,
+            headers: { "content-type": "application/problem+json" },
+          });
+    });
+    renderWithQuery(
+      <>
+        <OpeningForm settings={SETTINGS} />
+        <Toaster />
+      </>,
+    );
+
+    await userEvent.clear(amount());
+    await userEvent.type(amount(), "50000");
+    await userEvent.tab();
+    await userEvent.click(await screen.findByRole("button", { name: "Desfazer" }));
+
+    expect(await screen.findByText("Não foi possível salvar.")).toBeInTheDocument();
+    expect(amount()).toHaveValue("500,00");
+  });
+
+  it("keeps one undo for the latest save", async () => {
+    open({ "PATCH /api/settings": { status: 200, body: SETTINGS } });
+
+    await userEvent.clear(amount());
+    await userEvent.type(amount(), "50000");
+    await userEvent.tab();
+    await screen.findByText("Saldo inicial salvo");
+    await pickDate("Data", "2026-10-01");
+
+    await waitFor(() => expect(screen.getAllByText("Saldo inicial salvo")).toHaveLength(1));
+    expect(screen.getAllByRole("button", { name: "Desfazer" })).toHaveLength(1);
   });
 
   it("does not save an unchanged or an empty balance", async () => {
