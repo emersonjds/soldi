@@ -814,5 +814,57 @@ describe("Contas fixas", () => {
       await userEvent.click(within(sheet).getByRole("switch", { name: "Ativa" }));
       expect(within(sheet).getByText(stopped)).toBeInTheDocument();
     });
+
+    describe("in the list", () => {
+      const ENDED: Schemas["Bill"] = { ...FIES, id: "b1000000-0000-4000-8000-000000000011", last_month: "2026-10-01" };
+      const STOPPED: Schemas["Bill"] = { ...BILL_PAUSED, last_month: "2026-11-01" };
+      const STOPPED_LONG_AGO: Schemas["Bill"] = {
+        ...BILL_PAUSED,
+        id: "b1000000-0000-4000-8000-000000000012",
+        name: "Inglês",
+        last_month: "2026-09-01",
+      };
+      const row = async (name: RegExp) => (await screen.findByRole("button", { name })).closest("li") as HTMLElement;
+      const tab = (name: RegExp) => userEvent.click(screen.getByRole("tab", { name }));
+
+      it("reads until when a running parcelado lasts, among Despesas, with no switch", async () => {
+        open({ bills: [FIES] });
+
+        const fies = await row(/^Fies/);
+        expect(within(fies).getByText("Fies").parentElement).toHaveTextContent("Fies · até dez/26");
+        expect(within(fies).getByText("Fies").parentElement).toHaveClass("flex-wrap");
+        expect(within(fies).getByText("· até dez/26")).toHaveClass("whitespace-nowrap");
+        expect(within(fies).queryByRole("switch")).not.toBeInTheDocument();
+        expect(within(fies).queryByText("Pausada")).not.toBeInTheDocument();
+        await tab(/^Despesas/);
+        expect(names()).toEqual(["Fies"]);
+      });
+
+      it("reads when an ended parcelado finished, among Pausadas, and leaves it out of the total", async () => {
+        open({ bills: [BILL_ALUGUEL, ENDED] });
+
+        const fies = await row(/^Fies/);
+        expect(fies).toHaveTextContent("Fies · terminou em out/26");
+        expect(within(fies).queryByRole("switch")).not.toBeInTheDocument();
+        expect(within(fies).queryByText("Pausada")).not.toBeInTheDocument();
+        expect(within(await total()).getByText("R$ 2.259,56")).toBeInTheDocument();
+        expect(within(await total()).getByText("1 conta")).toBeInTheDocument();
+        await tab(/^Pausadas/);
+        expect(names()).toEqual(["Fies"]);
+      });
+
+      it("keeps the Pausada pill and switch on a stopped Fixo, and says when it ended once its month is behind", async () => {
+        open({ bills: [STOPPED, STOPPED_LONG_AGO] });
+
+        const gym = await row(/^Academia/);
+        expect(within(gym).getByText("Pausada")).toBeInTheDocument();
+        expect(within(gym).getByRole("switch", { name: "Ativa: Academia" })).not.toBeChecked();
+        expect(gym).not.toHaveTextContent("terminou");
+        const english = await row(/^Inglês/);
+        expect(english).toHaveTextContent("Inglês · terminou em set/26");
+        expect(within(english).getByText("Pausada")).toBeInTheDocument();
+        expect(within(english).getByRole("switch", { name: "Ativa: Inglês" })).not.toBeChecked();
+      });
+    });
   });
 });
