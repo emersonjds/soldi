@@ -5,7 +5,7 @@ import { type Ref, useState } from "react";
 import { Command as CommandPrimitive } from "cmdk";
 import { Plus, Search } from "lucide-react";
 
-import { Command, CommandEmpty, CommandItem, CommandList } from "@/components/ui/command";
+import { Command, CommandEmpty, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
 import type { Schemas } from "@/shared/api/client";
 import { CategoryIcon } from "@/shared/ui/category-icon";
@@ -15,9 +15,10 @@ import { categoryLabel } from "./categories-query";
 
 type Category = Schemas["Category"];
 
-/** `Ver todas`: a link that opens a sheet to search and tap any category, or create one. */
+/** `Ver todas`: a link that opens a sheet to search and tap any category of `kind`, or create one; a parent of another kind is a heading only (D26). */
 export const CategorySelect = ({
   ref,
+  kind,
   categories,
   chosen,
   onChoose,
@@ -25,6 +26,7 @@ export const CategorySelect = ({
   onCloseAutoFocus,
 }: {
   ref?: Ref<HTMLButtonElement>;
+  kind: Schemas["CategoryKind"];
   /** Parents each followed by their children. */
   categories: Category[];
   chosen: Category | undefined;
@@ -34,6 +36,39 @@ export const CategorySelect = ({
 }) => {
   const [open, setOpen] = useState(false);
   const labelOf = (category: Category) => categoryLabel(category, categories);
+  const foreign = (category?: Category) => Boolean(category && category.kind !== kind);
+  const item = (category: Category) => {
+    const label = labelOf(category);
+    const child = label !== category.name;
+    return (
+      <CommandItem
+        key={category.id}
+        value={label}
+        aria-label={label}
+        data-checked={chosen?.id === category.id}
+        onSelect={() => {
+          onChoose(category);
+          setOpen(false);
+        }}
+        className={cn(
+          "min-h-12 gap-3 rounded-xl! px-3 text-base [&>svg:last-child]:size-5 [&>svg:last-child]:text-primary",
+          child ? "pl-5" : "mt-1 font-semibold first:mt-0",
+        )}
+      >
+        {child && (
+          <span aria-hidden className="-mr-1 text-muted-foreground">
+            └
+          </span>
+        )}
+        <CategoryIcon
+          icon={category.icon}
+          color={category.color}
+          className={child ? "size-7 [&_svg]:size-4" : "size-8 [&_svg]:size-4"}
+        />
+        <span className="min-w-0 flex-1 truncate">{category.name}</span>
+      </CommandItem>
+    );
+  };
 
   return (
     <>
@@ -65,35 +100,21 @@ export const CategorySelect = ({
           <CommandList className="max-h-[55dvh]">
             <CommandEmpty className="py-8 text-base text-muted-foreground">Nenhuma categoria encontrada.</CommandEmpty>
             {categories.map((category) => {
-              const label = labelOf(category);
-              const child = label !== category.name;
+              if (!foreign(category))
+                return foreign(categories.find((each) => each.id === category.parent_id)) ? null : item(category);
               return (
-                <CommandItem
+                <CommandGroup
                   key={category.id}
-                  value={label}
-                  aria-label={label}
-                  data-checked={chosen?.id === category.id}
-                  onSelect={() => {
-                    onChoose(category);
-                    setOpen(false);
-                  }}
-                  className={cn(
-                    "min-h-12 gap-3 rounded-xl! px-3 text-base [&>svg:last-child]:size-5 [&>svg:last-child]:text-primary",
-                    child ? "pl-5" : "mt-1 font-semibold first:mt-0",
-                  )}
+                  heading={
+                    <>
+                      <CategoryIcon icon={category.icon} color={category.color} className="size-8 [&_svg]:size-4" />
+                      <span className="min-w-0 flex-1 truncate">{category.name}</span>
+                    </>
+                  }
+                  className="mt-1 p-0 **:[[cmdk-group-heading]]:flex **:[[cmdk-group-heading]]:min-h-12 **:[[cmdk-group-heading]]:items-center **:[[cmdk-group-heading]]:gap-3 **:[[cmdk-group-heading]]:px-3 **:[[cmdk-group-heading]]:font-semibold **:[[cmdk-group-heading]]:text-base **:[[cmdk-group-heading]]:text-foreground"
                 >
-                  {child && (
-                    <span aria-hidden className="-mr-1 text-muted-foreground">
-                      └
-                    </span>
-                  )}
-                  <CategoryIcon
-                    icon={category.icon}
-                    color={category.color}
-                    className={child ? "size-7 [&_svg]:size-4" : "size-8 [&_svg]:size-4"}
-                  />
-                  <span className="min-w-0 flex-1 truncate">{category.name}</span>
-                </CommandItem>
+                  {categories.filter((child) => child.parent_id === category.id).map(item)}
+                </CommandGroup>
               );
             })}
           </CommandList>

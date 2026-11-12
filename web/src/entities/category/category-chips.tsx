@@ -125,6 +125,7 @@ export const CategoryChips = ({
         </span>
         <CategorySelect
           ref={more}
+          kind={kind}
           categories={list}
           chosen={chosen}
           onChoose={pick}
@@ -137,8 +138,11 @@ export const CategoryChips = ({
           type="single"
           value={parent?.id ?? ""}
           onValueChange={(id: string) => {
-            const next = row.find((each) => each.id === id) ?? parent;
-            if (next) onChoose(next);
+            const top = row.find((each) => each.id === id) ?? parent;
+            if (!top) return;
+            // A parent of another kind is never chosen: its first child of the kind is.
+            const next = list.find((each) => each.kind === kind && (each.id === top.id || each.parent_id === top.id));
+            onChoose(next ?? top);
           }}
           aria-labelledby={labelId}
           aria-describedby={error ? errorId : undefined}
@@ -177,7 +181,10 @@ export const CategoryChips = ({
             <ToggleGroup
               type="single"
               value={chosen?.id === parent.id ? "" : (chosen?.id ?? "")}
-              onValueChange={(id: string) => onChoose(children.find((child) => child.id === id) ?? parent)}
+              onValueChange={(id: string) => {
+                const child = children.find((each) => each.id === id);
+                if (child || parent.kind === kind) onChoose(child ?? parent);
+              }}
               aria-label="Subcategoria"
               className="flex w-auto flex-wrap gap-2"
             >

@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import type { Schemas } from "@/shared/api/client";
 import { renderHookWithQuery, renderWithQuery } from "@/test/render";
-import { CATEGORIES, COMIDA, MERCADO, problem, RESGATE, SALARIO, stubApi } from "@/test/stub-api";
+import { CATEGORIES, COMIDA, MERCADO, problem, RESGATE, SALARIO, stubApi, WITH_MIXED_GROUP } from "@/test/stub-api";
 
 import { CategoryChips, useCategoryChips } from "./category-chips";
 
@@ -279,6 +279,65 @@ describe("CategoryChips", () => {
     expect(racao).toHaveAttribute("aria-checked", "true");
     expect(screen.getByRole("status", { name: "Escolhida" })).toHaveTextContent("Ração");
     await waitFor(() => expect(racao).toHaveFocus());
+  });
+
+  describe("with a parent of another kind (D26)", () => {
+    it("chooses its first child of the kind from its circle, never the parent itself", async () => {
+      setup({}, WITH_MIXED_GROUP);
+
+      const veiculo = await screen.findByRole("radio", { name: "Veículo" });
+      expect(chips()).not.toContain("Parcela");
+      await userEvent.click(veiculo);
+      expect(screen.getByRole("status", { name: "Escolhida" })).toHaveTextContent("Combustível");
+      const sub = screen.getByRole("radiogroup", { name: "Subcategoria" });
+      expect(
+        within(sub)
+          .getAllByRole("radio")
+          .map((radio) => radio.textContent),
+      ).toEqual(["Combustível"]);
+      const combustivel = within(sub).getByRole("radio", { name: "Veículo › Combustível" });
+      expect(combustivel).toHaveAttribute("aria-checked", "true");
+
+      await userEvent.click(combustivel);
+      expect(screen.getByRole("status", { name: "Escolhida" })).toHaveTextContent("Combustível");
+      expect(combustivel).toHaveAttribute("aria-checked", "true");
+    });
+
+    it("lists it in Ver todas as a heading over its children of the kind", async () => {
+      setup({}, WITH_MIXED_GROUP);
+
+      await userEvent.click(await screen.findByRole("button", { name: "Ver todas" }));
+      const sheet = await screen.findByRole("dialog", { name: "Categoria" });
+      expect(within(sheet).queryByRole("option", { name: "Veículo" })).not.toBeInTheDocument();
+      expect(within(sheet).getByText("Veículo")).toBeInTheDocument();
+      expect(within(sheet).queryByRole("option", { name: "Veículo › Parcela" })).not.toBeInTheDocument();
+      await userEvent.click(within(sheet).getByRole("option", { name: "Veículo › Combustível" }));
+
+      expect(screen.getByRole("status", { name: "Escolhida" })).toHaveTextContent("Combustível");
+    });
+
+    it("lets its own kind choose it", async () => {
+      stubApi({ "GET /api/categories": { status: 200, body: WITH_MIXED_GROUP } });
+      const Bill = () => {
+        const [chosen, setChosen] = useState<Schemas["Category"]>();
+        return (
+          <>
+            <CategoryChips kind="bill" chosen={chosen} onChoose={setChosen} entries={[]} />
+            <output aria-label="Escolhida">{chosen?.name}</output>
+          </>
+        );
+      };
+      renderWithQuery(<Bill />);
+
+      await userEvent.click(await screen.findByRole("radio", { name: "Veículo" }));
+      expect(screen.getByRole("status", { name: "Escolhida" })).toHaveTextContent("Veículo");
+      const sub = screen.getByRole("radiogroup", { name: "Subcategoria" });
+      expect(
+        within(sub)
+          .getAllByRole("radio")
+          .map((radio) => radio.textContent),
+      ).toEqual(["Parcela"]);
+    });
   });
 
   it("shows eight round placeholders while the categories load", () => {

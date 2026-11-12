@@ -3,9 +3,28 @@ import { act, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { renderHookWithQuery } from "@/test/render";
-import { ALUGUEL, CATEGORIES, LUZ, MERCADO, problem, stubApi } from "@/test/stub-api";
+import {
+  ALUGUEL,
+  CATEGORIES,
+  COMBUSTIVEL,
+  COMIDA,
+  LUZ,
+  MERCADO,
+  PARCELA,
+  problem,
+  stubApi,
+  VEICULO,
+  WITH_MIXED_GROUP,
+} from "@/test/stub-api";
 
-import { categoriesQuery, useArchiveCategory, useCategories, useUpdateCategory } from "./categories-query";
+import {
+  categoriesQuery,
+  kindsOf,
+  ofKind,
+  useArchiveCategory,
+  useCategories,
+  useUpdateCategory,
+} from "./categories-query";
 
 const loaded = async () => {
   const hook = renderHookWithQuery(() => ({
@@ -28,6 +47,29 @@ describe("useCategories", () => {
     const { result } = renderHookWithQuery(() => useCategories("bill"));
 
     await waitFor(() => expect(result.current.data).toEqual([ALUGUEL, LUZ]));
+  });
+
+  it("adds the parent of another kind that holds one of the kind's categories", async () => {
+    stubApi({ "GET /api/categories": { status: 200, body: WITH_MIXED_GROUP } });
+    const { result } = renderHookWithQuery(() => useCategories("daily"));
+
+    await waitFor(() => expect(result.current.data).toEqual([COMIDA, MERCADO, VEICULO, COMBUSTIVEL]));
+  });
+});
+
+describe("ofKind", () => {
+  const CASA = { ...ALUGUEL, id: "c1000000-0000-4000-8000-000000000030", name: "Casa" };
+
+  it("keeps the kind's categories and the parents of another kind that hold them", () => {
+    expect(ofKind([VEICULO, COMBUSTIVEL, PARCELA, CASA], "daily").map((each) => each.name)).toEqual([
+      "Veículo",
+      "Combustível",
+    ]);
+  });
+
+  it("lists every kind a group shows in", () => {
+    expect(kindsOf(VEICULO, [VEICULO, COMBUSTIVEL, PARCELA]).sort()).toEqual(["bill", "daily"]);
+    expect(kindsOf(MERCADO, CATEGORIES)).toEqual(["daily"]);
   });
 });
 

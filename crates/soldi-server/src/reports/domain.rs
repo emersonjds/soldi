@@ -25,6 +25,7 @@ pub struct CategorySum {
     pub group_name: String,
     pub group_icon: String,
     pub group_color: String,
+    pub group_kind: CategoryKind,
 }
 
 impl CategorySum {
@@ -148,7 +149,7 @@ pub fn report(month: NaiveDate, sums: Vec<CategorySum>) -> CategoryReport {
                         name: sum.group_name.clone(),
                         icon: sum.group_icon.clone(),
                         color: sum.group_color.clone(),
-                        kind: sum.kind,
+                        kind: sum.group_kind,
                         amount: Decimal::ZERO,
                         pct: Decimal::ZERO,
                         previous_amount,
@@ -228,6 +229,7 @@ mod tests {
             group_name: name.into(),
             group_icon: "circle".into(),
             group_color: "cat-1".into(),
+            group_kind: kind,
         }
     }
 
