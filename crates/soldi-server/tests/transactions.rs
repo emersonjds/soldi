@@ -833,21 +833,15 @@ async fn two_concurrent_repeats_of_one_entry_make_one_series(pool: PgPool) {
     let user = opened(pool.clone(), "ana@example.com").await;
     let created = spend(&user, "2026-11-05", "10", "Mercado").await;
     let entry = uri(&created);
-    let mut lock = pool.begin().await.unwrap();
-    sqlx::query("SELECT 1 FROM transactions WHERE id = $1::uuid FOR UPDATE")
-        .bind(created["id"].as_str().unwrap())
-        .execute(&mut *lock)
-        .await
-        .unwrap();
+    let lock = hold(&pool, &created).await;
 
-    let (first, second, ()) = tokio::join!(
-        user.patch(&entry, json!({ "repeat_months": 3 })),
-        user.patch(&entry, json!({ "repeat_months": 3 })),
-        async {
-            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
-            lock.commit().await.unwrap();
-        },
-    );
+    let both = async {
+        tokio::join!(
+            user.patch(&entry, json!({ "repeat_months": 3 })),
+            user.patch(&entry, json!({ "repeat_months": 3 })),
+        )
+    };
+    let (first, second) = behind(&pool, lock, 2, both).await;
 
     // The loser either races `set_series` (422 already-repeated) or runs after the winner and finds a
     // series of 3 already (a no-op resize, 200, SOL-47). Either way one series of 3 exists.
@@ -1369,14 +1363,13 @@ async fn two_concurrent_grows_from_different_members_add_the_months_once(pool: P
         .unwrap();
 
     let (first, third) = (uri(&first), uri(&third));
-    let (from_first, from_third, ()) = tokio::join!(
-        user.patch(&first, json!({ "repeat_months": 15 })),
-        user.patch(&third, json!({ "repeat_months": 15 })),
-        async {
-            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
-            lock.commit().await.unwrap();
-        },
-    );
+    let both = async {
+        tokio::join!(
+            user.patch(&first, json!({ "repeat_months": 15 })),
+            user.patch(&third, json!({ "repeat_months": 15 })),
+        )
+    };
+    let (from_first, from_third) = behind(&pool, lock, 2, both).await;
 
     assert_eq!(from_first.0, StatusCode::OK, "{}", from_first.1);
     assert_eq!(from_third.0, StatusCode::OK, "{}", from_third.1);
@@ -1390,26 +1383,14 @@ async fn a_grow_waits_for_a_following_delete_of_the_same_series(pool: PgPool) {
     let user = opened(pool.clone(), "ana@example.com").await;
     let first = repeat(&user, "2026-11-05", "10", 12).await;
     let tenth = only(&user, "2027-08").await;
-    let last = only(&user, "2027-10").await;
-    let mut lock = pool.begin().await.unwrap();
-    sqlx::query("SELECT 1 FROM transactions WHERE id = $1::uuid FOR UPDATE")
-        .bind(last["id"].as_str().unwrap())
-        .execute(&mut *lock)
-        .await
-        .unwrap();
+    let lock = hold(&pool, &only(&user, "2027-10").await).await;
 
-    let (first, following) = (uri(&first), format!("{}?scope=following", uri(&tenth)));
-    let (deleted, grown, ()) = tokio::join!(
-        user.delete(&following),
-        async {
-            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-            user.patch(&first, json!({ "repeat_months": 15 })).await
-        },
-        async {
-            tokio::time::sleep(std::time::Duration::from_millis(300)).await;
-            lock.commit().await.unwrap();
-        },
-    );
+    let (grow_first, delete_tail) = (uri(&first), following(&tenth));
+    let (deleted, grown) = tokio::join!(user.delete(&delete_tail), async {
+        waiting(&pool, 1).await;
+        let grow = user.patch(&grow_first, json!({ "repeat_months": 15 }));
+        behind(&pool, lock, 2, grow).await
+    });
 
     assert_eq!(deleted.0, StatusCode::NO_CONTENT, "{}", deleted.1);
     assert_eq!(grown.0, StatusCode::OK, "{}", grown.1);
@@ -1793,12 +1774,12 @@ async fn waiting(pool: &PgPool, count: i64) {
 }
 
 /// Runs `request` until it ends or `count` sessions wait on a lock, then commits `lock`.
-async fn behind(
+async fn behind<T>(
     pool: &PgPool,
     lock: sqlx::Transaction<'static, sqlx::Postgres>,
     count: i64,
-    request: impl Future<Output = (StatusCode, Value)>,
-) -> (StatusCode, Value) {
+    request: impl Future<Output = T>,
+) -> T {
     tokio::pin!(request);
     tokio::select! {
         done = &mut request => {
