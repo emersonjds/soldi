@@ -1524,6 +1524,28 @@ async fn p9_an_archived_pin_drops_out_and_a_new_order_still_saves(pool: PgPool) 
 }
 
 #[sqlx::test]
+async fn p9_a_pin_moved_under_a_parent_drops_out(pool: PgPool) {
+    let user = TestApp::signed_in(pool, "ana@example.com").await;
+    let (_, moto) = create(&user, json!({ "name": "Moto", "kind": "bill" })).await;
+    let moto = id_of(&moto);
+    let casa = user.category_id("Casa").await;
+    user.put(
+        "/api/categories/pins",
+        json!({ "category_ids": [moto, casa] }),
+    )
+    .await;
+
+    let (status, body) = user
+        .patch(
+            &format!("/api/categories/{moto}"),
+            json!({ "parent_id": casa }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(pins(&user).await, json!([casa]));
+}
+
+#[sqlx::test]
 async fn p9_pins_need_a_session(pool: PgPool) {
     let anonymous = TestApp::anonymous(pool);
     assert_eq!(

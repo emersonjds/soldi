@@ -461,6 +461,17 @@ pub async fn pins(conn: &mut PgConnection, user_id: Uuid) -> Result<Vec<Uuid>, s
     .await
 }
 
+/// Serializes one user's pin writes until the transaction ends.
+pub async fn lock_pins(conn: &mut PgConnection, user_id: Uuid) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        "SELECT pg_advisory_xact_lock(hashtextextended('pins:' || $1::text, 0))",
+        user_id.to_string()
+    )
+    .execute(&mut *conn)
+    .await?;
+    Ok(())
+}
+
 pub async fn count_pinnable(
     conn: &mut PgConnection,
     user_id: Uuid,

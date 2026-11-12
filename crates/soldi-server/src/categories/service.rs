@@ -281,6 +281,7 @@ pub async fn set_pins(
 ) -> Result<CategoryPins, AppError> {
     domain::check_pins(&input.category_ids)?;
     let mut tx = pool.begin().await?;
+    repo::lock_pins(&mut tx, user.id).await?;
     let pinnable = repo::count_pinnable(&mut tx, user.id, &input.category_ids).await?;
     if usize::try_from(pinnable).ok() != Some(input.category_ids.len()) {
         return Err(domain::not_pinnable());
