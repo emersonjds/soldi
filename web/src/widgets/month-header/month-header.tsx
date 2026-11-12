@@ -2,10 +2,18 @@ import type { ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
 
-type PageHeroProps = { eyebrow?: string; title: string; children?: ReactNode; className?: string };
+type PageHeroProps = {
+  eyebrow?: ReactNode;
+  title: string;
+  /** Drawn in place of `title`, which stays the band's name. */
+  heading?: ReactNode;
+  subtitle?: string;
+  children?: ReactNode;
+  className?: string;
+};
 
 /** The indigo band of the mobile frames: an eyebrow, the page's title and its switcher. */
-export const PageHero = ({ eyebrow, title, children, className }: PageHeroProps) => (
+export const PageHero = ({ eyebrow, title, heading, subtitle, children, className }: PageHeroProps) => (
   <section
     aria-label={title}
     className={cn(
@@ -15,7 +23,8 @@ export const PageHero = ({ eyebrow, title, children, className }: PageHeroProps)
   >
     <div className="flex flex-col gap-1">
       {eyebrow && <p className="font-semibold text-hero-foreground/70 text-xs uppercase tracking-wider">{eyebrow}</p>}
-      <h1 className="font-bold text-[22px] leading-7 lg:text-[28px] lg:leading-9">{title}</h1>
+      <h1 className="font-bold text-[22px] leading-7 lg:text-[28px] lg:leading-9">{heading ?? title}</h1>
+      {subtitle && <p className="text-hero-foreground/80 text-sm max-lg:hidden">{subtitle}</p>}
     </div>
     {children}
   </section>

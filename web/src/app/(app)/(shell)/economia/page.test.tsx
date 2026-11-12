@@ -489,11 +489,11 @@ describe("Cofrinhos", () => {
     open();
 
     const grid = await region("Seus Cofrinhos");
-    const year = screen.getByRole("region", { name: "Economia do ano" });
+    const year = await screen.findByRole("region", { name: "Economia do ano" });
     expect(grid.compareDocumentPosition(year) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(await within(year).findByRole("link", { name: /^Novembro de 2026/ })).toHaveAttribute(
+    expect(await within(year).findByRole("link", { name: /^Outubro de 2026/ })).toHaveAttribute(
       "href",
-      "/mes?m=2026-11",
+      "/mes?m=2026-10",
     );
   });
 

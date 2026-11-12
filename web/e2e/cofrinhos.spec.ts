@@ -156,13 +156,17 @@ test("Economia do ano lists each month's saving and opens it on Mês, unclipped 
   };
   await page.getByRole("navigation", { name: "Navegação principal" }).getByRole("link", { name: "Economia" }).click();
   const card = page.getByRole("region", { name: "Economia do ano" });
-  const current = card.getByRole("link", {
-    name: `${name(today.slice(0, 7))}: guardou R$ 12.345,67, 19,1% das entradas`,
+  await expect(card.getByRole("heading", { level: 1 })).toHaveText(/^Evolução e Poupança/);
+  const current = card.getByRole("list", { name: "Meses" }).getByRole("link", {
+    name: `${name(today.slice(0, 7))}: guardou R$ 12.345,67, 19,1% das entradas, faixa alta, ajustar`,
   });
   await expect(current).toContainText("Atual");
   await expect(current).toContainText("Entradas: R$ 64.482,80");
+  await expect(current).toHaveAttribute("href", `/para-onde-vai?m=${today.slice(0, 7)}&g=economia`);
   if (previous.slice(0, 4) !== today.slice(0, 4)) await card.getByRole("button", { name: "Ano anterior" }).click();
-  const last = card.getByRole("link", { name: `${name(previous)}: guardou -R$ 200,00, -0,3% das entradas` });
+  const last = card
+    .getByRole("list", { name: "Meses" })
+    .getByRole("link", { name: `${name(previous)}: guardou -R$ 200,00, -0,3% das entradas` });
   await expect(last).toContainText("-R$ 200,00");
 
   for (const width of [375, 1024, 1280, 1440]) {
