@@ -54,6 +54,7 @@ const open = (
     parentId?: string;
     kind?: Category["kind"];
     onKindChange?: (kind: Category["kind"]) => void;
+    note?: string | null;
   },
   replies: Record<string, Reply> = {},
 ) => {
@@ -591,6 +592,50 @@ describe("CategorySheet", () => {
         deadline: null,
       });
       expect(await screen.findByText("Cofrinho salvo")).toBeInTheDocument();
+    });
+
+    it("describes a new one in one line, counting characters up to 140", async () => {
+      const { requests } = open(
+        { kind: "bill", parentId: ECONOMIA.id },
+        cofrinhos({ "POST /api/categories": { status: 201, body: VIAGEM } }),
+      );
+
+      const sheet = await sheetNamed("Novo cofrinho");
+      const note = await within(sheet).findByLabelText("Descrição (opcional)");
+      expect(note).toHaveAttribute("placeholder", "Ex.: Início planejado após consolidar a Reserva de Emergência.");
+      expect(within(sheet).getByText("0/140")).toBeInTheDocument();
+      await userEvent.type(within(sheet).getByLabelText("Nome do agrupador"), "Casa");
+      await userEvent.click(note);
+      await userEvent.paste("a".repeat(141));
+      expect(within(sheet).getByText("141/140")).toHaveClass("text-destructive");
+      await userEvent.click(within(sheet).getByRole("button", { name: "Criar" }));
+      expect(within(sheet).getByText("Use até 140 caracteres.")).toBeInTheDocument();
+      expect(requests.some((request) => request.method === "POST")).toBe(false);
+
+      await userEvent.clear(note);
+      await userEvent.paste("Início planejado 🏠");
+      expect(within(sheet).getByText("18/140")).toBeInTheDocument();
+      await userEvent.click(within(sheet).getByRole("button", { name: "Criar" }));
+
+      await waitFor(() => expect(requests.some((request) => request.method === "POST")).toBe(true));
+      expect(await requests.find((request) => request.method === "POST")?.json()).toMatchObject({
+        note: "Início planejado 🏠",
+      });
+    });
+
+    it("edits the stored note and clears it with null", async () => {
+      const { requests } = open(
+        { kind: "bill", category: RESERVA, note: "Para imprevistos" },
+        cofrinhos({ [`PATCH /api/categories/${RESERVA.id}`]: { status: 200, body: RESERVA } }),
+      );
+
+      const sheet = await sheetNamed("Editar cofrinho");
+      const note = await within(sheet).findByLabelText("Descrição (opcional)");
+      expect(note).toHaveValue("Para imprevistos");
+      await userEvent.clear(note);
+      await userEvent.click(within(sheet).getByRole("button", { name: "Salvar" }));
+
+      expect(await patched(requests)).toMatchObject({ note: null });
     });
 
     it("keeps Economia itself at the top and never archives it", async () => {

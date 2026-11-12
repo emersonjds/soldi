@@ -857,3 +857,157 @@ async fn d32_a_weekly_series_on_a_card_lands_each_member_in_its_own_fatura(pool:
         [row("Porto", "150.00", "2026-12-10", false)]
     );
 }
+
+async fn notes(user: &TestApp, year: &str) -> Vec<(String, Value)> {
+    let (status, year) = user.get(&format!("/api/reports/savings?year={year}")).await;
+    assert_eq!(status, StatusCode::OK, "{year}");
+    year["months"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|month| !month["note"].is_null())
+        .map(|month| {
+            (
+                month["month"].as_str().unwrap().to_string(),
+                month["note"].clone(),
+            )
+        })
+        .collect()
+}
+
+#[sqlx::test]
+async fn p6_a_month_note_is_stored_replaced_and_deleted_by_a_blank(pool: PgPool) {
+    let user = TestApp::signed_in(pool, "ana@example.com").await;
+    open_at(&user, "0", "2026-01-01").await;
+
+    let (status, _) = user
+        .put(
+            "/api/months/2026-06/note",
+            json!({ "note": "  1ª parcela do 13º  " }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    assert_eq!(
+        notes(&user, "2026").await,
+        [("2026-06".to_string(), json!("1ª parcela do 13º"))]
+    );
+
+    let (status, _) = user
+        .put(
+            "/api/months/2026-06/note",
+            json!({ "note": "é".repeat(140) }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    assert_eq!(
+        notes(&user, "2026").await,
+        [("2026-06".to_string(), json!("é".repeat(140)))]
+    );
+
+    let (status, _) = user
+        .put("/api/months/2026-06/note", json!({ "note": "   " }))
+        .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    assert!(notes(&user, "2026").await.is_empty());
+    let (status, _) = user
+        .put("/api/months/2026-06/note", json!({ "note": "" }))
+        .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+}
+
+#[sqlx::test]
+async fn p6_the_savings_year_shows_notes_from_the_opening_month_through_december(pool: PgPool) {
+    let user = TestApp::signed_in(pool, "ana@example.com").await;
+    open_at(&user, "0", "2026-03-15").await;
+
+    for (month, note) in [
+        ("2026-02", "antes da abertura"),
+        ("2026-03", "abertura"),
+        ("2026-12", "previsto"),
+    ] {
+        let (status, _) = user
+            .put(
+                &format!("/api/months/{month}/note"),
+                json!({ "note": note }),
+            )
+            .await;
+        assert_eq!(status, StatusCode::NO_CONTENT, "{month}");
+    }
+
+    assert_eq!(
+        notes(&user, "2026").await,
+        [
+            ("2026-12".to_string(), json!("previsto")),
+            ("2026-03".to_string(), json!("abertura")),
+        ]
+    );
+}
+
+#[sqlx::test]
+async fn p6_a_bad_month_or_a_long_note_is_422(pool: PgPool) {
+    let user = TestApp::signed_in(pool, "ana@example.com").await;
+
+    for (uri, body, field) in [
+        ("/api/months/2026-13/note", json!({ "note": "x" }), "month"),
+        ("/api/months/1999-12/note", json!({ "note": "x" }), "month"),
+        (
+            "/api/months/2026-06/note",
+            json!({ "note": "a".repeat(141) }),
+            "note",
+        ),
+        (
+            "/api/months/2026-06/note",
+            json!({ "note": "a\u{0}b" }),
+            "note",
+        ),
+    ] {
+        let (status, problem) = user.put(uri, body).await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{uri} {problem}");
+        assert_eq!(problem["errors"][0]["field"], field, "{uri}");
+    }
+    let (status, _) = user
+        .put(
+            "/api/months/2026-06/note",
+            json!({ "note": "x", "color": "red" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+}
+
+#[sqlx::test]
+async fn p6_notes_are_per_user(pool: PgPool) {
+    let ana = TestApp::signed_in(pool, "ana@example.com").await;
+    let bia = ana.another_user("bia@example.com").await;
+    open_at(&ana, "0", "2026-01-01").await;
+    open_at(&bia, "0", "2026-01-01").await;
+
+    ana.put("/api/months/2026-06/note", json!({ "note": "da Ana" }))
+        .await;
+    bia.put("/api/months/2026-06/note", json!({ "note": "da Bia" }))
+        .await;
+    bia.put("/api/months/2026-07/note", json!({ "note": "só Bia" }))
+        .await;
+    bia.put("/api/months/2026-06/note", json!({ "note": " " }))
+        .await;
+
+    assert_eq!(
+        notes(&ana, "2026").await,
+        [("2026-06".to_string(), json!("da Ana"))]
+    );
+    assert_eq!(
+        notes(&bia, "2026").await,
+        [("2026-07".to_string(), json!("só Bia"))]
+    );
+}
+
+#[sqlx::test]
+async fn p6_a_month_note_needs_a_session(pool: PgPool) {
+    let app = TestApp::anonymous(pool);
+
+    assert_eq!(
+        app.put("/api/months/2026-06/note", json!({ "note": "x" }))
+            .await
+            .0,
+        StatusCode::UNAUTHORIZED
+    );
+}

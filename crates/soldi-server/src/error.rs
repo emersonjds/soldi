@@ -138,6 +138,19 @@ pub fn reject_nul(field: &str, text: &str) -> Result<(), AppError> {
     Ok(())
 }
 
+/// N1 (SOL-94): a cofrinho or month note, trimmed, at most 140 characters; blank is none.
+pub fn check_note(note: &str) -> Result<Option<String>, AppError> {
+    reject_nul("note", note)?;
+    let note = note.trim();
+    if note.chars().count() > 140 {
+        return Err(AppError::invalid(
+            "note",
+            "must have at most 140 characters",
+        ));
+    }
+    Ok((!note.is_empty()).then(|| note.to_string()))
+}
+
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
         if let AppError::Internal(message) = &self {
@@ -364,6 +377,18 @@ mod tests {
     fn nul_characters_are_refused() {
         assert!(super::reject_nul("name", "a\0b").is_err());
         assert!(super::reject_nul("name", "ab").is_ok());
+    }
+
+    #[test]
+    fn a_note_is_trimmed_up_to_140_characters_and_blank_is_none() {
+        assert_eq!(
+            super::check_note("  Plano  ").unwrap().as_deref(),
+            Some("Plano")
+        );
+        assert_eq!(super::check_note("   ").unwrap(), None);
+        assert!(super::check_note(&"é".repeat(140)).unwrap().is_some());
+        assert!(super::check_note(&"a".repeat(141)).is_err());
+        assert!(super::check_note("a\0b").is_err());
     }
 
     #[test]

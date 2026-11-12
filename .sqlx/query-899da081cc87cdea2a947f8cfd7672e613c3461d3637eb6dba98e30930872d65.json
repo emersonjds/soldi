@@ -1,0 +1,112 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT opening_balance, opening_date, tier_red, tier_zero, tier_yellow, tier_green,\n                currency AS \"currency: Currency\", savings_target_pct\n         FROM settings WHERE user_id = $1 FOR UPDATE",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "opening_balance",
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "settings",
+            "name": "opening_balance"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "opening_date",
+        "type_info": "Date",
+        "origin": {
+          "Table": {
+            "table": "settings",
+            "name": "opening_date"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "tier_red",
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "settings",
+            "name": "tier_red"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "tier_zero",
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "settings",
+            "name": "tier_zero"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "tier_yellow",
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "settings",
+            "name": "tier_yellow"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "tier_green",
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "settings",
+            "name": "tier_green"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "currency: Currency",
+        "type_info": "Bpchar",
+        "origin": {
+          "Table": {
+            "table": "settings",
+            "name": "currency"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "savings_target_pct",
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "settings",
+            "name": "savings_target_pct"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "899da081cc87cdea2a947f8cfd7672e613c3461d3637eb6dba98e30930872d65"
+}

@@ -64,6 +64,24 @@ pub async fn savings_by_month(
     .await
 }
 
+/// The user's month notes for the months `from` to `to`, by first day.
+pub async fn month_notes(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    from: NaiveDate,
+    to: NaiveDate,
+) -> Result<Vec<(NaiveDate, String)>, sqlx::Error> {
+    sqlx::query!(
+        "SELECT month, note FROM month_notes WHERE user_id = $1 AND month BETWEEN $2 AND $3",
+        user_id,
+        from,
+        to
+    )
+    .fetch_all(&mut *conn)
+    .await
+    .map(|rows| rows.into_iter().map(|row| (row.month, row.note)).collect())
+}
+
 /// One row per month and card of the entries dated `from` to `to`, by purchase date (D31):
 /// income and resgates as `savings_by_month`, deposits, Saídas without deposits and fatura
 /// payments, and Diário; `card_id` only on a card's spends. A fatura payment counts nowhere but

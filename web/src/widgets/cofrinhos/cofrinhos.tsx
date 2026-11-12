@@ -469,6 +469,7 @@ export const CofrinhosView = ({ month }: { month?: string }) => {
         open={editing.open}
         onOpenChange={(open) => setEditing((current) => ({ ...current, open }))}
         category={editing.category}
+        note={items.find((item) => item.category_id === editing.category?.id)?.note}
         parentId={economia?.id}
         onArchive={(category) =>
           archiveLater(category.id, items.find((item) => item.category_id === category.id)?.balance ?? "0")

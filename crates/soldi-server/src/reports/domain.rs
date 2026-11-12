@@ -5,8 +5,8 @@ use rust_decimal::{Decimal, RoundingStrategy};
 use soldi_types::categories::CategoryKind;
 use soldi_types::months::Totals;
 use soldi_types::reports::{
-    CategoryGroup, CategoryReport, CategoryShare, SavingsMonth, SavingsYear, YearCard, YearGroup,
-    YearMonth, YearReport,
+    CategoryGroup, CategoryReport, CategoryShare, SavingsMonth, SavingsTarget, SavingsYear,
+    YearCard, YearGroup, YearMonth, YearReport,
 };
 use uuid::Uuid;
 
@@ -138,6 +138,7 @@ pub fn savings_year(
                 saved,
                 rate_pct: percent(saved, income),
                 forecast: month > first_of(today),
+                note: None,
             });
             month = month - Months::new(1);
         }
@@ -154,7 +155,23 @@ pub fn savings_year(
         withdrawn_total,
         saved_total,
         rate_pct: percent(saved_total, income_total),
+        target: None,
         months,
+    }
+}
+
+/// P5 (N4): `pct` of `income_total` half to even, what `saved_total` still lacks and how far it
+/// got, floored at 0 and never capped so a beaten target reads above 100.
+pub fn savings_target(pct: Decimal, income_total: Decimal, saved_total: Decimal) -> SavingsTarget {
+    let mut amount = (pct * income_total / Decimal::ONE_HUNDRED)
+        .round_dp_with_strategy(2, RoundingStrategy::MidpointNearestEven);
+    amount.rescale(2);
+    SavingsTarget {
+        pct,
+        amount,
+        remaining: (amount - saved_total).max(Decimal::ZERO),
+        progress_pct: percent(saved_total, amount).map(|pct| pct.max(Decimal::new(0, 1))),
+        done: amount > Decimal::ZERO && saved_total >= amount,
     }
 }
 
@@ -358,6 +375,36 @@ mod tests {
 
     fn date(text: &str) -> NaiveDate {
         text.parse().unwrap()
+    }
+
+    #[test]
+    fn p5_the_target_is_a_share_of_the_entries_so_far() {
+        let dec = money;
+        let target = savings_target(dec("20.00"), dec("64482.80"), dec("5416.53"));
+        assert_eq!(
+            (target.amount, target.remaining),
+            (dec("12896.56"), dec("7480.03"))
+        );
+        assert_eq!(
+            (target.progress_pct, target.done),
+            (Some(dec("42.0")), false)
+        );
+        let beaten = savings_target(dec("10"), dec("1000.00"), dec("150.00"));
+        assert_eq!(
+            (beaten.remaining, beaten.progress_pct, beaten.done),
+            (dec("0.00"), Some(dec("150.0")), true)
+        );
+        let empty = savings_target(dec("20"), Decimal::ZERO, dec("50.00"));
+        assert_eq!(
+            (empty.amount, empty.progress_pct, empty.done),
+            (dec("0.00"), None, false)
+        );
+        let negative = savings_target(dec("20"), dec("1000.00"), dec("-30.00"));
+        assert_eq!(negative.progress_pct.unwrap().to_string(), "0.0");
+        let half = savings_target(dec("0.25"), dec("2.00"), dec("0.00"));
+        assert_eq!(half.amount, dec("0.00"));
+        let half_up = savings_target(dec("0.75"), dec("2.00"), dec("0.00"));
+        assert_eq!(half_up.amount, dec("0.02"));
     }
 
     fn sum(id: u128, name: &str, kind: CategoryKind, month: &str, amount: &str) -> CategorySum {

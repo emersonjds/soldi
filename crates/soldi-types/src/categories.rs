@@ -72,6 +72,9 @@ pub struct CreateCategory {
     /// Only for a subcategory of `Economia`.
     #[serde(default)]
     pub deadline: Option<NaiveDate>,
+    /// Up to 140 characters, trimmed; blank means none. Only for a subcategory of `Economia`.
+    #[serde(default)]
+    pub note: Option<String>,
 }
 
 /// Absent fields stay as they are; `kind`, `daily` or `bill`, moves this category alone, top-level
@@ -82,8 +85,8 @@ pub struct CreateCategory {
 /// lowest token free in the kind. For a subcategory `color` is validated, then ignored: it wears
 /// its parent's; a parent's new color reaches its subcategories. A move under a group can recolor
 /// that group and its subcategories to a color free in every kind it shows in. `null` clears
-/// `target` or `deadline`, which only a subcategory of `Economia` may set. Leaving `Economia`
-/// clears both.
+/// `target`, `deadline` or `note`, which only a subcategory of `Economia` may set; a blank `note`
+/// clears it too. Leaving `Economia` clears all three.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct UpdateCategory {
@@ -104,4 +107,7 @@ pub struct UpdateCategory {
     #[serde(default, deserialize_with = "crate::nullable_field")]
     #[schema(value_type = Option<NaiveDate>, nullable)]
     pub deadline: Option<Option<NaiveDate>>,
+    #[serde(default, deserialize_with = "crate::nullable_field")]
+    #[schema(value_type = Option<String>, nullable)]
+    pub note: Option<Option<String>>,
 }

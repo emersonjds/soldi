@@ -187,6 +187,12 @@ export const CofrinhoCard = ({ cofrinho, focus, today, disabled, onSave, onWithd
           {cofrinho.name}
         </h3>
         <Balance cofrinho={cofrinho} />
+        {cofrinho.note && (
+          <p className="line-clamp-2 text-muted-foreground text-sm">
+            {cofrinho.deadline && `Meta para ${cofrinho.deadline.slice(0, 4)} · `}
+            {cofrinho.note}
+          </p>
+        )}
         <InfoChip cofrinho={cofrinho} today={today} />
         <div className="mt-auto flex items-center gap-2">
           {empty ? (

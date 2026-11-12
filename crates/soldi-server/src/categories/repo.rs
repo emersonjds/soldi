@@ -253,6 +253,7 @@ pub struct NewCategory<'a> {
     pub parent_id: Option<Uuid>,
     pub target: Option<Decimal>,
     pub deadline: Option<NaiveDate>,
+    pub note: Option<&'a str>,
 }
 
 pub async fn insert(
@@ -262,8 +263,8 @@ pub async fn insert(
 ) -> Result<Category, sqlx::Error> {
     sqlx::query_as!(
         Category,
-        r#"INSERT INTO categories (user_id, name, kind, icon, color, parent_id, target, deadline)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        r#"INSERT INTO categories (user_id, name, kind, icon, color, parent_id, target, deadline, note)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
            RETURNING id, name, kind AS "kind: CategoryKind", icon, color, parent_id, is_savings,
                      target, deadline"#,
         user_id,
@@ -273,7 +274,8 @@ pub async fn insert(
         new.color,
         new.parent_id,
         new.target,
-        new.deadline
+        new.deadline,
+        new.note
     )
     .fetch_one(&mut *conn)
     .await
@@ -305,6 +307,7 @@ pub struct CategoryChange<'a> {
     pub parent_id: Option<Option<Uuid>>,
     pub target: Option<Option<Decimal>>,
     pub deadline: Option<Option<NaiveDate>>,
+    pub note: Option<Option<&'a str>>,
 }
 
 /// `Ok(None)` when no active category of the user has this id.
@@ -320,7 +323,8 @@ pub async fn update(
            SET name = COALESCE($3, name), icon = COALESCE($4, icon), color = COALESCE($5, color),
                parent_id = CASE WHEN $6 THEN $7 ELSE parent_id END,
                target = CASE WHEN $8 THEN $9 ELSE target END,
-               deadline = CASE WHEN $10 THEN $11 ELSE deadline END, updated_at = now()
+               deadline = CASE WHEN $10 THEN $11 ELSE deadline END,
+               note = CASE WHEN $12 THEN $13 ELSE note END, updated_at = now()
            WHERE user_id = $1 AND id = $2 AND archived_at IS NULL
            RETURNING id, name, kind AS "kind: CategoryKind", icon, color, parent_id, is_savings,
                      target, deadline"#,
@@ -334,7 +338,9 @@ pub async fn update(
         change.target.is_some(),
         change.target.flatten(),
         change.deadline.is_some(),
-        change.deadline.flatten()
+        change.deadline.flatten(),
+        change.note.is_some(),
+        change.note.flatten()
     )
     .fetch_optional(&mut *conn)
     .await
