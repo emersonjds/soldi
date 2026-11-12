@@ -242,7 +242,7 @@ const ListMonth = ({ month, current, onNote }: Noting & { month: Month; current:
         )}
       >
         <span className="flex min-w-0 flex-1 flex-col">
-          <span className="flex items-center gap-2 font-medium text-base">
+          <span className="flex flex-wrap items-center gap-x-2 font-medium text-base">
             {name}
             {current && (
               <span className="rounded-full bg-primary px-2 py-0.5 font-semibold text-primary-foreground text-xs uppercase">
@@ -255,7 +255,7 @@ const ListMonth = ({ month, current, onNote }: Noting & { month: Month; current:
               </span>
             )}
           </span>
-          <span className="text-muted-foreground text-sm">
+          <span className="flex flex-wrap gap-x-1 text-muted-foreground text-sm">
             Entradas: <Money amount={month.income} />
           </span>
         </span>
