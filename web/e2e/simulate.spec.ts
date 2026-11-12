@@ -100,3 +100,57 @@ test("Posso comprar isso? from the sidebar: 6× R$ 12.000,00 names the red month
   await expectNoClipped(page);
   expect(writes).toEqual([]);
 });
+
+test("Histórico keeps a simulation in this browser, restores it and leaves with the session", async ({
+  page,
+  request,
+}) => {
+  await requireServer(request);
+  test.setTimeout(90_000);
+
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto("/criar-conta");
+  await page.getByLabel("E-mail").fill(`e2e-historico-${Date.now()}@example.com`);
+  await page.getByLabel("Senha").fill("uma-senha-bem-longa");
+  await page.getByRole("button", { name: "Criar conta" }).click();
+  await page.getByRole("button", { name: "Continuar" }).click();
+  await page.getByLabel("Saldo de hoje").fill("12.345,67");
+  await page.getByRole("button", { name: "Continuar" }).click();
+  await page.getByRole("button", { name: "Pular por agora" }).click();
+  await page.getByRole("button", { name: "Ver meu mês" }).click();
+  await page.getByRole("button", { name: "Pular" }).click();
+  await page
+    .getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ })
+    .getByRole("button", { name: "Fechar" })
+    .click();
+
+  await page.goto("/posso-comprar");
+  const history = page.getByRole("button", { name: "Histórico" });
+  await page.getByLabel("Valor total estimado").fill("1.200,00");
+  await expect(history).toHaveCount(0);
+  await page.getByRole("radio", { name: "6x" }).click();
+  await page.getByRole("button", { name: "Calcular Projeção" }).click();
+  await page.getByRole("button", { name: "Limpar simulação" }).click();
+
+  await history.click();
+  const sheet = page.getByRole("dialog", { name: "Histórico de simulações" });
+  await expect(sheet).toContainText("As últimas 10 simulações ficam só neste navegador.");
+  await expectNoClipped(page);
+  await sheet.getByRole("button", { name: /^R\$\s1\.200,00 · 6x/ }).click();
+  await expect(page.getByLabel("Valor total estimado")).toHaveValue("1.200,00");
+  await expect(page.getByRole("radio", { name: "6x" })).toBeChecked();
+  await expect(page.getByRole("region", { name: "Veredito do orçamento" })).toBeVisible();
+
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.reload();
+  await expect(history).toBeVisible();
+  await expectNoClipped(page);
+  await page.goto("/ajustes#conta");
+  await page.getByRole("button", { name: "Sair de todos os aparelhos" }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Sair de todos" }).click();
+  await expect(page).toHaveURL(/\/entrar/);
+  const kept = await page.evaluate(() =>
+    Object.keys(localStorage).filter((key) => key.startsWith("soldi:simulations:")),
+  );
+  expect(kept).toEqual([]);
+});
