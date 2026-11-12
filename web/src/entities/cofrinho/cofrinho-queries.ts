@@ -1,15 +1,15 @@
-import { queryOptions, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, dataOrThrow, type Schemas } from "@/shared/api/client";
 
 export type Cofrinho = Schemas["Cofrinho"];
 
-export const cofrinhosQuery = queryOptions({
-  queryKey: ["cofrinhos"],
-  queryFn: async () => dataOrThrow(await api.GET("/api/cofrinhos")),
-});
-
-export const useCofrinhos = () => useQuery(cofrinhosQuery);
+/** `month` sets `saved_this_month`; without it the server takes this month. */
+export const useCofrinhos = (month?: string) =>
+  useQuery({
+    queryKey: ["cofrinhos", month],
+    queryFn: async () => dataOrThrow(await api.GET("/api/cofrinhos", { params: { query: { month } } })),
+  });
 
 /** Under `["cofrinhos"]` so whatever refreshes the cofrinhos refreshes these too. */
 export const useMovements = (categoryId: string) =>
