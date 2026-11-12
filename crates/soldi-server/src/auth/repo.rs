@@ -19,7 +19,7 @@ pub async fn insert_user(
     sqlx::query_as!(
         User,
         r#"INSERT INTO users (email, name, password_hash) VALUES ($1::text, $2, $3)
-           RETURNING id, email::text AS "email!", name, onboarded_at IS NOT NULL AS "onboarded!", tour_seen_at IS NOT NULL AS "tour_seen!""#,
+           RETURNING id, email::text AS "email!", name, onboarded_at IS NOT NULL AS "onboarded!", tour_seen_at IS NOT NULL AS "tour_seen!", email_verified_at IS NOT NULL AS "email_verified!""#,
         email,
         name,
         password_hash
@@ -33,7 +33,7 @@ pub async fn find_user_by_email(
     email: &str,
 ) -> Result<Option<UserWithHash>, sqlx::Error> {
     let row = sqlx::query!(
-        r#"SELECT id, email::text AS "email!", name, onboarded_at IS NOT NULL AS "onboarded!", tour_seen_at IS NOT NULL AS "tour_seen!", password_hash
+        r#"SELECT id, email::text AS "email!", name, onboarded_at IS NOT NULL AS "onboarded!", tour_seen_at IS NOT NULL AS "tour_seen!", email_verified_at IS NOT NULL AS "email_verified!", password_hash
            FROM users WHERE email = $1::text::citext"#,
         email
     )
@@ -46,6 +46,7 @@ pub async fn find_user_by_email(
             name: row.name,
             onboarded: row.onboarded,
             tour_seen: row.tour_seen,
+            email_verified: row.email_verified,
         },
         password_hash: row.password_hash,
     }))
@@ -54,7 +55,7 @@ pub async fn find_user_by_email(
 pub async fn find_user(conn: &mut PgConnection, user_id: Uuid) -> Result<User, sqlx::Error> {
     sqlx::query_as!(
         User,
-        r#"SELECT id, email::text AS "email!", name, onboarded_at IS NOT NULL AS "onboarded!", tour_seen_at IS NOT NULL AS "tour_seen!" FROM users WHERE id = $1"#,
+        r#"SELECT id, email::text AS "email!", name, onboarded_at IS NOT NULL AS "onboarded!", tour_seen_at IS NOT NULL AS "tour_seen!", email_verified_at IS NOT NULL AS "email_verified!" FROM users WHERE id = $1"#,
         user_id
     )
     .fetch_one(&mut *conn)
@@ -80,7 +81,7 @@ pub async fn update_name(
     sqlx::query_as!(
         User,
         r#"UPDATE users SET name = $2, updated_at = now() WHERE id = $1
-           RETURNING id, email::text AS "email!", name, onboarded_at IS NOT NULL AS "onboarded!", tour_seen_at IS NOT NULL AS "tour_seen!""#,
+           RETURNING id, email::text AS "email!", name, onboarded_at IS NOT NULL AS "onboarded!", tour_seen_at IS NOT NULL AS "tour_seen!", email_verified_at IS NOT NULL AS "email_verified!""#,
         user_id,
         name
     )
@@ -210,6 +211,86 @@ pub async fn take_password_reset(
 ) -> Result<Option<Uuid>, sqlx::Error> {
     sqlx::query_scalar!(
         "DELETE FROM password_resets WHERE token_hash = $1 AND expires_at > now() RETURNING user_id",
+        token_hash
+    )
+    .fetch_optional(&mut *conn)
+    .await
+}
+
+pub async fn email_verified(conn: &mut PgConnection, user_id: Uuid) -> Result<bool, sqlx::Error> {
+    sqlx::query_scalar!(
+        r#"SELECT email_verified_at IS NOT NULL AS "verified!" FROM users WHERE id = $1"#,
+        user_id
+    )
+    .fetch_one(&mut *conn)
+    .await
+}
+
+/// Keeps the first time; a second confirmation changes nothing.
+pub async fn mark_email_verified(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        "UPDATE users SET email_verified_at = COALESCE(email_verified_at, now()), updated_at = now()
+         WHERE id = $1",
+        user_id
+    )
+    .execute(&mut *conn)
+    .await?;
+    Ok(())
+}
+
+/// Serializes link requests of one user until the transaction ends, so only one link stays live.
+pub async fn lock_email_verifications(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        "SELECT pg_advisory_xact_lock(hashtext('email_verifications:' || $1::text))",
+        user_id.to_string()
+    )
+    .execute(&mut *conn)
+    .await?;
+    Ok(())
+}
+
+pub async fn delete_email_verifications(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        "DELETE FROM email_verifications WHERE user_id = $1",
+        user_id
+    )
+    .execute(&mut *conn)
+    .await?;
+    Ok(())
+}
+
+/// Expires in 24 hours.
+pub async fn insert_email_verification(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    token_hash: &[u8],
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        "INSERT INTO email_verifications (user_id, token_hash) VALUES ($1, $2)",
+        user_id,
+        token_hash
+    )
+    .execute(&mut *conn)
+    .await?;
+    Ok(())
+}
+
+/// Spends a live verification link; the owner's id, or `None` for an unknown, expired or used one.
+pub async fn take_email_verification(
+    conn: &mut PgConnection,
+    token_hash: &[u8],
+) -> Result<Option<Uuid>, sqlx::Error> {
+    sqlx::query_scalar!(
+        "DELETE FROM email_verifications WHERE token_hash = $1 AND expires_at > now() RETURNING user_id",
         token_hash
     )
     .fetch_optional(&mut *conn)

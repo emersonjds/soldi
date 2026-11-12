@@ -168,6 +168,22 @@ async fn confirming_sets_the_password_and_ends_every_session(pool: PgPool) {
 }
 
 #[sqlx::test]
+async fn confirming_a_reset_verifies_the_email(pool: PgPool) {
+    let (app, mail) = app(pool);
+    app.another_user("ana@example.com").await;
+    request_reset(&app, "ana@example.com").await;
+    let token = token_in(&mail.sent().await[0]);
+
+    assert_eq!(
+        confirm(&app, &token, NEW_PASSWORD).await.0,
+        StatusCode::NO_CONTENT
+    );
+
+    let (_, ana) = sign_in(&app, "ana@example.com", NEW_PASSWORD).await;
+    assert_eq!(ana.get("/api/auth/me").await.1["email_verified"], true);
+}
+
+#[sqlx::test]
 async fn an_expired_link_is_refused(pool: PgPool) {
     let (app, mail) = app(pool.clone());
     app.another_user("ana@example.com").await;

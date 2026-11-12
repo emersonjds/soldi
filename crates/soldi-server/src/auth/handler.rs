@@ -8,8 +8,8 @@ use axum::http::{HeaderMap, StatusCode};
 use axum::response::IntoResponse;
 use soldi_types::Problem;
 use soldi_types::auth::{
-    ChangePassword, ConfirmPasswordReset, DeleteAccount, RequestPasswordReset, SignIn, SignUp,
-    UpdateMe, User,
+    ChangePassword, ConfirmEmailVerification, ConfirmPasswordReset, DeleteAccount,
+    RequestPasswordReset, SignIn, SignUp, UpdateMe, User,
 };
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
@@ -39,6 +39,8 @@ pub fn router() -> OpenApiRouter<AppState> {
         .routes(routes!(change_password))
         .routes(routes!(request_password_reset))
         .routes(routes!(confirm_password_reset))
+        .routes(routes!(request_email_verification))
+        .routes(routes!(confirm_email_verification))
 }
 
 #[utoipa::path(post, path = "/api/auth/sign-up", tag = "auth", request_body = SignUp,
@@ -239,5 +241,55 @@ pub async fn confirm_password_reset(
         .limiter
         .check(&[(limits::PASSWORD_RESET_CONFIRM_IP, ip)])?;
     service::confirm_password_reset(&state.pool, input).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[utoipa::path(post, path = "/api/me/email-verification", tag = "auth",
+    responses(
+        (status = 202, description = "A verification link valid for 24 hours is e-mailed to the caller; older links stop working"),
+        (status = 401, body = Problem, content_type = "application/problem+json"),
+        (status = 422, body = Problem, content_type = "application/problem+json", description = "`email-already-verified`; nothing is sent"),
+        (status = 429, body = Problem, content_type = "application/problem+json", description = "Rate limited; wait `Retry-After` seconds")))]
+pub async fn request_email_verification(
+    State(state): State<AppState>,
+    user: CurrentUser,
+) -> Result<StatusCode, AppError> {
+    let user_id = Some(user.id.to_string());
+    state
+        .limiter
+        .check(&[(limits::EMAIL_VERIFY_USER, user_id)])?;
+    service::check_unverified(&state.pool, &user).await?;
+    let mailer = state.mailer.clone();
+    let task = tokio::spawn(async move {
+        let sent = service::request_email_verification(
+            &state.pool,
+            &state.mailer,
+            &state.public_url,
+            &user,
+        );
+        if let Err(error) = sent.await {
+            tracing::warn!(?error, "email verification request failed");
+        }
+    });
+    mailer.track(task);
+    Ok(StatusCode::ACCEPTED)
+}
+
+#[utoipa::path(post, path = "/api/auth/email-verification/confirm", tag = "auth", request_body = ConfirmEmailVerification,
+    responses(
+        (status = 204, description = "E-mail verified; every pending verification link of the user ends. Signs nobody in"),
+        (status = 422, body = Problem, content_type = "application/problem+json", description = "`invalid-verification-link` for an unknown, expired or used token"),
+        (status = 429, body = Problem, content_type = "application/problem+json", description = "Rate limited; wait `Retry-After` seconds")))]
+pub async fn confirm_email_verification(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    peer: Peer,
+    JsonBody(input): JsonBody<ConfirmEmailVerification>,
+) -> Result<StatusCode, AppError> {
+    let ip = client_ip(&headers, peer);
+    state
+        .limiter
+        .check(&[(limits::EMAIL_VERIFY_CONFIRM_IP, ip)])?;
+    service::confirm_email_verification(&state.pool, input).await?;
     Ok(StatusCode::NO_CONTENT)
 }

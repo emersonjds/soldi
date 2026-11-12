@@ -29,7 +29,7 @@ async fn created(user: &TestApp, uri: &str, body: Value) -> Value {
 }
 
 /// A subcategory, a cofrinho with a deposit and a resgate, a recurring bill with a payment,
-/// a repeated series, a month note and a reset link.
+/// a repeated series, a month note, a reset link and a verification link.
 async fn fill_account(pool: &PgPool, user: &TestApp, email: &str) {
     let today = soldi_server::today_sao_paulo().to_string();
     let alimentacao = user.category_id("Alimentação").await;
@@ -82,6 +82,15 @@ async fn fill_account(pool: &PgPool, user: &TestApp, email: &str) {
     sqlx::query(
         "INSERT INTO password_resets (user_id, token_hash)
          SELECT id, sha256(convert_to(email, 'UTF8')) FROM users WHERE email = $1",
+    )
+    .bind(email)
+    .execute(pool)
+    .await
+    .unwrap();
+
+    sqlx::query(
+        "INSERT INTO email_verifications (user_id, token_hash)
+         SELECT id, sha256(convert_to('verify ' || email, 'UTF8')) FROM users WHERE email = $1",
     )
     .bind(email)
     .execute(pool)

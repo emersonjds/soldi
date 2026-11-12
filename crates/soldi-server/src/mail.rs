@@ -90,22 +90,43 @@ impl Mailer {
         name: &str,
         link: &str,
     ) -> reqwest::Result<()> {
+        let message = password_reset(to, name, link);
+        self.deliver(message, "password reset link for a user", link)
+            .await
+    }
+
+    pub async fn send_email_verification(
+        &self,
+        to: &str,
+        name: &str,
+        link: &str,
+    ) -> reqwest::Result<()> {
+        let message = email_verification(to, name, link);
+        self.deliver(message, "email verification link for a user", link)
+            .await
+    }
+
+    async fn deliver(
+        &self,
+        message: Message,
+        log: &'static str,
+        link: &str,
+    ) -> reqwest::Result<()> {
         match self {
-            Mailer::Log => tracing::info!(%link, "password reset link for a user"),
+            Mailer::Log => tracing::info!(%link, "{log}"),
             Mailer::Resend {
                 client,
                 api_key,
                 from,
             } => {
-                let request =
-                    resend_request(client, api_key, from, &password_reset(to, name, link))?;
+                let request = resend_request(client, api_key, from, &message)?;
                 client.execute(request).await?.error_for_status()?;
             }
             Mailer::Recording(recording) => recording
                 .sent
                 .lock()
                 .unwrap_or_else(PoisonError::into_inner)
-                .push(password_reset(to, name, link)),
+                .push(message),
         }
         Ok(())
     }
@@ -157,6 +178,22 @@ fn password_reset(to: &str, name: &str, link: &str) -> Message {
     }
 }
 
+fn email_verification(to: &str, name: &str, link: &str) -> Message {
+    let intro = "Confirme que este e-mail é seu para concluir a verificação da sua conta no Soldi. \
+                 Use o link abaixo em até 24 horas:";
+    let outro = "Se não foi você, ignore este e-mail.";
+    let (html_name, html_link) = (escape_html(name), escape_html(link));
+    Message {
+        to: to.to_string(),
+        subject: "Confirme seu e-mail no Soldi".into(),
+        text: format!("Olá, {name}.\n\n{intro}\n\n{link}\n\n{outro}\n"),
+        html: format!(
+            "<p>Olá, {html_name}.</p><p>{intro}</p>\
+             <p><a href=\"{html_link}\">{html_link}</a></p><p>{outro}</p>"
+        ),
+    }
+}
+
 fn escape_html(text: &str) -> String {
     text.replace('&', "&amp;")
         .replace('<', "&lt;")
@@ -196,6 +233,56 @@ mod tests {
                 .contains(&format!("<a href=\"{link}\">{link}</a>"))
         );
         assert!(!message.html.contains("<Ana"));
+    }
+
+    #[test]
+    fn the_verification_message_carries_the_link_and_escapes_the_name_in_html() {
+        let link = "https://getsoldi.app/verificar-email#token=abc&x";
+
+        let message = email_verification("ana@example.com", "<Ana & \"Bia\">", link);
+
+        assert_eq!(message.to, "ana@example.com");
+        assert_eq!(message.subject, "Confirme seu e-mail no Soldi");
+        assert_eq!(
+            message.text,
+            "Olá, <Ana & \"Bia\">.\n\n\
+             Confirme que este e-mail é seu para concluir a verificação da sua conta no Soldi. \
+             Use o link abaixo em até 24 horas:\n\n\
+             https://getsoldi.app/verificar-email#token=abc&x\n\n\
+             Se não foi você, ignore este e-mail.\n"
+        );
+        assert!(
+            message
+                .html
+                .contains("Olá, &lt;Ana &amp; &quot;Bia&quot;&gt;.")
+        );
+        let html_link = "https://getsoldi.app/verificar-email#token=abc&amp;x";
+        assert!(
+            message
+                .html
+                .contains(&format!("<a href=\"{html_link}\">{html_link}</a>"))
+        );
+        assert!(!message.html.contains("<Ana"));
+    }
+
+    #[tokio::test]
+    async fn without_a_key_the_verification_link_goes_to_the_log_without_the_address() {
+        let buffer = Buffer::default();
+        let writer = buffer.clone();
+        let subscriber = tracing_subscriber::fmt()
+            .with_writer(move || writer.clone())
+            .finish();
+        let _guard = tracing::subscriber::set_default(subscriber);
+
+        Mailer::Log
+            .send_email_verification("ana@example.com", "Ana", "http://x/verificar-email#token=t")
+            .await
+            .unwrap();
+
+        let log = String::from_utf8(buffer.0.lock().unwrap().clone()).unwrap();
+        assert!(log.contains("email verification link for a user"), "{log}");
+        assert!(log.contains("http://x/verificar-email#token=t"), "{log}");
+        assert!(!log.contains("ana@example.com"), "{log}");
     }
 
     #[test]
