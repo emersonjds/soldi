@@ -7,6 +7,16 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.49.0
+
+> Headline: Contas fixas looks like Stitch
+
+### Web
+
+- Contas Fixas Recorrentes: breadcrumb, `Status:` filter and `⊕ Nova Conta Fixa`; `Total de Despesas Fixas` with `Compromete x% da renda líquida` for the switcher's month; `Próximo Vencimento` with Hoje / Amanhã / Em n dias / Vencida (a bill registered after its day is not owed yet, D17).
+- Tabs Todas / Despesas / Pausadas with counts, `ORDENAÇÃO:` by vencimento, valor or nome, a table from 1024 px with `Dia dd`, the amount, the Ativa switch and a `⋮` menu (Editar, Arquivar); cards keep `Fecha dia n · vence dia m`.
+- From 1280 px a side form (`Adicionar Nova Conta`, day chips Dia 05–20, Categoria select, `✓ Salvar Conta Fixa`); the bill sheet uses the same form everywhere. Contas fixas gets the month switcher.
+
 ## 0.48.0
 
 > Headline: Resgatado next to Guardado

@@ -137,7 +137,7 @@ test("the shell follows Stitch from 375 to 1440: app bar and tab bar on mobile, 
   await tabs.getByRole("link", { name: "Ajustes" }).click();
   await page.getByRole("link", { name: /^Contas fixas/ }).click();
   await expect(page).toHaveURL(`/ajustes/contas?m=${next}`);
-  await expect(page.getByRole("group", { name: "Mês" })).toHaveCount(0);
+  await expect(main.getByRole("group", { name: "Mês" }).locator("[aria-live]")).toHaveText(label);
   await tabs.getByRole("link", { name: "Mês" }).click();
   await expect(page).toHaveURL(`/mes?m=${next}`);
   await expect(main.getByRole("group", { name: "Mês" }).locator("[aria-live]")).toHaveText(label);
@@ -161,8 +161,8 @@ test("the shell follows Stitch from 375 to 1440: app bar and tab bar on mobile, 
       .getByRole("link", { name: "Contas Fixas" })
       .click();
     await expect(page).toHaveURL(/\/ajustes\/contas\?m=/);
-    await expect(page.getByRole("heading", { level: 1, name: "Contas fixas" })).toBeVisible();
-    await expect(page.getByRole("group", { name: "Mês" })).toHaveCount(0);
+    await expect(page.getByRole("heading", { level: 1, name: "Contas Fixas Recorrentes" })).toBeVisible();
+    await expect(bar.getByRole("group", { name: "Mês" })).toBeVisible();
     await expect(pill).toHaveAttribute("aria-label", tier ?? "");
     await expectNoClipped(page);
     await page
