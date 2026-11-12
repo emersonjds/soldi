@@ -7,6 +7,19 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.56.0
+
+> Headline: pin categories and keep simulations
+
+### Server
+
+- `GET` / `PUT /api/categories/pins` keep one ordered list of up to 24 pinned top-level categories per user, written in one serialized transaction. Migration 0024 adds `categories.pin_rank`.
+
+### Web
+
+- `Personalizar` next to `Ver todas` in Lançar pins and orders up to 8 categories per row; pinned ones lead, usage fills the rest.
+- Posso comprar isso? keeps the last 10 simulations' inputs in this browser (`Histórico`), never a verdict (D34); restoring re-runs against today, and leaving the account clears them.
+
 ## 0.55.0
 
 > Headline: cofrinho notes, a yearly savings target and month notes
