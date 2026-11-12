@@ -373,6 +373,16 @@ describe("AppShell", () => {
     );
   });
 
+  it("keeps the page's other parameters when moving the month", async () => {
+    setPathname("/ajustes/categorias");
+    setSearch("k=bill&m=2026-12");
+    router.replace.mockClear();
+    renderWithQuery(<AppShell>conteúdo</AppShell>);
+
+    await userEvent.click(screen.getAllByRole("button", { name: "Próximo mês" })[0]);
+    expect(router.replace).toHaveBeenLastCalledWith("/ajustes/categorias?k=bill&m=2027-01", { scroll: false });
+  });
+
   it("takes the sidebar user card and the top-bar avatar to Minha conta, with the version under it and no sign-out", async () => {
     vi.stubEnv("NEXT_PUBLIC_APP_VERSION", "0.34.0");
     renderWithQuery(<AppShell>conteúdo</AppShell>);
