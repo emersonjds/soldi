@@ -7,6 +7,14 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.43.2
+
+> Headline: a family icon
+
+### Web
+
+- The category icon picker offers a family icon (`users`) among its quick icons, drawn without waiting for the full icon set.
+
 ## 0.43.1
 
 > Headline: a deleted cofrinho's money stays put

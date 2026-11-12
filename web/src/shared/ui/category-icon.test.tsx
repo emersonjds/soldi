@@ -16,4 +16,9 @@ describe("CategoryIcon", () => {
     expect(circle).toHaveClass("bg-cat-6", "lg:bg-(--cat)/15", "lg:text-(--cat)");
     expect(circle.style.getPropertyValue("--cat")).toBe("var(--cat-6)");
   });
+
+  it("draws the family icon at once, without the lazy fallback", () => {
+    const { container } = render(<CategoryIcon icon="users" color="cat-2" />);
+    expect(container.querySelector("svg.lucide-users")).toBeInTheDocument();
+  });
 });
