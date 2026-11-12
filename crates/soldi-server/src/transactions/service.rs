@@ -1,7 +1,6 @@
-use chrono::Datelike;
 use soldi_types::categories::Category;
 use soldi_types::transactions::{
-    CreateTransaction, Scope, Transaction, TransactionSeries, UpdateTransaction,
+    CreateTransaction, RepeatEvery, Scope, Transaction, TransactionSeries, UpdateTransaction,
 };
 use sqlx::{PgConnection, PgPool};
 use uuid::Uuid;
@@ -10,7 +9,6 @@ use super::{domain, repo};
 use crate::bills::service::check_fatura_open;
 use crate::error::AppError;
 use crate::extract::CurrentUser;
-use crate::months::domain::first_of;
 use crate::{categories, months, settings};
 
 pub async fn list(
@@ -132,8 +130,9 @@ pub async fn create(
     }
     check_opening(&mut tx, user, input.date).await?;
     let count = input.repeat_months.or(input.installments);
+    let every = input.repeat_every.unwrap_or_default();
     let copies = match count {
-        Some(count) => domain::repeat_dates(input.date, count)?,
+        Some(count) => domain::repeat_dates(input.date, count, every)?,
         None => vec![],
     };
     let dates = [&[input.date], copies.as_slice()].concat();
@@ -147,15 +146,34 @@ pub async fn create(
         ..input
     };
     let series_id = count.map(|_| Uuid::new_v4());
-    let id = repo::insert(&mut tx, user.id, &first, None, None, series_id).await?;
+    let id = repo::insert(
+        &mut tx,
+        user.id,
+        &first,
+        None,
+        None,
+        series_id,
+        series_id.map(|_| every),
+    )
+    .await?;
     let mut series = None;
     if let (Some(count), Some(series_id)) = (count, series_id) {
-        repo::insert_copies(&mut tx, user.id, &first, series_id, &copies, &amounts[1..]).await?;
+        repo::insert_copies(
+            &mut tx,
+            user.id,
+            &first,
+            series_id,
+            every,
+            &copies,
+            &amounts[1..],
+        )
+        .await?;
         series = Some(TransactionSeries {
             id: series_id,
             position: 1,
             total: count.into(),
             last_date: copies.last().copied().unwrap_or(first.date),
+            every,
         });
     }
     tx.commit().await?;
@@ -185,6 +203,15 @@ pub async fn update(
             .ok_or(AppError::NotFound)?;
     }
     check_cofrinho_active(&mut tx, user, &current, scope).await?;
+    if let (Some(series), Some(every)) = (&current.series, patch.repeat_every)
+        && every != series.every
+    {
+        return Err(AppError::invalid("repeat_every", "a series keeps its step"));
+    }
+    let every = current
+        .series
+        .as_ref()
+        .map_or(RepeatEvery::Month, |series| series.every);
     if patch.repeat_months.is_some() {
         domain::check_repeatable(&current)?;
     }
@@ -203,6 +230,7 @@ pub async fn update(
         category_id: category.id,
         note: patch.note.unwrap_or(current.note),
         repeat_months: patch.repeat_months,
+        repeat_every: patch.repeat_every.filter(|_| current.series.is_none()),
         installments: None,
         card_id: patch.card_id.unwrap_or(current.card_id),
     })?;
@@ -217,14 +245,15 @@ pub async fn update(
     }
     let moves = scope == Scope::Following && current.series.is_some() && next.date != current.date;
     if moves {
-        domain::check_day_move(current.date, next.date)?;
+        domain::check_move(every, current.date, next.date)?;
     }
     check_opening(&mut tx, user, next.date).await?;
     if next.amount != current.amount || next.date != current.date || next.card_id != current.card_id
     {
         let mut dates = vec![current.date];
         if let Some(series) = current.series.as_ref().filter(|_| spreads) {
-            dates = repo::members_from(&mut tx, user.id, series.id, first_of(current.date))
+            let from = domain::period_start(every, current.date);
+            dates = repo::members_from(&mut tx, user.id, series.id, from)
                 .await?
                 .into_iter()
                 .map(|(_, date)| date)
@@ -246,13 +275,13 @@ pub async fn update(
         let amount = (next.amount != current.amount).then_some(next.amount);
         repo::update_following(&mut tx, user.id, series.id, current.date, &next, amount).await?;
         if moves {
-            let month = next.date.with_day(1).unwrap_or(next.date);
+            let from = domain::period_start(every, next.date);
             let (ids, dates): (Vec<_>, Vec<_>) =
-                repo::members_from(&mut tx, user.id, series.id, month)
+                repo::members_from(&mut tx, user.id, series.id, from)
                     .await?
                     .into_iter()
                     .unzip();
-            let dates = domain::moved_dates(&dates, next.date.day())?;
+            let dates = domain::moved(every, &dates, next.date)?;
             repo::set_dates(&mut tx, user.id, &ids, &dates).await?;
         }
     }
@@ -263,13 +292,15 @@ pub async fn update(
                 check_card(&mut tx, user, card_id).await?;
             }
             let series_id = Uuid::new_v4();
-            if !repo::set_series(&mut tx, user.id, id, series_id).await? {
+            let every = next.repeat_every.unwrap_or_default();
+            if !repo::set_series(&mut tx, user.id, id, series_id, every).await? {
                 return Err(domain::already_repeated());
             }
-            let dates = domain::repeat_dates(next.date, months)?;
+            let dates = domain::repeat_dates(next.date, months, every)?;
             check_fatura_open(&mut tx, user, next.card_id, &dates).await?;
             let amounts = vec![next.amount; dates.len()];
-            repo::insert_copies(&mut tx, user.id, &next, series_id, &dates, &amounts).await?;
+            repo::insert_copies(&mut tx, user.id, &next, series_id, every, &dates, &amounts)
+                .await?;
         }
         (None, _) => {}
     }
@@ -303,13 +334,23 @@ async fn resize(
             check_card(conn, user, card_id).await?;
         }
         let end = repo::series_end(conn, user.id, series_id).await?;
-        let last = *end.first().ok_or(AppError::NotFound)?;
-        let day = domain::series_day(last, end.get(1).copied());
+        if end.is_empty() {
+            return Err(AppError::NotFound);
+        }
         let count = u32::try_from(i64::from(months) - total).unwrap_or(0);
-        let added = domain::following_dates(day, last, count)?;
+        let added = domain::growth_dates(edited.every, &end, count)?;
         check_fatura_open(conn, user, next.card_id, &added).await?;
         let amounts = vec![next.amount; added.len()];
-        repo::insert_copies(conn, user.id, next, series_id, &added, &amounts).await?;
+        repo::insert_copies(
+            conn,
+            user.id,
+            next,
+            series_id,
+            edited.every,
+            &added,
+            &amounts,
+        )
+        .await?;
     }
     Ok(())
 }
@@ -335,7 +376,8 @@ pub async fn delete(
     check_cofrinho_active(&mut tx, user, &current, scope).await?;
     let mut dates = vec![current.date];
     if let (Scope::Following, Some(series)) = (scope, &current.series) {
-        dates = repo::members_from(&mut tx, user.id, series.id, first_of(current.date))
+        let from = domain::period_start(series.every, current.date);
+        dates = repo::members_from(&mut tx, user.id, series.id, from)
             .await?
             .into_iter()
             .map(|(_, date)| date)

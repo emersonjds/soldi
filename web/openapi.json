@@ -2739,13 +2739,24 @@
             ],
             "description": "Up to 500 characters; blank means none."
           },
+          "repeat_every": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/RepeatEvery",
+                "description": "The step of `repeat_months`; absent means `month`. Only with `repeat_months`, or `month`\nwith `installments`."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "repeat_months": {
             "type": [
               "integer",
               "null"
             ],
             "format": "int32",
-            "description": "2 to 60 entries, this one included, on the same day of the following months (the\nmonth's last day when shorter); absent means just this one.",
+            "description": "2 to 60 entries, this one included, one `repeat_every` apart (a month: the same day, the\nmonth's last day when shorter); absent means just this one.",
             "maximum": 60,
             "minimum": 2
           }
@@ -3090,6 +3101,15 @@
           }
         }
       },
+      "RepeatEvery": {
+        "type": "string",
+        "description": "The step between a series' entries (D32); a running series never changes it.",
+        "enum": [
+          "month",
+          "week",
+          "year"
+        ]
+      },
       "RequestPasswordReset": {
         "type": "object",
         "required": [
@@ -3410,9 +3430,13 @@
           "id",
           "position",
           "total",
-          "last_date"
+          "last_date",
+          "every"
         ],
         "properties": {
+          "every": {
+            "$ref": "#/components/schemas/RepeatEvery"
+          },
           "id": {
             "type": "string",
             "format": "uuid"
@@ -3420,7 +3444,7 @@
           "last_date": {
             "type": "string",
             "format": "date",
-            "description": "The date of the series' last member; growth continues in the months after it."
+            "description": "The date of the series' last member; growth continues after it, by `every`."
           },
           "position": {
             "type": "integer",
@@ -3651,6 +3675,17 @@
             "type": [
               "string",
               "null"
+            ]
+          },
+          "repeat_every": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/RepeatEvery",
+                "description": "The step of a series `repeat_months` starts from an entry outside one; on a member it must\nequal the series' step."
+              },
+              {
+                "type": "null"
+              }
             ]
           },
           "repeat_months": {

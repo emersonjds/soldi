@@ -1,7 +1,7 @@
-use chrono::{Datelike, Months, NaiveDate};
+use chrono::{Datelike, Days, Months, NaiveDate};
 use rust_decimal::{Decimal, RoundingStrategy};
 use soldi_types::categories::{Category, CategoryKind};
-use soldi_types::transactions::{CreateTransaction, Transaction};
+use soldi_types::transactions::{CreateTransaction, RepeatEvery, Transaction};
 use uuid::Uuid;
 
 use crate::error::{AppError, reject_nul};
@@ -19,6 +19,18 @@ pub fn check(input: CreateTransaction) -> Result<CreateTransaction, AppError> {
     let note = input.note.as_deref().map(check_note).transpose()?.flatten();
     input.repeat_months.map(check_repeat).transpose()?;
     check_installments(&input, amount)?;
+    match (input.repeat_every, input.repeat_months, input.installments) {
+        (Some(_), None, None) => {
+            return Err(AppError::invalid("repeat_every", "needs repeat_months"));
+        }
+        (Some(every), None, Some(_)) if every != RepeatEvery::Month => {
+            return Err(AppError::invalid(
+                "repeat_every",
+                "installments are monthly",
+            ));
+        }
+        _ => {}
+    }
     check_card(input.kind, input.card_id)?;
     Ok(CreateTransaction {
         amount,
@@ -78,9 +90,120 @@ fn check_installments(input: &CreateTransaction, amount: Decimal) -> Result<(), 
     Ok(())
 }
 
-/// R1: the dates of the `months - 1` copies, each the original's day in its own month.
-pub fn repeat_dates(date: NaiveDate, months: i16) -> Result<Vec<NaiveDate>, AppError> {
-    following_dates(date.day(), date, u32::try_from(months - 1).unwrap_or(0))
+/// R1 (D32): the dates of the `count - 1` copies after `date`, by step. A yearly copy counts from
+/// the original, so 29 February comes back in leap years.
+pub fn repeat_dates(
+    date: NaiveDate,
+    count: i16,
+    every: RepeatEvery,
+) -> Result<Vec<NaiveDate>, AppError> {
+    let copies = u32::try_from(count - 1).unwrap_or(0);
+    match every {
+        RepeatEvery::Month => following_dates(date.day(), date, copies),
+        RepeatEvery::Week => weeks_after(date, copies),
+        RepeatEvery::Year => {
+            within_2100((1..=copies).map(|k| date.checked_add_months(Months::new(12 * k))))
+        }
+    }
+}
+
+/// L1 (D19, D32): `count` members after the series' end; `end` holds its last members, last first.
+pub fn growth_dates(
+    every: RepeatEvery,
+    end: &[NaiveDate],
+    count: u32,
+) -> Result<Vec<NaiveDate>, AppError> {
+    let Some((&last, earlier)) = end.split_first() else {
+        return Ok(Vec::new());
+    };
+    match every {
+        RepeatEvery::Month => {
+            following_dates(series_day(last, earlier.first().copied()), last, count)
+        }
+        RepeatEvery::Week => weeks_after(last, count),
+        RepeatEvery::Year => {
+            let day = i16::try_from(yearly_day(last, earlier)).unwrap_or(1);
+            let month = last.with_day(1).unwrap_or(last);
+            within_2100((1..=count).map(|k| {
+                month
+                    .checked_add_months(Months::new(12 * k))
+                    .map(|month| crate::bills::domain::due_date(month, day))
+            }))
+        }
+    }
+}
+
+/// M3 for a yearly series: a last member clamped on its month's last day takes the largest day of
+/// the earlier members in that month, so 28 February returns to 29 in a leap year.
+pub fn yearly_day(last: NaiveDate, earlier: &[NaiveDate]) -> u32 {
+    if last != crate::months::domain::month_end(last) {
+        return last.day();
+    }
+    earlier
+        .iter()
+        .filter(|date| date.month() == last.month())
+        .map(|date| date.day())
+        .fold(last.day(), u32::max)
+}
+
+/// M1 (D32): where a move fetches the reached members from: the Monday of the ISO week, or the
+/// month's first day.
+pub fn period_start(every: RepeatEvery, date: NaiveDate) -> NaiveDate {
+    match every {
+        RepeatEvery::Week => date
+            .checked_sub_days(Days::new(date.weekday().num_days_from_monday().into()))
+            .unwrap_or(date),
+        RepeatEvery::Month | RepeatEvery::Year => crate::months::domain::first_of(date),
+    }
+}
+
+/// M4 (D32): a weekly series moves inside the edited member's ISO week; the others inside its month.
+pub fn check_move(every: RepeatEvery, from: NaiveDate, to: NaiveDate) -> Result<(), AppError> {
+    match every {
+        RepeatEvery::Week if from.iso_week() != to.iso_week() => Err(AppError::invalid(
+            "date",
+            "must stay in this entry's week when the series moves",
+        )),
+        RepeatEvery::Week => Ok(()),
+        RepeatEvery::Month | RepeatEvery::Year => check_day_move(from, to),
+    }
+}
+
+/// M2, M5 (D32): `dates` (by `date, id`) on `to`'s weekday in their own ISO week, or on its day in
+/// their own month; refused when two share a period.
+pub fn moved(
+    every: RepeatEvery,
+    dates: &[NaiveDate],
+    to: NaiveDate,
+) -> Result<Vec<NaiveDate>, AppError> {
+    if every != RepeatEvery::Week {
+        return moved_dates(dates, to.day());
+    }
+    if dates
+        .windows(2)
+        .any(|pair| pair[0].iso_week() == pair[1].iso_week())
+    {
+        return Err(AppError::invalid(
+            "date",
+            "must not move a series with two entries in one week",
+        ));
+    }
+    let offset = Days::new(to.weekday().num_days_from_monday().into());
+    Ok(dates
+        .iter()
+        .map(|date| period_start(every, *date) + offset)
+        .collect())
+}
+
+fn weeks_after(date: NaiveDate, count: u32) -> Result<Vec<NaiveDate>, AppError> {
+    within_2100((1..=count).map(|k| date.checked_add_days(Days::new(7 * u64::from(k)))))
+}
+
+fn within_2100(dates: impl Iterator<Item = Option<NaiveDate>>) -> Result<Vec<NaiveDate>, AppError> {
+    dates
+        .map(|date| date.filter(|date| date.year() <= 2100))
+        .collect::<Option<Vec<_>>>()
+        .ok_or_else(|| AppError::invalid("date", "must leave room for every month"))
 }
 
 /// L1, L4: `count` dates in the months after `last`'s, each on `day` clamped to its month;
@@ -266,6 +389,7 @@ mod tests {
             category_id: Uuid::nil(),
             note: note.map(String::from),
             repeat_months: None,
+            repeat_every: None,
             installments: None,
             card_id: None,
         }
@@ -314,6 +438,7 @@ mod tests {
             position: 1,
             total: 2,
             last_date: date("2026-12-05"),
+            every: RepeatEvery::Month,
         })
     }
 
@@ -381,22 +506,22 @@ mod tests {
     #[test]
     fn r1_each_copy_clamps_the_original_day_to_its_own_month() {
         assert_eq!(
-            repeat_dates(date("2027-01-31"), 4).unwrap(),
+            repeat_dates(date("2027-01-31"), 4, RepeatEvery::Month).unwrap(),
             [date("2027-02-28"), date("2027-03-31"), date("2027-04-30")]
         );
         assert_eq!(
-            repeat_dates(date("2028-01-31"), 2).unwrap(),
+            repeat_dates(date("2028-01-31"), 2, RepeatEvery::Month).unwrap(),
             [date("2028-02-29")]
         );
         assert_eq!(
-            repeat_dates(date("2026-11-30"), 3).unwrap(),
+            repeat_dates(date("2026-11-30"), 3, RepeatEvery::Month).unwrap(),
             [date("2026-12-30"), date("2027-01-30")]
         );
     }
 
     #[test]
     fn r2_twelve_entries_are_the_original_and_eleven_copies() {
-        let copies = repeat_dates(date("2026-11-05"), 12).unwrap();
+        let copies = repeat_dates(date("2026-11-05"), 12, RepeatEvery::Month).unwrap();
 
         assert_eq!(copies.len(), 11);
         assert_eq!(copies[0], date("2026-12-05"));
@@ -468,9 +593,17 @@ mod tests {
             following_dates(5, date("2100-11-05"), 1).unwrap(),
             [date("2100-12-05")]
         );
-        assert_eq!(repeat_dates(date("2100-01-31"), 12).unwrap().len(), 11);
+        assert_eq!(
+            repeat_dates(date("2100-01-31"), 12, RepeatEvery::Month)
+                .unwrap()
+                .len(),
+            11
+        );
         assert_eq!(field(following_dates(5, date("2100-08-05"), 5)), "date");
-        assert_eq!(field(repeat_dates(date("2100-06-05"), 12)), "date");
+        assert_eq!(
+            field(repeat_dates(date("2100-06-05"), 12, RepeatEvery::Month)),
+            "date"
+        );
     }
 
     #[test]
@@ -548,6 +681,144 @@ mod tests {
         ] {
             assert_eq!(slug(check_convertible(&other)), "cannot-become-bill");
         }
+    }
+
+    #[test]
+    fn d32_weekly_and_yearly_dates_by_step() {
+        let weekly = repeat_dates(date("2026-11-12"), 8, RepeatEvery::Week).unwrap();
+        assert_eq!(weekly.first(), Some(&date("2026-11-19")));
+        assert_eq!(weekly.last(), Some(&date("2026-12-31")));
+        assert_eq!(weekly.len(), 7);
+        let leap = repeat_dates(date("2024-02-29"), 5, RepeatEvery::Year).unwrap();
+        assert_eq!(
+            leap,
+            ["2025-02-28", "2026-02-28", "2027-02-28", "2028-02-29"].map(date)
+        );
+        assert_eq!(
+            repeat_dates(date("2026-01-31"), 2, RepeatEvery::Month).unwrap(),
+            [date("2026-02-28")]
+        );
+        assert_eq!(
+            field(repeat_dates(date("2099-01-01"), 3, RepeatEvery::Year).map(|_| ())),
+            "date"
+        );
+        assert_eq!(
+            field(repeat_dates(date("2100-12-20"), 3, RepeatEvery::Week).map(|_| ())),
+            "date"
+        );
+    }
+
+    #[test]
+    fn d32_growth_by_step() {
+        let week = growth_dates(
+            RepeatEvery::Week,
+            &[date("2026-12-31"), date("2026-12-24")],
+            2,
+        )
+        .unwrap();
+        assert_eq!(week, ["2027-01-07", "2027-01-14"].map(date));
+        let end = ["2027-02-28", "2026-02-28", "2025-02-28", "2024-02-29"].map(date);
+        assert_eq!(
+            growth_dates(RepeatEvery::Year, &end, 1).unwrap(),
+            [date("2028-02-29")]
+        );
+        assert_eq!(
+            growth_dates(RepeatEvery::Year, &[date("2026-11-12")], 2).unwrap(),
+            ["2027-11-12", "2028-11-12"].map(date)
+        );
+        let month = growth_dates(
+            RepeatEvery::Month,
+            &[date("2026-02-28"), date("2026-01-31")],
+            1,
+        )
+        .unwrap();
+        assert_eq!(month, [date("2026-03-31")]);
+        assert!(growth_dates(RepeatEvery::Week, &[], 2).unwrap().is_empty());
+        assert_eq!(yearly_day(date("2027-02-28"), &[date("2026-03-31")]), 28);
+    }
+
+    #[test]
+    fn d32_moves_stay_in_their_period() {
+        assert!(check_move(RepeatEvery::Week, date("2026-11-12"), date("2026-11-09")).is_ok());
+        assert_eq!(
+            field(check_move(
+                RepeatEvery::Week,
+                date("2026-11-12"),
+                date("2026-11-16")
+            )),
+            "date"
+        );
+        assert_eq!(
+            field(check_move(
+                RepeatEvery::Year,
+                date("2026-11-12"),
+                date("2026-12-01")
+            )),
+            "date"
+        );
+        assert!(check_move(RepeatEvery::Month, date("2026-11-12"), date("2026-11-30")).is_ok());
+        let moved_week = moved(
+            RepeatEvery::Week,
+            &[date("2026-11-12"), date("2026-11-19")],
+            date("2026-11-09"),
+        )
+        .unwrap();
+        assert_eq!(moved_week, ["2026-11-09", "2026-11-16"].map(date));
+        assert_eq!(
+            field(
+                moved(
+                    RepeatEvery::Week,
+                    &[date("2026-11-12"), date("2026-11-13")],
+                    date("2026-11-09")
+                )
+                .map(|_| ())
+            ),
+            "date"
+        );
+        assert_eq!(
+            moved(
+                RepeatEvery::Year,
+                &[date("2026-03-10"), date("2027-03-10")],
+                date("2026-03-31")
+            )
+            .unwrap(),
+            ["2026-03-31", "2027-03-31"].map(date)
+        );
+        assert_eq!(
+            period_start(RepeatEvery::Week, date("2026-11-15")),
+            date("2026-11-09")
+        );
+        assert_eq!(
+            period_start(RepeatEvery::Year, date("2026-11-15")),
+            date("2026-11-01")
+        );
+    }
+
+    #[test]
+    fn d32_repeat_every_needs_repeat_months_and_parcelas_stay_monthly() {
+        let alone = CreateTransaction {
+            repeat_every: Some(RepeatEvery::Week),
+            ..entry("10", None)
+        };
+        assert_eq!(field(check(alone).map(|_| ())), "repeat_every");
+        let split = CreateTransaction {
+            installments: Some(3),
+            repeat_every: Some(RepeatEvery::Week),
+            ..entry("30", None)
+        };
+        assert_eq!(field(check(split).map(|_| ())), "repeat_every");
+        let monthly = CreateTransaction {
+            installments: Some(3),
+            repeat_every: Some(RepeatEvery::Month),
+            ..entry("30", None)
+        };
+        assert!(check(monthly).is_ok());
+        let weekly = CreateTransaction {
+            repeat_months: Some(4),
+            repeat_every: Some(RepeatEvery::Week),
+            ..entry("10", None)
+        };
+        assert!(check(weekly).is_ok());
     }
 
     fn field(result: Result<impl std::fmt::Debug, AppError>) -> String {
