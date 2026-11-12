@@ -7,7 +7,7 @@
       "name": "AGPL-3.0-only",
       "identifier": "AGPL-3.0-only"
     },
-    "version": "0.48.0"
+    "version": "0.49.0"
   },
   "paths": {
     "/api/auth/me": {
