@@ -95,6 +95,7 @@ test("Posso comprar isso? from the sidebar: 6× R$ 12.000,00 names the red month
   await page.getByRole("button", { name: "Testar em 10x" }).click();
   await expect(page.getByRole("radio", { name: "10x" })).toBeChecked();
   await expect(page.getByRole("heading", { name: "Curva de Saldo Projetado (10 Meses)" })).toBeVisible();
+  await expectNoClipped(page);
 
   await page.setViewportSize({ width: 375, height: 812 });
   await expectNoClipped(page);
@@ -144,6 +145,9 @@ test("Histórico keeps a simulation in this browser, restores it and leaves with
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.reload();
   await expect(history).toBeVisible();
+  await history.click();
+  await sheet.getByRole("button", { name: /^R\$\s1\.200,00 · 6x/ }).click();
+  await expect(page.getByRole("heading", { name: "Curva de Saldo Projetado (6 Meses)" })).toBeVisible();
   await expectNoClipped(page);
   await page.goto("/ajustes#conta");
   await page.getByRole("button", { name: "Sair de todos os aparelhos" }).click();

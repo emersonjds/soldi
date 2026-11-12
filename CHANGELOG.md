@@ -7,6 +7,23 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.57.1
+
+> Headline: the right day on a weekly or yearly deposit
+
+### Server
+
+- A cofrinho's next automatic deposit carries its `date`.
+
+### Web
+
+- The cofrinho chip names the day: `toda quinta`, `todo domingo`, `todo ano em 10/03` (monthly stays `todo dia DD`).
+- The Posso comprar isso? chart keeps the `Linha Zero` label above the line, off the month ticks.
+
+### Tests
+
+- The category race tests release their lock only once a request waits on it.
+
 ## 0.57.0
 
 > Headline: a verified e-mail

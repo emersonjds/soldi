@@ -7,7 +7,7 @@
       "name": "AGPL-3.0-only",
       "identifier": "AGPL-3.0-only"
     },
-    "version": "0.57.0"
+    "version": "0.57.1"
   },
   "paths": {
     "/api/auth/email-verification/confirm": {
@@ -3257,11 +3257,17 @@
         "required": [
           "amount",
           "day",
-          "every"
+          "every",
+          "date"
         ],
         "properties": {
           "amount": {
             "type": "string"
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "description": "The next member's date; names the weekday or the day and month the chip shows."
           },
           "day": {
             "type": "integer",
