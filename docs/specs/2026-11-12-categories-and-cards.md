@@ -215,6 +215,14 @@ ALTER TABLE recurring_bills DROP COLUMN closing_day, ALTER COLUMN amount SET NOT
 - An entry row with a card shows a `credit-card` icon and the card's name next to the category; its day's Diário column does not include it.
 - Simular with a card: the draft dips on the fatura's due date.
 
+### Partial payments and paid faturas (D30)
+
+- A fatura is paid by the card's entry dated in its due month (before the due date counts). Paid below its total, the rest `max(0, fatura − paid)` joins the card's next fatura, no interest: fatura 50 paid 30 makes next month's fatura 20 plus its own spends, so over the two months the balance drops exactly the spends. Paid above, the balance drops by the payment and nothing carries.
+- A paid fatura is frozen. 422 `fatura-paid` ("Essa fatura já foi paga.") on: a new card spend whose cycle is paid; changing `amount`, `date` or `card_id` of a spend in a paid fatura; a date or card change that lands a spend in a paid fatura; deleting a spend of a paid fatura (with `following`, any later member counts too). A note or category change stays allowed.
+- A card's `closing_day` is refused 422 `fatura-paid` while any of its faturas from the current month on is paid; older paid faturas do not block it.
+- The month view reads card spends from two months before the opening date's month, so a fatura due after a moved opening keeps its earlier spends; only a fatura due on or after the opening date is owed.
+- A card never pays into `Economia` or a cofrinho (422 `category_id`).
+
 ### Rejected (SOL-106)
 
 - **A separate `cards` table**: re-implements list, archive, one-payment-a-month, pay/unpay and D17 landing for the same shape.
