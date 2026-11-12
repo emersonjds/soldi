@@ -200,13 +200,26 @@ pub fn year_report(
         .collect();
     top_months.sort_by_key(|month| std::cmp::Reverse(month.spent));
     top_months.truncate(3);
-    let mut cards: Vec<YearCard> = by_card.into_values().collect();
-    cards.sort_by(|a, b| b.amount.cmp(&a.amount).then_with(|| a.name.cmp(&b.name)));
+    let mut cards: Vec<YearCard> = by_card
+        .into_values()
+        .filter(|card| !card.amount.is_zero())
+        .collect();
+    cards.sort_by(|a, b| {
+        b.amount
+            .cmp(&a.amount)
+            .then_with(|| a.name.cmp(&b.name))
+            .then_with(|| a.card_id.cmp(&b.card_id))
+    });
     let card_spent: Decimal = cards.iter().map(|card| card.amount).sum();
     let (income_groups, spending_groups): (Vec<_>, Vec<_>) =
         groups.into_iter().partition(|group| group.income);
     let top = |mut groups: Vec<YearGroupSum>, base: Decimal| -> Vec<YearGroup> {
-        groups.sort_by(|a, b| b.amount.cmp(&a.amount).then_with(|| a.name.cmp(&b.name)));
+        groups.sort_by(|a, b| {
+            b.amount
+                .cmp(&a.amount)
+                .then_with(|| a.name.cmp(&b.name))
+                .then_with(|| a.category_id.cmp(&b.category_id))
+        });
         groups
             .into_iter()
             .take(5)
@@ -215,7 +228,7 @@ pub fn year_report(
                 name: group.name,
                 icon: group.icon,
                 color: group.color,
-                pct: percent(group.amount, base).unwrap_or_default(),
+                pct: percent(group.amount, base).unwrap_or(Decimal::new(0, 1)),
                 amount: group.amount,
             })
             .collect()
@@ -1036,5 +1049,40 @@ mod tests {
         assert!(report.income.is_empty());
         assert!(report.cards.is_empty());
         assert_eq!(report.card_pct, None);
+    }
+
+    #[test]
+    fn ties_go_by_id_and_cards_without_spends_drop() {
+        let report = year_report(
+            2025,
+            Some((date("2025-01-01"), date("2025-12-31"))),
+            vec![
+                flow("2025-01", Some((2, "Porto")), ["0", "0", "0", "0", "50"]),
+                flow("2025-01", Some((1, "Porto")), ["0", "0", "0", "0", "50"]),
+                flow("2025-01", Some((3, "Itaú")), ["0", "0", "0", "0", "0"]),
+            ],
+            vec![group(2, "Casa", false, "50"), group(1, "Casa", false, "50")],
+        );
+
+        let cards: Vec<Uuid> = report.cards.iter().map(|card| card.card_id).collect();
+        assert_eq!(cards, [Uuid::from_u128(1), Uuid::from_u128(2)]);
+        let spending: Vec<Uuid> = report
+            .spending
+            .iter()
+            .map(|group| group.category_id)
+            .collect();
+        assert_eq!(spending, [Uuid::from_u128(1), Uuid::from_u128(2)]);
+    }
+
+    #[test]
+    fn a_share_of_nothing_reads_zero_with_one_decimal() {
+        let report = year_report(
+            2025,
+            Some((date("2025-01-01"), date("2025-12-31"))),
+            Vec::new(),
+            vec![group(1, "Salário", true, "100")],
+        );
+
+        assert_eq!(report.income[0].pct.to_string(), "0.0");
     }
 }
