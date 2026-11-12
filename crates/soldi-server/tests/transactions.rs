@@ -333,6 +333,29 @@ async fn repeat(user: &TestApp, date: &str, amount: &str, months: i64) -> Value 
     created
 }
 
+async fn repeat_every(user: &TestApp, date: &str, amount: &str, count: i64, every: &str) -> Value {
+    let category_id = user.category_id("Mercado").await;
+    let (status, created) = user
+        .post(
+            "/api/transactions",
+            json!({ "date": date, "amount": amount, "kind": "daily", "category_id": category_id,
+                    "repeat_months": count, "repeat_every": every }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{created}");
+    created
+}
+
+/// The entries of `count` months from `first`, oldest first.
+async fn entries_from(user: &TestApp, first: &str, count: u32) -> Vec<Value> {
+    let mut entries = vec![];
+    for of in months_from(first, count) {
+        entries.extend(month(user, &of).await);
+    }
+    entries.sort_by(|a, b| a["date"].as_str().cmp(&b["date"].as_str()));
+    entries
+}
+
 async fn month(user: &TestApp, month: &str) -> Vec<Value> {
     let (status, listed) = user.get(&format!("/api/transactions?month={month}")).await;
     assert_eq!(status, StatusCode::OK, "{listed}");
@@ -559,7 +582,7 @@ async fn sol60_a_series_reaching_past_2100_is_refused_and_writes_nothing(pool: P
         assert_eq!(problem["errors"][0]["field"], "date");
         assert_eq!(
             problem["errors"][0]["message"],
-            "must leave room for every month"
+            "must keep every entry up to 2100"
         );
     }
     assert_empty(&user, "2100-06", 7).await;
@@ -704,7 +727,7 @@ async fn r6_m1_this_keeps_the_series_and_following_rewrites_later_members_and_th
     assert_eq!(first["amount"], "99.90");
     assert_eq!(first["category"]["name"], "Mercado");
     let (status, _) = user
-        .patch(&format!("{}?scope=all", uri(&second)), json!({}))
+        .patch(&format!("{}?scope=every", uri(&second)), json!({}))
         .await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
 }
@@ -2055,10 +2078,6 @@ async fn d28_an_archived_card_reaches_no_new_or_later_entry(pool: PgPool) {
     for (uri, patch) in [
         (uri(&single), json!({ "repeat_months": 3 })),
         (uri(&series), json!({ "repeat_months": 5 })),
-        (
-            format!("{}?scope=following", uri(&series)),
-            json!({ "note": "Feira" }),
-        ),
     ] {
         let (status, problem) = ana.patch(&uri, patch.clone()).await;
         assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{patch}");
@@ -2067,9 +2086,379 @@ async fn d28_an_archived_card_reaches_no_new_or_later_entry(pool: PgPool) {
     let (_, january) = ana.get("/api/transactions?month=2027-01").await;
     assert_eq!(january.as_array().unwrap().len(), 1);
     assert_eq!(january[0]["note"], Value::Null);
+    let (status, noted) = ana
+        .patch(
+            &format!("{}?scope=following", uri(&series)),
+            json!({ "note": "Feira" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{noted}");
+    let (_, january) = ana.get("/api/transactions?month=2027-01").await;
+    assert_eq!(january[0]["note"], "Feira");
+    assert_eq!(january[0]["card_id"], porto);
     let (status, shrunk) = ana
         .patch(&uri(&series), json!({ "repeat_months": 2 }))
         .await;
     assert_eq!(status, StatusCode::OK, "{shrunk}");
     assert_eq!(shrunk["card_id"], porto);
+}
+
+#[sqlx::test]
+async fn d32_a_weekly_series_lands_every_seven_days_and_grows_after_the_last(pool: PgPool) {
+    let user = opened(pool, "ana@example.com").await;
+    let first = repeat_every(&user, "2026-11-12", "150", 8, "week").await;
+
+    assert_eq!(first["series"]["every"], "week");
+    assert_eq!(first["series"]["last_date"], "2026-12-31");
+    let entries = entries_from(&user, "2026-11", 2).await;
+    assert_eq!(
+        field_of(&entries, "date"),
+        [
+            "2026-11-12",
+            "2026-11-19",
+            "2026-11-26",
+            "2026-12-03",
+            "2026-12-10",
+            "2026-12-17",
+            "2026-12-24",
+            "2026-12-31"
+        ]
+    );
+    assert_ranked(&entries, 8);
+
+    let (status, grown) = user
+        .patch(&uri(&first), json!({ "repeat_months": 10 }))
+        .await;
+
+    assert_eq!(status, StatusCode::OK, "{grown}");
+    assert_eq!(grown["series"]["every"], "week");
+    let added = entries_from(&user, "2027-01", 1).await;
+    assert_eq!(field_of(&added, "date"), ["2027-01-07", "2027-01-14"]);
+    assert_eq!(added[1]["series"]["every"], "week");
+    assert_eq!(place(&added[1]), (10, 10));
+}
+
+#[sqlx::test]
+async fn d32_a_yearly_series_from_29_february_returns_to_29_in_leap_years(pool: PgPool) {
+    let ana = TestApp::signed_in(pool, "ana@example.com").await;
+    ana.open_at("0", "2024-01-01").await;
+    let bia = ana.another_user("bia@example.com").await;
+    bia.open_at("0", "2024-01-01").await;
+    let created = repeat_every(&bia, "2024-02-29", "1200", 5, "year").await;
+    assert_eq!(created["series"]["last_date"], "2028-02-29");
+    let first = repeat_every(&ana, "2024-02-29", "1200", 4, "year").await;
+
+    assert_eq!(first["series"]["every"], "year");
+    let leap = ["2024-02", "2025-02", "2026-02", "2027-02"];
+    let mut dates = vec![];
+    for of in leap {
+        dates.push(only(&ana, of).await["date"].as_str().unwrap().to_string());
+    }
+    assert_eq!(
+        dates,
+        ["2024-02-29", "2025-02-28", "2026-02-28", "2027-02-28"]
+    );
+    assert!(month(&ana, "2024-03").await.is_empty());
+
+    let (status, grown) = ana.patch(&uri(&first), json!({ "repeat_months": 5 })).await;
+
+    assert_eq!(status, StatusCode::OK, "{grown}");
+    assert_eq!(grown["series"]["last_date"], "2028-02-29");
+    assert_eq!(place(&only(&ana, "2028-02").await), (5, 5));
+}
+
+#[sqlx::test]
+async fn d32_a_weekly_following_move_stays_in_each_week(pool: PgPool) {
+    let user = opened(pool, "ana@example.com").await;
+    repeat_every(&user, "2026-11-12", "150", 4, "week").await;
+    let entries = entries_from(&user, "2026-11", 2).await;
+
+    let (status, moved) = user
+        .patch(&following(&entries[1]), json!({ "date": "2026-11-16" }))
+        .await;
+
+    assert_eq!(status, StatusCode::OK, "{moved}");
+    let entries = entries_from(&user, "2026-11", 2).await;
+    assert_eq!(
+        field_of(&entries, "date"),
+        ["2026-11-12", "2026-11-16", "2026-11-23", "2026-11-30"]
+    );
+    assert_ranked(&entries, 4);
+
+    let (status, problem) = user
+        .patch(&following(&entries[1]), json!({ "date": "2026-11-23" }))
+        .await;
+
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+    assert_eq!(problem["errors"][0]["field"], "date");
+    assert_eq!(
+        problem["errors"][0]["message"],
+        "must stay in this entry's week when the series moves"
+    );
+
+    let (status, alone) = user
+        .patch(
+            &format!("{}?scope=this", uri(&entries[2])),
+            json!({ "date": "2026-11-17" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{alone}");
+    let (status, problem) = user
+        .patch(
+            &following(&entries[1]),
+            json!({ "date": "2026-11-18", "amount": "99" }),
+        )
+        .await;
+
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+    assert_eq!(
+        problem["errors"][0]["message"],
+        "must not move a series with two entries in one week"
+    );
+    let entries = entries_from(&user, "2026-11", 2).await;
+    assert_eq!(
+        field_of(&entries, "date"),
+        ["2026-11-12", "2026-11-16", "2026-11-17", "2026-11-30"]
+    );
+    assert_eq!(field_of(&entries, "amount"), ["150.00"; 4]);
+}
+
+#[sqlx::test]
+async fn d32_a_member_keeps_its_series_step(pool: PgPool) {
+    let user = opened(pool, "ana@example.com").await;
+    let first = repeat_every(&user, "2026-11-12", "150", 3, "week").await;
+
+    let (status, problem) = user
+        .patch(
+            &uri(&first),
+            json!({ "repeat_every": "month", "note": "x" }),
+        )
+        .await;
+
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+    assert_eq!(problem["errors"][0]["field"], "repeat_every");
+    assert_eq!(problem["errors"][0]["message"], "a series keeps its step");
+    let entries = entries_from(&user, "2026-11", 1).await;
+    assert!(entries.iter().all(|entry| entry["note"].is_null()));
+    let (status, same) = user
+        .patch(
+            &uri(&first),
+            json!({ "repeat_every": "week", "note": "diarista" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{same}");
+    assert_eq!(same["series"]["every"], "week");
+
+    let standalone = spend(&user, "2026-11-05", "40", "Mercado").await;
+    let (status, problem) = user
+        .patch(&uri(&standalone), json!({ "repeat_every": "year" }))
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+    assert_eq!(problem["errors"][0]["field"], "repeat_every");
+    let (status, yearly) = user
+        .patch(
+            &uri(&standalone),
+            json!({ "repeat_months": 3, "repeat_every": "year" }),
+        )
+        .await;
+
+    assert_eq!(status, StatusCode::OK, "{yearly}");
+    assert_eq!(yearly["series"]["every"], "year");
+    assert_eq!(yearly["series"]["last_date"], "2028-11-05");
+    assert_eq!(only(&user, "2027-11").await["series"]["every"], "year");
+    assert!(month(&user, "2026-12").await.is_empty());
+}
+
+#[sqlx::test]
+async fn d32_another_users_weekly_series_is_not_found(pool: PgPool) {
+    let ana = opened(pool, "ana@example.com").await;
+    let bia = ana.another_user("bia@example.com").await;
+    let first = repeat_every(&ana, "2026-11-12", "10", 3, "week").await;
+    let following = format!("{}?scope=following", uri(&first));
+
+    assert_eq!(
+        bia.patch(&following, json!({ "date": "2026-11-09" }))
+            .await
+            .0,
+        StatusCode::NOT_FOUND
+    );
+    assert_eq!(
+        bia.patch(
+            &uri(&first),
+            json!({ "repeat_months": 5, "repeat_every": "week" })
+        )
+        .await
+        .0,
+        StatusCode::NOT_FOUND
+    );
+    assert_eq!(bia.delete(&following).await.0, StatusCode::NOT_FOUND);
+    let entries = entries_from(&ana, "2026-11", 1).await;
+    assert_eq!(
+        field_of(&entries, "date"),
+        ["2026-11-12", "2026-11-19", "2026-11-26"]
+    );
+    assert_ranked(&entries, 3);
+}
+
+fn all(entry: &Value) -> String {
+    format!("{}?scope=all", uri(entry))
+}
+
+#[sqlx::test]
+async fn d33_all_from_a_middle_member_rewrites_every_member(pool: PgPool) {
+    let user = opened(pool, "ana@example.com").await;
+    repeat(&user, "2026-11-05", "99.90", 6).await;
+    let third = only(&user, "2027-01").await;
+    let food = user.category_id("Comer fora").await;
+
+    let (status, edited) = user
+        .patch(
+            &all(&third),
+            json!({ "category_id": food, "amount": "120", "note": "nova" }),
+        )
+        .await;
+
+    assert_eq!(status, StatusCode::OK, "{edited}");
+    assert_eq!(place(&edited), (3, 6));
+    let entries = run(&user, "2026-11", 6).await;
+    assert_eq!(field_of(&entries, "amount"), ["120.00"; 6]);
+    assert_eq!(field_of(&entries, "note"), ["nova"; 6]);
+    assert_eq!(field_of(&entries, "date"), days_from("2026-11", 6, "05"));
+    for entry in &entries {
+        assert_eq!(entry["category"]["name"], "Comer fora");
+    }
+    assert_ranked(&entries, 6);
+}
+
+#[sqlx::test]
+async fn d33_delete_all_from_a_middle_member_removes_the_whole_series(pool: PgPool) {
+    let user = opened(pool, "ana@example.com").await;
+    repeat(&user, "2026-11-05", "10", 6).await;
+    let alone = spend(&user, "2026-11-20", "7", "Mercado").await;
+    let third = only(&user, "2027-01").await;
+
+    assert_eq!(user.delete(&all(&third)).await.0, StatusCode::NO_CONTENT);
+
+    assert_eq!(only(&user, "2026-11").await["id"], alone["id"]);
+    assert_empty(&user, "2026-12", 5).await;
+}
+
+#[sqlx::test]
+async fn d33_all_from_the_first_member_equals_following(pool: PgPool) {
+    let ana = opened(pool, "ana@example.com").await;
+    let bia = ana.another_user("bia@example.com").await;
+    bia.open_at("0", "2026-10-01").await;
+    let body = json!({ "amount": "5", "date": "2026-11-20" });
+    let first = repeat(&ana, "2026-11-05", "10", 3).await;
+    let (status, _) = ana.patch(&following(&first), body.clone()).await;
+    assert_eq!(status, StatusCode::OK);
+    let first = repeat(&bia, "2026-11-05", "10", 3).await;
+
+    let (status, edited) = bia.patch(&all(&first), body).await;
+
+    assert_eq!(status, StatusCode::OK, "{edited}");
+    let (by_following, by_all) = (run(&ana, "2026-11", 3).await, run(&bia, "2026-11", 3).await);
+    for field in ["date", "amount"] {
+        assert_eq!(field_of(&by_all, field), field_of(&by_following, field));
+    }
+    assert_eq!(field_of(&by_all, "date"), days_from("2026-11", 3, "20"));
+    let entries = run(&bia, "2026-11", 3).await;
+    let (status, _) = bia.delete(&all(&entries[0])).await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    assert_empty(&bia, "2026-11", 3).await;
+}
+
+#[sqlx::test]
+async fn d33_an_all_move_lands_every_member_on_the_new_day_and_refuses_before_the_opening_date(
+    pool: PgPool,
+) {
+    let ana = TestApp::signed_in(pool, "ana@example.com").await;
+    ana.open_at("0", "2026-03-01").await;
+    repeat(&ana, "2026-03-10", "10", 3).await;
+    let second = only(&ana, "2026-04").await;
+
+    let (status, moved) = ana
+        .patch(&all(&second), json!({ "date": "2026-04-05" }))
+        .await;
+
+    assert_eq!(status, StatusCode::OK, "{moved}");
+    let entries = run(&ana, "2026-03", 3).await;
+    assert_eq!(field_of(&entries, "date"), days_from("2026-03", 3, "05"));
+    assert_ranked(&entries, 3);
+    let (status, problem) = ana
+        .patch(&all(&entries[1]), json!({ "date": "2026-05-05" }))
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+    assert_eq!(problem["errors"][0]["field"], "date");
+
+    let bia = ana.another_user("bia@example.com").await;
+    bia.open_at("0", "2026-03-08").await;
+    repeat(&bia, "2026-03-10", "10", 3).await;
+    let second = only(&bia, "2026-04").await;
+
+    let (status, problem) = bia
+        .patch(&all(&second), json!({ "date": "2026-04-05" }))
+        .await;
+
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+    assert_eq!(problem["type"], "urn:soldi:error:before-opening-date");
+    let entries = run(&bia, "2026-03", 3).await;
+    assert_eq!(field_of(&entries, "date"), days_from("2026-03", 3, "10"));
+}
+
+#[sqlx::test]
+async fn d33_another_users_member_is_not_found_with_all(pool: PgPool) {
+    let ana = opened(pool, "ana@example.com").await;
+    let bia = ana.another_user("bia@example.com").await;
+    bia.open_at("0", "2026-10-01").await;
+    repeat(&ana, "2026-11-05", "10", 3).await;
+    repeat(&bia, "2026-11-05", "10", 3).await;
+    let second = only(&ana, "2026-12").await;
+
+    let (status, _) = bia.patch(&all(&second), json!({ "amount": "1" })).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let (status, _) = bia.delete(&all(&second)).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+
+    for user in [&ana, &bia] {
+        let entries = run(user, "2026-11", 3).await;
+        assert_eq!(field_of(&entries, "amount"), ["10.00"; 3]);
+    }
+}
+
+#[sqlx::test]
+async fn d32_d33_an_all_move_keeps_each_weekly_and_yearly_member_in_its_period(pool: PgPool) {
+    let user = opened(pool, "ana@example.com").await;
+    repeat_every(&user, "2026-11-12", "150", 4, "week").await;
+    let weekly = entries_from(&user, "2026-11", 2).await;
+
+    let (status, moved) = user
+        .patch(&all(&weekly[2]), json!({ "date": "2026-11-23" }))
+        .await;
+
+    assert_eq!(status, StatusCode::OK, "{moved}");
+    let weekly = entries_from(&user, "2026-11", 2).await;
+    assert_eq!(
+        field_of(&weekly, "date"),
+        ["2026-11-09", "2026-11-16", "2026-11-23", "2026-11-30"]
+    );
+    assert_ranked(&weekly, 4);
+
+    repeat_every(&user, "2027-03-10", "900", 3, "year").await;
+    let second = only(&user, "2028-03").await;
+
+    let (status, moved) = user
+        .patch(&all(&second), json!({ "date": "2028-03-31" }))
+        .await;
+
+    assert_eq!(status, StatusCode::OK, "{moved}");
+    let mut yearly = vec![];
+    for of in ["2027-03", "2028-03", "2029-03"] {
+        yearly.push(only(&user, of).await);
+    }
+    assert_eq!(
+        field_of(&yearly, "date"),
+        ["2027-03-31", "2028-03-31", "2029-03-31"]
+    );
+    assert_ranked(&yearly, 3);
 }

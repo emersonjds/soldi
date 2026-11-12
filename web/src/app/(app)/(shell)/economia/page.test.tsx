@@ -351,8 +351,20 @@ describe("Cofrinhos", () => {
       expect(screen.getByRole("region", { name: "Sofá" })).not.toHaveTextContent("Prazo");
     });
 
+    it("words a weekly and a yearly automatic deposit", async () => {
+      open(
+        items([
+          { ...COFRINHO_RESERVA, next_contribution: { amount: "50.00", day: 12, every: "week" } },
+          { ...COFRINHO_VIAGEM, next_contribution: { amount: "900.00", day: 10, every: "year" } },
+        ]),
+      );
+
+      expect(await region("Reserva")).toHaveTextContent("Aporte automático: R$ 50,00 toda semana");
+      expect(await region("Viagem")).toHaveTextContent("Aporte automático: R$ 900,00 todo ano");
+    });
+
     it("shows the balance, the goal caption and the automatic deposit", async () => {
-      open(items([{ ...COFRINHO_RESERVA, next_contribution: { amount: "500.00", day: 5 } }]));
+      open(items([{ ...COFRINHO_RESERVA, next_contribution: { amount: "500.00", day: 5, every: "month" } }]));
 
       const reserva = await region("Reserva");
       expect(reserva).toHaveTextContent("R$ 300,00 de R$ 10.000,00");

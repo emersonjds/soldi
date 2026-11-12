@@ -108,13 +108,16 @@ const chip = "flex items-center gap-2 rounded-xl bg-muted px-3 py-2 text-muted-f
 const InfoChip = ({ cofrinho, today }: { cofrinho: Cofrinho; today: string }) => {
   const currency = useCurrency();
   const next = cofrinho.next_contribution;
-  if (next)
+  if (next) {
+    // The DTO carries only the day of the month: no weekday or month to name.
+    const when = { month: `todo dia ${String(next.day).padStart(2, "0")}`, week: "toda semana", year: "todo ano" };
     return (
       <p className={chip}>
         <RefreshCw className="size-4 shrink-0" aria-hidden />
-        Aporte automático: {formatMoney(next.amount, currency)} todo dia {String(next.day).padStart(2, "0")}
+        Aporte automático: {formatMoney(next.amount, currency)} {when[next.every]}
       </p>
     );
+  }
   if (cents(cofrinho.balance) !== 0 || !cofrinho.deadline || cofrinho.deadline <= today) return null;
   const months = Math.max(1, monthsBetween(today, cofrinho.deadline));
   return (

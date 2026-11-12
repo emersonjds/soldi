@@ -474,6 +474,15 @@ async fn the_next_contribution_is_the_earliest_future_member_of_the_users_series
     assert_eq!(status, StatusCode::OK, "{edited}");
     let next = (first + Months::new(1)).to_string();
     deposit(&user, &next, casa["id"].as_str().unwrap(), "5").await;
+    let later = (first + Months::new(2)).to_string();
+    let (status, weekly) = user
+        .post(
+            "/api/transactions",
+            json!({ "date": later, "amount": "9", "kind": "bill", "category_id": casa["id"],
+                    "repeat_months": 3, "repeat_every": "week" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{weekly}");
     let bia = user.another_user("bia@example.com").await;
     bia.open_at("0", &first.to_string()).await;
     let bia_economia = bia.category_id("Economia").await;
@@ -496,15 +505,15 @@ async fn the_next_contribution_is_the_earliest_future_member_of_the_users_series
     let in_a_month = today.parse::<NaiveDate>().unwrap() + Months::new(1);
     assert_eq!(
         item(&cofrinhos, "Reserva")["next_contribution"],
-        json!({ "amount": "100.00", "day": 1 })
+        json!({ "amount": "100.00", "day": 1, "every": "month" })
     );
     assert_eq!(
         item(&cofrinhos, "Viagem")["next_contribution"],
-        json!({ "amount": "40.00", "day": in_a_month.day() })
+        json!({ "amount": "40.00", "day": in_a_month.day(), "every": "month" })
     );
     assert_eq!(
         item(&cofrinhos, "Reforma")["next_contribution"],
-        Value::Null
+        json!({ "amount": "9.00", "day": 1, "every": "week" })
     );
 }
 
@@ -788,4 +797,61 @@ async fn another_users_deleted_cofrinho_is_out_of_reach_and_a_period_wipe_still_
         .await;
     assert_eq!(status, StatusCode::OK, "{wiped}");
     assert_eq!(wiped["deleted"], 2);
+}
+
+#[sqlx::test]
+async fn d33_all_refuses_when_an_earlier_deposit_sits_in_a_deleted_cofrinho(pool: PgPool) {
+    let Setup {
+        user,
+        today,
+        viagem,
+        ..
+    } = setup(pool).await;
+    let first = first_of(&today);
+    let (_, gym) = user
+        .post(
+            "/api/categories",
+            json!({ "name": "Academia", "kind": "bill" }),
+        )
+        .await;
+    let head = repeat(&user, &first.to_string(), gym["id"].as_str().unwrap(), "90").await;
+    let series = head["series"]["id"].as_str().unwrap();
+    let head = format!("/api/transactions/{}", head["id"].as_str().unwrap());
+    let (status, moved) = user.patch(&head, json!({ "category_id": viagem })).await;
+    assert_eq!(status, StatusCode::OK, "{moved}");
+    withdraw(&user, &viagem, json!({ "date": today, "amount": "90" })).await;
+    assert_eq!(
+        user.delete(&format!("/api/categories/{viagem}")).await.0,
+        StatusCode::NO_CONTENT
+    );
+    let (_, entries) = user
+        .get(&format!(
+            "/api/transactions?month={}",
+            (first + Months::new(1)).format("%Y-%m")
+        ))
+        .await;
+    let second = entries
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|entry| entry["series"]["id"] == series)
+        .unwrap()["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let second = format!("/api/transactions/{second}");
+
+    let (status, problem) = user
+        .patch(&format!("{second}?scope=all"), json!({ "note": "x" }))
+        .await;
+    assert_archived(status, &problem);
+    let (status, problem) = user.delete(&format!("{second}?scope=all")).await;
+    assert_archived(status, &problem);
+    let (_, count) = user.get("/api/transactions/count?period=all").await;
+    assert_eq!(count["count"], 4);
+
+    let (status, body) = user
+        .patch(&format!("{second}?scope=following"), json!({ "note": "x" }))
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
 }

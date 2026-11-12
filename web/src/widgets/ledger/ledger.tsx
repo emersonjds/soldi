@@ -14,6 +14,7 @@ import { categoriesQuery, categoryLabel } from "@/entities/category/categories-q
 import { billKey } from "@/entities/month/forecast-alert";
 import { visibleDays } from "@/entities/month/schedule";
 import { ScopeRadio } from "@/entities/transaction/scope-radio";
+import { SeriesAllDialog } from "@/entities/transaction/series-all-dialog";
 import {
   type Scope,
   type Transaction,
@@ -203,6 +204,7 @@ export const Ledger = ({
   const [acting, setActing] = useState(false);
   const [editing, setEditing] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [asking, setAsking] = useState(false);
   const [scope, setScope] = useState<Scope>("this");
   const create = useCreateTransaction();
   const remove = useDeleteTransaction();
@@ -236,7 +238,7 @@ export const Ledger = ({
       { id: transaction.id, scope: transaction.series ? scope : undefined },
       {
         onSuccess: () => {
-          if (transaction.series) return toast(scope === "following" ? "Série excluída" : "Lançamento excluído");
+          if (transaction.series) return toast(scope === "this" ? "Lançamento excluído" : "Série excluída");
           toast("Lançamento excluído", {
             duration: 5000,
             action: {
@@ -369,9 +371,21 @@ export const Ledger = ({
                 value={scope}
                 onChange={setScope}
               />
-              <Button variant="destructive" className="mt-2 min-h-12 text-base" onClick={() => destroy(selected)}>
+              <Button
+                variant="destructive"
+                className="mt-2 min-h-12 text-base"
+                onClick={() => (scope === "all" ? setAsking(true) : destroy(selected))}
+              >
                 Excluir
               </Button>
+              <SeriesAllDialog
+                mode="delete"
+                position={selected.series.position}
+                total={selected.series.total}
+                open={asking}
+                onOpenChange={setAsking}
+                onConfirm={() => destroy(selected)}
+              />
               <Button variant="ghost" className="min-h-12 text-base" onClick={() => setActing(false)}>
                 Cancelar
               </Button>

@@ -1,7 +1,7 @@
 use chrono::NaiveDate;
 use rust_decimal::Decimal;
 use soldi_types::categories::{Category, CategoryKind};
-use soldi_types::transactions::{CreateTransaction, Transaction, TransactionSeries};
+use soldi_types::transactions::{CreateTransaction, RepeatEvery, Transaction, TransactionSeries};
 use sqlx::PgConnection;
 use uuid::Uuid;
 
@@ -26,6 +26,7 @@ struct Row {
     series_position: i64,
     series_total: i64,
     series_last_date: Option<NaiveDate>,
+    series_every: Option<RepeatEvery>,
     card_id: Option<Uuid>,
 }
 
@@ -48,6 +49,7 @@ impl From<Row> for Transaction {
                     position: row.series_position,
                     total: row.series_total,
                     last_date,
+                    every: row.series_every.unwrap_or_default(),
                 }),
             category: Category {
                 id: row.category_id,
@@ -83,7 +85,7 @@ pub async fn list(
                   c.is_savings AS category_is_savings, c.target AS category_target,
                   c.deadline AS category_deadline, t.series_id,
                   s.position AS "series_position!", s.total AS "series_total!",
-                  s.last_date AS series_last_date
+                  s.last_date AS series_last_date, t.series_every AS "series_every: RepeatEvery"
            FROM transactions t JOIN categories c ON c.user_id = t.user_id AND c.id = t.category_id
            LEFT JOIN LATERAL (
                SELECT count(*) AS total, max(m.date) AS last_date, count(*) FILTER (WHERE (m.date, m.id) <= (t.date, t.id)) AS position
@@ -120,7 +122,7 @@ pub async fn movements(
                   c.is_savings AS category_is_savings, c.target AS category_target,
                   c.deadline AS category_deadline, t.series_id,
                   s.position AS "series_position!", s.total AS "series_total!",
-                  s.last_date AS series_last_date
+                  s.last_date AS series_last_date, t.series_every AS "series_every: RepeatEvery"
            FROM transactions t JOIN categories c ON c.user_id = t.user_id AND c.id = t.category_id
            LEFT JOIN LATERAL (
                SELECT count(*) AS total, max(m.date) AS last_date, count(*) FILTER (WHERE (m.date, m.id) <= (t.date, t.id)) AS position
@@ -158,7 +160,7 @@ pub async fn find(
                   c.is_savings AS category_is_savings, c.target AS category_target,
                   c.deadline AS category_deadline, t.series_id,
                   s.position AS "series_position!", s.total AS "series_total!",
-                  s.last_date AS series_last_date
+                  s.last_date AS series_last_date, t.series_every AS "series_every: RepeatEvery"
            FROM transactions t JOIN categories c ON c.user_id = t.user_id AND c.id = t.category_id
            LEFT JOIN LATERAL (
                SELECT count(*) AS total, max(m.date) AS last_date, count(*) FILTER (WHERE (m.date, m.id) <= (t.date, t.id)) AS position
@@ -180,12 +182,13 @@ pub async fn insert(
     recurring_bill_id: Option<Uuid>,
     cofrinho_id: Option<Uuid>,
     series_id: Option<Uuid>,
+    every: Option<RepeatEvery>,
 ) -> Result<Uuid, sqlx::Error> {
     sqlx::query_scalar!(
         "INSERT INTO transactions
              (user_id, date, amount, kind, category_id, note, recurring_bill_id, cofrinho_id,
-              series_id, card_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id",
+              series_id, card_id, series_every)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id",
         user_id,
         input.date,
         input.amount,
@@ -195,7 +198,8 @@ pub async fn insert(
         recurring_bill_id,
         cofrinho_id,
         series_id,
-        input.card_id
+        input.card_id,
+        every.map(RepeatEvery::as_str)
     )
     .fetch_one(&mut *conn)
     .await
@@ -207,12 +211,15 @@ pub async fn insert_copies(
     user_id: Uuid,
     entry: &CreateTransaction,
     series_id: Uuid,
+    every: RepeatEvery,
     dates: &[NaiveDate],
     amounts: &[Decimal],
 ) -> Result<(), sqlx::Error> {
     sqlx::query!(
-        "INSERT INTO transactions (user_id, date, amount, kind, category_id, note, series_id, card_id)
-         SELECT $1, c.d, c.a, $4, $5, $6, $7, $8 FROM UNNEST($2::date[], $3::numeric[]) AS c(d, a)",
+        "INSERT INTO transactions
+             (user_id, date, amount, kind, category_id, note, series_id, card_id, series_every)
+         SELECT $1, c.d, c.a, $4, $5, $6, $7, $8, $9
+         FROM UNNEST($2::date[], $3::numeric[]) AS c(d, a)",
         user_id,
         dates,
         amounts,
@@ -220,7 +227,8 @@ pub async fn insert_copies(
         entry.category_id,
         entry.note,
         series_id,
-        entry.card_id
+        entry.card_id,
+        every.as_str()
     )
     .execute(&mut *conn)
     .await?;
@@ -233,21 +241,24 @@ pub async fn set_series(
     user_id: Uuid,
     id: Uuid,
     series_id: Uuid,
+    every: RepeatEvery,
 ) -> Result<bool, sqlx::Error> {
     let result = sqlx::query!(
-        "UPDATE transactions SET series_id = $3, updated_at = now()
+        "UPDATE transactions SET series_id = $3, series_every = $4, updated_at = now()
          WHERE user_id = $1 AND id = $2 AND series_id IS NULL",
         user_id,
         id,
-        series_id
+        series_id,
+        every.as_str()
     )
     .execute(&mut *conn)
     .await?;
     Ok(result.rows_affected() == 1)
 }
 
-/// R6: the series' members dated after `from` take `entry`'s kind, category, note and card, and
-/// `amount` when given; without it each keeps its own (parcelas differ by the remainder).
+/// R6: the series' members dated after `from` take `entry`'s kind, category and note, its card
+/// with `card` (each keeps its own otherwise), and `amount` when given; without it each keeps its
+/// own (parcelas differ by the remainder).
 pub async fn update_following(
     conn: &mut PgConnection,
     user_id: Uuid,
@@ -255,11 +266,12 @@ pub async fn update_following(
     from: NaiveDate,
     entry: &CreateTransaction,
     amount: Option<Decimal>,
+    card: bool,
 ) -> Result<(), sqlx::Error> {
     sqlx::query!(
         "UPDATE transactions
-         SET amount = COALESCE($4, amount), kind = $5, category_id = $6, note = $7, card_id = $8,
-             updated_at = now()
+         SET amount = COALESCE($4, amount), kind = $5, category_id = $6, note = $7,
+             card_id = CASE WHEN $9 THEN $8 ELSE card_id END, updated_at = now()
          WHERE user_id = $1 AND series_id = $2 AND date > $3",
         user_id,
         series_id,
@@ -268,7 +280,8 @@ pub async fn update_following(
         entry.kind.as_str(),
         entry.category_id,
         entry.note,
-        entry.card_id
+        entry.card_id,
+        card
     )
     .execute(&mut *conn)
     .await?;
@@ -332,7 +345,7 @@ pub async fn lock_series(conn: &mut PgConnection, series_id: Uuid) -> Result<(),
     Ok(())
 }
 
-/// M3: the dates of the series' last member and the one before it, last first.
+/// M3 (D32): the dates of the series' last four members, last first.
 pub async fn series_end(
     conn: &mut PgConnection,
     user_id: Uuid,
@@ -340,7 +353,7 @@ pub async fn series_end(
 ) -> Result<Vec<NaiveDate>, sqlx::Error> {
     sqlx::query_scalar!(
         "SELECT date FROM transactions WHERE user_id = $1 AND series_id = $2
-         ORDER BY date DESC, id DESC LIMIT 2",
+         ORDER BY date DESC, id DESC LIMIT 4",
         user_id,
         series_id
     )
@@ -348,15 +361,16 @@ pub async fn series_end(
     .await
 }
 
-/// M1: the series' members dated `from` on, by `(date, id)`.
+/// M1, D30b: the series' members dated `from` on, by `(date, id)`, with their card.
 pub async fn members_from(
     conn: &mut PgConnection,
     user_id: Uuid,
     series_id: Uuid,
     from: NaiveDate,
-) -> Result<Vec<(Uuid, NaiveDate)>, sqlx::Error> {
+) -> Result<Vec<(Uuid, NaiveDate, Option<Uuid>)>, sqlx::Error> {
     let rows = sqlx::query!(
-        "SELECT id, date FROM transactions WHERE user_id = $1 AND series_id = $2 AND date >= $3
+        "SELECT id, date, card_id FROM transactions
+         WHERE user_id = $1 AND series_id = $2 AND date >= $3
          ORDER BY date, id",
         user_id,
         series_id,
@@ -364,7 +378,10 @@ pub async fn members_from(
     )
     .fetch_all(&mut *conn)
     .await?;
-    Ok(rows.into_iter().map(|row| (row.id, row.date)).collect())
+    Ok(rows
+        .into_iter()
+        .map(|row| (row.id, row.date, row.card_id))
+        .collect())
 }
 
 /// M1, M6: `dates[i]` onto entry `ids[i]`; nothing else changes.
@@ -587,6 +604,7 @@ mod tests {
             category_id: rent,
             note: None,
             repeat_months: None,
+            repeat_every: None,
             installments: None,
             card_id: None,
         };
@@ -597,6 +615,7 @@ mod tests {
             None,
             None,
             Some(Uuid::new_v4()),
+            Some(RepeatEvery::Month),
         )
         .await
         .unwrap();
@@ -607,6 +626,7 @@ mod tests {
             None,
             None,
             None,
+            None,
         )
         .await
         .unwrap();
@@ -614,6 +634,7 @@ mod tests {
             &mut conn,
             user.id,
             &entry(CategoryKind::Bill),
+            None,
             None,
             None,
             None,

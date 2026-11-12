@@ -33,6 +33,8 @@ import { type BillPrefill, useCards, useCreateBill } from "@/entities/bill/bill-
 import { CategoryChips, useCategoryChips } from "@/entities/category/category-chips";
 import { useSettings } from "@/entities/settings/settings-query";
 import { ScopeRadio } from "@/entities/transaction/scope-radio";
+import { SeriesAllDialog } from "@/entities/transaction/series-all-dialog";
+import { type Every, repeatSummary, resizeLine, UNITS } from "@/entities/transaction/series-step";
 import {
   type NewTransaction,
   type Scope,
@@ -45,7 +47,7 @@ import { useIsLg } from "@/hooks/use-lg";
 import { cn } from "@/lib/utils";
 import { ApiError, problemMessage, type Schemas } from "@/shared/api/client";
 import { useCurrency } from "@/shared/lib/currency";
-import { addMonths, monthSlashYear, monthYear, todayISO } from "@/shared/lib/date";
+import { isoWeekStart, todayISO, weekdayName } from "@/shared/lib/date";
 import { installmentCents } from "@/shared/lib/installments";
 import { formatMoney, positiveAmount } from "@/shared/lib/money";
 import { cents, fromCents } from "@/shared/lib/tier";
@@ -84,10 +86,10 @@ type Draft = {
   preset: string;
   custom: string;
   scope: Scope;
+  every: Every;
 };
 
-/** `out 2027`: the month of the last of `months` entries from `date`; the day clamp never changes the month. */
-const lastMonth = (date: string, months: number) => monthYear(addMonths(date.slice(0, 7), months - 1));
+const EVERY_LABELS: Record<Every, string> = { month: "Mensal", week: "Semanal", year: "Anual" };
 
 type Source = Transaction | NewTransaction;
 
@@ -97,6 +99,10 @@ const SHARED_MONTH = "must not move a series with two entries in one month";
 const PAYMENT_KIND = "a conta fixa payment stays a Saída";
 const FIELD_MESSAGES: [server: string, message: string][] = [
   [SHARED_MONTH, "Outro lançamento da série está no mesmo mês. Mova-o com Só este antes."],
+  [
+    "must not move a series with two entries in one week",
+    "Outro lançamento da série está na mesma semana. Mova-o com Só este antes.",
+  ],
   [PAYMENT_KIND, "Um pagamento de conta fixa continua sendo Saída."],
 ];
 
@@ -127,6 +133,7 @@ const TransactionForm = ({
 }) => {
   const [draft, setDraft] = useState(initial);
   const [submitted, setSubmitted] = useState(false);
+  const [asking, setAsking] = useState(false);
   const currency = useCurrency();
   const categories = useCategoryChips(draft.kind);
   const keypad = useKeypad();
@@ -148,12 +155,17 @@ const TransactionForm = ({
   // A moved date can change the member's position; Meses na série waits for the next save.
   const moved = Boolean(series) && draft.date !== transaction?.date;
   const resizing = Boolean(series) && !moved && months !== series?.total;
-  // D20: Este e os próximos moves the day of the month, never the month.
-  const moving = moved && draft.scope === "following";
-  const monthChanged = moving && draft.date.slice(0, 7) !== transaction?.date.slice(0, 7);
+  const every = draft.every;
+  const unit = UNITS[every];
+  const weekly = every === "week";
+  // D20, D32: a move keeps each member in its own month (its own ISO week when weekly).
+  const moving = moved && draft.scope !== "this";
+  const period = (date = "") => (weekly ? isoWeekStart(date) : date.slice(0, 7));
+  const periodChanged = moving && period(draft.date) !== period(transaction?.date);
   const day = Number(draft.date.slice(8));
-  const dayHelper = `${series?.position === 1 ? "Toda a série vai" : "Os próximos lançamentos também serão movidos automaticamente"} para o dia ${day}.${
-    day >= 29 ? " Nos meses mais curtos, no último dia." : ""
+  const target = weekly ? weekdayName(draft.date) : `o dia ${day}`;
+  const dayHelper = `${series?.position === 1 || draft.scope === "all" ? "Toda a série vai" : "Os próximos lançamentos também serão movidos automaticamente"} para ${target}.${
+    !weekly && day >= 29 ? " Nos meses mais curtos, no último dia." : ""
   }`;
   const resized = resizing && monthsValid ? months : undefined;
   const monthsChecked = draft.repeat || installments || resizing;
@@ -170,18 +182,11 @@ const TransactionForm = ({
   let dateLegendClass = isLg ? "sr-only" : undefined;
   if (series) dateLegendClass = caption;
   const presetLabel = (preset: string) => {
-    if (series) return preset === "other" ? "Customizado" : `${preset} meses`;
+    if (series) return preset === "other" ? "Customizado" : `${preset} ${unit.many}`;
     return preset === "other" ? "Outro" : `${preset}×`;
   };
 
-  const resizeHelper = () => {
-    if (!series || !resized) return;
-    const added = resized - series.total;
-    const end = monthSlashYear(addMonths(series.last_date.slice(0, 7), added));
-    if (added > 0) return `Série estendida: Adiciona ${added} ${added === 1 ? "mês" : "meses"}. Termina em ${end}.`;
-    return `Série encurtada: Remove ${added === -1 ? "o último mês" : `os ${-added} últimos meses`}. Termina em ${end}.`;
-  };
-  const resizeNote = resizeHelper();
+  const resizeNote = series && resized && resizeLine(every, series.last_date, resized - series.total);
   // Shortening an Entrada series loses money: no saving.
   const saving =
     series && resized && resized < series.total && amount && draft.kind !== "income"
@@ -192,7 +197,7 @@ const TransactionForm = ({
 
   const fields = (): NewTransaction | undefined => {
     setSubmitted(true);
-    if (!amount || !category || (monthsChecked && !monthsValid) || !splitValid || monthChanged) return;
+    if (!amount || !category || (monthsChecked && !monthsValid) || !splitValid || periodChanged) return;
     const note = draft.note.trim();
     return {
       date: draft.date,
@@ -201,6 +206,7 @@ const TransactionForm = ({
       category_id: category.id,
       note: note || null,
       repeat_months: draft.repeat ? months : resized,
+      repeat_every: draft.repeat ? every : undefined,
       installments: installments ? months : undefined,
       // Absent keeps the stored card; `null` takes it off.
       card_id: cardId === (transaction?.card_id ?? null) ? undefined : cardId,
@@ -208,9 +214,12 @@ const TransactionForm = ({
     };
   };
 
-  const save = () => {
+  const save = (confirmed = false) => {
     const valid = fields();
-    if (valid) onSave(valid, series ? draft.scope : undefined, moving);
+    if (!valid) return;
+    // D33: asked here, before onSave closes the sheet and this dialog with it.
+    if (series && draft.scope === "all" && !confirmed) return setAsking(true);
+    onSave(valid, series ? draft.scope : undefined, moving);
   };
 
   const submit = (event: FormEvent) => {
@@ -285,12 +294,12 @@ const TransactionForm = ({
         min={settings.data?.opening_date}
         onChange={(date) => set({ date })}
       />
-      {monthChanged && (
+      {periodChanged && (
         <p role="alert" className="text-destructive text-sm">
-          Para mudar o mês, use Só este.
+          {weekly ? "Para mudar a semana, use Só este." : "Para mudar o mês, use Só este."}
         </p>
       )}
-      {moving && !monthChanged && (
+      {moving && !periodChanged && (
         <p className="flex items-center gap-2 text-muted-foreground text-sm">
           <CalendarDays aria-hidden className="size-4 shrink-0" />
           {dayHelper}
@@ -356,9 +365,25 @@ const TransactionForm = ({
             id="transaction-repeat-switch"
             aria-labelledby="transaction-repeat"
             checked={draft.repeat}
-            onCheckedChange={(repeat) => set({ repeat, installments: false })}
+            onCheckedChange={(repeat) => set({ repeat, installments: false, every: "month" })}
           />
         </label>
+      )}
+      {draft.repeat && (
+        <ToggleGroup
+          type="single"
+          spacing={0}
+          value={every}
+          onValueChange={(picked: Every | "") => picked && set({ every: picked })}
+          aria-label="Frequência"
+          className="grid w-full grid-cols-3 rounded-2xl bg-muted p-1"
+        >
+          {(["month", "week", "year"] as const).map((value) => (
+            <ToggleGroupItem key={value} value={value} className={chip}>
+              {EVERY_LABELS[value]}
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
       )}
       {!transaction && draft.kind !== "income" && (
         <label
@@ -407,7 +432,7 @@ const TransactionForm = ({
             <div className="flex flex-col gap-1.5">
               <Input
                 inputMode="numeric"
-                aria-label={installments ? "Parcelas" : "Meses"}
+                aria-label={installments ? "Parcelas" : unit.label}
                 placeholder={`De ${minMonths} a 60`}
                 value={draft.custom}
                 disabled={moved}
@@ -418,7 +443,7 @@ const TransactionForm = ({
               />
               {monthsError && (
                 <p id="transaction-months-error" role="alert" className="text-destructive text-sm">
-                  {installments ? "Escolha de 2 a 60 parcelas." : `Escolha de ${minMonths} a 60 meses.`}
+                  {installments ? "Escolha de 2 a 60 parcelas." : `Escolha de ${minMonths} a 60 ${unit.many}.`}
                 </p>
               )}
             </div>
@@ -426,7 +451,7 @@ const TransactionForm = ({
           {draft.repeat && monthsValid && (
             <p className="flex items-center gap-2 text-muted-foreground text-sm">
               <Lightbulb aria-hidden className="size-4 shrink-0" />
-              {`${amount ? `${months}× de ${formatMoney(amount, currency)} · ` : ""}repete todo dia ${day} até ${lastMonth(draft.date, months)}`}
+              {`${amount ? `${months}× de ${formatMoney(amount, currency)} · ` : ""}${repeatSummary(every, draft.date, months)}`}
             </p>
           )}
           {resizeNote && (
@@ -450,7 +475,7 @@ const TransactionForm = ({
               Valor pequeno demais para {months} parcelas.
             </p>
           )}
-          {!series && Number(draft.date.slice(8)) >= 29 && (
+          {!series && every === "month" && day >= 29 && (
             <p className="text-muted-foreground text-xs">Em meses mais curtos, cai no último dia.</p>
           )}
         </>
@@ -487,6 +512,14 @@ const TransactionForm = ({
             date={transaction.date}
             value={draft.scope}
             onChange={(scope) => set({ scope })}
+          />
+          <SeriesAllDialog
+            mode="edit"
+            position={series.position}
+            total={series.total}
+            open={asking}
+            onOpenChange={setAsking}
+            onConfirm={() => save(true)}
           />
           {amountField}
           {monthsField}
@@ -615,6 +648,7 @@ export const TransactionSheet = ({
 
   const save = (fields: NewTransaction, scope?: Scope, moving = false) => {
     onOpenChange(false);
+    const every = transaction?.series?.every ?? "month";
     const done = (fallback: string) => {
       if (fields.installments) return toast.success(`${fields.installments} parcelas lançadas`);
       toast.success(fields.repeat_months ? `${fields.repeat_months} lançamentos criados` : fallback);
@@ -626,9 +660,14 @@ export const TransactionSheet = ({
       {
         onSuccess: () => {
           if (transaction.series && fields.repeat_months)
-            return toast.success(`Série ajustada com sucesso para ${fields.repeat_months} meses futuros.`);
-          if (moving) return toast.success(`Série movida para o dia ${Number(fields.date.slice(8))}`);
-          done(scope === "following" ? "Série atualizada" : "Lançamento atualizado");
+            return toast.success(
+              `Série ajustada com sucesso para ${fields.repeat_months} ${UNITS[every].many} ${UNITS[every].future}.`,
+            );
+          if (moving)
+            return toast.success(
+              `Série movida para ${every === "week" ? weekdayName(fields.date) : `o dia ${Number(fields.date.slice(8))}`}`,
+            );
+          done(scope && scope !== "this" ? "Série atualizada" : "Lançamento atualizado");
         },
         onError: (error) =>
           toast.error(
@@ -667,6 +706,7 @@ export const TransactionSheet = ({
     preset: "12",
     custom: "",
     scope: "this",
+    every: transaction?.series?.every ?? "month",
   } as const;
   const total = String(transaction?.series?.total ?? "");
   const initial: Draft = transaction
@@ -699,7 +739,7 @@ export const TransactionSheet = ({
         transaction?.series && (
           <p className="-mb-4 flex items-center gap-2 pr-12 font-medium text-primary text-sm">
             <InfinityIcon aria-hidden className="size-4" />
-            Parte de uma série de {transaction.series.total} meses
+            Parte de uma série de {transaction.series.total} {UNITS[transaction.series.every].many}
           </p>
         )
       }

@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE transactions\n         SET amount = COALESCE($4, amount), kind = $5, category_id = $6, note = $7,\n             card_id = CASE WHEN $9 THEN $8 ELSE card_id END, updated_at = now()\n         WHERE user_id = $1 AND series_id = $2 AND date > $3",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Date",
+        "Numeric",
+        "Text",
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "900b090a02c7d08cc54488f86b28f4b0af96e08db35ebe9e2aa3a35dba10d9c0"
+}

@@ -42,6 +42,23 @@ export const ScopeRadio = ({
     mode === "edit"
       ? `Altera a parcela ${position} e todas as subsequentes até o fim da série programada.`
       : `Exclui a parcela ${position} e todas as subsequentes.`;
+  const options: [Scope, string, string][] =
+    position === 1
+      ? [
+          ["this", "Só este lançamento", only],
+          ["following", `Toda a série (${total} lançamentos)`, `Todos os ${total} lançamentos da série.`],
+        ]
+      : [
+          ["this", "Só este lançamento", only],
+          ["following", "Este e os próximos", following],
+          [
+            "all",
+            `Toda a série (${total} lançamentos)`,
+            mode === "edit"
+              ? "Modifica todas as parcelas retroativas já registradas e todas as parcelas futuras."
+              : "Exclui todas as parcelas já registradas e todas as futuras.",
+          ],
+        ];
   return (
     <div className="flex flex-col gap-2">
       <p id={`${id}-legend`} className="font-semibold text-sm">
@@ -49,18 +66,11 @@ export const ScopeRadio = ({
       </p>
       <RadioGroup
         value={value}
-        onValueChange={(picked) => onChange(picked === "following" ? "following" : "this")}
+        onValueChange={(picked) => onChange(picked === "following" || picked === "all" ? picked : "this")}
         aria-labelledby={`${id}-legend`}
         className="gap-2"
       >
-        {(
-          [
-            ["this", "Só este lançamento", only],
-            position === 1
-              ? ["following", `Toda a série (${total} lançamentos)`, `Todos os ${total} lançamentos da série.`]
-              : ["following", "Este e os próximos", following],
-          ] as const
-        ).map(([scope, label, line]) => (
+        {options.map(([scope, label, line]) => (
           <label
             key={scope}
             htmlFor={`${id}-${scope}`}

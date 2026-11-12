@@ -1,6 +1,28 @@
 import { describe, expect, it } from "vitest";
 
-import { addMonths, dayMonth, isMonth, monthName, monthYear, repeatDates } from "./date";
+import {
+  addDays,
+  addMonths,
+  dayMonth,
+  isMonth,
+  isoWeekStart,
+  monthName,
+  monthYear,
+  repeatDates,
+  slashDate,
+  weekdayName,
+} from "./date";
+
+describe("week dates", () => {
+  it("adds days across a year, names the weekday and finds the ISO week's Monday in UTC", () => {
+    expect(addDays("2026-12-31", 7)).toBe("2027-01-07");
+    expect(addDays("2026-11-12", -3)).toBe("2026-11-09");
+    expect(weekdayName("2026-11-12")).toBe("quinta-feira");
+    expect(isoWeekStart("2026-11-15")).toBe("2026-11-09");
+    expect(isoWeekStart("2026-11-09")).toBe("2026-11-09");
+    expect(slashDate("2026-12-24")).toBe("24/12/2026");
+  });
+});
 
 describe("monthYear", () => {
   it("writes a deadline as the month and year", () => {
