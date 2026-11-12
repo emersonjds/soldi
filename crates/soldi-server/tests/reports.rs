@@ -209,13 +209,14 @@ async fn the_savings_year_matches_each_month_view_and_only_the_callers_entries(p
     log(&ana, "2025-03-10", "income", "999", "Salário").await;
     ana.open_at("0", "2025-03-15").await;
     log(&ana, "2025-03-20", "income", "5000", "Salário").await;
-    log(&ana, "2025-03-20", "bill", "300", "Reserva").await;
+    log(&ana, "2025-03-20", "bill", "500", "Reserva").await;
     log(&ana, "2025-03-21", "bill", "100.55", "Economia").await;
     log(&ana, "2025-03-21", "bill", "1000", "Aluguel").await;
     log(&ana, "2025-03-22", "daily", "50", "Mercado").await;
     withdraw(&ana, &reserva, "2025-03-25", "200").await;
+    log(&ana, "2025-06-10", "bill", "100", "Reserva").await;
     log(&ana, "2025-06-30", "income", "1000", "Salário").await;
-    withdraw(&ana, &reserva, "2025-06-30", "100").await;
+    withdraw(&ana, &reserva, "2025-06-30", "300").await;
     log(&ana, "2025-12-31", "bill", "10", "Economia").await;
     log(&bia, "2025-03-20", "bill", "777", "Economia").await;
     log(&bia, "2025-03-20", "income", "1", "Salário").await;
@@ -238,32 +239,36 @@ async fn the_savings_year_matches_each_month_view_and_only_the_callers_entries(p
     assert!(months.iter().all(|month| month["forecast"] == false));
     assert_eq!(
         months[9],
-        json!({ "month": "2025-03", "income": "5000.00", "saved": "200.55", "rate_pct": "4.0", "forecast": false })
+        json!({ "month": "2025-03", "income": "5000.00", "deposited": "600.55", "withdrawn": "200.00", "saved": "400.55", "rate_pct": "8.0", "forecast": false })
     );
     assert_eq!(
         months[6],
-        json!({ "month": "2025-06", "income": "1000.00", "saved": "-100.00", "rate_pct": "-10.0", "forecast": false })
+        json!({ "month": "2025-06", "income": "1000.00", "deposited": "100.00", "withdrawn": "300.00", "saved": "-200.00", "rate_pct": "-20.0", "forecast": false })
     );
     assert_eq!(
         months[0],
-        json!({ "month": "2025-12", "income": "0.00", "saved": "10.00", "rate_pct": null, "forecast": false })
+        json!({ "month": "2025-12", "income": "0.00", "deposited": "10.00", "withdrawn": "0.00", "saved": "10.00", "rate_pct": null, "forecast": false })
     );
     assert_eq!(
         months[7],
-        json!({ "month": "2025-05", "income": "0.00", "saved": "0.00", "rate_pct": null, "forecast": false })
+        json!({ "month": "2025-05", "income": "0.00", "deposited": "0.00", "withdrawn": "0.00", "saved": "0.00", "rate_pct": null, "forecast": false })
     );
     assert_eq!(
         (
             &year["year"],
             &year["income_total"],
             &year["saved_total"],
+            &year["deposited_total"],
+            &year["withdrawn_total"],
             &year["rate_pct"]
         ),
         (
             &json!(2025),
             &json!("6000.00"),
-            &json!("110.55"),
-            &json!("1.8")
+            &json!("210.55"),
+            &json!("710.55"),
+            &json!("500.00"),
+            &json!("3.5")
         )
     );
     for row in months {
@@ -285,6 +290,8 @@ async fn the_savings_year_matches_each_month_view_and_only_the_callers_entries(p
     let (_, theirs) = savings(&bia, "2025").await;
     assert_eq!(theirs["months"].as_array().unwrap().len(), 12);
     assert_eq!(theirs["saved_total"], "777.00");
+    assert_eq!(theirs["deposited_total"], "777.00");
+    assert_eq!(theirs["withdrawn_total"], "0.00");
     assert_eq!(theirs["income_total"], "1.00");
 }
 
@@ -324,13 +331,13 @@ async fn the_current_year_runs_to_december_with_later_months_a_forecast_out_of_t
     let at = |month: &str| months.iter().find(|row| row["month"] == month);
     assert_eq!(
         at(&this_month).unwrap(),
-        &json!({ "month": this_month, "income": "1000.00", "saved": "100.00", "rate_pct": "10.0", "forecast": false })
+        &json!({ "month": this_month, "income": "1000.00", "deposited": "100.00", "withdrawn": "0.00", "saved": "100.00", "rate_pct": "10.0", "forecast": false })
     );
     // In December next month belongs to next year, so this year must not list it.
     if next[..4] == this_month[..4] {
         assert_eq!(
             at(&next[..7]).unwrap(),
-            &json!({ "month": &next[..7], "income": "500.00", "saved": "500.00", "rate_pct": "100.0", "forecast": true })
+            &json!({ "month": &next[..7], "income": "500.00", "deposited": "500.00", "withdrawn": "0.00", "saved": "500.00", "rate_pct": "100.0", "forecast": true })
         );
     } else {
         assert!(at(&next[..7]).is_none());
@@ -355,7 +362,7 @@ async fn a_year_before_the_opening_or_after_today_is_empty(pool: PgPool) {
         assert_eq!(status, StatusCode::OK);
         assert_eq!(
             body,
-            json!({ "year": year.parse::<i32>().unwrap(), "income_total": "0.00", "saved_total": "0.00", "rate_pct": null, "months": [] })
+            json!({ "year": year.parse::<i32>().unwrap(), "income_total": "0.00", "deposited_total": "0.00", "withdrawn_total": "0.00", "saved_total": "0.00", "rate_pct": null, "months": [] })
         );
     }
 }

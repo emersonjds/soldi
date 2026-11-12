@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT date_trunc('month', t.date::timestamp)::date AS \"month!\",\n                  COALESCE(SUM(t.amount) FILTER (WHERE t.kind = 'income' AND t.cofrinho_id IS NULL), 0)\n                      AS \"income!\",\n                  COALESCE(SUM(t.amount) FILTER (WHERE t.kind = 'bill' AND (c.is_savings\n                      OR COALESCE(p.is_savings, false) OR t.cofrinho_id IS NOT NULL)), 0) AS \"deposited!\",\n                  COALESCE(SUM(t.amount) FILTER (WHERE t.kind <> 'bill' AND t.cofrinho_id IS NOT NULL), 0)\n                      AS \"withdrawn!\"\n           FROM transactions t JOIN categories c ON c.user_id = t.user_id AND c.id = t.category_id\n           LEFT JOIN categories p ON p.user_id = c.user_id AND p.id = c.parent_id\n           WHERE t.user_id = $1 AND t.date BETWEEN $2 AND $3\n           GROUP BY 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "month!",
+        "type_info": "Date",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 1,
+        "name": "income!",
+        "type_info": "Numeric",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "deposited!",
+        "type_info": "Numeric",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 3,
+        "name": "withdrawn!",
+        "type_info": "Numeric",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Date",
+        "Date"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "472db92817e63e8c88739537e20bf8a4982c2424bcde847327b60b1b2f8e741d"
+}

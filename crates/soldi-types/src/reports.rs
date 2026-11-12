@@ -62,8 +62,9 @@ pub struct CategoryReport {
     pub groups: Vec<CategoryGroup>,
 }
 
-/// A month of the savings year: `income` without resgates and `saved` (Economia and its
-/// cofrinhos minus resgates), as the month view's `totals.income` and `savings.saved`.
+/// A month of the savings year: `income` without resgates, `deposited` (bills under Economia and
+/// its cofrinhos), `withdrawn` (resgates) and `saved`, `deposited` minus `withdrawn`, as the month
+/// view's `totals.income` and `savings.saved`.
 /// `rate_pct` is `saved` over `income` with one decimal, null when `income` is 0. `forecast`
 /// marks a month after today's: only the entries already dated there, out of the year's totals.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
@@ -72,6 +73,10 @@ pub struct SavingsMonth {
     pub month: String,
     #[serde(serialize_with = "crate::money")]
     pub income: Decimal,
+    #[serde(serialize_with = "crate::money")]
+    pub deposited: Decimal,
+    #[serde(serialize_with = "crate::money")]
+    pub withdrawn: Decimal,
     #[serde(serialize_with = "crate::money")]
     pub saved: Decimal,
     #[schema(value_type = Option<String>, example = "11.9")]
@@ -88,6 +93,10 @@ pub struct SavingsYear {
     pub year: i32,
     #[serde(serialize_with = "crate::money")]
     pub income_total: Decimal,
+    #[serde(serialize_with = "crate::money")]
+    pub deposited_total: Decimal,
+    #[serde(serialize_with = "crate::money")]
+    pub withdrawn_total: Decimal,
     #[serde(serialize_with = "crate::money")]
     pub saved_total: Decimal,
     #[schema(value_type = Option<String>, example = "8.4")]

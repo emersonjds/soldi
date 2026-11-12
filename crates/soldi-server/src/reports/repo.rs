@@ -35,8 +35,8 @@ pub async fn category_sums(
     .await
 }
 
-/// Each month's income without resgates and its savings (bills under `Economia`, itself or a
-/// cofrinho, minus resgates), for the entries dated `from` to `to`; months without entries are absent.
+/// Each month's income without resgates, its deposits (bills under `Economia`, itself or a
+/// cofrinho) and its resgates, for the entries dated `from` to `to`; months without entries are absent.
 pub async fn savings_by_month(
     conn: &mut PgConnection,
     user_id: Uuid,
@@ -48,9 +48,10 @@ pub async fn savings_by_month(
         r#"SELECT date_trunc('month', t.date::timestamp)::date AS "month!",
                   COALESCE(SUM(t.amount) FILTER (WHERE t.kind = 'income' AND t.cofrinho_id IS NULL), 0)
                       AS "income!",
-                  COALESCE(SUM(CASE WHEN t.kind = 'bill' THEN t.amount ELSE -t.amount END)
-                      FILTER (WHERE (t.kind = 'bill' AND (c.is_savings OR COALESCE(p.is_savings, false)))
-                                 OR t.cofrinho_id IS NOT NULL), 0) AS "saved!"
+                  COALESCE(SUM(t.amount) FILTER (WHERE t.kind = 'bill' AND (c.is_savings
+                      OR COALESCE(p.is_savings, false) OR t.cofrinho_id IS NOT NULL)), 0) AS "deposited!",
+                  COALESCE(SUM(t.amount) FILTER (WHERE t.kind <> 'bill' AND t.cofrinho_id IS NOT NULL), 0)
+                      AS "withdrawn!"
            FROM transactions t JOIN categories c ON c.user_id = t.user_id AND c.id = t.category_id
            LEFT JOIN categories p ON p.user_id = c.user_id AND p.id = c.parent_id
            WHERE t.user_id = $1 AND t.date BETWEEN $2 AND $3

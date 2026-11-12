@@ -3043,14 +3043,19 @@
       },
       "SavingsMonth": {
         "type": "object",
-        "description": "A month of the savings year: `income` without resgates and `saved` (Economia and its\ncofrinhos minus resgates), as the month view's `totals.income` and `savings.saved`.\n`rate_pct` is `saved` over `income` with one decimal, null when `income` is 0. `forecast`\nmarks a month after today's: only the entries already dated there, out of the year's totals.",
+        "description": "A month of the savings year: `income` without resgates, `deposited` (bills under Economia and\nits cofrinhos), `withdrawn` (resgates) and `saved`, `deposited` minus `withdrawn`, as the month\nview's `totals.income` and `savings.saved`.\n`rate_pct` is `saved` over `income` with one decimal, null when `income` is 0. `forecast`\nmarks a month after today's: only the entries already dated there, out of the year's totals.",
         "required": [
           "month",
           "income",
+          "deposited",
+          "withdrawn",
           "saved",
           "forecast"
         ],
         "properties": {
+          "deposited": {
+            "type": "string"
+          },
           "forecast": {
             "type": "boolean",
             "example": false
@@ -3071,6 +3076,9 @@
           },
           "saved": {
             "type": "string"
+          },
+          "withdrawn": {
+            "type": "string"
           }
         }
       },
@@ -3080,10 +3088,15 @@
         "required": [
           "year",
           "income_total",
+          "deposited_total",
+          "withdrawn_total",
           "saved_total",
           "months"
         ],
         "properties": {
+          "deposited_total": {
+            "type": "string"
+          },
           "income_total": {
             "type": "string"
           },
@@ -3101,6 +3114,9 @@
             "example": "8.4"
           },
           "saved_total": {
+            "type": "string"
+          },
+          "withdrawn_total": {
             "type": "string"
           },
           "year": {
