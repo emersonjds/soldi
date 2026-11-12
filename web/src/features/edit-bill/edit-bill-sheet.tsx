@@ -10,11 +10,13 @@ import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Switch } from "@/components/ui/switch";
+import { firstMonth, installmentOf, lastMonthOf } from "@/entities/bill/bill-plan";
 import { type Bill, useCreateBill, useUpdateBill } from "@/entities/bill/bill-queries";
 import { categoryLabel } from "@/entities/category/categories-query";
 import { useCategoryChips } from "@/entities/category/category-chips";
 import { cn } from "@/lib/utils";
 import type { Schemas } from "@/shared/api/client";
+import { monthAbbrev, todayISO } from "@/shared/lib/date";
 import { positiveAmount } from "@/shared/lib/money";
 import { AmountInput } from "@/shared/ui/amount-input";
 import { BrandButton } from "@/shared/ui/brand-button";
@@ -28,6 +30,9 @@ type Draft = {
   card: boolean;
   categoryId?: string;
   active: boolean;
+  parcelado: boolean;
+  installments: string;
+  current: string;
 };
 
 const input = "h-12 text-base md:text-base";
@@ -43,6 +48,7 @@ const DayField = ({
   error,
   onChange,
   autoFocus,
+  placeholder = "10",
 }: {
   id: string;
   label: string;
@@ -50,11 +56,12 @@ const DayField = ({
   error?: string;
   onChange: (value: string) => void;
   autoFocus?: boolean;
+  placeholder?: string;
 }) => (
   <Input
     id={id}
     inputMode="numeric"
-    placeholder="10"
+    placeholder={placeholder}
     value={value}
     autoFocus={autoFocus}
     onChange={(event) => onChange(event.target.value.replace(/\D/g, "").slice(0, 2))}
@@ -84,7 +91,23 @@ const chip = "min-h-11 rounded-xl px-1 font-medium text-sm leading-4 transition-
 
 type Fields = Schemas["CreateBill"] & { active: boolean };
 
-const emptyDraft: Draft = { name: "", amount: "", dueDay: "", closingDay: "", card: false, active: true };
+const emptyDraft: Draft = {
+  name: "",
+  amount: "",
+  dueDay: "",
+  closingDay: "",
+  card: false,
+  active: true,
+  parcelado: false,
+  installments: "",
+  current: "1",
+};
+
+const currentOf = (bill?: Bill) => {
+  if (!bill?.installments || !bill.last_month) return "1";
+  const current = installmentOf(firstMonth(todayISO(), bill.due_day), bill.last_month, bill.installments);
+  return String(current ?? 1);
+};
 
 const draftOf = (bill?: Bill, prefill?: Schemas["CreateBill"]): Draft => {
   const from = bill ?? prefill;
@@ -97,6 +120,9 @@ const draftOf = (bill?: Bill, prefill?: Schemas["CreateBill"]): Draft => {
     card: from.closing_day != null,
     categoryId: from.category_id,
     active: bill?.active ?? true,
+    parcelado: bill?.installments != null,
+    installments: bill?.installments ? String(bill.installments) : "",
+    current: currentOf(bill),
   };
 };
 
@@ -129,6 +155,10 @@ export const BillForm = ({
   const amount = positiveAmount(draft.amount);
   const day = asDay(draft.dueDay);
   const closingDay = asDay(draft.closingDay);
+  const count = Number(draft.installments) >= 2 && Number(draft.installments) <= 60 ? Number(draft.installments) : 0;
+  const maxCurrent = count || 60;
+  const current = Number(draft.current) >= 1 && Number(draft.current) <= maxCurrent ? Number(draft.current) : 0;
+  const lastMonth = count && current && day ? lastMonthOf(todayISO(), day, count, current - 1) : undefined;
   const dayError = "Escolha um dia de 1 a 31.";
   const errors = {
     name: submitted && !name ? "Informe o nome." : undefined,
@@ -136,6 +166,8 @@ export const BillForm = ({
     day: submitted && !day ? dayError : undefined,
     closingDay: submitted && draft.card && !closingDay ? dayError : undefined,
     category: submitted && !categoryId ? "Escolha uma categoria." : undefined,
+    installments: submitted && draft.parcelado && !count ? "Escolha de 2 a 60 parcelas." : undefined,
+    current: submitted && draft.parcelado && !current ? `Escolha uma parcela de 1 a ${maxCurrent}.` : undefined,
   };
 
   const set = (patch: Partial<Draft>) => setDraft((current) => ({ ...current, ...patch }));
@@ -154,7 +186,11 @@ export const BillForm = ({
       if (closingDay) onSave({ ...fields, closing_day: closingDay });
       return;
     }
-    if (amount) onSave({ ...fields, amount });
+    if (!amount) return;
+    if (!draft.parcelado) return onSave({ ...fields, amount });
+    if (!lastMonth) return;
+    const changed = count !== bill?.installments || lastMonth !== bill?.last_month;
+    onSave({ ...fields, amount, ...(changed && { installments: count, last_month: lastMonth }) });
   };
 
   const actions = (
@@ -192,20 +228,36 @@ export const BillForm = ({
         {errors.name && <FieldError>{errors.name}</FieldError>}
       </Field>
       {!bill && !prefill && (
-        <label
-          htmlFor="bill-card-switch"
-          className="flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-xl bg-muted px-4 py-2"
-        >
-          <span id="bill-card" className="font-medium text-base">
-            Cartão de crédito
-          </span>
-          <Switch
-            id="bill-card-switch"
-            aria-labelledby="bill-card"
-            checked={draft.card}
-            onCheckedChange={(card) => set({ card })}
-          />
-        </label>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <label
+            htmlFor="bill-card-switch"
+            className="flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-xl bg-muted px-4 py-2"
+          >
+            <span id="bill-card" className="font-medium text-base">
+              Cartão de crédito
+            </span>
+            <Switch
+              id="bill-card-switch"
+              aria-labelledby="bill-card"
+              checked={draft.card}
+              onCheckedChange={(card) => set({ card, parcelado: card ? false : draft.parcelado })}
+            />
+          </label>
+          <label
+            htmlFor="bill-parcelado-switch"
+            className="flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-xl bg-muted px-4 py-2"
+          >
+            <span id="bill-parcelado" className="font-medium text-base">
+              Parcelado
+            </span>
+            <Switch
+              id="bill-parcelado-switch"
+              aria-labelledby="bill-parcelado"
+              checked={draft.parcelado}
+              onCheckedChange={(parcelado) => set({ parcelado, card: parcelado ? false : draft.card })}
+            />
+          </label>
+        </div>
       )}
       {draft.card ? (
         <ClosingDay value={draft.closingDay} error={errors.closingDay} onChange={(closingDay) => set({ closingDay })} />
@@ -252,6 +304,39 @@ export const BillForm = ({
         </div>
         {errors.day && <FieldError>{errors.day}</FieldError>}
       </Field>
+      {draft.parcelado && (
+        <>
+          <Field className="gap-1.5" data-invalid={Boolean(errors.installments)}>
+            <FieldLabel htmlFor="bill-installments">Quantas parcelas</FieldLabel>
+            <DayField
+              id="bill-installments"
+              label="Quantas parcelas"
+              placeholder="12"
+              value={draft.installments}
+              error={errors.installments}
+              onChange={(installments) => set({ installments })}
+            />
+            {errors.installments && <FieldError>{errors.installments}</FieldError>}
+          </Field>
+          <Field className="gap-1.5" data-invalid={Boolean(errors.current)}>
+            <FieldLabel htmlFor="bill-current">Parcela atual</FieldLabel>
+            <DayField
+              id="bill-current"
+              label="Parcela atual"
+              placeholder="1"
+              value={draft.current}
+              error={errors.current}
+              onChange={(current) => set({ current })}
+            />
+            {errors.current && <FieldError>{errors.current}</FieldError>}
+          </Field>
+          {lastMonth && (
+            <p className="-mt-3 text-muted-foreground text-sm">
+              {`Parcela ${current}/${count} em ${monthAbbrev(firstMonth(todayISO(), day))} · termina em ${monthAbbrev(lastMonth)}`}
+            </p>
+          )}
+        </>
+      )}
       <Field className="gap-1.5" data-invalid={Boolean(errors.category)}>
         <FieldLabel htmlFor="bill-category">Categoria</FieldLabel>
         <NativeSelect
@@ -284,10 +369,10 @@ export const BillForm = ({
         <span className="flex min-h-12 items-center gap-2 rounded-xl bg-muted px-4 text-base">
           <Repeat className="size-4 text-primary" aria-hidden />
           Mensal (todo mês)
-          <span className="ml-auto text-muted-foreground text-xs">Fixo</span>
+          <span className="ml-auto text-muted-foreground text-xs">{draft.parcelado ? "Parcelado" : "Fixo"}</span>
         </span>
       </div>
-      {bill && !draft.card && (
+      {bill && !draft.card && !draft.parcelado && (
         <label
           htmlFor="bill-active-switch"
           className="flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-xl bg-muted px-4"
@@ -296,7 +381,11 @@ export const BillForm = ({
             <span id="bill-active" className="font-medium text-base">
               Ativa
             </span>
-            <span className="text-muted-foreground text-xs">Pausada, fica fora do mês e do projetado.</span>
+            {!draft.active && (
+              <span className="text-muted-foreground text-xs">
+                Parada. Sai dos próximos meses; este e os anteriores ficam como estão.
+              </span>
+            )}
           </span>
           <Switch
             id="bill-active-switch"
