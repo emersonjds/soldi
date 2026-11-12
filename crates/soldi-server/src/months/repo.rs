@@ -15,10 +15,10 @@ pub async fn day_sums(
     sqlx::query_as!(
         DaySum,
         r#"SELECT date, kind AS "kind: CategoryKind", cofrinho_id IS NOT NULL AS "withdrawn!",
-                  SUM(amount) AS "amount!"
+                  card_id, SUM(amount) AS "amount!"
            FROM transactions
            WHERE user_id = $1 AND date BETWEEN $2 AND $3
-           GROUP BY date, kind, cofrinho_id IS NOT NULL"#,
+           GROUP BY date, kind, cofrinho_id IS NOT NULL, card_id"#,
         user_id,
         from,
         to
@@ -27,14 +27,16 @@ pub async fn day_sums(
     .await
 }
 
-/// Active, unarchived bills by due day, then name, with the day each started owing.
+/// Active, unarchived bills and every card (D28: an archived card's faturas still owe), by due
+/// day, then name, with the day each started owing.
 pub async fn bills(conn: &mut PgConnection, user_id: Uuid) -> Result<Vec<MonthBill>, sqlx::Error> {
     sqlx::query_as!(
         MonthBill,
-        r#"SELECT b.id, b.name, c.icon, c.color, b.amount AS "amount!", b.due_day,
+        r#"SELECT b.id, b.name, c.icon, c.color, b.amount, b.due_day, b.closing_day,
                   b.active_since
            FROM recurring_bills b JOIN categories c ON c.user_id = b.user_id AND c.id = b.category_id
-           WHERE b.user_id = $1 AND b.active AND b.archived_at IS NULL AND b.closing_day IS NULL
+           WHERE b.user_id = $1
+             AND ((b.active AND b.archived_at IS NULL) OR b.closing_day IS NOT NULL)
            ORDER BY b.due_day, lower(b.name), b.id"#,
         user_id
     )

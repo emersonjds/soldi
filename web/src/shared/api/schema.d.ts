@@ -482,6 +482,8 @@ export interface components {
          *     unpaid; `due_date` clamps a late due day to the month's last day; `overdue` is unpaid with
          *     `due_date` before today in São Paulo. In the current month, a bill still unpaid in an earlier
          *     month is listed again first, with that month's `due_date`, `overdue` and `lands_on` today (D17).
+         *     A card's row is its fatura (D28): unpaid, `amount` sums the spends due that month; a card
+         *     month without spends or payment is not listed.
          */
         BillOfMonth: {
             amount: string;
@@ -493,6 +495,8 @@ export interface components {
             due_date: string;
             /** @description The category's lucide icon. */
             icon: string;
+            /** @description A credit card's fatura (D28). */
+            is_card: boolean;
             /**
              * Format: date
              * @description The day an unpaid bill enters the projection: its due date, or today once due; null when

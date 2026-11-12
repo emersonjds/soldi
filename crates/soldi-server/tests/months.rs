@@ -236,7 +236,8 @@ async fn rule_1_end_to_end_unpaid_then_paid_then_unpaid(pool: PgPool) {
         json!([{
             "bill_id": bill["id"], "name": "Aluguel", "icon": "key-round", "color": "cat-6",
             "amount": "2259.56", "due_date": "2026-11-05", "paid": false,
-            "transaction_id": null, "overdue": overdue, "lands_on": lands_on
+            "transaction_id": null, "overdue": overdue, "lands_on": lands_on,
+            "is_card": false
         }])
     );
     assert_eq!(last_balance(&unpaid), "1000.00");
@@ -520,4 +521,123 @@ async fn sol51_the_forecast_walks_twelve_months_of_the_callers_bills(pool: PgPoo
 
     let (status, _) = TestApp::anonymous(pool).get("/api/forecast").await;
     assert_eq!(status, StatusCode::UNAUTHORIZED);
+}
+
+async fn card(user: &TestApp, name: &str) -> String {
+    let category_id = user.category_id("Cartão").await;
+    let (status, card) = user
+        .post(
+            "/api/bills",
+            json!({ "name": name, "due_day": 10, "closing_day": 3, "category_id": category_id }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{card}");
+    card["id"].as_str().unwrap().into()
+}
+
+async fn spend(user: &TestApp, date: &str, amount: &str, card_id: &str) {
+    let category_id = user.category_id("Mercado").await;
+    let (status, created) = user
+        .post(
+            "/api/transactions",
+            json!({ "date": date, "amount": amount, "kind": "daily",
+                    "category_id": category_id, "card_id": card_id }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{created}");
+}
+
+fn faturas(view: &Value) -> Vec<(String, String, String, bool, bool)> {
+    view["bills_of_month"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|bill| {
+            (
+                bill["name"].as_str().unwrap().into(),
+                bill["amount"].as_str().unwrap().into(),
+                bill["due_date"].as_str().unwrap().into(),
+                bill["is_card"] == true,
+                bill["paid"] == true,
+            )
+        })
+        .collect()
+}
+
+fn row(name: &str, amount: &str, due: &str, paid: bool) -> (String, String, String, bool, bool) {
+    (name.into(), amount.into(), due.into(), true, paid)
+}
+
+#[sqlx::test]
+async fn d28_card_spends_move_the_balance_on_the_faturas_due_date_only(pool: PgPool) {
+    let ana = TestApp::signed_in(pool.clone(), "ana@example.com").await;
+    let bia = ana.another_user("bia@example.com").await;
+    open_at(&ana, "1000", "2026-11-01").await;
+    open_at(&bia, "1000", "2026-11-01").await;
+    let porto = card(&ana, "Porto").await;
+    let nubank = card(&bia, "Nubank").await;
+    spend(&ana, "2026-11-02", "50", &porto).await;
+    spend(&ana, "2026-11-04", "30", &porto).await;
+    spend(&bia, "2026-11-02", "70", &nubank).await;
+    owing_since(&pool, "2026-12-01").await;
+
+    let (status, november) = ana.get("/api/months/2026-11").await;
+    let (_, december) = ana.get("/api/months/2026-12").await;
+    let (_, theirs) = bia.get("/api/months/2026-11").await;
+
+    assert_eq!(status, StatusCode::OK, "{november}");
+    assert_eq!(
+        faturas(&november),
+        [row("Porto", "50.00", "2026-11-10", false)]
+    );
+    assert!(
+        balances(&november, 30)
+            .iter()
+            .all(|balance| *balance == "1000.00")
+    );
+    assert_eq!(november["totals"]["daily"], "0.00");
+    assert_eq!(november["projected_balance"], "950.00");
+    assert_eq!(
+        faturas(&december),
+        [row("Porto", "30.00", "2026-12-10", false)]
+    );
+    assert_eq!(december["projected_balance"], "920.00");
+    assert_eq!(
+        faturas(&theirs),
+        [row("Nubank", "70.00", "2026-11-10", false)]
+    );
+    assert_eq!(theirs["projected_balance"], "930.00");
+
+    let (status, entry) = ana
+        .post(
+            &format!("/api/bills/{porto}/pay?month=2026-11"),
+            json!({ "date": "2026-11-10", "amount": "52" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{entry}");
+    let (_, paid) = ana.get("/api/months/2026-11").await;
+
+    assert_eq!(faturas(&paid), [row("Porto", "52.00", "2026-11-10", true)]);
+    assert_eq!(balances(&paid, 10)[8..], ["1000.00", "948.00"]);
+    assert_eq!(paid["totals"]["bills"], "52.00");
+    assert_eq!(paid["totals"]["daily"], "0.00");
+    assert_eq!(paid["projected_balance"], "948.00");
+}
+
+#[sqlx::test]
+async fn d28_an_archived_card_keeps_its_unpaid_fatura_in_the_month(pool: PgPool) {
+    let ana = TestApp::signed_in(pool, "ana@example.com").await;
+    open_at(&ana, "1000", "2026-11-01").await;
+    let porto = card(&ana, "Porto").await;
+    spend(&ana, "2026-11-02", "50", &porto).await;
+
+    let (status, _) = ana.delete(&format!("/api/bills/{porto}")).await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    let (_, november) = ana.get("/api/months/2026-11").await;
+
+    assert_eq!(
+        faturas(&november),
+        [row("Porto", "50.00", "2026-11-10", false)]
+    );
+    assert_eq!(november["projected_balance"], "950.00");
 }

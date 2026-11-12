@@ -2124,7 +2124,7 @@
       },
       "BillOfMonth": {
         "type": "object",
-        "description": "An active recurring bill in the month. `amount` is what was paid, or the bill's amount while\nunpaid; `due_date` clamps a late due day to the month's last day; `overdue` is unpaid with\n`due_date` before today in São Paulo. In the current month, a bill still unpaid in an earlier\nmonth is listed again first, with that month's `due_date`, `overdue` and `lands_on` today (D17).",
+        "description": "An active recurring bill in the month. `amount` is what was paid, or the bill's amount while\nunpaid; `due_date` clamps a late due day to the month's last day; `overdue` is unpaid with\n`due_date` before today in São Paulo. In the current month, a bill still unpaid in an earlier\nmonth is listed again first, with that month's `due_date`, `overdue` and `lands_on` today (D17).\nA card's row is its fatura (D28): unpaid, `amount` sums the spends due that month; a card\nmonth without spends or payment is not listed.",
         "required": [
           "bill_id",
           "name",
@@ -2133,7 +2133,8 @@
           "amount",
           "due_date",
           "paid",
-          "overdue"
+          "overdue",
+          "is_card"
         ],
         "properties": {
           "amount": {
@@ -2154,6 +2155,10 @@
           "icon": {
             "type": "string",
             "description": "The category's lucide icon."
+          },
+          "is_card": {
+            "type": "boolean",
+            "description": "A credit card's fatura (D28)."
           },
           "lands_on": {
             "type": [
