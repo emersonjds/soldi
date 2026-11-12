@@ -22,7 +22,7 @@ Every existing row stays valid: the change only removes a restriction. Reverting
 
 | Place | Rule |
 | --- | --- |
-| Lançar picker (chips and `Ver todas`) for kind `k` | The categories of kind `k`, plus each parent of another kind that holds a category of kind `k`, shown as its group. A parent of another kind is a header only: tapping its circle shows its `Sub:` pills and never chooses the parent itself. |
+| Lançar picker (chips and `Ver todas`) for kind `k` | The categories of kind `k`, plus each parent of another kind that holds a category of kind `k`, shown as its group. A parent of another kind is a header only: tapping its circle chooses its first subcategory of kind `k` (API order) and shows its `Sub:` pills; the parent itself is never the chosen category. |
 | Ajustes › Categorias, tab `k` | Same set. `Veículo` (Saída) shows in the Diário tab with `Combustível` under it. `Nova subcategoria` from that row creates a Diário child. Editing the row edits `Veículo` with its own kind, never the tab's. |
 | `Subcategoria de` (parent picker) | Every active top-level of the same side (outflow or income); `Economia` only for a Saída child. |
 | Para onde vai (`/api/reports/categories`) | Unchanged grouping by parent: `Veículo` adds `Parcela` (Saída) and `Combustível` (Diário). `CategoryGroup.kind` becomes the **parent's own kind** (`COALESCE(p.kind, c.kind)`), not the first child's. Income and outflow still split by the leaf's kind; they never mix (rule above). |
@@ -66,7 +66,7 @@ Backend:
 9. Another user's category as parent → 404 (unchanged).
 
 Web (every state):
-- Lançar Diário with Veículo (Saída) › Combustível (Diário): Veículo's circle shows; tapping it shows `Sub: Combustível`; nothing is chosen until Combustível is tapped; `Ver todas` lists `Veículo › Combustível` and Veículo as a non-selectable heading.
+- Lançar Diário with Veículo (Saída) › Combustível (Diário): Veículo's circle shows; tapping it chooses Combustível and shows `Sub: Combustível`; deselecting the pill keeps Combustível (the parent is never chosen); `Ver todas` lists `Veículo › Combustível` and Veículo as a non-selectable heading.
 - Lançar Saída: Veículo is choosable itself (own kind) and shows Parcela, Seguro, IPVA.
 - A group with no child of kind `k` and of another kind does not show in `k`.
 - Ajustes › Categorias Diário: Veículo header with Combustível; editing Veículo opens `Editar categoria` with Saída's colors and its own kind; `Nova subcategoria` from it creates a Diário child.
@@ -82,6 +82,7 @@ Winner (D27):
 - `kind-of-subcategory` is removed. `kind-locked` stays (Economia, cofrinhos, Resgate, any income category, any change to income).
 - Name check: only the category's own name in the new kind (409 `duplicate-name`).
 - `category-has-bills`: only conta fixas on this category (not its children) block a change to Diário.
+- A top-level with no free color in every kind it would show in is refused with 422 `palette-full` and nothing changes (the color index would refuse two top-levels of one kind with one color).
 - Color: a top-level keeps its color when it is free in every kind it now shows in, else takes the lowest free one there; its children wear it. A subcategory keeps its parent's color, and the parent applies D26's "starts showing in a new kind" rule.
 - SOL-106 adds `category-has-card-entries` (422): a category whose entries carry a card cannot become Saída.
 - The balance never moves: Diário and Saída are both outflow.
@@ -113,7 +114,7 @@ Seeds in `categories::domain` become two explicit tables: top-levels with a fixe
 | Economia (savings) | Saída | piggy-bank | cat-13 | |
 | Resgate (savings) | Entrada | piggy-bank | cat-2 | |
 
-Totals: 16 top-levels (4 income incl. Resgate, 12 outflow incl. Economia), 26 subcategories, 42 rows. Removed from the old list: Celular, Impostos, Roupas, Beleza, Outros (Gasto replaces it). Existing accounts are never touched (no backfill).
+Totals: 16 top-levels (4 income incl. Resgate, 12 outflow incl. Economia), 25 subcategories, 41 rows. Removed from the old list: Celular, Impostos, Roupas, Beleza, Outros (Gasto replaces it). Existing accounts are never touched (no backfill).
 
 Lançar's first and preselected category (`FIRST` in `category-chips.tsx`) becomes `{ income: "Salário", bill: "Casa", daily: "Gasto" }`; an account without that name keeps today's fallback.
 
