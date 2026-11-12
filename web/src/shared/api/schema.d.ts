@@ -582,7 +582,8 @@ export interface components {
          *     its entries minus its resgates since the opening date; `progress_pct` is `balance / target`
          *     with one decimal, capped at 100, null without a target; `done` is a balance at or above the
          *     target; `monthly_suggestion` is what is left over the months to the deadline, this one
-         *     included, null without a deadline or when done.
+         *     included, null without a deadline or when done; `next_contribution` is the earliest member
+         *     dated after today of a repeated entry into it, null without one.
          */
         Cofrinho: {
             balance: string;
@@ -595,13 +596,14 @@ export interface components {
             icon: string;
             monthly_suggestion?: string | null;
             name: string;
+            next_contribution?: components["schemas"]["NextContribution"] | null;
             parent: boolean;
             /** @example 3.0 */
             progress_pct?: string | null;
             target?: string | null;
         };
         /**
-         * @description `total_saved` sums every balance; `saved_this_month` is the month view's `totals.saved`.
+         * @description `total_saved` sums every balance; `saved_this_month` is the requested month view's `totals.saved`.
          *     Items go done last, then by name; `Sem objetivo` only while its balance is above zero.
          */
         Cofrinhos: {
@@ -764,6 +766,12 @@ export interface components {
             projected_tier: components["schemas"]["Tier"];
             savings: components["schemas"]["MonthSavings"];
             totals: components["schemas"]["Totals"];
+        };
+        /** @description A repeated entry's next deposit: its amount and the day of the month it falls on. */
+        NextContribution: {
+            amount: string;
+            /** Format: int32 */
+            day: number;
         };
         Onboarding: {
             /** @description Up to 50 recurring bills. */
@@ -1789,14 +1797,20 @@ export interface operations {
     };
     list_cofrinhos: {
         parameters: {
-            query?: never;
+            query?: {
+                /**
+                 * @description The month of `saved_this_month`, `YYYY-MM`; this month in São Paulo when absent
+                 * @example 2026-11
+                 */
+                month?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Every cofrinho with its balance and goal; this month in São Paulo */
+            /** @description Every cofrinho with its balance, goal and next repeated deposit */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1806,6 +1820,15 @@ export interface operations {
                 };
             };
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description `month` is not `YYYY-MM` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1830,7 +1853,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Its entries and resgates, newest date first, then newest entry first */
+            /** @description Its entries and resgates, `Economia`'s with its subcategories', newest date first, then newest entry first */
             200: {
                 headers: {
                     [name: string]: unknown;

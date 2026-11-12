@@ -2,152 +2,44 @@
 
 import { useState } from "react";
 
-import { ArrowDownToLine, ArrowUpFromLine, Check, ChevronRight, Pencil, PiggyBank, Plus, Trash2 } from "lucide-react";
+import { ArrowDownToLine, ArrowUpFromLine, LayoutGrid, List, ListFilter, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useArchiveCategory, useCategories } from "@/entities/category/categories-query";
 import { CategorySheet } from "@/entities/category/category-sheet";
-import { CofrinhoBar } from "@/entities/cofrinho/cofrinho-bar";
 import { type Cofrinho, useCofrinhos, useMovements } from "@/entities/cofrinho/cofrinho-queries";
 import { TransactionSheet } from "@/features/add-transaction/transaction-sheet";
 import { EditBillSheet } from "@/features/edit-bill/edit-bill-sheet";
 import { WithdrawForm } from "@/features/withdraw-cofrinho/withdraw-form";
 import { cn } from "@/lib/utils";
 import { hasProblem, type Schemas } from "@/shared/api/client";
-import { useCurrency } from "@/shared/lib/currency";
-import { monthYear, shortDay } from "@/shared/lib/date";
-import { formatMoney, minusMoney, positiveAmount } from "@/shared/lib/money";
-import { formatPct } from "@/shared/lib/percent";
+import { shortDay, todayISO } from "@/shared/lib/date";
+import { positiveAmount } from "@/shared/lib/money";
 import { cents } from "@/shared/lib/tier";
 import { BrandButton } from "@/shared/ui/brand-button";
-import { CategoryIcon } from "@/shared/ui/category-icon";
-import { DashCard } from "@/shared/ui/dash-card";
-import { CofrinhoIllustration } from "@/shared/ui/illustrations";
 import { Money } from "@/shared/ui/money";
 import { PageError } from "@/shared/ui/page-state";
 import { ResponsiveSheet } from "@/shared/ui/responsive-sheet";
+
+import { Balance, CofrinhoCard, CreateTile, focusOf, ReservaLivreCard } from "./cofrinho-card";
+import { CofrinhoPicker, CofrinhosHero } from "./cofrinhos-hero";
 
 const card = "flex flex-col gap-4 rounded-2xl bg-card p-4 shadow-sm lg:p-6";
 
 const caption = "font-semibold text-[11px] text-muted-foreground uppercase leading-4 tracking-[0.12em]";
 
-/** `Faltam … · …/mês até jun 2027`, `Faltam … · Sem prazo`, or nothing without a goal or once it is met. */
-const useGoalCaption = () => {
-  const currency = useCurrency();
-  return ({ target, balance, done, deadline, monthly_suggestion }: Cofrinho) => {
-    if (!target || done) return null;
-    const left = `Faltam ${formatMoney(minusMoney(target, balance), currency)}`;
-    if (!deadline || !monthly_suggestion) return `${left} · Sem prazo`;
-    return `${left} · ${formatMoney(monthly_suggestion, currency)}/mês até ${monthYear(deadline)}`;
-  };
-};
+type MovementsProps = { categoryId: string; nameOf?: (movement: Schemas["Transaction"]) => string };
 
-/** The balance, `de {meta}`, the bar and the caption: the card and the sheet show the same. */
-const Balance = ({ cofrinho, large = false }: { cofrinho: Cofrinho; large?: boolean }) => {
-  const goal = useGoalCaption()(cofrinho);
-  return (
-    <div className="flex flex-col gap-3">
-      <p className="leading-8">
-        <Money
-          amount={cofrinho.balance}
-          className={cn("font-bold tracking-[-0.02em]", large ? "text-[34px] leading-10" : "text-2xl leading-8")}
-        />{" "}
-        {cofrinho.target && (
-          <span className="whitespace-nowrap text-muted-foreground">
-            de <Money amount={cofrinho.target} />
-          </span>
-        )}
-      </p>
-      {cofrinho.target && <CofrinhoBar cofrinho={cofrinho} />}
-      {goal && <p className="text-muted-foreground text-sm">{goal}</p>}
-    </div>
-  );
-};
-
-const Status = ({ cofrinho }: { cofrinho: Cofrinho }) => {
-  if (cofrinho.done)
-    return (
-      <span className="inline-flex items-center gap-1 font-medium text-income-text text-sm">
-        <Check className="size-4" aria-hidden />
-        Meta batida
-      </span>
-    );
-  if (!cofrinho.progress_pct) return null;
-  return <span className="text-muted-foreground text-sm tabular-nums">{formatPct(cofrinho.progress_pct, 0)}</span>;
-};
-
-type CardProps = {
-  cofrinho: Cofrinho;
-  disabled: boolean;
-  onOpen: () => void;
-  onSave: () => void;
-  onWithdraw: () => void;
-};
-
-/** Guardar and Resgatar sit above the open button's overlay, which still takes taps beside them; an empty cofrinho only takes its first deposit. */
-const CardActions = ({ cofrinho, disabled, onSave, onWithdraw }: Omit<CardProps, "onOpen">) => {
-  if (cents(cofrinho.balance) === 0)
-    return (
-      <div className="relative z-10 mt-4">
-        <Button variant="secondary" className="min-h-11 w-full text-base" disabled={disabled} onClick={onSave}>
-          <Plus className="size-5" />
-          Guardar primeiro valor <span className="sr-only">em {cofrinho.name}</span>
-        </Button>
-      </div>
-    );
-  return (
-    <div className="pointer-events-none relative z-10 mt-4 flex gap-2">
-      <Button
-        variant="secondary"
-        className="pointer-events-auto min-h-11 px-4 text-base"
-        disabled={disabled}
-        onClick={onSave}
-      >
-        <Plus className="size-5" />
-        Guardar <span className="sr-only">em {cofrinho.name}</span>
-      </Button>
-      <Button
-        variant="ghost"
-        className="pointer-events-auto min-h-11 px-4 text-base"
-        disabled={disabled}
-        onClick={onWithdraw}
-      >
-        Resgatar <span className="sr-only">de {cofrinho.name}</span>
-      </Button>
-    </div>
-  );
-};
-
-/** The button stretches over the whole DashCard, so a tap anywhere on the card opens the cofrinho. */
-const CofrinhoCard = ({ cofrinho, disabled, onOpen, onSave, onWithdraw }: CardProps) => (
-  <li className="min-w-0">
-    <DashCard
-      title={cofrinho.name}
-      className="relative h-full transition-shadow focus-within:ring-2 focus-within:ring-ring hover:shadow-md"
-    >
-      <button
-        type="button"
-        onClick={onOpen}
-        className="flex w-full flex-col gap-4 text-left outline-none after:absolute after:inset-0"
-      >
-        <span className="sr-only">{cofrinho.name}</span>
-        <span className="flex min-h-11 items-center gap-3">
-          <CategoryIcon icon={cofrinho.icon} color={cofrinho.color} className="size-11" />
-          <span className="min-w-0 flex-1">
-            <Status cofrinho={cofrinho} />
-          </span>
-          <ChevronRight className="size-5 shrink-0 text-muted-foreground" aria-hidden />
-        </span>
-        <Balance cofrinho={cofrinho} />
-      </button>
-      <CardActions cofrinho={cofrinho} disabled={disabled} onSave={onSave} onWithdraw={onWithdraw} />
-    </DashCard>
-  </li>
-);
-
-const Movements = ({ categoryId }: { categoryId: string }) => {
+const Movements = ({ categoryId, nameOf }: MovementsProps) => {
   const movements = useMovements(categoryId);
 
   if (movements.isError)
@@ -180,7 +72,7 @@ const Movements = ({ categoryId }: { categoryId: string }) => {
             <span className="flex min-w-0 flex-1 flex-col">
               <span className="font-medium text-base">{resgate ? "Resgatado" : "Guardado"}</span>
               <span className="truncate text-muted-foreground text-xs">
-                {movement.note ? `${shortDay(movement.date)} · ${movement.note}` : shortDay(movement.date)}
+                {[shortDay(movement.date), nameOf?.(movement), movement.note].filter(Boolean).join(" · ")}
               </span>
             </span>
             <Money amount={movement.amount} income={resgate} className="font-semibold text-base" />
@@ -232,15 +124,17 @@ const CofrinhoDetail = ({
           />
         ) : (
           <>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid auto-cols-fr grid-flow-col gap-2">
               <BrandButton disabled={saveDisabled} onClick={() => onSave(cofrinho)}>
                 <ArrowDownToLine className="size-5" />
                 Guardar
               </BrandButton>
-              <Button variant="outline" className="min-h-12 text-base" onClick={() => setWithdrawing(true)}>
-                <ArrowUpFromLine className="size-5" />
-                Resgatar
-              </Button>
+              {cents(cofrinho.balance) > 0 && (
+                <Button variant="outline" className="min-h-12 text-base" onClick={() => setWithdrawing(true)}>
+                  <ArrowUpFromLine className="size-5" />
+                  Resgatar
+                </Button>
+              )}
             </div>
             <section aria-labelledby="movements-title" className="flex flex-col gap-1">
               <h3 id="movements-title" className={caption}>
@@ -271,31 +165,6 @@ const CofrinhoDetail = ({
   </ResponsiveSheet>
 );
 
-const Total = ({ data }: { data: Schemas["Cofrinhos"] }) => {
-  const currency = useCurrency();
-  const month = data.saved_this_month;
-  return (
-    <section aria-labelledby="saved-total-title" className={cn(card, "flex-row items-center justify-between gap-4")}>
-      <div className="flex min-w-0 flex-col gap-1">
-        <h2 id="saved-total-title" className={caption}>
-          Guardado
-        </h2>
-        <Money amount={data.total_saved} size="hero" />
-        <p className="text-muted-foreground text-sm tabular-nums">
-          Este mês {month.startsWith("-") ? "" : "+"}
-          {formatMoney(month, currency)}
-        </p>
-      </div>
-      <span
-        aria-hidden
-        className="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-secondary text-primary lg:size-16"
-      >
-        <PiggyBank className="size-7 lg:size-8" />
-      </span>
-    </section>
-  );
-};
-
 export const CofrinhosSkeleton = () => (
   <div role="status" aria-label="Carregando" className="flex flex-col gap-6">
     <div className={card}>
@@ -319,9 +188,73 @@ export const CofrinhosSkeleton = () => (
 
 type Editing = { open: boolean; category?: Schemas["Category"] };
 
-/** `Cofrinhos`: what is saved, one card per goal, and the sheets to create, fill, empty and archive them. */
-export const CofrinhosView = () => {
-  const cofrinhos = useCofrinhos();
+type Filter = "all" | "progress" | "done" | "none";
+
+const FILTERS: { key: Filter; label: string; empty?: string; keep: (item: Cofrinho) => boolean }[] = [
+  { key: "all", label: "Todos", keep: () => true },
+  {
+    key: "progress",
+    label: "Em andamento",
+    empty: "Nenhum cofrinho em andamento.",
+    keep: (item) => Boolean(item.target) && !item.done,
+  },
+  { key: "done", label: "Meta batida", empty: "Nenhum cofrinho com meta batida.", keep: (item) => item.done },
+  { key: "none", label: "Sem meta", empty: "Nenhum cofrinho sem meta.", keep: (item) => !item.target },
+];
+
+const RESERVA_LIVRE = "Reserva Livre";
+
+type ControlsProps = { filter: Filter; list: boolean; onFilter: (filter: Filter) => void; onList: () => void };
+
+const GridControls = ({ filter, list, onFilter, onList }: ControlsProps) => {
+  const active = FILTERS.find(({ key }) => key === filter)?.label;
+  return (
+    <div className="ml-auto flex items-center">
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            aria-label={`Filtrar: ${active}`}
+            className="min-h-11 min-w-11 rounded-full px-3 text-base text-muted-foreground"
+          >
+            <ListFilter className="size-5" />
+            {filter !== "all" && active}
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-auto">
+          <DropdownMenuRadioGroup value={filter}>
+            {FILTERS.map(({ key, label }) => (
+              <DropdownMenuRadioItem
+                key={key}
+                value={key}
+                className="min-h-11 text-base"
+                onSelect={() => onFilter(key)}
+              >
+                {label}
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        aria-label="Ver em lista"
+        aria-pressed={list}
+        className="size-11 rounded-full text-muted-foreground"
+        onClick={onList}
+      >
+        {list ? <LayoutGrid className="size-5" /> : <List className="size-5" />}
+      </Button>
+    </div>
+  );
+};
+
+/** `Cofrinhos`: the total, one card per goal, Reserva Livre, the create tile, and the sheets to fill, empty and archive them. */
+export const CofrinhosView = ({ month }: { month?: string }) => {
+  const cofrinhos = useCofrinhos(month);
   const categories = useCategories("bill");
   const archive = useArchiveCategory();
   const [selectedId, setSelectedId] = useState<string>();
@@ -329,14 +262,35 @@ export const CofrinhosView = () => {
   const [saving, setSaving] = useState<Schemas["Category"]>();
   const [editing, setEditing] = useState<Editing>({ open: false });
   const [archiving, setArchiving] = useState<string[]>([]);
+  const [picking, setPicking] = useState<"save" | "withdraw">();
+  const [allMovements, setAllMovements] = useState(false);
+  const [filter, setFilter] = useState<Filter>("all");
+  const [list, setList] = useState(false);
   const economia = categories.data?.find((category) => category.is_savings);
   const categoryOf = (id: string) => categories.data?.find((category) => category.id === id);
-  const items = (cofrinhos.data?.items ?? []).filter((item) => !archiving.includes(item.category_id));
-  const selected = items.find((item) => item.category_id === selectedId);
-  const active = items.filter((item) => !item.parent).length;
+  const items = (cofrinhos.data?.items ?? [])
+    .filter((item) => !archiving.includes(item.category_id))
+    .map((item) => (item.parent ? { ...item, name: RESERVA_LIVRE } : item));
+  const goals = items.filter((item) => !item.parent);
+  const livre: Cofrinho = items.find((item) => item.parent) ?? {
+    category_id: economia?.id ?? "",
+    name: RESERVA_LIVRE,
+    icon: "piggy-bank",
+    color: economia?.color ?? "",
+    balance: "0.00",
+    done: false,
+    parent: true,
+  };
+  const withdrawable = [...goals, livre].filter((item) => cents(item.balance) > 0);
+  const selected = [...goals, livre].find((item) => item.category_id === selectedId);
+  const { keep, empty } = FILTERS.find(({ key }) => key === filter) ?? FILTERS[0];
+  const shown = goals.filter(keep);
+  const today = todayISO();
+  const focus = focusOf(goals, today);
 
   const create = () => setEditing({ open: true });
   const openCofrinho = (id: string, withdraw: boolean) => {
+    setPicking(undefined);
     setWithdrawing(withdraw);
     setSelectedId(id);
   };
@@ -345,8 +299,13 @@ export const CofrinhosView = () => {
       categories.refetch();
       return toast.error("Não foi possível carregar as categorias.");
     }
+    setPicking(undefined);
     setSelectedId(undefined);
     setSaving(categoryOf(id));
+  };
+  const nameOf = (movement: Schemas["Transaction"]) => {
+    const id = movement.cofrinho_id ?? movement.category.id;
+    return [...goals, livre].find((item) => item.category_id === id)?.name ?? movement.category.name;
   };
 
   // ponytail: no unarchive endpoint, so the DELETE waits for the toast, as in Ajustes › Categorias.
@@ -393,61 +352,98 @@ export const CofrinhosView = () => {
     if (!cofrinhos.data) return <CofrinhosSkeleton />;
     return (
       <>
-        <Total data={cofrinhos.data} />
-        {items.length > 0 && (
-          <section aria-labelledby="cofrinhos-grid-title" className="flex flex-col gap-3">
-            <h2 className="flex items-baseline gap-2 font-semibold text-lg leading-6">
-              <span id="cofrinhos-grid-title">Seus cofrinhos</span>{" "}
-              {active > 0 && (
-                <span className="font-normal text-muted-foreground text-sm">
-                  {active} {active === 1 ? "ativo" : "ativos"}
+        <CofrinhosHero
+          data={{ ...cofrinhos.data, items }}
+          firstUse={
+            goals.length === 0 &&
+            cents(cofrinhos.data.total_saved) === 0 &&
+            cents(cofrinhos.data.saved_this_month) === 0
+          }
+          saveDisabled={categories.isPending}
+          withdrawDisabled={withdrawable.length === 0}
+          onSave={() => setPicking("save")}
+          onWithdraw={() => setPicking("withdraw")}
+          onMovements={() => setAllMovements(true)}
+        />
+        <section aria-labelledby="cofrinhos-grid-title" className="flex flex-col gap-3">
+          <div className="flex items-center gap-2">
+            <h2 className="flex items-center gap-2 font-semibold text-lg leading-6">
+              <span id="cofrinhos-grid-title">Seus Cofrinhos</span>{" "}
+              {goals.length > 0 && (
+                <span className="rounded-full bg-muted px-2 py-0.5 font-semibold text-muted-foreground text-xs">
+                  {goals.length} {goals.length === 1 ? "ativo" : "ativos"}
                 </span>
               )}
             </h2>
-            <ul aria-label="Cofrinhos" className="grid gap-4 lg:grid-cols-2">
-              {items.map((item) => (
-                <CofrinhoCard
-                  key={item.category_id}
-                  cofrinho={item}
-                  disabled={categories.isPending}
-                  onOpen={() => openCofrinho(item.category_id, false)}
-                  onSave={() => save(item.category_id)}
-                  onWithdraw={() => openCofrinho(item.category_id, true)}
-                />
-              ))}
-            </ul>
-          </section>
-        )}
-        {active === 0 && (
-          <div className={cn(card, "items-center gap-3 px-6 py-10")}>
-            <div
-              aria-hidden
-              className="pointer-events-none flex w-full select-none justify-center opacity-50 saturate-50"
-            >
-              <CofrinhoIllustration />
-            </div>
-            <p className="max-w-xs text-center text-muted-foreground">
-              Nenhum cofrinho ainda. Comece pela reserva de emergência.
-            </p>
-            <BrandButton className="w-auto px-6" onClick={create}>
-              Criar cofrinho
-            </BrandButton>
+            <GridControls filter={filter} list={list} onFilter={setFilter} onList={() => setList(!list)} />
           </div>
-        )}
+          {empty && shown.length === 0 && <p className="text-muted-foreground">{empty}</p>}
+          <ul aria-label="Cofrinhos" className={cn("grid gap-4", !list && "lg:grid-cols-2 xl:grid-cols-3")}>
+            {shown.map((item) => (
+              <CofrinhoCard
+                key={item.category_id}
+                cofrinho={item}
+                focus={item.category_id === focus}
+                today={today}
+                disabled={categories.isPending}
+                onSave={() => save(item.category_id)}
+                onWithdraw={() => openCofrinho(item.category_id, true)}
+                onMovements={() => openCofrinho(item.category_id, false)}
+                onEdit={() => setEditing({ open: true, category: categoryOf(item.category_id) })}
+                onArchive={() => archiveLater(item.category_id, item.balance)}
+              />
+            ))}
+            {keep(livre) && (
+              <ReservaLivreCard
+                cofrinho={livre}
+                disabled={categories.isPending}
+                onSave={() => save(livre.category_id)}
+                onWithdraw={() => openCofrinho(livre.category_id, true)}
+              />
+            )}
+            <CreateTile onCreate={create} />
+          </ul>
+        </section>
       </>
     );
   };
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between gap-3">
-        <h1 className="font-bold text-[22px] leading-7 lg:text-[28px] lg:leading-9">Cofrinhos</h1>
-        <Button variant="outline" className="min-h-11 rounded-full text-base text-primary" onClick={create}>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div className="flex flex-col gap-1">
+          <p className="font-semibold text-muted-foreground text-xs uppercase tracking-wider">
+            POUPANÇA ATIVA & FUTURO
+          </p>
+          <h1 className="font-bold text-[22px] leading-7 lg:text-[28px] lg:leading-9">Cofrinhos & Metas de Poupança</h1>
+        </div>
+        <BrandButton className="w-auto px-5" onClick={create}>
           <Plus className="size-5" />
-          Novo cofrinho
-        </Button>
+          Novo Cofrinho
+        </BrandButton>
       </div>
       {body()}
+      <CofrinhoPicker
+        title={picking === "withdraw" ? "Resgatar" : "Guardar Dinheiro"}
+        options={picking === "withdraw" ? withdrawable : [...goals, livre]}
+        open={Boolean(picking)}
+        onOpenChange={(open) => !open && setPicking(undefined)}
+        onPick={(cofrinho) =>
+          picking === "withdraw" ? openCofrinho(cofrinho.category_id, true) : save(cofrinho.category_id)
+        }
+      />
+      <ResponsiveSheet
+        open={allMovements}
+        onOpenChange={setAllMovements}
+        title="Movimentos"
+        description="Os movimentos de todos os cofrinhos."
+      >
+        {categories.isError ? (
+          <PageError message="Não foi possível carregar as categorias." onRetry={() => categories.refetch()} />
+        ) : (
+          economia && <Movements categoryId={economia.id} nameOf={nameOf} />
+        )}
+      </ResponsiveSheet>
       <CofrinhoDetail
         cofrinho={selected}
         saveDisabled={categories.isPending}

@@ -7,6 +7,22 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.42.0
+
+> Headline: Cofrinhos looks like Stitch
+
+### Server
+
+- `GET /api/cofrinhos?month=YYYY-MM` returns that month's `saved_this_month` (default: this São Paulo month; an invalid month is a 422).
+- Each cofrinho carries `next_contribution` (`amount`, `day`): the next future member of a series feeding it, in one query for all cofrinhos.
+- The Economia parent's movements include its subcategories' entries and resgates.
+
+### Web
+
+- Cofrinhos & Metas de Poupança: hero with the total, `+R$ x este mês.`, Guardar Dinheiro and Resgatar with a cofrinho picker, every movement, and Meta Global Consolidada over the cofrinhos with a target.
+- Seus Cofrinhos: a filter, grid or list, badges (Foco atual, Longo prazo, Em andamento, Meta batida), `Aporte automático` or `Prazo: n meses`, and a `⋮` menu with Movimentos, Editar and Excluir; Reserva Livre and the create tile close the grid.
+- `/economia` gets the month switcher: in the top bar from 1024 px, in a card under the app bar below.
+
 ## 0.41.0
 
 > Headline: Para onde vai looks like Stitch

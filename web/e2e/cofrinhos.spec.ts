@@ -25,28 +25,31 @@ test("a cofrinho fills from a Saída in Economia and empties with a resgate", as
 
   const nav = page.getByRole("navigation", { name: "Navegação principal" });
   await nav.getByRole("link", { name: "Economia" }).click();
-  await expect(page.getByText("Nenhum cofrinho ainda. Comece pela reserva de emergência.")).toBeVisible();
-  await page.getByRole("button", { name: "Novo cofrinho" }).click();
+  const hero = page.getByRole("region", { name: "Total guardado em cofrinhos" });
+  await expect(hero).toContainText("Nada guardado ainda.");
+  await expect(hero.getByRole("button", { name: "Resgatar" })).toBeDisabled();
+  await expect(page.getByRole("region", { name: "Reserva Livre" })).toContainText("sem teto fixado");
+  await page.getByRole("button", { name: "Começar objetivo" }).click();
   const create = page.getByRole("dialog", { name: "Novo cofrinho" });
   await create.getByLabel("Nome").fill("Reserva");
   await create.getByLabel("Meta").fill("1.000,00");
   await create.getByRole("button", { name: "Criar" }).click();
   await expect(page.getByText("Cofrinho criado")).toBeVisible();
 
-  await expect(page.getByRole("region", { name: "Seus cofrinhos" })).toContainText("1 ativo");
-  const reservaCard = page.getByRole("region", { name: "Reserva" });
-  await expect(reservaCard.getByRole("button", { name: "Resgatar" })).toHaveCount(0);
-  await reservaCard.getByRole("button", { name: "Guardar primeiro valor" }).click();
+  await expect(page.getByRole("region", { name: "Seus Cofrinhos" })).toContainText("1 ativo");
+  const reserva = page.getByRole("region", { name: "Reserva", exact: true });
+  await expect(reserva.getByRole("button", { name: /^Resgatar/ })).toHaveCount(0);
+  await reserva.getByRole("button", { name: "Guardar primeiro valor" }).click();
   const lancar = page.getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ });
   await expect(lancar.getByRole("radio", { name: "Conta" })).toBeChecked();
   await expect(lancar.getByRole("radio", { name: "Economia › Reserva" })).toHaveAttribute("aria-checked", "true");
   await lancar.getByLabel("Valor").fill("200,00");
   await lancar.getByRole("button", { name: "Salvar" }).click();
 
-  const reserva = page.getByRole("list", { name: "Cofrinhos" }).getByRole("button", { name: /^Reserva/ });
   await expect(reserva).toContainText("R$ 200,00 de R$ 1.000,00");
-  await expect(reserva).toContainText("20%");
   await expect(reserva.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "20");
+  await expect(hero).toContainText("Meta Global Consolidada: R$ 200,00 de R$ 1.000,00");
+  await expect(hero).toContainText("20,0% concluído");
 
   for (const width of [375, 1024, 1280, 1440]) {
     await page.setViewportSize({ width, height: 900 });
@@ -54,16 +57,18 @@ test("a cofrinho fills from a Saída in Economia and empties with a resgate", as
   }
   await page.setViewportSize({ width: 375, height: 812 });
 
-  const actions = reservaCard.getByRole("button", { name: "Resgatar de Reserva" }).locator("..");
-  const row = await actions.boundingBox();
-  if (!row) throw new Error("no action row");
-  await page.mouse.click(row.x + row.width - 4, row.y + row.height / 2);
+  await reserva.getByRole("button", { name: "Mais ações de Reserva" }).click();
+  await page.getByRole("menuitem", { name: "Movimentos" }).click();
   const sheet = page.getByRole("dialog", { name: "Reserva" });
-  await expect(sheet.getByRole("button", { name: "Resgatar", exact: true })).toBeVisible();
+  await expect(sheet.getByRole("list", { name: "Movimentos" })).toContainText("Guardado");
   await page.keyboard.press("Escape");
   await expect(sheet).toHaveCount(0);
 
-  await reservaCard.getByRole("button", { name: "Resgatar de Reserva" }).click();
+  await hero.getByRole("button", { name: "Resgatar" }).click();
+  await page
+    .getByRole("dialog", { name: "Resgatar" })
+    .getByRole("button", { name: /^Reserva/ })
+    .click();
   await sheet.getByLabel("Valor").fill("5.000,00");
   await sheet.getByRole("button", { name: "Confirmar resgate" }).click();
   await expect(sheet.getByText("Você só tem R$ 200,00 guardado aqui")).toBeVisible();
@@ -73,7 +78,13 @@ test("a cofrinho fills from a Saída in Economia and empties with a resgate", as
   await expect(sheet.getByRole("list", { name: "Movimentos" })).toContainText("Resgatado");
   await page.keyboard.press("Escape");
   await expect(reserva).toContainText("R$ 150,00 de R$ 1.000,00");
-  await expect(page.getByRole("region", { name: "Guardado" })).toContainText("R$ 150,00");
+  await expect(hero).toContainText("R$ 150,00");
+
+  await hero.getByRole("button", { name: "Movimentos" }).click();
+  const all = page.getByRole("dialog", { name: "Movimentos" });
+  await expect(all.getByRole("list", { name: "Movimentos" }).getByRole("listitem")).toHaveCount(2);
+  await expect(all).toContainText("Reserva");
+  await page.keyboard.press("Escape");
 
   await nav.getByRole("link", { name: "Mês" }).click();
   const ledger = page.getByRole("region", { name: "Lançamentos" });
