@@ -248,13 +248,6 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
             </Link>
           </header>
           <main className="mx-auto w-full max-w-6xl flex-1 px-4 pt-4 pb-(--tabbar-space) lg:px-6 lg:pt-6 lg:pb-10">
-            {readsMonth && !isAt("/mes") && (
-              <Suspense>
-                <div className="mb-4 rounded-2xl bg-card p-2 shadow-sm lg:hidden">
-                  <ShellMonthSwitcher pathname={pathname} />
-                </div>
-              </Suspense>
-            )}
             {children}
           </main>
         </div>

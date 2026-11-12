@@ -44,10 +44,14 @@ test("an entry shows up in Para onde vai and Cofrinhos starts empty", async ({ p
 
   await nav.getByRole("link", { name: "Para onde vai" }).click();
   const mercado = page.getByRole("list", { name: "Categorias" }).getByRole("button", { name: /^Mercado/ });
-  await expect(mercado).toContainText("100%");
+  await expect(mercado).toContainText("100,0% das despesas");
   await expect(mercado).toContainText("R$ 80,00");
+  await expect(page.getByRole("radio", { name: "Entradas" })).toHaveCount(0);
   await mercado.click();
-  await expect(page.getByRole("region", { name: "Lançamentos de Mercado" })).toContainText("R$ 80,00");
+  await expect(page.getByRole("region", { name: "Lançamentos: Mercado" })).toContainText("- R$ 80,00");
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await expect(page.getByText("Total Saídas:")).toContainText("Total Saídas: R$ 80,00");
+  await page.setViewportSize({ width: 375, height: 812 });
 
   await nav.getByRole("link", { name: "Economia" }).click();
   await expect(page.getByRole("heading", { level: 1, name: "Cofrinhos" })).toBeVisible();
@@ -93,17 +97,18 @@ test("Economia folds two cofrinhos and lists both their entries, unclipped from 
     .getByRole("navigation", { name: "Navegação principal" })
     .getByRole("link", { name: "Para onde vai" })
     .click();
+  await page.setViewportSize({ width: 1440, height: 900 });
   const legend = page.getByRole("list", { name: "Categorias" });
   await expect(legend.getByRole("button", { name: /^Economia/ })).toContainText("R$ 14.840,77");
   await legend.getByRole("button", { name: "Mostrar subcategorias de Economia" }).click();
   await expect(legend).toContainText("Economia (sem subcategoria)R$ 150,00");
   await legend.getByRole("button", { name: /^Economia/ }).click();
 
-  const entries = page.getByRole("region", { name: "Lançamentos de Economia" });
-  await expect(entries).toContainText("Aporte Reserva");
-  await expect(entries).toContainText("Aporte Viagem");
-  await expect(entries).toContainText("3 lançamentos");
-  await expect(entries).toContainText("Total: R$ 14.840,77");
+  const entries = page.getByRole("region", { name: "Lançamentos: Economia" });
+  await expect(entries).toContainText("Aporte Reserva (Reserva)");
+  await expect(entries).toContainText("Aporte Viagem (Viagem)");
+  await expect(entries).toContainText("3 itens");
+  await expect(entries).toContainText("Total no recorte selecionado: R$ 14.840,77");
 
   for (const width of [375, 1024, 1280, 1440]) {
     await page.setViewportSize({ width, height: 900 });
