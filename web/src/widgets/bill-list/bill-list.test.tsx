@@ -119,6 +119,16 @@ describe("Contas fixas", () => {
       expect(await within(card).findByText("Comprometem 36% das entradas de novembro")).toBeInTheDocument();
     });
 
+    it("leaves a card out of the total and the rows", async () => {
+      const porto: Schemas["Bill"] = { ...BILL_LUZ, name: "Porto", amount: null, closing_day: 3 };
+      open({ bills: [BILL_ALUGUEL, porto] });
+
+      const card = await total();
+      expect(within(card).getByText("R$ 2.259,56")).toBeInTheDocument();
+      expect(within(card).getByText("1 conta ativa")).toBeInTheDocument();
+      expect(screen.queryByText("Porto")).not.toBeInTheDocument();
+    });
+
     it("says there is no income yet instead of a share", async () => {
       open({ month: { ...NOVEMBER, totals: { ...NOVEMBER.totals, income: "0.00" } } });
 

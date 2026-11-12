@@ -221,7 +221,8 @@ export const BillList = () => {
     return <PageError message="Não foi possível carregar as contas." onRetry={() => bills.refetch()} />;
   if (!bills.data) return <PageLoading />;
 
-  const visible = bills.data.filter((bill) => !archiving.includes(bill.id));
+  // ponytail: cards stay out until SOL-106 Task 8 gives them their own row.
+  const visible = bills.data.filter((bill) => bill.closing_day == null && !archiving.includes(bill.id));
   const active = visible.filter(isActive);
   const paused = visible.filter((bill) => !isActive(bill));
 
