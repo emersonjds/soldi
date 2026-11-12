@@ -41,6 +41,8 @@ async fn bills_list_only_the_callers_bills(pool: PgPool) {
         due_day: 10,
         category_id: light,
         closing_day: None,
+        installments: None,
+        last_month: None,
     };
     soldi_server::bills::repo::insert_all(&mut conn, user_id(&ana).await, &[bill])
         .await
@@ -289,6 +291,90 @@ async fn d35_a_stopped_bill_pays_its_own_months_and_refuses_later_ones(pool: PgP
         bia.get("/api/bills").await.1[0]["last_month"],
         serde_json::Value::Null
     );
+}
+
+#[sqlx::test]
+async fn d35_parar_after_paying_ahead_ends_at_the_paid_month(pool: PgPool) {
+    let ana = TestApp::signed_in(pool, "ana@example.com").await;
+    ana.open_at("1000", "2026-11-01").await;
+    let bill = create(&ana, rent(category_id(&ana, "Aluguel").await)).await;
+    let next = this_month() + chrono::Months::new(1);
+    ana.post(&pay_uri(&bill), json!({ "date": next.to_string() }))
+        .await;
+
+    let (status, stopped) = ana
+        .patch(&bill_uri(&bill), json!({ "active": false }))
+        .await;
+
+    assert_eq!(status, StatusCode::OK, "{stopped}");
+    assert_eq!(stopped["last_month"], next.to_string());
+}
+
+fn fies(category_id: Uuid, last_month: chrono::NaiveDate) -> serde_json::Value {
+    json!({ "name": "Fies", "amount": "300", "due_day": 10, "category_id": category_id,
+            "installments": 6, "last_month": last_month.to_string() })
+}
+
+#[sqlx::test]
+async fn d35_a_parcelado_bill_edits_its_plan_but_never_hides_a_paid_month(pool: PgPool) {
+    let ana = TestApp::signed_in(pool, "ana@example.com").await;
+    let bia = ana.another_user("bia@example.com").await;
+    ana.open_at("1000", "2026-11-01").await;
+    let month = |ahead: u32| this_month() + chrono::Months::new(ahead);
+    let internet = category_id(&ana, "Internet").await;
+    let plan = create(&ana, fies(internet, month(2))).await;
+    let fixo = create(&ana, rent(category_id(&ana, "Aluguel").await)).await;
+    let theirs = create(&bia, rent(category_id(&bia, "Aluguel").await)).await;
+    ana.post(&pay_uri(&plan), json!({ "date": month(1).to_string() }))
+        .await;
+    let uri = bill_uri(&plan);
+
+    for (uri, body, field) in [
+        (
+            &uri,
+            json!({ "installments": 6, "last_month": previous_month() }),
+            "last_month",
+        ),
+        (
+            &uri,
+            json!({ "installments": 6, "last_month": month(0) }),
+            "last_month",
+        ),
+        (&uri, json!({ "installments": 6 }), "last_month"),
+        (&uri, json!({ "active": false }), "active"),
+        (
+            &bill_uri(&fixo),
+            json!({ "installments": 6, "last_month": month(2) }),
+            "installments",
+        ),
+    ] {
+        let (status, problem) = ana.patch(uri, body.clone()).await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+        assert_eq!(problem["errors"][0]["field"], field, "{body}");
+    }
+    let (status, shorter) = ana
+        .patch(&uri, json!({ "installments": 4, "last_month": month(1) }))
+        .await;
+    assert_eq!(status, StatusCode::OK, "{shorter}");
+    assert_eq!(
+        (
+            &shorter["installments"],
+            &shorter["last_month"],
+            &shorter["active"]
+        ),
+        (&json!(4), &json!(month(1).to_string()), &json!(true))
+    );
+    let cards = category_id(&ana, "Cartão").await;
+    let (status, card) = ana
+        .post(
+            "/api/bills",
+            json!({ "name": "Porto", "due_day": 10, "closing_day": 3, "category_id": cards,
+                    "installments": 6, "last_month": month(2) }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{card}");
+    assert_eq!(card["errors"][0]["field"], "installments");
+    assert_eq!(bia.get("/api/bills").await.1, json!([theirs]));
 }
 
 #[sqlx::test]

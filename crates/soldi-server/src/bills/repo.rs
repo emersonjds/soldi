@@ -94,8 +94,9 @@ pub async fn insert(
 ) -> Result<Bill, sqlx::Error> {
     sqlx::query_as!(
         Bill,
-        r#"INSERT INTO recurring_bills (user_id, name, amount, due_day, category_id, closing_day)
-         VALUES ($1, $2, $3, $4, $5, $6)
+        r#"INSERT INTO recurring_bills
+             (user_id, name, amount, due_day, category_id, closing_day, installments, last_month)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
          RETURNING id, category_id, name, amount, due_day,
                    (last_month IS NULL OR installments IS NOT NULL) AS "active!", closing_day,
                    last_month, installments"#,
@@ -104,7 +105,9 @@ pub async fn insert(
         bill.amount,
         bill.due_day,
         bill.category_id,
-        bill.closing_day
+        bill.closing_day,
+        bill.installments,
+        bill.last_month
     )
     .fetch_one(&mut *conn)
     .await
@@ -124,7 +127,7 @@ pub async fn update(
         Bill,
         r#"UPDATE recurring_bills
          SET name = $3, amount = $4, due_day = $5, category_id = $6, closing_day = $7,
-             last_month = $8,
+             last_month = $8, installments = $10,
              active_since = CASE WHEN $9 THEN (now() AT TIME ZONE 'America/Sao_Paulo')::date
                                  ELSE active_since END,
              updated_at = now()
@@ -140,7 +143,8 @@ pub async fn update(
         bill.category_id,
         bill.closing_day,
         last_month,
-        restart
+        restart,
+        bill.installments
     )
     .fetch_optional(&mut *conn)
     .await
@@ -349,6 +353,8 @@ mod tests {
             due_day,
             category_id,
             closing_day: None,
+            installments: None,
+            last_month: None,
         }
     }
 

@@ -43,10 +43,19 @@ pub struct CreateBill {
     #[serde(default)]
     #[schema(minimum = 1, maximum = 31)]
     pub closing_day: Option<i16>,
+    /// 2 to 60; makes the bill parcelado. Needs `last_month`; not on a card.
+    #[serde(default)]
+    #[schema(minimum = 2, maximum = 60)]
+    pub installments: Option<i16>,
+    /// A month's first day, from this month to `installments` months ahead: the month of the
+    /// last parcela. Only with `installments`.
+    #[serde(default)]
+    pub last_month: Option<chrono::NaiveDate>,
 }
 
 /// Absent fields stay as they are. `active: false` is Parar: the bill owes up to this month or its
-/// latest paid month; `true` is Retomar. Refused on a card. `closing_day` changes only on a card.
+/// latest paid month; `true` is Retomar. Refused on a card and on a parcelado bill. `closing_day`
+/// changes only on a card.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct UpdateBill {
@@ -65,6 +74,13 @@ pub struct UpdateBill {
     #[serde(default)]
     #[schema(minimum = 1, maximum = 31)]
     pub closing_day: Option<i16>,
+    /// Only on a parcelado bill, sent with `last_month`.
+    #[serde(default)]
+    #[schema(minimum = 2, maximum = 60)]
+    pub installments: Option<i16>,
+    /// Only on a parcelado bill, sent with `installments`; not before the latest paid month.
+    #[serde(default)]
+    pub last_month: Option<chrono::NaiveDate>,
 }
 
 /// `amount` defaults to the bill's amount and is required for a card; the bill never changes.

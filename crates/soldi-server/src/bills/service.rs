@@ -103,6 +103,9 @@ pub async fn create(
     transaction_id: Option<Uuid>,
 ) -> Result<Bill, AppError> {
     let input = domain::check(input, "")?;
+    if let (Some(n), Some(last)) = (input.installments, input.last_month) {
+        domain::check_plan(n, last, first_of(crate::today_sao_paulo()))?;
+    }
     if transaction_id.is_some() && input.closing_day.is_some() {
         return Err(AppError::invalid(
             "transaction_id",
@@ -160,6 +163,10 @@ pub async fn update(
             due_day: patch.due_day.unwrap_or(current.due_day),
             category_id: patch.category_id.unwrap_or(current.category_id),
             closing_day: patch.closing_day.or(current.closing_day),
+            installments: patch.installments.or(current.installments),
+            last_month: patch
+                .last_month
+                .or(current.installments.and(current.last_month)),
         },
         "",
     )?;
@@ -170,19 +177,43 @@ pub async fn update(
             check_card_category(&mut conn, user, category_id).await?;
         }
     }
+    let this_month = first_of(crate::today_sao_paulo());
     if current.closing_day.is_some()
         && next.closing_day != current.closing_day
-        && repo::paid_since(&mut conn, user.id, id, first_of(crate::today_sao_paulo())).await?
+        && repo::paid_since(&mut conn, user.id, id, this_month).await?
     {
         return Err(domain::fatura_paid());
     }
+    let plan = if patch.installments.is_some() || patch.last_month.is_some() {
+        if current.installments.is_none() {
+            return Err(AppError::invalid(
+                "installments",
+                "only a parcelado bill has parcelas",
+            ));
+        }
+        let (Some(n), Some(last)) = (patch.installments, patch.last_month) else {
+            return Err(AppError::invalid(
+                "last_month",
+                "send installments and last_month together",
+            ));
+        };
+        domain::check_plan(n, last, this_month)?;
+        if repo::last_paid(&mut conn, user.id, id)
+            .await?
+            .is_some_and(|paid| last < first_of(paid))
+        {
+            return Err(AppError::invalid("last_month", "must keep the paid months"));
+        }
+        Some(last)
+    } else {
+        None
+    };
     if current.installments.is_some() && patch.active.is_some() {
         return Err(AppError::invalid(
             "active",
             "a parcelado bill ends on its last parcela",
         ));
     }
-    let this_month = first_of(crate::today_sao_paulo());
     // D35: Parar keeps this month and any month paid ahead; Retomar after the end restarts D17.
     let (last_month, restart) = match patch.active {
         Some(false) if current.active => {
@@ -199,7 +230,7 @@ pub async fn update(
                 current.last_month.is_some_and(|last| last < this_month),
             )
         }
-        _ => (current.last_month, false),
+        _ => (plan.or(current.last_month), false),
     };
     repo::update(&mut conn, user.id, id, &next, last_month, restart)
         .await?

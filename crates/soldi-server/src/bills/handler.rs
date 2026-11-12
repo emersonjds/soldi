@@ -65,7 +65,7 @@ pub struct CreateQuery {
         (status = 400, body = Problem, content_type = "application/problem+json", description = "`transaction_id` is not a UUID"),
         (status = 401, body = Problem, content_type = "application/problem+json"),
         (status = 404, body = Problem, content_type = "application/problem+json", description = "The `transaction_id` entry is missing or another user's"),
-        (status = 422, body = Problem, content_type = "application/problem+json", description = "Name not 1 to 100 characters, amount not above zero or with more than two places, missing on a conta fixa or present on a card (`amount`), `closing_day` not 1 to 31, due day not 1 to 31, `category_id` not one of the caller's active bill categories or, on a card, `Economia` or a cofrinho, or `cannot-become-bill` when the entry is not a `bill` entry, already a bill's payment, a resgate or a series member")))]
+        (status = 422, body = Problem, content_type = "application/problem+json", description = "Name not 1 to 100 characters, amount not above zero or with more than two places, missing on a conta fixa or present on a card (`amount`), `closing_day` not 1 to 31, due day not 1 to 31, `category_id` not one of the caller's active bill categories or, on a card, `Economia` or a cofrinho, `installments` not 2 to 60, missing with `last_month` or on a card, `last_month` missing with `installments`, not a month's first day or not from this month to `installments` months ahead, or `cannot-become-bill` when the entry is not a `bill` entry, already a bill's payment, a resgate or a series member")))]
 pub async fn create_bill(
     State(state): State<AppState>,
     user: CurrentUser,
@@ -82,7 +82,7 @@ pub async fn create_bill(
         (status = 200, body = Bill, description = "The bill after the change; absent fields stay as they are"),
         (status = 401, body = Problem, content_type = "application/problem+json"),
         (status = 404, body = Problem, content_type = "application/problem+json", description = "Missing, archived or another user's"),
-        (status = 422, body = Problem, content_type = "application/problem+json", description = "Same rules as create, on the bill after the change; `closing_day` on a conta fixa, `active: false` on a card, `active` on a parcelado bill; `fatura-paid` when a card's `closing_day` changes while a fatura from this month on is paid (D30b)")))]
+        (status = 422, body = Problem, content_type = "application/problem+json", description = "Same rules as create, on the bill after the change; `closing_day` on a conta fixa, `active: false` on a card, `active` on a parcelado bill; `installments` or `last_month` on a bill that is not parcelado, sent apart, or `last_month` before the latest paid month; `fatura-paid` when a card's `closing_day` changes while a fatura from this month on is paid (D30b)")))]
 pub async fn update_bill(
     State(state): State<AppState>,
     user: CurrentUser,

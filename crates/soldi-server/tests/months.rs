@@ -237,7 +237,7 @@ async fn rule_1_end_to_end_unpaid_then_paid_then_unpaid(pool: PgPool) {
             "bill_id": bill["id"], "name": "Aluguel", "icon": "key-round", "color": "cat-6",
             "amount": "2259.56", "due_date": "2026-11-05", "paid": false,
             "transaction_id": null, "overdue": overdue, "lands_on": lands_on,
-            "is_card": false
+            "is_card": false, "installment": null, "installments": null
         }])
     );
     assert_eq!(last_balance(&unpaid), "1000.00");
@@ -347,6 +347,50 @@ async fn d35_a_stopped_bill_keeps_its_paid_month_and_leaves_the_next(pool: PgPoo
     assert_eq!(december["bills_of_month"], json!([]));
     assert_eq!(december["projected_balance"], "850.00");
     assert_eq!(theirs["bills_of_month"][0]["amount"], "999.00");
+}
+
+#[sqlx::test]
+async fn d35_fies_lists_its_parcela_then_the_last_one_then_nothing(pool: PgPool) {
+    use chrono::{Datelike, Months};
+    let user = TestApp::signed_in(pool.clone(), "ana@example.com").await;
+    let bia = user.another_user("bia@example.com").await;
+    let this = soldi_server::today_sao_paulo().with_day(1).unwrap();
+    let month = |ahead: u32| (this + Months::new(ahead)).format("%Y-%m").to_string();
+    open_at(&user, "1000", &this.to_string()).await;
+    bia.open_at("1000", &this.to_string()).await;
+    let category_id = user.category_id("Internet").await;
+    let (status, fies) = user
+        .post(
+            "/api/bills",
+            json!({ "name": "Fies", "amount": "300", "due_day": 28, "category_id": category_id,
+                    "installments": 6, "last_month": (this + Months::new(1)).to_string() }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{fies}");
+    assert_eq!(
+        (&fies["installments"], &fies["active"]),
+        (&json!(6), &json!(true))
+    );
+    add_bill(&bia, "Internet", "100", 28, "Internet").await;
+    owing_since(&pool, &this.to_string()).await;
+
+    let (_, now) = user.get(&format!("/api/months/{}", month(0))).await;
+    let (_, next) = user.get(&format!("/api/months/{}", month(1))).await;
+    let (_, after) = user.get(&format!("/api/months/{}", month(2))).await;
+    let (_, theirs) = bia.get(&format!("/api/months/{}", month(2))).await;
+    let (_, forecast) = user.get("/api/forecast").await;
+
+    let parcela = |view: &Value| {
+        let row = &view["bills_of_month"][0];
+        (row["installment"].clone(), row["installments"].clone())
+    };
+    assert_eq!(parcela(&now), (json!(5), json!(6)));
+    assert_eq!(parcela(&next), (json!(6), json!(6)));
+    assert_eq!(after["bills_of_month"], json!([]));
+    assert_eq!(theirs["bills_of_month"][0]["installment"], Value::Null);
+    let days = forecast["days"].as_array().unwrap();
+    assert_eq!(days.last().unwrap()["projected_balance"], "400.00");
+    assert!(days.iter().all(|day| day["projected_balance"] != "100.00"));
 }
 
 #[sqlx::test]

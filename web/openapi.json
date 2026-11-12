@@ -448,7 +448,7 @@
             }
           },
           "422": {
-            "description": "Name not 1 to 100 characters, amount not above zero or with more than two places, missing on a conta fixa or present on a card (`amount`), `closing_day` not 1 to 31, due day not 1 to 31, `category_id` not one of the caller's active bill categories or, on a card, `Economia` or a cofrinho, or `cannot-become-bill` when the entry is not a `bill` entry, already a bill's payment, a resgate or a series member",
+            "description": "Name not 1 to 100 characters, amount not above zero or with more than two places, missing on a conta fixa or present on a card (`amount`), `closing_day` not 1 to 31, due day not 1 to 31, `category_id` not one of the caller's active bill categories or, on a card, `Economia` or a cofrinho, `installments` not 2 to 60, missing with `last_month` or on a card, `last_month` missing with `installments`, not a month's first day or not from this month to `installments` months ahead, or `cannot-become-bill` when the entry is not a `bill` entry, already a bill's payment, a resgate or a series member",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -561,7 +561,7 @@
             }
           },
           "422": {
-            "description": "Same rules as create, on the bill after the change; `closing_day` on a conta fixa, `active: false` on a card, `active` on a parcelado bill; `fatura-paid` when a card's `closing_day` changes while a fatura from this month on is paid (D30b)",
+            "description": "Same rules as create, on the bill after the change; `closing_day` on a conta fixa, `active: false` on a card, `active` on a parcelado bill; `installments` or `last_month` on a bill that is not parcelado, sent apart, or `last_month` before the latest paid month; `fatura-paid` when a card's `closing_day` changes while a fatura from this month on is paid (D30b)",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -2449,6 +2449,22 @@
             "type": "string",
             "description": "The category's lucide icon."
           },
+          "installment": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "The parcela of a parcelado bill this row is, counted in the row's own month (D35)."
+          },
+          "installments": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "The parcelado bill's number of parcelas."
+          },
           "is_card": {
             "type": "boolean",
             "description": "A credit card's fatura (D28)."
@@ -2897,6 +2913,24 @@
             "description": "1 to 31.",
             "maximum": 31,
             "minimum": 1
+          },
+          "installments": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "2 to 60; makes the bill parcelado. Needs `last_month`; not on a card.",
+            "maximum": 60,
+            "minimum": 2
+          },
+          "last_month": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date",
+            "description": "A month's first day, from this month to `installments` months ahead: the month of the\nlast parcela. Only with `installments`."
           },
           "name": {
             "type": "string",
@@ -3801,7 +3835,7 @@
       },
       "UpdateBill": {
         "type": "object",
-        "description": "Absent fields stay as they are. `active: false` is Parar: the bill owes up to this month or its\nlatest paid month; `true` is Retomar. Refused on a card. `closing_day` changes only on a card.",
+        "description": "Absent fields stay as they are. `active: false` is Parar: the bill owes up to this month or its\nlatest paid month; `true` is Retomar. Refused on a card and on a parcelado bill. `closing_day`\nchanges only on a card.",
         "properties": {
           "active": {
             "type": [
@@ -3839,6 +3873,24 @@
             "format": "int32",
             "maximum": 31,
             "minimum": 1
+          },
+          "installments": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Only on a parcelado bill, sent with `last_month`.",
+            "maximum": 60,
+            "minimum": 2
+          },
+          "last_month": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date",
+            "description": "Only on a parcelado bill, sent with `installments`; not before the latest paid month."
           },
           "name": {
             "type": [

@@ -169,6 +169,13 @@ pub fn runs_in(bill: &MonthBill, month: NaiveDate) -> bool {
     }
 }
 
+/// D35: the parcela a parcelado `bill` holds in the month of `due`.
+fn installment_in(bill: &MonthBill, due: NaiveDate) -> Option<i16> {
+    bill.last_month
+        .zip(bill.installments)
+        .and_then(|(last, n)| installment_of(first_of(due), last, n))
+}
+
 /// D17: a month of `bill` is owed when its due date is on or after the opening date and the
 /// bill's `active_since`, inside its run (D35); a card's (D28) when its fatura is above zero,
 /// whenever it was registered.
@@ -306,6 +313,8 @@ pub fn month_view(input: MonthInput) -> MonthView {
             overdue: true,
             lands_on: Some(late.lands_on),
             is_card: late.bill.closing_day.is_some(),
+            installment: installment_in(late.bill, late.due_date),
+            installments: late.bill.installments,
         });
     let own = bills.iter().filter_map(|bill| {
         let payment = payments
@@ -335,6 +344,8 @@ pub fn month_view(input: MonthInput) -> MonthView {
                 .then_some(due_date.max(today))
                 .filter(|day| *day <= end),
             is_card,
+            installment: installment_in(bill, due_date),
+            installments: bill.installments,
         })
     });
     let bills_of_month: Vec<BillOfMonth> = carried.chain(own).collect();
@@ -886,6 +897,8 @@ mod tests {
                 overdue: false,
                 lands_on: Some(date("2026-11-05")),
                 is_card: false,
+                installment: None,
+                installments: None,
             }]
         );
     }
@@ -1355,6 +1368,68 @@ mod tests {
         );
         assert!(december.bills_of_month.is_empty());
         assert_eq!(december.projected_balance, money("900"));
+    }
+
+    #[test]
+    fn d35_the_carry_and_the_forecast_stop_at_the_last_month() {
+        let stopped = || MonthBill {
+            last_month: Some(date("2026-10-01")),
+            ..since(1, "Inglês", 20, "2026-01-01")
+        };
+        let november = with_bills(
+            "2026-11",
+            settings("1000", "2026-09-01"),
+            vec![],
+            vec![stopped()],
+            vec![],
+            "2026-11-12",
+        );
+        let coming = ahead(
+            settings("1000", "2026-09-01"),
+            vec![],
+            vec![stopped()],
+            "2026-11-12",
+        );
+
+        assert_eq!(
+            rows(&november),
+            [
+                (date("2026-09-20"), true, Some(date("2026-11-12"))),
+                (date("2026-10-20"), true, Some(date("2026-11-12")))
+            ]
+        );
+        assert_eq!(november.projected_balance, money("800"));
+        assert_eq!(coming.days.last().unwrap().projected_balance, money("800"));
+    }
+
+    #[test]
+    fn d35_each_row_holds_the_parcela_of_its_own_month() {
+        let fies = MonthBill {
+            last_month: Some(date("2026-11-01")),
+            installments: Some(6),
+            ..since(1, "Fies", 20, "2026-01-01")
+        };
+        let view = with_bills(
+            "2026-11",
+            settings("1000", "2026-10-01"),
+            vec![],
+            vec![fies],
+            vec![],
+            "2026-11-12",
+        );
+
+        let parcelas: Vec<_> = view
+            .bills_of_month
+            .iter()
+            .map(|bill| (bill.due_date, bill.installment, bill.installments))
+            .collect();
+        assert_eq!(
+            parcelas,
+            [
+                (date("2026-10-20"), Some(5), Some(6)),
+                (date("2026-11-20"), Some(6), Some(6))
+            ]
+        );
     }
 
     #[test]

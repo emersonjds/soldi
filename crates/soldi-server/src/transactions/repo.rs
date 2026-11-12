@@ -593,6 +593,8 @@ mod tests {
                 due_day: 7,
                 category_id: rent,
                 closing_day: None,
+                installments: None,
+                last_month: None,
             },
         )
         .await
