@@ -45,12 +45,14 @@ pub async fn delete_period(
     Ok(i64::try_from(deleted).unwrap_or(i64::MAX))
 }
 
-async fn active_category(
+/// Share-locks the category so a concurrent kind change finishes first.
+async fn category(
     conn: &mut PgConnection,
     user: &CurrentUser,
     id: Uuid,
+    active: bool,
 ) -> Result<Category, AppError> {
-    categories::repo::find_active(conn, user.id, id)
+    categories::repo::find_shared(conn, user.id, id, active)
         .await?
         .ok_or(AppError::NotFound)
 }
@@ -109,7 +111,7 @@ pub async fn create(
 ) -> Result<Transaction, AppError> {
     let input = domain::check(input)?;
     let mut tx = pool.begin().await?;
-    let category = active_category(&mut tx, user, input.category_id).await?;
+    let category = category(&mut tx, user, input.category_id, true).await?;
     domain::check_kind(input.kind, &category)?;
     check_opening(&mut tx, user, input.date).await?;
     let count = input.repeat_months.or(input.installments);
@@ -164,10 +166,8 @@ pub async fn update(
     if patch.repeat_months.is_some() {
         domain::check_repeatable(&current)?;
     }
-    let category = match patch.category_id {
-        Some(category_id) => active_category(&mut tx, user, category_id).await?,
-        None => current.category,
-    };
+    let category_id = patch.category_id.unwrap_or(current.category.id);
+    let category = category(&mut tx, user, category_id, patch.category_id.is_some()).await?;
     let next = domain::check(CreateTransaction {
         date: patch.date.unwrap_or(current.date),
         amount: patch.amount.unwrap_or(current.amount),

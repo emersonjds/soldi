@@ -832,8 +832,19 @@ async fn a_daily_subcategory_becomes_bill_alone_and_its_group_takes_a_color_free
 #[sqlx::test]
 async fn a_bill_group_becomes_daily_alone_keeping_a_color_free_in_both(pool: PgPool) {
     let user = TestApp::signed_in(pool, "ana@example.com").await;
+    user.open_at("1000", "2026-11-01").await;
     let veiculo = veiculo(&user, "cat-16").await;
-    create_child(&user, "Parcela", "bill", &veiculo).await;
+    let (_, parcela) = create_child(&user, "Parcela", "bill", &veiculo).await;
+    log(
+        &user,
+        json!({ "date": "2026-11-03", "amount": "300", "kind": "bill", "category_id": id_of(&parcela) }),
+    )
+    .await;
+    log(
+        &user,
+        json!({ "date": "2026-11-04", "amount": "80", "kind": "bill", "category_id": veiculo }),
+    )
+    .await;
 
     let (status, moved) = change_kind(&user, &veiculo, "daily").await;
 
@@ -843,6 +854,131 @@ async fn a_bill_group_becomes_daily_alone_keeping_a_color_free_in_both(pool: PgP
     let (_, categories) = user.get("/api/categories").await;
     assert_eq!(find(&categories, "Parcela")["kind"], "bill");
     assert_eq!(find(&categories, "Parcela")["color"], "cat-16");
+    let (_, november) = user.get("/api/months/2026-11").await;
+    assert_eq!(november["totals"]["bills"], "300.00");
+    assert_eq!(november["totals"]["daily"], "80.00");
+}
+
+#[sqlx::test]
+async fn a_top_level_with_no_free_color_in_the_new_kind_keeps_its_kind_and_entries(pool: PgPool) {
+    let user = TestApp::signed_in(pool, "ana@example.com").await;
+    user.open_at("1000", "2026-11-01").await;
+    let mercado = user.category_id("Mercado").await;
+    log(
+        &user,
+        json!({ "date": "2026-11-03", "amount": "100", "kind": "daily", "category_id": mercado }),
+    )
+    .await;
+    for n in 1..=24 {
+        let (status, created) = create(
+            &user,
+            json!({ "name": format!("Conta {n}"), "kind": "bill" }),
+        )
+        .await;
+        if status != StatusCode::CREATED {
+            assert_eq!(slug(&created), "palette-full");
+            break;
+        }
+    }
+
+    let (status, problem) = change_kind(&user, &mercado, "bill").await;
+
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+    assert_eq!(slug(&problem), "palette-full");
+    let (_, categories) = user.get("/api/categories").await;
+    assert_eq!(find(&categories, "Mercado")["kind"], "daily");
+    let (_, november) = user.get("/api/months/2026-11").await;
+    assert_eq!(november["totals"]["daily"], "100.00");
+    assert_eq!(november["totals"]["bills"], "0.00");
+}
+
+#[sqlx::test]
+async fn a_top_level_alone_takes_the_lowest_color_free_in_its_new_kind_only(pool: PgPool) {
+    let user = TestApp::signed_in(pool, "ana@example.com").await;
+    let (_, academia) = create(
+        &user,
+        json!({ "name": "Academia", "kind": "daily", "color": "cat-20" }),
+    )
+    .await;
+    create(
+        &user,
+        json!({ "name": "Clube", "kind": "bill", "color": "cat-20" }),
+    )
+    .await;
+
+    let (status, moved) = change_kind(&user, &id_of(&academia), "bill").await;
+
+    assert_eq!(status, StatusCode::OK, "{moved}");
+    assert_eq!(moved["color"], "cat-14");
+}
+
+#[sqlx::test]
+async fn an_archived_category_keeps_its_kind(pool: PgPool) {
+    let user = TestApp::signed_in(pool, "ana@example.com").await;
+    let pets = user.category_id("Pets").await;
+    user.delete(&format!("/api/categories/{pets}")).await;
+
+    let (status, _) = change_kind(&user, &pets, "bill").await;
+
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}
+
+#[sqlx::test]
+async fn a_kind_and_a_color_change_together(pool: PgPool) {
+    let user = TestApp::signed_in(pool, "ana@example.com").await;
+    let pets = format!("/api/categories/{}", user.category_id("Pets").await);
+
+    let (status, moved) = user
+        .patch(&pets, json!({ "kind": "bill", "color": "cat-22" }))
+        .await;
+
+    assert_eq!(status, StatusCode::OK, "{moved}");
+    assert_eq!(
+        (&moved["kind"], &moved["color"]),
+        (&json!("bill"), &json!("cat-22"))
+    );
+}
+
+#[sqlx::test]
+async fn a_kind_change_runs_before_a_move_under_a_parent(pool: PgPool) {
+    let user = TestApp::signed_in(pool, "ana@example.com").await;
+    let economia = user.category_id("Economia").await;
+    let pets = format!("/api/categories/{}", user.category_id("Pets").await);
+
+    let (status, moved) = user
+        .patch(&pets, json!({ "kind": "bill", "parent_id": economia }))
+        .await;
+
+    assert_eq!(status, StatusCode::OK, "{moved}");
+    assert_eq!(moved["kind"], "bill");
+    assert_eq!(moved["parent_id"], json!(economia));
+    assert_eq!(moved["color"], color_of(&user, "Economia").await);
+}
+
+#[sqlx::test]
+async fn an_entry_logged_while_its_category_changes_kind_sees_the_new_kind(pool: PgPool) {
+    let user = TestApp::signed_in(pool.clone(), "ana@example.com").await;
+    user.open_at("1000", "2026-11-01").await;
+    let lazer = user.category_id("Lazer").await;
+    let mut change = pool.begin().await.unwrap();
+    sqlx::query("UPDATE categories SET kind = 'bill', color = 'cat-24' WHERE id::text = $1")
+        .bind(&lazer)
+        .execute(&mut *change)
+        .await
+        .unwrap();
+
+    let ((status, problem), ()) = tokio::join!(
+        user.post(
+            "/api/transactions",
+            json!({ "date": "2026-11-03", "amount": "10", "kind": "daily", "category_id": lazer }),
+        ),
+        async {
+            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+            change.commit().await.unwrap();
+        }
+    );
+
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
 }
 
 #[sqlx::test]
@@ -894,9 +1030,9 @@ async fn only_a_conta_fixa_on_the_category_keeps_it_from_becoming_daily(pool: Pg
 
     let bill = format!("/api/bills/{}", id_of(&bill));
     user.patch(&bill, json!({ "active": false })).await;
-    let (status, moved) = change_kind(&user, &parcela, "daily").await;
-    assert_eq!(status, StatusCode::OK, "{moved}");
-    assert_eq!(moved["kind"], "daily");
+    let (status, problem) = change_kind(&user, &parcela, "daily").await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(slug(&problem), "category-has-bills");
     let (status, moved) = change_kind(&user, &user.category_id("Luz").await, "daily").await;
     assert_eq!(status, StatusCode::OK, "{moved}");
 }
