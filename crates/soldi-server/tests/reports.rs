@@ -408,3 +408,103 @@ async fn ten_thousand_entries_in_a_year_come_back_in_twelve_rows(pool: PgPool) {
     assert_eq!(year["saved_total"], "33330.00");
     assert!(elapsed < std::time::Duration::from_secs(1), "{elapsed:?}");
 }
+
+#[sqlx::test]
+async fn d28_para_onde_vai_counts_card_spends_in_their_categories_and_not_the_fatura(pool: PgPool) {
+    let ana = TestApp::signed_in(pool, "ana@example.com").await;
+    ana.open_at("0", "2026-10-01").await;
+    let bia = ana.another_user("bia@example.com").await;
+    bia.open_at("0", "2026-10-01").await;
+    let cards = ana.category_id("Cartão").await;
+    let (_, porto) = ana
+        .post(
+            "/api/bills",
+            json!({ "name": "Porto", "due_day": 10, "closing_day": 3, "category_id": cards }),
+        )
+        .await;
+    let light = ana.category_id("Luz").await;
+    let (_, luz) = ana
+        .post(
+            "/api/bills",
+            json!({ "name": "Luz", "amount": "100", "due_day": 5, "category_id": light }),
+        )
+        .await;
+    let mercado = ana.category_id("Mercado").await;
+    for (date, amount) in [("2026-10-20", "30"), ("2026-11-02", "50")] {
+        let (status, created) = ana
+            .post(
+                "/api/transactions",
+                json!({ "date": date, "amount": amount, "kind": "daily",
+                        "category_id": mercado, "card_id": porto["id"] }),
+            )
+            .await;
+        assert_eq!(status, StatusCode::CREATED, "{created}");
+    }
+    for (bill, body) in [
+        (&porto, json!({ "date": "2026-11-10", "amount": "52" })),
+        (&luz, json!({ "date": "2026-11-05" })),
+    ] {
+        let id = bill["id"].as_str().unwrap();
+        let (status, paid) = ana
+            .post(&format!("/api/bills/{id}/pay?month=2026-11"), body)
+            .await;
+        assert_eq!(status, StatusCode::CREATED, "{paid}");
+    }
+    log(&bia, "2026-11-03", "bill", "900", "Cartão").await;
+
+    let (_, november) = ana.get("/api/reports/categories?month=2026-11").await;
+    let (_, october) = ana.get("/api/reports/categories?month=2026-10").await;
+
+    let rows = |report: &serde_json::Value| -> Vec<(String, String)> {
+        report["outflow"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|row| {
+                (
+                    row["name"].as_str().unwrap().into(),
+                    row["amount"].as_str().unwrap().into(),
+                )
+            })
+            .collect()
+    };
+    assert_eq!(
+        rows(&november),
+        [
+            ("Luz".into(), "100.00".into()),
+            ("Mercado".into(), "50.00".into())
+        ]
+    );
+    assert_eq!(november["outflow_total"], "150.00");
+    assert_eq!(rows(&october), [("Mercado".into(), "30.00".into())]);
+}
+
+#[sqlx::test]
+async fn d28_an_archived_cards_payment_stays_out_of_para_onde_vai(pool: PgPool) {
+    let ana = TestApp::signed_in(pool, "ana@example.com").await;
+    ana.open_at("0", "2026-11-01").await;
+    let cards = ana.category_id("Cartão").await;
+    let (_, porto) = ana
+        .post(
+            "/api/bills",
+            json!({ "name": "Porto", "due_day": 10, "closing_day": 3, "category_id": cards }),
+        )
+        .await;
+    let id = porto["id"].as_str().unwrap();
+    assert_eq!(
+        ana.delete(&format!("/api/bills/{id}")).await.0,
+        StatusCode::NO_CONTENT
+    );
+    let (status, paid) = ana
+        .post(
+            &format!("/api/bills/{id}/pay?month=2026-11"),
+            json!({ "date": "2026-11-10", "amount": "52" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{paid}");
+
+    let (_, november) = ana.get("/api/reports/categories?month=2026-11").await;
+
+    assert_eq!(november["outflow"], json!([]));
+    assert_eq!(november["outflow_total"], "0.00");
+}

@@ -242,3 +242,113 @@ async fn dropping_the_importer_keeps_imported_entries(pool: PgPool) {
         .unwrap();
     assert_eq!((leftovers, previews, kept), (0, None, 1));
 }
+
+#[sqlx::test(migrations = false)]
+async fn credit_cards_keep_every_bill_and_entry(pool: PgPool) {
+    migrate_before(&pool, 20).await;
+    let ana = user(&pool, "ana@example.com").await;
+    let luz = category(&pool, ana, "Luz", "bill", "cat-1", None, false).await;
+    let mercado = category(&pool, ana, "Mercado", "daily", "cat-2", None, false).await;
+    sqlx::query(
+        "INSERT INTO recurring_bills (user_id, name, amount, due_day, category_id)
+         VALUES ($1, 'Luz', 100, 10, $2)",
+    )
+    .bind(ana)
+    .bind(luz)
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO transactions (user_id, date, amount, kind, category_id)
+         VALUES ($1, '2026-11-05', 42.50, 'daily', $2)",
+    )
+    .bind(ana)
+    .bind(mercado)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    migrate_from(&pool, 20).await;
+
+    let (amount, closing): (Option<rust_decimal::Decimal>, Option<i16>) =
+        sqlx::query_as("SELECT amount, closing_day FROM recurring_bills")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!((amount, closing), (Some("100".parse().unwrap()), None));
+    let card: Option<Uuid> = sqlx::query_scalar("SELECT card_id FROM transactions")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(card, None);
+
+    let bia = user(&pool, "bia@example.com").await;
+    let feira = category(&pool, bia, "Feira", "daily", "cat-3", None, false).await;
+    let porto: Uuid = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
+        "INSERT INTO recurring_bills (user_id, name, due_day, category_id, closing_day)
+         VALUES ('{ana}', 'Porto', 10, '{luz}', 3) RETURNING id"
+    )))
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    for (sql, constraint) in [
+        (
+            format!(
+                "INSERT INTO recurring_bills (user_id, name, amount, due_day, category_id, closing_day)
+                 VALUES ('{ana}', 'Porto', 10, 10, '{luz}', 3)"
+            ),
+            "recurring_bills_card_amount",
+        ),
+        (
+            format!(
+                "INSERT INTO recurring_bills (user_id, name, due_day, category_id)
+                 VALUES ('{ana}', 'Porto', 10, '{luz}')"
+            ),
+            "recurring_bills_card_amount",
+        ),
+        (
+            format!(
+                "INSERT INTO transactions (user_id, date, amount, kind, category_id, card_id)
+                 VALUES ('{ana}', '2026-11-05', 10, 'bill', '{luz}', '{porto}')"
+            ),
+            "transactions_card_daily",
+        ),
+        (
+            format!(
+                "INSERT INTO transactions (user_id, date, amount, kind, category_id, card_id)
+                 VALUES ('{bia}', '2026-11-05', 10, 'daily', '{feira}', '{porto}')"
+            ),
+            "transactions_card_fk",
+        ),
+    ] {
+        let refused = sqlx::query(sqlx::AssertSqlSafe(sql.clone())).execute(&pool).await.unwrap_err();
+        assert_eq!(
+            refused.as_database_error().unwrap().constraint(),
+            Some(constraint),
+            "{sql}"
+        );
+    }
+
+    sqlx::query(sqlx::AssertSqlSafe(format!(
+        "INSERT INTO transactions (user_id, date, amount, kind, category_id, card_id)
+         VALUES ('{ana}', '2026-11-06', 30, 'daily', '{mercado}', '{porto}')"
+    )))
+    .execute(&pool)
+    .await
+    .unwrap();
+    let spec = include_str!("../../../docs/specs/2026-11-12-categories-and-cards.md");
+    let revert = spec
+        .split("the revert, if ever needed, is:")
+        .nth(1)
+        .and_then(|rest| rest.split("```").nth(1))
+        .unwrap()
+        .trim_start_matches("sql");
+    sqlx::raw_sql(revert).execute(&pool).await.unwrap();
+    let (amount, active): (rust_decimal::Decimal, bool) =
+        sqlx::query_as("SELECT amount, active FROM recurring_bills WHERE id = $1")
+            .bind(porto)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!((amount, active), ("0.01".parse().unwrap(), false));
+}

@@ -7,6 +7,22 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.47.0
+
+> Headline: credit cards with their fatura
+
+### Server
+
+- A credit card is a conta fixa with a closing day and no fixed amount (D28). A Diário entry can carry `card_id`; it joins the fatura that closes after it and is due on the card's day.
+- The balance, tier, projection and forecast drop on the fatura's due date, never on the spend date; Para onde vai keeps each spend in its own category and leaves the fatura payment out, so nothing counts twice.
+- A fatura paid below its total carries the rest into the next one; a paid fatura is frozen: its spends and the card's closing day can no longer change (D30). A card never sits under Economia or a cofrinho.
+
+### Web
+
+- Contas fixas creates a card (`Cartão de crédito`, `Fecha dia`, `Vence dia`) and lists it as `Fecha dia {n} · vence dia {m}`.
+- Contas do mês shows `Fatura {cartão}` with the amount owed; paying opens the sheet with the fatura pre-filled (`Confira com a fatura do banco.`).
+- Lançar has a `Cartão` field for Diário entries, the entry row names its card, and Posso comprar isso? simulates a card purchase on its fatura's day.
+
 ## 0.46.0
 
 > Headline: new accounts start organized

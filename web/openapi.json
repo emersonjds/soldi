@@ -7,7 +7,7 @@
       "name": "AGPL-3.0-only",
       "identifier": "AGPL-3.0-only"
     },
-    "version": "0.46.0"
+    "version": "0.47.0"
   },
   "paths": {
     "/api/auth/me": {
@@ -405,7 +405,7 @@
             }
           },
           "422": {
-            "description": "Name not 1 to 100 characters, amount not above zero or with more than two places, due day not 1 to 31, `category_id` not one of the caller's active bill categories, or `cannot-become-bill` when the entry is not a `bill` entry, already a bill's payment, a resgate or a series member",
+            "description": "Name not 1 to 100 characters, amount not above zero or with more than two places, missing on a conta fixa or present on a card (`amount`), `closing_day` not 1 to 31, due day not 1 to 31, `category_id` not one of the caller's active bill categories or, on a card, `Economia` or a cofrinho, or `cannot-become-bill` when the entry is not a `bill` entry, already a bill's payment, a resgate or a series member",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -518,7 +518,7 @@
             }
           },
           "422": {
-            "description": "Same rules as create, on the bill after the change",
+            "description": "Same rules as create, on the bill after the change; `closing_day` on a conta fixa, `active: false` on a card; `fatura-paid` when a card's `closing_day` changes while a fatura from this month on is paid (D30b)",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -589,7 +589,7 @@
             }
           },
           "404": {
-            "description": "Missing, paused, archived or another user's",
+            "description": "Missing, paused, archived (a card stays payable) or another user's",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -609,7 +609,7 @@
             }
           },
           "422": {
-            "description": "`date` outside `month`, `month` not `YYYY-MM`, amount not above zero or with more than two places, or a date before the opening date (`before-opening-date`)",
+            "description": "`date` outside `month`, `month` not `YYYY-MM`, `amount` missing on a card, amount not above zero or with more than two places, or a date before the opening date (`before-opening-date`)",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -933,7 +933,7 @@
             }
           },
           "422": {
-            "description": "A bad field, `kind-locked` for a `kind` on `Economia`, a cofrinho, `Resgate` or an income category or a `kind` of `income`, `category-has-bills` when moving to `daily` a category an unarchived conta fixa (active or paused) uses, a parent on the other side (income vs outflow) or a non-bill under `Economia` or itself, `nested-subcategory` when the parent is a subcategory or this category has subcategories, `savings-category` when moving `Economia` or `Resgate` or under `Resgate`, `not-a-cofrinho` for a target or deadline outside `Economia`, `color-taken` when the color is taken in any kind the group shows in, or `palette-full` when moving to top-level without a color, or changing a top-level's `kind`, and all 24 are taken in the kind",
+            "description": "A bad field, `kind-locked` for a `kind` on `Economia`, a cofrinho, `Resgate` or an income category or a `kind` of `income`, `category-has-bills` when moving to `daily` a category an unarchived conta fixa (active or paused) uses, `category-has-card-entries` when moving to `bill` a category with entries on a card, a parent on the other side (income vs outflow) or a non-bill under `Economia` or itself, `nested-subcategory` when the parent is a subcategory or this category has subcategories, `savings-category` when moving `Economia` or `Resgate` or under `Resgate`, `not-a-cofrinho` for a target or deadline outside `Economia`, `color-taken` when the color is taken in any kind the group shows in, or `palette-full` when moving to top-level without a color, or changing a top-level's `kind`, and all 24 are taken in the kind",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -1800,7 +1800,7 @@
             }
           },
           "422": {
-            "description": "Amount not above zero or with more than two places, note over 500 characters, a kind other than the category's (`category_id`), `repeat_months` not 2 to 60, `installments` not 2 to 60, with `repeat_months`, or leaving a parcela at zero, a date outside 2000 to 2100, or a date before the opening date (`before-opening-date`)",
+            "description": "Amount not above zero or with more than two places, note over 500 characters, `card_id` on a non-`daily` entry or not one of the caller's unarchived cards, a kind other than the category's (`category_id`), `repeat_months` not 2 to 60, `installments` not 2 to 60, with `repeat_months`, or leaving a parcela at zero, a date outside 2000 to 2100, a date before the opening date (`before-opening-date`), or `fatura-paid` when a spend on a card lands in an already paid fatura (D30b)",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -1973,7 +1973,7 @@
             }
           },
           "422": {
-            "description": "`archived-cofrinho`: the entry, or with `following` a later series member, is a deposit into or a resgate from a deleted cofrinho; nothing is deleted",
+            "description": "`archived-cofrinho`: the entry, or with `following` a later series member, is a deposit into or a resgate from a deleted cofrinho; `fatura-paid`: the entry, or with `following` a later series member, is a card spend of a paid fatura (D30b); nothing is deleted",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -2061,7 +2061,7 @@
             }
           },
           "422": {
-            "description": "Same rules as create, on the entry after the change, `before-opening-date` included; with `repeat_months`, `repeat-not-allowed-on-bill-payment` or `repeat-not-allowed-on-cofrinho-withdrawal` on an entry outside a series, `validation` on `repeat_months` outside 2..60 or below this member's position, on `date` when the series would pass 2100; with `following` on a series member, `validation` on `date` when the new date leaves this entry's month (`must stay in this entry's month when the series moves`) or when two of the moved members share a month (`must not move a series with two entries in one month`); `archived-cofrinho` when the entry, or with `following` a later series member, is a deposit into or a resgate from a deleted cofrinho; nothing is written",
+            "description": "Same rules as create, on the entry after the change, `before-opening-date` included (an archived card it already carries stays allowed); with `repeat_months`, `repeat-not-allowed-on-bill-payment` or `repeat-not-allowed-on-cofrinho-withdrawal` on an entry outside a series, `validation` on `repeat_months` outside 2..60 or below this member's position, on `date` when the series would pass 2100; with `following` on a series member, `validation` on `date` when the new date leaves this entry's month (`must stay in this entry's month when the series moves`) or when two of the moved members share a month (`must not move a series with two entries in one month`); `archived-cofrinho` when the entry, or with `following` a later series member, is a deposit into or a resgate from a deleted cofrinho; `fatura-paid` when the amount, date or card changes on a card spend whose fatura (or, with `following`, a later member's) is paid, or the change lands it in a paid fatura (D30b); nothing is written",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -2078,12 +2078,11 @@
     "schemas": {
       "Bill": {
         "type": "object",
-        "description": "A recurring bill. `due_day` 29 to 31 falls on the last day of a shorter month.",
+        "description": "A recurring bill, or with `closing_day` a credit card (D28). `due_day` 29 to 31 falls on the\nlast day of a shorter month.",
         "required": [
           "id",
           "category_id",
           "name",
-          "amount",
           "due_day",
           "active"
         ],
@@ -2092,11 +2091,23 @@
             "type": "boolean"
           },
           "amount": {
-            "type": "string"
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Always set on a conta fixa, never on a card."
           },
           "category_id": {
             "type": "string",
             "format": "uuid"
+          },
+          "closing_day": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Set only on a card: a spend dated before it (clamped) closes this month's fatura."
           },
           "due_day": {
             "type": "integer",
@@ -2113,7 +2124,7 @@
       },
       "BillOfMonth": {
         "type": "object",
-        "description": "An active recurring bill in the month. `amount` is what was paid, or the bill's amount while\nunpaid; `due_date` clamps a late due day to the month's last day; `overdue` is unpaid with\n`due_date` before today in São Paulo. In the current month, a bill still unpaid in an earlier\nmonth is listed again first, with that month's `due_date`, `overdue` and `lands_on` today (D17).",
+        "description": "An active recurring bill in the month. `amount` is what was paid, or the bill's amount while\nunpaid; `due_date` clamps a late due day to the month's last day; `overdue` is unpaid with\n`due_date` before today in São Paulo. In the current month, a bill still unpaid in an earlier\nmonth is listed again first, with that month's `due_date`, `overdue` and `lands_on` today (D17).\nA card's row is its fatura (D28): unpaid, `amount` sums the spends due that month; a card\nmonth without spends or payment is not listed.",
         "required": [
           "bill_id",
           "name",
@@ -2122,7 +2133,8 @@
           "amount",
           "due_date",
           "paid",
-          "overdue"
+          "overdue",
+          "is_card"
         ],
         "properties": {
           "amount": {
@@ -2143,6 +2155,10 @@
           "icon": {
             "type": "string",
             "description": "The category's lucide icon."
+          },
+          "is_card": {
+            "type": "boolean",
+            "description": "A credit card's fatura (D28)."
           },
           "lands_on": {
             "type": [
@@ -2520,19 +2536,31 @@
         "type": "object",
         "required": [
           "name",
-          "amount",
           "due_day",
           "category_id"
         ],
         "properties": {
           "amount": {
-            "type": "string",
-            "description": "Greater than zero, up to two decimal places."
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "A conta fixa's: greater than zero, up to two decimal places. Absent on a card."
           },
           "category_id": {
             "type": "string",
             "format": "uuid",
             "description": "One of the caller's active `bill` categories."
+          },
+          "closing_day": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "1 to 31; makes the bill a card, which then has no `amount`.",
+            "maximum": 31,
+            "minimum": 1
           },
           "due_day": {
             "type": "integer",
@@ -2611,6 +2639,14 @@
           "amount": {
             "type": "string",
             "description": "Greater than zero, up to two decimal places; never rounded."
+          },
+          "card_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "One of the caller's unarchived cards; only on a `daily` entry."
           },
           "category_id": {
             "type": "string",
@@ -2943,7 +2979,7 @@
       },
       "PayBill": {
         "type": "object",
-        "description": "`amount` defaults to the bill's amount; the bill itself never changes.",
+        "description": "`amount` defaults to the bill's amount and is required for a card; the bill never changes.",
         "required": [
           "date"
         ],
@@ -3220,6 +3256,14 @@
           "amount": {
             "type": "string"
           },
+          "card_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "The card a Diário spend went on; it weighs on the balance with the card's fatura (D28)."
+          },
           "category": {
             "$ref": "#/components/schemas/Category"
           },
@@ -3314,7 +3358,7 @@
       },
       "UpdateBill": {
         "type": "object",
-        "description": "Absent fields stay as they are. `active: false` keeps the bill out of the month.",
+        "description": "Absent fields stay as they are. `active: false` keeps the bill out of the month; a card has\nno pause. `closing_day` changes only on a card.",
         "properties": {
           "active": {
             "type": [
@@ -3334,6 +3378,15 @@
               "null"
             ],
             "format": "uuid"
+          },
+          "closing_day": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "maximum": 31,
+            "minimum": 1
           },
           "due_day": {
             "type": [
@@ -3477,13 +3530,21 @@
       },
       "UpdateTransaction": {
         "type": "object",
-        "description": "Absent fields stay as they are; `\"note\": null` clears the note.",
+        "description": "Absent fields stay as they are; `\"note\": null` clears the note, `\"card_id\": null` the card.",
         "properties": {
           "amount": {
             "type": [
               "string",
               "null"
             ]
+          },
+          "card_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "A new card must be one of the caller's unarchived cards; keeping an archived one is fine."
           },
           "category_id": {
             "type": [

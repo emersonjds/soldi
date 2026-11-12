@@ -5,7 +5,8 @@ use uuid::Uuid;
 
 use super::domain::{CategorySum, MonthSaving};
 
-/// Totals by category and month for the entries dated `from` to `to`, resgates left out (SOL-28).
+/// Totals by category and month for the entries dated `from` to `to`, resgates left out (SOL-28)
+/// and card payments left out, their spends already counted (D28).
 pub async fn category_sums(
     conn: &mut PgConnection,
     user_id: Uuid,
@@ -22,7 +23,9 @@ pub async fn category_sums(
                   COALESCE(p.kind, c.kind) AS "group_kind!: CategoryKind"
            FROM transactions t JOIN categories c ON c.user_id = t.user_id AND c.id = t.category_id
            LEFT JOIN categories p ON p.user_id = c.user_id AND p.id = c.parent_id
+           LEFT JOIN recurring_bills b ON b.user_id = t.user_id AND b.id = t.recurring_bill_id
            WHERE t.user_id = $1 AND t.date BETWEEN $2 AND $3 AND t.cofrinho_id IS NULL
+             AND b.closing_day IS NULL
            GROUP BY c.id, p.id, date_trunc('month', t.date::timestamp)"#,
         user_id,
         from,

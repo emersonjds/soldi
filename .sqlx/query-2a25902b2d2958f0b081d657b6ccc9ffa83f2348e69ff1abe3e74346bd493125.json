@@ -1,0 +1,69 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT date, kind AS \"kind: CategoryKind\", cofrinho_id IS NOT NULL AS \"withdrawn!\",\n                  card_id, SUM(amount) AS \"amount!\"\n           FROM transactions\n           WHERE user_id = $1 AND date <= $3\n             AND (date >= $2 OR (card_id IS NOT NULL AND date >= $4))\n           GROUP BY date, kind, cofrinho_id IS NOT NULL, card_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "date",
+        "type_info": "Date",
+        "origin": {
+          "Table": {
+            "table": "transactions",
+            "name": "date"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "kind: CategoryKind",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "transactions",
+            "name": "kind"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "withdrawn!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 3,
+        "name": "card_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "transactions",
+            "name": "card_id"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "amount!",
+        "type_info": "Numeric",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Date",
+        "Date",
+        "Date"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      null,
+      true,
+      null
+    ]
+  },
+  "hash": "2a25902b2d2958f0b081d657b6ccc9ffa83f2348e69ff1abe3e74346bd493125"
+}

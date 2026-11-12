@@ -261,6 +261,13 @@ pub fn category_has_bills() -> AppError {
     )
 }
 
+pub fn category_has_card_entries() -> AppError {
+    AppError::rule(
+        "category-has-card-entries",
+        "Entries on a card use this category; only a Diário entry goes on a card.",
+    )
+}
+
 /// `target` and `deadline` are set only on a cofrinho; a target is money greater than zero.
 pub fn check_goal(
     cofrinho: bool,

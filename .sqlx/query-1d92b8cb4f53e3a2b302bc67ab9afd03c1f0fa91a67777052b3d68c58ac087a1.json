@@ -1,0 +1,112 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT b.id, b.name, c.icon, c.color, b.amount, b.due_day, b.closing_day,\n                  b.active_since\n           FROM recurring_bills b JOIN categories c ON c.user_id = b.user_id AND c.id = b.category_id\n           WHERE b.user_id = $1\n             AND ((b.active AND b.archived_at IS NULL) OR b.closing_day IS NOT NULL)\n           ORDER BY b.due_day, lower(b.name), b.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "recurring_bills",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "recurring_bills",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "icon",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "categories",
+            "name": "icon"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "color",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "categories",
+            "name": "color"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "amount",
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "recurring_bills",
+            "name": "amount"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "due_day",
+        "type_info": "Int2",
+        "origin": {
+          "Table": {
+            "table": "recurring_bills",
+            "name": "due_day"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "closing_day",
+        "type_info": "Int2",
+        "origin": {
+          "Table": {
+            "table": "recurring_bills",
+            "name": "closing_day"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "active_since",
+        "type_info": "Date",
+        "origin": {
+          "Table": {
+            "table": "recurring_bills",
+            "name": "active_since"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "1d92b8cb4f53e3a2b302bc67ab9afd03c1f0fa91a67777052b3d68c58ac087a1"
+}

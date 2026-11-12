@@ -6,7 +6,7 @@ import { Check, Clock } from "lucide-react";
 import { toast } from "sonner";
 
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { type BillOfMonth, payDateFor, usePayBill, useUnpayBill } from "@/entities/bill/bill-queries";
+import { type BillOfMonth, billTitle, payDateFor, usePayBill, useUnpayBill } from "@/entities/bill/bill-queries";
 import { BillStatus } from "@/entities/bill/bill-status";
 import { billKey } from "@/entities/month/forecast-alert";
 import { ALL_BILLS_PAID, dueDays, nextDue } from "@/entities/month/schedule";
@@ -135,7 +135,8 @@ const Row = ({
 }) => {
   const currency = useCurrency();
   const late = carriedFrom(bill, month);
-  const label = late ? `${bill.name} de ${late}` : bill.name;
+  const title = billTitle(bill);
+  const label = late ? `${title} de ${late}` : title;
   const amount = (
     <Money
       amount={bill.amount}
@@ -158,13 +159,13 @@ const Row = ({
       <CategoryIcon icon={bill.icon} color={bill.color} tintedOnDesktop />
       <span className="flex min-w-0 flex-1 flex-col items-start gap-1">
         <span
-          title={bill.name}
+          title={title}
           className={cn(
             "max-w-full truncate font-medium text-base",
             bill.paid && "lg:text-muted-foreground lg:line-through",
           )}
         >
-          {bill.name}
+          {title}
         </span>
         <Caption bill={bill} paidOn={paidOn} />
       </span>
@@ -206,7 +207,14 @@ export const BillsOfMonth = ({ view, className }: { view: Schemas["MonthView"]; 
   let upcoming = next && `Próxima: dia ${next.due_date.slice(8)} · ${formatMoney(next.amount, currency)}`;
   if (paid === bills.length) upcoming = ALL_BILLS_PAID;
 
+  const adjust = (bill: BillOfMonth) => {
+    setAdjusting(bill);
+    setSheetOpen(true);
+  };
+
+  // A fatura is paid only through the sheet: the API wants its amount (D28).
   const payNow = (bill: BillOfMonth) => {
+    if (bill.is_card) return adjust(bill);
     const month = bill.due_date.slice(0, 7);
     pay.mutate(
       { billId: bill.bill_id, month, date: payDateFor(month, bill.due_date) },
@@ -222,11 +230,6 @@ export const BillsOfMonth = ({ view, className }: { view: Schemas["MonthView"]; 
         onError: () => toast.error("Não foi possível desfazer o pagamento."),
       },
     );
-
-  const adjust = (bill: BillOfMonth) => {
-    setAdjusting(bill);
-    setSheetOpen(true);
-  };
 
   if (bills.length === 0) return null;
 

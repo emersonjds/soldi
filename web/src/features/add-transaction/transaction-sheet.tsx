@@ -10,6 +10,7 @@ import {
   Check,
   CircleCheck,
   CircleX,
+  CreditCard,
   InfinityIcon,
   Lightbulb,
   type LucideIcon,
@@ -23,10 +24,12 @@ import {
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { type BillPrefill, useCreateBill } from "@/entities/bill/bill-queries";
+import { type BillPrefill, useCards, useCreateBill } from "@/entities/bill/bill-queries";
 import { CategoryChips, useCategoryChips } from "@/entities/category/category-chips";
 import { useSettings } from "@/entities/settings/settings-query";
 import { ScopeRadio } from "@/entities/transaction/scope-radio";
@@ -75,6 +78,8 @@ type Draft = {
   kind: Kind;
   amount: string;
   category?: Schemas["Category"];
+  /** `""`: Nenhum. */
+  cardId: string;
   date: string;
   note: string;
   repeat: boolean;
@@ -126,7 +131,10 @@ const TransactionForm = ({
   const isLg = useIsLg();
   const thisMonth = useTransactions(todayISO().slice(0, 7));
   const settings = useSettings();
+  const cards = useCards().data ?? [];
   const category = draft.category ?? categories.data?.[0];
+  const cardId = (draft.kind === "daily" && draft.cardId) || null;
+  const card = cards.find(({ id }) => id === cardId);
   const amount = positiveAmount(draft.amount);
   const months = Number(draft.preset === "other" ? draft.custom : draft.preset);
   const series = transaction?.series;
@@ -160,7 +168,7 @@ const TransactionForm = ({
   if (installments) plan = "installments";
   const rows =
     amount && (plan === "once" || monthsValid)
-      ? draftRows({ kind: draft.kind, amount, date: draft.date, plan, count: months })
+      ? draftRows({ kind: draft.kind, amount, date: draft.date, plan, count: months, card })
       : null;
 
   let amountLabel = draft.kind === "income" ? "Valor da entrada" : "Valor do gasto";
@@ -200,6 +208,8 @@ const TransactionForm = ({
       note: note || null,
       repeat_months: draft.repeat ? months : resized,
       installments: installments ? months : undefined,
+      // Absent keeps the stored card; `null` takes it off.
+      card_id: cardId === (transaction?.card_id ?? null) ? undefined : cardId,
       category,
     };
   };
@@ -251,6 +261,28 @@ const TransactionForm = ({
       entries={thisMonth.isError ? [] : thisMonth.data}
       error={submitted && !category ? "Escolha uma categoria" : undefined}
     />
+  );
+  // D25: no card, no field.
+  const cardField = draft.kind === "daily" && cards.length > 0 && (
+    <Field className="gap-1.5">
+      <FieldLabel htmlFor="transaction-card" className="flex items-center gap-2">
+        <CreditCard aria-hidden className="size-4 text-muted-foreground" />
+        Cartão
+      </FieldLabel>
+      <NativeSelect
+        id="transaction-card"
+        value={draft.cardId}
+        onChange={(event) => set({ cardId: event.target.value })}
+        className="w-full [&>select]:h-12 [&>select]:rounded-xl [&>select]:pl-3 [&>select]:text-base"
+      >
+        <NativeSelectOption value="">Nenhum</NativeSelectOption>
+        {cards.map(({ id, name }) => (
+          <NativeSelectOption key={id} value={id}>
+            {name}
+          </NativeSelectOption>
+        ))}
+      </NativeSelect>
+    </Field>
   );
   const dateField = (
     <div className="flex flex-col gap-2">
@@ -468,6 +500,7 @@ const TransactionForm = ({
           {monthsField}
           {dateField}
           {categoryField}
+          {cardField}
           {noteField}
           {recurringNote}
         </>
@@ -500,7 +533,8 @@ const TransactionForm = ({
             spacing={0}
             value={draft.kind}
             onValueChange={(kind: Kind | "") =>
-              kind && set({ kind, category: undefined, installments: draft.installments && kind !== "income" })
+              kind &&
+              set({ kind, category: undefined, cardId: "", installments: draft.installments && kind !== "income" })
             }
             aria-label="Tipo"
             className="grid w-full grid-cols-3 rounded-2xl bg-muted p-1"
@@ -518,6 +552,7 @@ const TransactionForm = ({
           </ToggleGroup>
           {amountField}
           {categoryField}
+          {cardField}
           {dateField}
           {noteField}
           {recurringNote}
@@ -682,6 +717,7 @@ export const TransactionSheet = ({
         kind: transaction.kind,
         amount: transaction.amount,
         category: transaction.category,
+        cardId: transaction.card_id ?? "",
         date: transaction.date,
         note: transaction.note ?? "",
         ...repeat,
@@ -691,6 +727,7 @@ export const TransactionSheet = ({
         kind: initialKind,
         amount: "",
         category: initialCategory,
+        cardId: "",
         date: initialDate,
         note: "",
         ...repeat,

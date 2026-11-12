@@ -57,6 +57,7 @@ const PROBLEMS: [slug: string, message: string][] = [
   ["kind-locked", "O tipo dessa categoria não pode mudar."],
   ["duplicate-name", "Já existe uma categoria com esse nome no outro tipo."],
   ["category-has-bills", "Uma conta fixa usa essa categoria. Arquive a conta antes de mudar para Diário."],
+  ["fatura-paid", "Essa fatura já foi paga."],
 ];
 
 /** The pt-BR copy of a refused rule more than one screen can meet; otherwise the screen's own. */

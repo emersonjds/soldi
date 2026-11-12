@@ -65,6 +65,8 @@ pub struct Totals {
 /// unpaid; `due_date` clamps a late due day to the month's last day; `overdue` is unpaid with
 /// `due_date` before today in São Paulo. In the current month, a bill still unpaid in an earlier
 /// month is listed again first, with that month's `due_date`, `overdue` and `lands_on` today (D17).
+/// A card's row is its fatura (D28): unpaid, `amount` sums the spends due that month; a card
+/// month without spends or payment is not listed.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct BillOfMonth {
     pub bill_id: Uuid,
@@ -82,6 +84,8 @@ pub struct BillOfMonth {
     /// The day an unpaid bill enters the projection: its due date, or today once due; null when
     /// paid or when that day falls after the month.
     pub lands_on: Option<NaiveDate>,
+    /// A credit card's fatura (D28).
+    pub is_card: bool,
 }
 
 /// The month's savings (SOL-20): `saved` is `totals.saved`; `rate_pct` is `saved / income` as a
