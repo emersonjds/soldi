@@ -828,12 +828,14 @@ export interface components {
             email: string;
         };
         /**
-         * @description A month of the savings year: `income` without resgates and `saved` (Economia and its
-         *     cofrinhos minus resgates), as the month view's `totals.income` and `savings.saved`.
+         * @description A month of the savings year: `income` without resgates, `deposited` (bills under Economia and
+         *     its cofrinhos), `withdrawn` (resgates) and `saved`, `deposited` minus `withdrawn`, as the month
+         *     view's `totals.income` and `savings.saved`.
          *     `rate_pct` is `saved` over `income` with one decimal, null when `income` is 0. `forecast`
          *     marks a month after today's: only the entries already dated there, out of the year's totals.
          */
         SavingsMonth: {
+            deposited: string;
             /** @example false */
             forecast: boolean;
             income: string;
@@ -842,17 +844,20 @@ export interface components {
             /** @example 11.9 */
             rate_pct?: string | null;
             saved: string;
+            withdrawn: string;
         };
         /**
          * @description A year's savings month by month, newest first, from the opening month (or January) to
          *     December; totals and `rate_pct` are over the months up to today's, not the forecast ones.
          */
         SavingsYear: {
+            deposited_total: string;
             income_total: string;
             months: components["schemas"]["SavingsMonth"][];
             /** @example 8.4 */
             rate_pct?: string | null;
             saved_total: string;
+            withdrawn_total: string;
             /**
              * Format: int32
              * @example 2026
