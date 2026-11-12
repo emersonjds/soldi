@@ -66,7 +66,8 @@ pub async fn savings_by_month(
 
 /// One row per month and card of the entries dated `from` to `to`, by purchase date (D31):
 /// income and resgates as `savings_by_month`, deposits, Saídas without deposits and fatura
-/// payments, and Diário; `card_id` only on a card's spends.
+/// payments, and Diário; `card_id` only on a card's spends. A fatura payment counts nowhere but
+/// `withdrawn` and `deposited`, whatever its kind.
 pub async fn year_flows(
     conn: &mut PgConnection,
     user_id: Uuid,
@@ -77,8 +78,8 @@ pub async fn year_flows(
         YearFlow,
         r#"SELECT date_trunc('month', t.date::timestamp)::date AS "month!", t.card_id,
                   card.name AS "card_name?",
-                  COALESCE(SUM(t.amount) FILTER (WHERE t.kind = 'income' AND t.cofrinho_id IS NULL), 0)
-                      AS "income!",
+                  COALESCE(SUM(t.amount) FILTER (WHERE t.kind = 'income' AND t.cofrinho_id IS NULL
+                      AND b.closing_day IS NULL), 0) AS "income!",
                   COALESCE(SUM(t.amount) FILTER (WHERE t.kind <> 'bill' AND t.cofrinho_id IS NOT NULL), 0)
                       AS "withdrawn!",
                   COALESCE(SUM(t.amount) FILTER (WHERE t.kind = 'bill' AND (c.is_savings
@@ -86,8 +87,8 @@ pub async fn year_flows(
                   COALESCE(SUM(t.amount) FILTER (WHERE t.kind = 'bill' AND NOT (c.is_savings
                       OR COALESCE(p.is_savings, false)) AND t.cofrinho_id IS NULL
                       AND b.closing_day IS NULL), 0) AS "bills!",
-                  COALESCE(SUM(t.amount) FILTER (WHERE t.kind = 'daily' AND t.cofrinho_id IS NULL), 0)
-                      AS "daily!"
+                  COALESCE(SUM(t.amount) FILTER (WHERE t.kind = 'daily' AND t.cofrinho_id IS NULL
+                      AND b.closing_day IS NULL), 0) AS "daily!"
            FROM transactions t JOIN categories c ON c.user_id = t.user_id AND c.id = t.category_id
            LEFT JOIN categories p ON p.user_id = c.user_id AND p.id = c.parent_id
            LEFT JOIN recurring_bills b ON b.user_id = t.user_id AND b.id = t.recurring_bill_id
