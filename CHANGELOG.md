@@ -7,6 +7,16 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.51.0
+
+> Headline: Ajustes looks like Stitch
+
+### Web
+
+- Ajustes & Preferências is one page with a sticky sub-nav from 1024 px: Calibragem do Termômetro Financeiro (four limits, the tier scale with today's balance, Restaurar Padrões), Moeda & Saldo Inicial (saves on pick or blur, with Desfazer), Organização (Contas fixas, Categorias), Gestão de Dados & Zona de Perigo, Minha Conta & Segurança, Ajuda & Como Funciona with the version.
+- Deleting entries: Mês atual or the switcher's month, Ano de {aaaa} or Zerar tudo, each with its record count; `Excluir Lançamentos` needs `CONFIRMAR` typed again after any scope or month change and stays off when nothing would go.
+- The old Ajustes subpages redirect to their section; the avatar opens Minha Conta; Ajustes gets the month switcher.
+
 ## 0.50.0
 
 > Headline: Categorias looks like Stitch
