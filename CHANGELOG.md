@@ -7,6 +7,22 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.54.0
+
+> Headline: weekly and yearly series, and Toda a série
+
+### Server
+
+- A series repeats monthly, weekly or yearly (`repeat_every`, D32): weekly members sit 7 days apart and move inside their ISO week; yearly members count from the original date, so 29 February returns in leap years. Installments stay monthly. Migration 0021 adds `series_every` (existing series are monthly).
+- `scope=all` changes or deletes every member of a series from any member (D33); paid faturas, deleted cofrinhos and the opening date still guard every member, each against its own card.
+- A cofrinho's next automatic deposit carries its step.
+
+### Web
+
+- Lançar offers `Mensal · Semanal · Anual` under Repetir; Editar série words every unit by the step.
+- From a middle member, Editar série and delete offer `Toda a série`, confirmed with the number of earlier entries that change.
+- The cofrinho chip reads `toda semana` / `todo ano` for weekly and yearly deposits.
+
 ## 0.53.1
 
 > Headline: a bill payment stays a Saída
