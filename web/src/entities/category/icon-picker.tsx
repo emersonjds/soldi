@@ -5,8 +5,8 @@ import { useEffect, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { CategoryIcon } from "@/shared/ui/category-icon";
 
-/** Shown before the user searches: the icons the default categories wear, plus a few common ones. */
-const SUGGESTED = [
+/** Shown before the user searches: the default categories' icons first, then common ones by theme. */
+export const SUGGESTED = [
   "circle-dashed",
   "shopping-cart",
   "utensils",
@@ -24,6 +24,35 @@ const SUGGESTED = [
   "gift",
   "paw-print",
   "briefcase",
+  "credit-card",
+  "shopping-bag",
+  "receipt",
+  "piggy-bank",
+  "landmark",
+  "bus",
+  "pill",
+  "coffee",
+  "bike",
+  "car-taxi-front",
+  "key-round",
+  "hammer",
+  "droplets",
+  "flame",
+  "wallet",
+  "hand-coins",
+  "calculator",
+  "stethoscope",
+  "brain",
+  "dumbbell",
+  "baby",
+  "languages",
+  "book-open",
+  "film",
+  "music",
+  "tv",
+  "shirt",
+  "scissors",
+  "laptop",
 ];
 
 const PAGE = 24;
