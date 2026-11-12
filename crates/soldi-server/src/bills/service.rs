@@ -62,6 +62,12 @@ pub async fn create(
     transaction_id: Option<Uuid>,
 ) -> Result<Bill, AppError> {
     let input = domain::check(input, "")?;
+    if transaction_id.is_some() && input.closing_day.is_some() {
+        return Err(AppError::invalid(
+            "transaction_id",
+            "an entry becomes a conta fixa, never a card",
+        ));
+    }
     let mut tx = pool.begin().await?;
     if let Some(id) = transaction_id {
         let entry = transactions::repo::find(&mut tx, user.id, id)
@@ -205,6 +211,13 @@ pub async fn insert_all(
         .enumerate()
         .map(|(index, bill)| domain::check(bill, &format!("bills[{index}].")))
         .collect::<Result<Vec<_>, _>>()?;
+    // D28: a card is created from Contas fixas only.
+    if let Some(index) = bills.iter().position(|bill| bill.closing_day.is_some()) {
+        return Err(AppError::invalid(
+            &format!("bills[{index}].closing_day"),
+            "a card is added from Contas fixas",
+        ));
+    }
     let ids: Vec<_> = bills.iter().map(|bill| bill.category_id).collect();
     let allowed = repo::bill_category_ids(conn, user.id, &ids).await?;
     if let Some(index) = ids.iter().position(|id| !allowed.contains(id)) {

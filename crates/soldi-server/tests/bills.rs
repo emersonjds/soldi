@@ -678,3 +678,23 @@ async fn d28_a_card_is_paid_with_an_amount_even_once_archived(pool: PgPool) {
     assert_eq!(status, StatusCode::CREATED, "{december}");
     assert_eq!(ana.get("/api/bills").await.1, json!([]));
 }
+
+#[sqlx::test]
+async fn d28_an_entry_never_becomes_a_card(pool: PgPool) {
+    let ana = TestApp::signed_in(pool, "ana@example.com").await;
+    ana.open_at("0", "2026-11-01").await;
+    let rent = category_id(&ana, "Aluguel").await;
+    let saida = entry(
+        &ana,
+        json!({ "date": "2026-11-07", "amount": "50", "kind": "bill", "category_id": rent }),
+    )
+    .await;
+
+    let (status, problem) = ana
+        .post(&from_entry(&saida), porto(&ana.category_id("Cartão").await))
+        .await;
+
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+    assert_eq!(problem["errors"][0]["field"], "transaction_id");
+    assert_eq!(ana.get("/api/bills").await.1, json!([]));
+}
