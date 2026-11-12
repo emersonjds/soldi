@@ -54,9 +54,8 @@ test("an entry shows up in Para onde vai and Cofrinhos starts empty", async ({ p
   await page.setViewportSize({ width: 375, height: 812 });
 
   await nav.getByRole("link", { name: "Economia" }).click();
-  await expect(page.getByRole("heading", { level: 1, name: "Cofrinhos" })).toBeVisible();
-  await expect(page.getByRole("region", { name: "Guardado" })).toContainText("R$ 0,00");
-  await expect(page.getByText("Nenhum cofrinho ainda. Comece pela reserva de emergência.")).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Cofrinhos & Metas de Poupança" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Total guardado em cofrinhos" })).toContainText("Nada guardado ainda.");
 });
 
 test("Economia folds two cofrinhos and lists both their entries, unclipped from 375 to 1440", async ({
