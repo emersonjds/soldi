@@ -305,7 +305,7 @@ describe("CategoryChips", () => {
     const sheet = await openCreate();
     expect(within(sheet).getByLabelText("Nome")).toHaveAttribute("maxlength", "40");
     expect(within(sheet).getByRole("radio", { name: "Ícone circle-dashed" })).toBeChecked();
-    expect(within(sheet).getAllByRole("radio", { name: /^Ícone / })).toHaveLength(16);
+    expect(within(sheet).getAllByRole("radio", { name: /^Ícone / })).toHaveLength(17);
     expect(within(sheet).getByRole("radio", { name: "Cor Azul" })).toBeChecked();
     await userEvent.type(within(sheet).getByLabelText("Nome"), "  Carro ");
     await userEvent.click(within(sheet).getByRole("radio", { name: "Ícone car" }));
