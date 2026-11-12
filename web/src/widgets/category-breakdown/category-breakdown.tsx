@@ -37,7 +37,7 @@ const caption = "font-semibold text-[11px] text-muted-foreground uppercase leadi
 
 const title = "font-semibold text-lg leading-6";
 
-const pill = "rounded-full bg-secondary px-3 py-1 font-semibold text-secondary-foreground text-sm";
+const pill = "rounded-full bg-secondary px-3 py-1 font-semibold text-secondary-foreground text-sm whitespace-nowrap";
 
 const plural = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
 
@@ -110,7 +110,7 @@ const Donut = ({ groups, active, onSelect, children }: DonutProps) => {
   }));
 
   return (
-    <div className="@container relative mx-auto aspect-square w-full max-w-56 lg:max-w-64">
+    <div className="relative mx-auto aspect-square w-full max-w-56 lg:max-w-64">
       <ChartContainer config={{}} aria-hidden className="aspect-square size-full">
         <PieChart accessibilityLayer={false}>
           <Pie
@@ -129,7 +129,7 @@ const Donut = ({ groups, active, onSelect, children }: DonutProps) => {
           />
         </PieChart>
       </ChartContainer>
-      <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-1 text-center">
+      <div className="@container pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-1 text-center">
         {children}
       </div>
     </div>
