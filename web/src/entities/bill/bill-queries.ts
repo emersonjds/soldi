@@ -26,6 +26,15 @@ export const billsQuery = (includeInactive = false) =>
 
 export const useBills = ({ includeInactive = false } = {}) => useQuery(billsQuery(includeInactive));
 
+export type Card = Bill & { closing_day: number };
+
+/** D28: a card is a bill with a closing day; archived ones only with `includeInactive`. */
+export const useCards = ({ includeInactive = false } = {}) =>
+  useQuery({
+    ...billsQuery(includeInactive),
+    select: (bills) => bills.filter((bill): bill is Card => bill.closing_day != null),
+  });
+
 // A bill changes the projection of every month it falls in.
 const refresh = (client: QueryClient) =>
   Promise.all([

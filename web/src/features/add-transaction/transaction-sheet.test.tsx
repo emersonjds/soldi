@@ -293,6 +293,103 @@ describe("TransactionSheet", () => {
     expect(await screen.findByText("Lançamento atualizado")).toBeInTheDocument();
   });
 
+  describe("on a credit card (D28)", () => {
+    const PORTO: Schemas["Bill"] = {
+      id: "b1000000-0000-4000-8000-000000000009",
+      category_id: BILL_ALUGUEL.category_id,
+      name: "Porto",
+      amount: null,
+      closing_day: 3,
+      due_day: 10,
+      active: true,
+    };
+    const withCard = { "GET /api/bills": { status: 200, body: [BILL_ALUGUEL, PORTO] } };
+    const cardField = () => screen.findByRole("combobox", { name: "Cartão" });
+
+    it("offers Cartão on Diário with Nenhum first and posts the card", async () => {
+      const { sent } = setup({}, withCard);
+
+      const field = await cardField();
+      expect(
+        within(field)
+          .getAllByRole("option")
+          .map((option) => option.textContent),
+      ).toEqual(["Nenhum", "Porto"]);
+      expect(field).toHaveValue("");
+      await userEvent.selectOptions(field, "Porto");
+      await userEvent.type(screen.getByLabelText(/^Valor d/), "3590");
+      await userEvent.click(screen.getByRole("button", { name: "Salvar Lançamento" }));
+
+      expect(await sent("POST")).toMatchObject({ kind: "daily", amount: "35.90", card_id: PORTO.id });
+    });
+
+    it("hides Cartão with no card", async () => {
+      setup({}, { "GET /api/bills": { status: 200, body: [BILL_ALUGUEL] } });
+
+      expect(await screen.findByRole("radio", { name: "Comida fora" })).toBeInTheDocument();
+      expect(screen.queryByRole("combobox", { name: "Cartão" })).not.toBeInTheDocument();
+    });
+
+    it("drops the card when the kind leaves Diário", async () => {
+      const { sent } = setup({}, withCard);
+
+      await userEvent.selectOptions(await cardField(), "Porto");
+      await userEvent.click(screen.getByRole("radio", { name: "Conta" }));
+      expect(screen.queryByRole("combobox", { name: "Cartão" })).not.toBeInTheDocument();
+      await userEvent.click(screen.getByRole("radio", { name: "Diário" }));
+      expect(await cardField()).toHaveValue("");
+      await userEvent.click(screen.getByRole("radio", { name: "Conta" }));
+      await userEvent.click(screen.getByLabelText(/^Valor d/));
+      await userEvent.keyboard("10");
+      await userEvent.click(screen.getByRole("button", { name: "Salvar Lançamento" }));
+
+      expect(await sent("POST")).not.toHaveProperty("card_id");
+    });
+
+    it("keeps the card on every parcela", async () => {
+      const { sent } = setup({}, withCard);
+
+      await userEvent.selectOptions(await cardField(), "Porto");
+      await userEvent.click(screen.getByRole("switch", { name: "Parcelar compra" }));
+      await userEvent.click(screen.getByRole("radio", { name: "3×" }));
+      await userEvent.click(screen.getByLabelText(/^Valor d/));
+      await userEvent.keyboard("90");
+      await userEvent.click(screen.getByRole("button", { name: "Salvar Lançamento" }));
+
+      expect(await sent("POST")).toMatchObject({ installments: 3, card_id: PORTO.id });
+    });
+
+    it("preselects the card when editing and Nenhum takes it off", async () => {
+      const { sent } = setup({ transaction: { ...MERCADO_ROW, card_id: PORTO.id } }, withCard);
+
+      const field = await cardField();
+      await waitFor(() => expect(field).toHaveValue(PORTO.id));
+      await userEvent.selectOptions(field, "Nenhum");
+      await userEvent.click(screen.getByRole("button", { name: "Salvar Lançamento" }));
+
+      expect(await sent("PATCH")).toMatchObject({ card_id: null });
+    });
+
+    it("simulates the spend on the fatura's due date", async () => {
+      setup(
+        {},
+        {
+          "GET /api/bills": { status: 200, body: [{ ...PORTO, closing_day: 6, due_day: 12 }] },
+          "GET /api/forecast": { status: 200, body: FORECAST },
+          "GET /api/settings": { status: 200, body: SETTINGS },
+        },
+      );
+
+      await userEvent.selectOptions(await cardField(), "Porto");
+      await userEvent.click(screen.getByRole("switch", { name: "Simular" }));
+      await userEvent.click(screen.getByLabelText(/^Valor d/));
+      await userEvent.keyboard("6700,00");
+
+      const simulation = await screen.findByRole("region", { name: "Simulação" });
+      await waitFor(() => expect(simulation).toHaveTextContent(/^12\/11.*Com essa compra, dia 12 fica no vermelho/));
+    });
+  });
+
   it("tells when the server refuses", async () => {
     setup({}, { "POST /api/transactions": { status: 422, body: problem(422, "amount") } });
 
@@ -759,7 +856,7 @@ describe("TransactionSheet", () => {
     await userEvent.click(screen.getByRole("button", { name: "Criar conta" }));
 
     expect(await screen.findByText("Lançado, mas a conta fixa não foi criada.")).toBeInTheDocument();
-    const bill = requests.find((request) => request.url.includes("/api/bills"));
+    const bill = requests.find((request) => request.method === "POST" && request.url.includes("/api/bills"));
     expect(await bill?.json()).toMatchObject({ name: "Internet" });
   });
 
@@ -774,7 +871,7 @@ describe("TransactionSheet", () => {
     await userEvent.click(screen.getByRole("button", { name: "Criar conta" }));
 
     expect(await screen.findByText("Não foi possível salvar o lançamento.")).toBeInTheDocument();
-    expect(requests.some((request) => request.url.includes("/api/bills"))).toBe(false);
+    expect(requests.some((request) => request.method === "POST" && request.url.includes("/api/bills"))).toBe(false);
   });
 
   it("turns the stored Saída into a bill with the bills call only, ignoring unsaved edits", async () => {

@@ -193,6 +193,24 @@ describe("Mês", () => {
     expect(within(days[2]).getByText("R$ 2.342,10")).toHaveClass("text-tier-green-foreground");
   });
 
+  it("names the card an entry went on, archived or not (D28)", async () => {
+    const card = { id: "b1000000-0000-4000-8000-000000000009", name: "Porto", closing_day: 3, due_day: 10 };
+    open({
+      "GET /api/transactions": {
+        status: 200,
+        body: [{ ...TRANSACTIONS[0], card_id: card.id }, ...TRANSACTIONS.slice(1)],
+      },
+      "GET /api/bills?include_inactive=true": { status: 200, body: [{ ...card, amount: null, active: false }] },
+    });
+
+    const groceries = await within(await screen.findByRole("region", { name: "Lançamentos" })).findByRole("button", {
+      name: /Compras da semana/,
+    });
+    await waitFor(() => expect(groceries).toHaveTextContent("Compras da semanaDiárioPorto- R$ 184,31"));
+    expect(groceries.querySelector(".lucide-credit-card")).not.toBeNull();
+    expect(within(ledger()).getByRole("button", { name: /Aluguel/ })).toHaveTextContent("AluguelSaída- R$ 1.200,00");
+  });
+
   it("puts the title, the filter and Ver o mês inteiro with an arrow on one row from lg", async () => {
     open({
       "GET /api/transactions": {
