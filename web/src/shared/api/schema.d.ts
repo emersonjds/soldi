@@ -498,7 +498,8 @@ export interface components {
         };
         /**
          * @description `icon` is a lucide icon name; `color` a palette token, `cat-1` to `cat-24`, unique among the
-         *     active top-level categories of a kind and the parent's on a subcategory; `parent_id` the
+         *     active top-level categories showing in a kind (their own or a subcategory's) and the parent's on
+         *     a subcategory; `parent_id` the
          *     category this one is a subcategory of, null for a top-level one. `is_savings` marks the
          *     user's `Economia` (bill) and `Resgate` (income); `target` and `deadline` belong only to
          *     cofrinhos, the subcategories of `Economia`.
@@ -520,7 +521,8 @@ export interface components {
         /**
          * @description A top-level category with its subcategories' amounts rolled in: `amount` and `previous_amount`
          *     add its own entries and its subcategories'; `pct` is its share of the outflow or income total.
-         *     `children` are the subcategories with entries in the month, largest first.
+         *     `children` are the subcategories with entries in the month, largest first; `kind` is the
+         *     top-level category's own, whatever its subcategories' kinds.
          */
         CategoryGroup: {
             amount: string;
@@ -636,8 +638,10 @@ export interface components {
         /**
          * @description `icon` defaults to `circle-dashed`; `color`, `cat-1` to `cat-24`, to the lowest token free in
          *     the kind. `parent_id` makes it a subcategory of one of the caller's active top-level categories
-         *     of the same kind; for a subcategory `color` is validated, then ignored: it wears its parent's
-         *     color.
+         *     on the same side: income under income, `daily` or `bill` under either outflow kind, only `bill`
+         *     under `Economia`. For a subcategory `color` is validated, then ignored: it wears its parent's
+         *     color; a parent whose color is taken in the child's kind moves to the lowest token free in every
+         *     kind it shows in, or keeps it when none is.
          */
         CreateCategory: {
             color?: string | null;
@@ -939,8 +943,10 @@ export interface components {
         /**
          * @description Absent fields stay as they are; the kind never changes; `"parent_id": null` makes it top-level,
          *     with `color` or the lowest token free in the kind. For a subcategory `color` is validated, then
-         *     ignored: it wears its parent's; a parent's new color reaches its subcategories. `null` clears `target` or
-         *     `deadline`, which only a subcategory of `Economia` may set. Leaving `Economia` clears both.
+         *     ignored: it wears its parent's; a parent's new color reaches its subcategories. A move under a
+         *     group can recolor that group and its subcategories to a color free in every kind it shows in.
+         *     `null` clears `target` or `deadline`, which only a subcategory of `Economia` may set. Leaving
+         *     `Economia` clears both.
          */
         UpdateCategory: {
             color?: string | null;
@@ -1604,7 +1610,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Active categories, flat: income, bills, then daily; within a kind by parent name, each parent followed by its subcategories by name */
+            /** @description Active categories, flat: income, bills, then daily; within a kind by parent name, each parent followed by its subcategories by name; a subcategory of another kind than its parent sits in its own kind's section */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1679,7 +1685,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description A bad field, a parent of another kind, `nested-subcategory` when the parent is a subcategory, `savings-category` under `Resgate`, `not-a-cofrinho` for a target or deadline outside `Economia`, `color-taken` when another active top-level category of the kind has the color, or `palette-full` when no color is given and all 24 are taken in the kind */
+            /** @description A bad field, a parent on the other side (income vs outflow) or a non-bill under `Economia`, `nested-subcategory` when the parent is a subcategory, `savings-category` under `Resgate`, `not-a-cofrinho` for a target or deadline outside `Economia`, `color-taken` when the color is taken in any kind the group shows in, or `palette-full` when no color is given and all 24 are taken in the kind */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -1787,7 +1793,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description A bad field, a parent of another kind or itself, `nested-subcategory` when the parent is a subcategory or this category has subcategories, `savings-category` when moving `Economia` or `Resgate` or under `Resgate`, `not-a-cofrinho` for a target or deadline outside `Economia`, `color-taken` when another active top-level category of the kind has the color, or `palette-full` when moving to top-level without a color and all 24 are taken in the kind */
+            /** @description A bad field, a parent on the other side (income vs outflow) or a non-bill under `Economia` or itself, `nested-subcategory` when the parent is a subcategory or this category has subcategories, `savings-category` when moving `Economia` or `Resgate` or under `Resgate`, `not-a-cofrinho` for a target or deadline outside `Economia`, `color-taken` when the color is taken in any kind the group shows in, or `palette-full` when moving to top-level without a color and all 24 are taken in the kind */
             422: {
                 headers: {
                     [name: string]: unknown;
