@@ -916,6 +916,34 @@ async fn p6_a_month_note_is_stored_replaced_and_deleted_by_a_blank(pool: PgPool)
 }
 
 #[sqlx::test]
+async fn p6_the_savings_year_shows_notes_from_the_opening_month_through_december(pool: PgPool) {
+    let user = TestApp::signed_in(pool, "ana@example.com").await;
+    open_at(&user, "0", "2026-03-15").await;
+
+    for (month, note) in [
+        ("2026-02", "antes da abertura"),
+        ("2026-03", "abertura"),
+        ("2026-12", "previsto"),
+    ] {
+        let (status, _) = user
+            .put(
+                &format!("/api/months/{month}/note"),
+                json!({ "note": note }),
+            )
+            .await;
+        assert_eq!(status, StatusCode::NO_CONTENT, "{month}");
+    }
+
+    assert_eq!(
+        notes(&user, "2026").await,
+        [
+            ("2026-12".to_string(), json!("previsto")),
+            ("2026-03".to_string(), json!("abertura")),
+        ]
+    );
+}
+
+#[sqlx::test]
 async fn p6_a_bad_month_or_a_long_note_is_422(pool: PgPool) {
     let user = TestApp::signed_in(pool, "ana@example.com").await;
 

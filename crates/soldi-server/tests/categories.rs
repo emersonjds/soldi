@@ -1351,6 +1351,8 @@ async fn p4_a_cofrinho_keeps_a_note_and_loses_it_outside_economia(pool: PgPool) 
     assert_eq!(problem["errors"][0]["field"], "note");
     let (status, _) = user.patch(&uri, json!({ "note": "é".repeat(140) })).await;
     assert_eq!(status, StatusCode::OK);
+    let (_, cofrinhos) = user.get("/api/cofrinhos").await;
+    assert_eq!(note_of(&cofrinhos, "Troca de Carro"), "é".repeat(140));
     let (status, _) = user.patch(&uri, json!({ "note": null })).await;
     assert_eq!(status, StatusCode::OK);
     let (_, cofrinhos) = user.get("/api/cofrinhos").await;
@@ -1377,6 +1379,8 @@ async fn p4_a_cofrinho_keeps_a_note_and_loses_it_outside_economia(pool: PgPool) 
     assert_eq!(problem["type"], "urn:soldi:error:not-a-cofrinho");
 
     user.patch(&uri, json!({ "note": "Plano" })).await;
+    let (_, cofrinhos) = user.get("/api/cofrinhos").await;
+    assert_eq!(note_of(&cofrinhos, "Troca de Carro"), "Plano");
     let (status, _) = user.patch(&uri, json!({ "parent_id": null })).await;
     assert_eq!(status, StatusCode::OK);
     user.patch(&uri, json!({ "parent_id": economia })).await;

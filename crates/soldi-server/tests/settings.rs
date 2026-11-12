@@ -122,6 +122,11 @@ async fn p5_the_savings_target_is_a_percent_above_0_up_to_100(pool: PgPool) {
         .patch("/api/settings", json!({ "savings_target_pct": "100" }))
         .await;
     assert_eq!(full["savings_target_pct"], "100.00");
+    let (status, other) = user
+        .patch("/api/settings", json!({ "tier_green": "2500" }))
+        .await;
+    assert_eq!(status, StatusCode::OK, "{other}");
+    assert_eq!(other["savings_target_pct"], "100.00");
 
     for pct in [
         json!("0"),
