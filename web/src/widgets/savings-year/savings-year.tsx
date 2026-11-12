@@ -426,7 +426,8 @@ const YearBody = ({ data, year, today }: { data: Schemas["SavingsYear"]; year: n
   );
 };
 
-const hasMoney = (month: Month) => cents(month.income) !== 0 || cents(month.saved) !== 0;
+const hasMoney = (month: Month) =>
+  cents(month.income) !== 0 || cents(month.deposited) !== 0 || cents(month.withdrawn) !== 0;
 
 /** Spec 2026-11-11 §7: the year's Economia month by month, between the opening year and this one. */
 export const SavingsYear = () => {

@@ -218,6 +218,16 @@ describe("SavingsYear", () => {
     expect(within(section()).queryByText(/^Consistência/)).not.toBeInTheDocument();
   });
 
+  it("shows a year whose resgates matched its deposits, with no income", async () => {
+    show({
+      "GET /api/reports/savings": year([
+        month("2026-11", "0.00", { income: "0.00", rate_pct: null, deposited: "500.00", withdrawn: "500.00" }),
+      ]),
+    });
+
+    expect(await row("Novembro de 2026")).toHaveTextContent("Resgatado R$ 500,00");
+  });
+
   it("keeps the band for an older account with nothing yet this year and reaches past years", async () => {
     const requests = show(
       {
