@@ -13,6 +13,18 @@ pub struct Message {
     pub html: String,
 }
 
+/// A hosted run (`PORT` or `RAILWAY_ENVIRONMENT` set) must name its public URL; a local one
+/// defaults to `http://localhost:8080`.
+pub fn public_url(explicit: Option<String>, hosted: bool) -> Result<String, String> {
+    match explicit.filter(|url| !url.trim().is_empty()) {
+        Some(url) => Ok(url.trim().trim_end_matches('/').to_string()),
+        None if hosted => {
+            Err("SOLDI_PUBLIC_URL is required when PORT or RAILWAY_ENVIRONMENT is set".into())
+        }
+        None => Ok("http://localhost:8080".into()),
+    }
+}
+
 #[derive(Clone)]
 pub enum Mailer {
     /// No `RESEND_API_KEY` (local runs): the link goes to the log, the address does not.
@@ -65,9 +77,9 @@ impl Mailer {
         public_url: &str,
     ) -> Result<Self, String> {
         let Some(api_key) = api_key else {
-            let local = ["http://localhost", "http://127.0.0.1"]
-                .iter()
-                .any(|prefix| public_url.starts_with(prefix));
+            let local = reqwest::Url::parse(public_url).is_ok_and(|url| {
+                url.scheme() == "http" && matches!(url.host_str(), Some("localhost" | "127.0.0.1"))
+            });
             return if local {
                 Ok(Mailer::Log)
             } else {
@@ -95,13 +107,8 @@ impl Mailer {
             .await
     }
 
-    pub async fn send_email_verification(
-        &self,
-        to: &str,
-        name: &str,
-        link: &str,
-    ) -> reqwest::Result<()> {
-        let message = email_verification(to, name, link);
+    pub async fn send_email_verification(&self, to: &str, link: &str) -> reqwest::Result<()> {
+        let message = email_verification(to, link);
         self.deliver(message, "email verification link for a user", link)
             .await
     }
@@ -178,17 +185,18 @@ fn password_reset(to: &str, name: &str, link: &str) -> Message {
     }
 }
 
-fn email_verification(to: &str, name: &str, link: &str) -> Message {
+/// No name: the account owner chose it and the address may be someone else's.
+fn email_verification(to: &str, link: &str) -> Message {
     let intro = "Confirme que este e-mail é seu para concluir a verificação da sua conta no Soldi. \
                  Use o link abaixo em até 24 horas:";
     let outro = "Se não foi você, ignore este e-mail.";
-    let (html_name, html_link) = (escape_html(name), escape_html(link));
+    let html_link = escape_html(link);
     Message {
         to: to.to_string(),
         subject: "Confirme seu e-mail no Soldi".into(),
-        text: format!("Olá, {name}.\n\n{intro}\n\n{link}\n\n{outro}\n"),
+        text: format!("Olá!\n\n{intro}\n\n{link}\n\n{outro}\n"),
         html: format!(
-            "<p>Olá, {html_name}.</p><p>{intro}</p>\
+            "<p>Olá!</p><p>{intro}</p>\
              <p><a href=\"{html_link}\">{html_link}</a></p><p>{outro}</p>"
         ),
     }
@@ -236,33 +244,28 @@ mod tests {
     }
 
     #[test]
-    fn the_verification_message_carries_the_link_and_escapes_the_name_in_html() {
+    fn the_verification_message_carries_the_escaped_link_and_no_name() {
         let link = "https://getsoldi.app/verificar-email#token=abc&x";
 
-        let message = email_verification("ana@example.com", "<Ana & \"Bia\">", link);
+        let message = email_verification("ana@example.com", link);
 
         assert_eq!(message.to, "ana@example.com");
         assert_eq!(message.subject, "Confirme seu e-mail no Soldi");
         assert_eq!(
             message.text,
-            "Olá, <Ana & \"Bia\">.\n\n\
+            "Olá!\n\n\
              Confirme que este e-mail é seu para concluir a verificação da sua conta no Soldi. \
              Use o link abaixo em até 24 horas:\n\n\
              https://getsoldi.app/verificar-email#token=abc&x\n\n\
              Se não foi você, ignore este e-mail.\n"
         );
-        assert!(
-            message
-                .html
-                .contains("Olá, &lt;Ana &amp; &quot;Bia&quot;&gt;.")
-        );
+        assert!(message.html.starts_with("<p>Olá!</p>"), "{}", message.html);
         let html_link = "https://getsoldi.app/verificar-email#token=abc&amp;x";
         assert!(
             message
                 .html
                 .contains(&format!("<a href=\"{html_link}\">{html_link}</a>"))
         );
-        assert!(!message.html.contains("<Ana"));
     }
 
     #[tokio::test]
@@ -275,7 +278,7 @@ mod tests {
         let _guard = tracing::subscriber::set_default(subscriber);
 
         Mailer::Log
-            .send_email_verification("ana@example.com", "Ana", "http://x/verificar-email#token=t")
+            .send_email_verification("ana@example.com", "http://x/verificar-email#token=t")
             .await
             .unwrap();
 
@@ -360,9 +363,30 @@ mod tests {
             "https://getsoldi.app",
             "http://getsoldi.app",
             "https://localhost",
+            "http://localhost.evil.tld",
+            "http://127.0.0.1.evil.tld",
+            "http://localhost@evil.tld",
+            "http://localhostevil.tld",
+            "not a url",
         ] {
             assert!(from_env(None, None, url).is_err(), "{url}");
         }
+    }
+
+    #[test]
+    fn a_local_run_defaults_the_public_url_and_a_hosted_one_must_name_it() {
+        assert_eq!(public_url(None, false).unwrap(), "http://localhost:8080");
+        let required = "SOLDI_PUBLIC_URL is required when PORT or RAILWAY_ENVIRONMENT is set";
+        assert_eq!(public_url(None, true).unwrap_err(), required);
+        assert_eq!(public_url(Some(" ".into()), true).unwrap_err(), required);
+        assert_eq!(
+            public_url(Some("https://getsoldi.app/".into()), true).unwrap(),
+            "https://getsoldi.app"
+        );
+        assert_eq!(
+            public_url(Some("http://localhost:3000".into()), false).unwrap(),
+            "http://localhost:3000"
+        );
     }
 
     #[derive(Clone, Default)]

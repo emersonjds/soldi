@@ -205,11 +205,53 @@ async fn an_expired_link_is_refused(pool: PgPool) {
 
 #[sqlx::test]
 async fn an_unknown_token_is_refused(pool: PgPool) {
-    let (app, _) = app(pool);
+    let (app, _) = app(pool.clone());
+    app.another_user("ana@example.com").await;
+    request_reset(&app, "ana@example.com").await;
 
     let (status, problem) = confirm(&app, "not-a-token", NEW_PASSWORD).await;
 
     assert_invalid_link(status, &problem);
+    assert_eq!(verified_users(&pool).await, 0);
+}
+
+async fn verified_users(pool: &PgPool) -> i64 {
+    sqlx::query_scalar("SELECT count(*) FROM users WHERE email_verified_at IS NOT NULL")
+        .fetch_one(pool)
+        .await
+        .unwrap()
+}
+
+#[sqlx::test]
+async fn confirming_a_reset_voids_pending_verification_links(pool: PgPool) {
+    let (app, mail) = app(pool.clone());
+    let ana = app.another_user("ana@example.com").await;
+    let bia = app.another_user("bia@example.com").await;
+    for user in [&ana, &bia] {
+        let request = json_request(
+            Method::POST,
+            "/api/me/email-verification",
+            user.cookie.as_deref(),
+            None,
+        );
+        assert_eq!(user.send(request).await.status(), StatusCode::ACCEPTED);
+    }
+    mail.sent().await;
+    request_reset(&app, "ana@example.com").await;
+    let token = token_in(mail.sent().await.last().unwrap());
+
+    assert_eq!(
+        confirm(&app, &token, NEW_PASSWORD).await.0,
+        StatusCode::NO_CONTENT
+    );
+
+    let pending: Vec<String> = sqlx::query_scalar(
+        "SELECT u.email FROM email_verifications v JOIN users u ON u.id = v.user_id",
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(pending, vec!["bia@example.com".to_string()]);
 }
 
 #[sqlx::test]
@@ -292,7 +334,7 @@ async fn the_link_is_stored_only_as_its_hash(pool: PgPool) {
 
 #[sqlx::test]
 async fn a_short_new_password_is_refused_and_the_link_still_works(pool: PgPool) {
-    let (app, mail) = app(pool);
+    let (app, mail) = app(pool.clone());
     app.another_user("ana@example.com").await;
     request_reset(&app, "ana@example.com").await;
     let token = token_in(&mail.sent().await[0]);
@@ -301,6 +343,7 @@ async fn a_short_new_password_is_refused_and_the_link_still_works(pool: PgPool) 
 
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
     assert_eq!(problem["errors"][0]["field"], "password");
+    assert_eq!(verified_users(&pool).await, 0);
     assert_eq!(
         confirm(&app, &token, NEW_PASSWORD).await.0,
         StatusCode::NO_CONTENT

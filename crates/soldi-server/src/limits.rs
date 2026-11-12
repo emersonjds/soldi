@@ -66,6 +66,11 @@ pub const EMAIL_VERIFY_USER: Budget = Budget {
     limit: 3,
     window: ONE_HOUR,
 };
+pub const EMAIL_VERIFY_IP: Budget = Budget {
+    name: "email-verify-ip",
+    limit: 10,
+    window: ONE_HOUR,
+};
 pub const EMAIL_VERIFY_CONFIRM_IP: Budget = Budget {
     name: "email-verify-confirm-ip",
     limit: 20,

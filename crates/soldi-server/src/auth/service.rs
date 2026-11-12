@@ -152,7 +152,7 @@ pub async fn request_password_reset(
         .map_err(|error| AppError::Internal(error.to_string()))
 }
 
-/// Sets the password and ends every session and every pending link of the user.
+/// Sets the password, verifies the e-mail and ends every session and every pending link of the user.
 pub async fn confirm_password_reset(
     pool: &PgPool,
     input: ConfirmPasswordReset,
@@ -175,6 +175,7 @@ pub async fn confirm_password_reset(
     repo::mark_email_verified(&mut tx, user_id).await?;
     repo::delete_all_sessions(&mut tx, user_id).await?;
     repo::delete_password_resets(&mut tx, user_id).await?;
+    repo::delete_email_verifications(&mut tx, user_id).await?;
     tx.commit().await?;
     Ok(())
 }
@@ -204,7 +205,7 @@ pub async fn request_email_verification(
     tx.commit().await?;
     let link = format!("{public_url}/verificar-email#token={token}");
     mailer
-        .send_email_verification(&found.email, &found.name, &link)
+        .send_email_verification(&found.email, &link)
         .await
         .map_err(|error| AppError::Internal(error.to_string()))
 }

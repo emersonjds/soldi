@@ -252,12 +252,15 @@ pub async fn confirm_password_reset(
         (status = 429, body = Problem, content_type = "application/problem+json", description = "Rate limited; wait `Retry-After` seconds")))]
 pub async fn request_email_verification(
     State(state): State<AppState>,
+    headers: HeaderMap,
+    peer: Peer,
     user: CurrentUser,
 ) -> Result<StatusCode, AppError> {
-    let user_id = Some(user.id.to_string());
-    state
-        .limiter
-        .check(&[(limits::EMAIL_VERIFY_USER, user_id)])?;
+    let ip = client_ip(&headers, peer);
+    state.limiter.check(&[
+        (limits::EMAIL_VERIFY_IP, ip),
+        (limits::EMAIL_VERIFY_USER, Some(user.id.to_string())),
+    ])?;
     service::check_unverified(&state.pool, &user).await?;
     let mailer = state.mailer.clone();
     let task = tokio::spawn(async move {

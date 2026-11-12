@@ -100,7 +100,7 @@ async fn a_request_mails_a_fragment_link_and_confirming_it_verifies_the_email_on
     let token = token_in(message);
     assert_eq!(token.len(), 43, "{token}");
     let link = format!("http://localhost:8080/verificar-email#token={token}");
-    assert!(message.text.starts_with("Olá, ana."), "{}", message.text);
+    assert!(message.text.starts_with("Olá!\n"), "{}", message.text);
     assert!(message.text.contains(&link), "{}", message.text);
     assert!(message.html.contains(&format!("href=\"{link}\"")));
 
@@ -110,6 +110,13 @@ async fn a_request_mails_a_fragment_link_and_confirming_it_verifies_the_email_on
         .unwrap();
     assert_eq!(stored, vec![hash_token(&token)]);
     assert_eq!(stored[0].len(), 32);
+    let lasts_a_day: bool = sqlx::query_scalar(
+        "SELECT expires_at - created_at = interval '24 hours' FROM email_verifications",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(lasts_a_day);
 
     let response = app.send(confirm_request(&token)).await;
     assert_eq!(response.status(), StatusCode::NO_CONTENT);
@@ -210,6 +217,35 @@ async fn the_fourth_request_of_one_user_within_an_hour_is_limited(pool: PgPool) 
     assert_rate_limited(ana.send(verification_request(&ana)).await).await;
     assert_eq!(mail.sent().await.len(), 3);
     assert_eq!(request(&bia).await.0, StatusCode::ACCEPTED);
+}
+
+#[sqlx::test]
+async fn the_eleventh_request_from_one_ip_is_limited_before_the_user_budget(pool: PgPool) {
+    let (app, _) = app(pool);
+    let mut users = Vec::new();
+    for n in 0..4 {
+        users.push(app.another_user(&format!("u{n}@example.com")).await);
+    }
+    for n in 0..10 {
+        let user = &users[n / 3];
+        let response = user
+            .send(forwarded(verification_request(user), "203.0.113.1"))
+            .await;
+        assert_eq!(response.status(), StatusCode::ACCEPTED, "{n}");
+    }
+
+    let last = &users[3];
+    assert_rate_limited(
+        last.send(forwarded(verification_request(last), "203.0.113.1"))
+            .await,
+    )
+    .await;
+    for n in 0..2 {
+        let response = last
+            .send(forwarded(verification_request(last), "203.0.113.2"))
+            .await;
+        assert_eq!(response.status(), StatusCode::ACCEPTED, "{n}");
+    }
 }
 
 #[sqlx::test]
