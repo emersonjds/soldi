@@ -32,11 +32,11 @@ async fn created(user: &TestApp, uri: &str, body: Value) -> Value {
 /// a repeated series and a reset link.
 async fn fill_account(pool: &PgPool, user: &TestApp, email: &str) {
     let today = soldi_server::today_sao_paulo().to_string();
-    let mercado = user.category_id("Mercado").await;
+    let alimentacao = user.category_id("Alimentação").await;
     let feira = created(
         user,
         "/api/categories",
-        json!({ "name": "Feira", "kind": "daily", "parent_id": mercado }),
+        json!({ "name": "Feira", "kind": "daily", "parent_id": alimentacao }),
     )
     .await;
     created(
