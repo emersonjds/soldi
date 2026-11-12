@@ -26,15 +26,22 @@ test("a user renames, changes the password, signs out everywhere and signs in wi
     .click();
 
   await page.getByRole("link", { name: "Minha conta", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Minha conta" })).toBeVisible();
-  await page.getByLabel("Nome").fill("Ana Paula");
-  await page.getByRole("button", { name: "Salvar" }).click();
+  await expect(page.getByRole("heading", { name: "Minha Conta & Segurança" })).toBeVisible();
+  await page.getByRole("button", { name: "Alterar dados" }).click();
+  const profile = page.getByRole("dialog", { name: "Alterar dados" });
+  await profile.getByLabel("Nome").fill("Ana Paula");
+  await profile.getByRole("button", { name: "Salvar" }).click();
+  await expect(page.getByText("Nome salvo")).toBeVisible();
+  await page.keyboard.press("Escape");
   await expect(page.getByRole("link", { name: /^Minha conta,/ })).toContainText("Ana Paula");
 
-  await page.getByLabel("Senha atual").fill("uma-senha-bem-longa");
-  await page.getByLabel("Nova senha").fill("outra-senha-bem-longa");
   await page.getByRole("button", { name: "Trocar senha" }).click();
+  const password = page.getByRole("dialog", { name: "Trocar senha" });
+  await password.getByLabel("Senha atual").fill("uma-senha-bem-longa");
+  await password.getByLabel("Nova senha").fill("outra-senha-bem-longa");
+  await password.getByRole("button", { name: "Trocar senha" }).click();
   await expect(page.getByText("Senha trocada. Os outros aparelhos foram desconectados.")).toBeVisible();
+  await page.keyboard.press("Escape");
 
   await page.getByRole("button", { name: "Sair de todos os aparelhos" }).click();
   await page.getByRole("alertdialog").getByRole("button", { name: "Sair de todos" }).click();
