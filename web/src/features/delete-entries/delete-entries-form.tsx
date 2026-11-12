@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
@@ -25,10 +25,15 @@ const monthName = (month: string) => {
   return `${name[0].toUpperCase()}${name.slice(1)} ${month.slice(0, 4)}`;
 };
 
-/** Months of `year` from January, or the opening month, up to today's month. */
+const months = (count: number) => (count === 1 ? "1 mês" : `${count} meses`);
+
+/** `2026-11…` → a month count since year 0. */
+const monthIndex = (date: string) => Number(date.slice(0, 4)) * 12 + Number(date.slice(5, 7));
+
+/** Months of `year` from the opening month up to today's month; 0 for a year outside them. */
 const monthsOf = (year: string, opening: string, today: string) => {
-  const first = opening.startsWith(year) ? Number(opening.slice(5, 7)) : 1;
-  const last = today.startsWith(year) ? Number(today.slice(5, 7)) : 12;
+  const first = Math.max(monthIndex(opening), monthIndex(`${year}-01`));
+  const last = Math.min(monthIndex(today), monthIndex(`${year}-12`));
   return Math.max(last - first + 1, 0);
 };
 
@@ -38,25 +43,51 @@ export const DeleteEntriesForm = ({ month, opening }: { month: string; opening: 
   const year = month.slice(0, 4);
   const [scope, setScope] = useState<Scope>("month");
   const [typed, setTyped] = useState("");
-  const count = useTransactionCount(month);
+  const scopesRef = useRef<HTMLDivElement>(null);
+  const counts = {
+    month: useTransactionCount(month),
+    year: useTransactionCount(year),
+    all: useTransactionCount("all"),
+  };
   const remove = useDeletePeriod();
   const period = { month, year, all: "all" }[scope];
+  const yearMonths = months(monthsOf(year, opening, today));
+  const failed = Object.values(counts).filter((count) => count.isError);
 
   const scopes: { value: Scope; title: string; caption: string }[] = [
     {
       value: "month",
       title: month === today.slice(0, 7) ? "Mês atual" : "Mês selecionado",
-      caption: count.data === undefined ? monthName(month) : `${monthName(month)} (${records(count.data)})`,
+      caption:
+        counts.month.data === undefined ? monthName(month) : `${monthName(month)} (${records(counts.month.data)})`,
     },
-    { value: "year", title: `Ano de ${year}`, caption: `Todos os ${monthsOf(year, opening, today)} meses deste ano` },
-    { value: "all", title: "Zerar tudo", caption: "Limpa toda a base da conta" },
+    {
+      value: "year",
+      title: `Ano de ${year}`,
+      caption: counts.year.data === undefined ? yearMonths : `${records(counts.year.data)} em ${yearMonths}`,
+    },
+    {
+      value: "all",
+      title: "Zerar tudo",
+      caption:
+        counts.all.data === undefined
+          ? "Limpa toda a base da conta"
+          : `Limpa toda a base da conta (${records(counts.all.data)})`,
+    },
   ];
+
+  const choose = (next: Scope) => {
+    setScope(next);
+    setTyped("");
+    remove.reset();
+  };
 
   const confirm = () =>
     remove.mutate(period, {
       onSuccess: ({ deleted }) => {
         toast.success(`${entries(deleted)} ${deleted === 1 ? "apagado" : "apagados"}`);
         setTyped("");
+        scopesRef.current?.focus();
       },
     });
 
@@ -65,7 +96,13 @@ export const DeleteEntriesForm = ({ month, opening }: { month: string; opening: 
       <p id="delete-scope" className="font-semibold text-sm">
         Selecione o escopo para exclusão:
       </p>
-      <div role="radiogroup" aria-labelledby="delete-scope" className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+      <div
+        ref={scopesRef}
+        tabIndex={-1}
+        role="radiogroup"
+        aria-labelledby="delete-scope"
+        className="grid grid-cols-1 gap-2 outline-none sm:grid-cols-3"
+      >
         {scopes.map(({ value, title, caption }) => (
           <label
             key={value}
@@ -81,16 +118,22 @@ export const DeleteEntriesForm = ({ month, opening }: { month: string; opening: 
               value={value}
               aria-label={title}
               checked={scope === value}
-              onChange={() => setScope(value)}
+              onChange={() => choose(value)}
               className="size-5 shrink-0 accent-brand"
             />
           </label>
         ))}
       </div>
-      {count.isError && (
+      {failed.length > 0 && (
         <p className="text-destructive text-sm">
           Não foi possível contar os lançamentos.{" "}
-          <Button variant="link" className="min-h-11 px-0 text-sm" onClick={() => count.refetch()}>
+          <Button
+            variant="link"
+            className="min-h-11 px-0 text-sm"
+            onClick={() => {
+              for (const count of failed) count.refetch();
+            }}
+          >
             Tentar de novo
           </Button>
         </p>
@@ -117,7 +160,7 @@ export const DeleteEntriesForm = ({ month, opening }: { month: string; opening: 
         />
         <Button
           variant="destructive"
-          disabled={typed !== WORD || remove.isPending}
+          disabled={typed !== WORD || counts[scope].data === 0 || remove.isPending}
           onClick={confirm}
           className="h-12 text-base"
         >

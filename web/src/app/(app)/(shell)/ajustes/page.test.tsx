@@ -1,4 +1,4 @@
-import { act, screen, waitFor, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -11,8 +11,6 @@ import AjustesPage from "./page";
 vi.mock("next/navigation", () => import("@/test/next-navigation"));
 
 type Reply = { status: number; body?: unknown };
-
-type Seen = Pick<IntersectionObserverEntry, "isIntersecting" | "target">;
 
 const open = (replies: Record<string, Reply> = {}) => {
   const requests = signedIn({ "GET /api/months/2026-11": { status: 200, body: MONTH }, ...replies });
@@ -70,26 +68,14 @@ describe("Ajustes", () => {
     setSearch("");
   });
 
-  it("marks the section in view in the sub-nav", () => {
-    let report: (entries: Seen[]) => void = () => undefined;
-    vi.stubGlobal(
-      "IntersectionObserver",
-      class {
-        constructor(private readonly callback: (entries: Seen[]) => void) {}
-        observe = (target: Element) => {
-          if (target.tagName === "SECTION") report = this.callback;
-        };
-        unobserve = () => undefined;
-        disconnect = () => undefined;
-      },
-    );
-    open();
+  it("hands the switcher month of ?m= to the delete card", async () => {
+    setSearch("m=2025-03");
+    open({ "GET /api/transactions/count?period=2025-03": { status: 200, body: { count: 4 } } });
 
-    const moeda = screen.getByRole("region", { name: "Moeda & Saldo Inicial" });
-    act(() => report([{ isIntersecting: true, target: moeda }]));
-
-    expect(subNav().getByRole("link", { name: "Moeda & Saldo Inicial" })).toHaveAttribute("aria-current", "true");
-    expect(subNav().getByRole("link", { name: "Termômetro & Limites" })).not.toHaveAttribute("aria-current");
+    expect(await screen.findByRole("radio", { name: "Mês selecionado" })).toBeChecked();
+    expect(await screen.findByText("Março 2025 (4 registros)")).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "Ano de 2025" })).toBeInTheDocument();
+    setSearch("");
   });
 
   it("offers a retry when the settings do not load", async () => {

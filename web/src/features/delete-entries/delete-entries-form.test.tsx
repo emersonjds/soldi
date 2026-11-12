@@ -11,17 +11,17 @@ type Reply = { status: number; body?: unknown };
 
 type Answer = Reply | Promise<Reply>;
 
-/** Counts per `period`; `remove` answers the DELETE and, when it succeeds, empties every count. */
+/** Counts per `period`; `remove` answers the DELETE and, when it succeeds, empties that period's count. */
 const serve = (counts: Record<string, Answer>, remove: Answer = { status: 200, body: { deleted: 37 } }) => {
   const requests: Request[] = [];
-  let deleted = false;
+  const emptied = new Set<string>();
   vi.stubGlobal("fetch", async (request: Request) => {
     requests.push(request);
     const period = new URL(request.url).searchParams.get("period") ?? "";
-    const emptied = deleted ? count(0) : counts[period];
-    const answer = request.method === "DELETE" ? remove : emptied;
+    const counted = emptied.has(period) ? count(0) : counts[period];
+    const answer = request.method === "DELETE" ? remove : counted;
     const { status, body } = await (answer ?? { status: 404, body: { detail: period } });
-    if (request.method === "DELETE" && status === 200) deleted = true;
+    if (request.method === "DELETE" && status === 200) emptied.add(period);
     return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
   });
   return requests;
@@ -51,35 +51,65 @@ beforeEach(() => {
 });
 
 describe("DeleteEntriesForm", () => {
-  it("offers today's month with its count, its year and everything", async () => {
-    serve({ "2026-11": count(42) });
+  it("offers today's month, its year and everything, each with its count", async () => {
+    serve({ "2026-11": count(42), "2026": count(120), all: count(300) });
     open();
 
     expect(screen.getByRole("radiogroup", { name: "Selecione o escopo para exclusão:" })).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: "Mês atual" })).toBeChecked();
     expect(await screen.findByText("Novembro 2026 (42 registros)")).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: "Ano de 2026" })).not.toBeChecked();
-    expect(screen.getByText("Todos os 11 meses deste ano")).toBeInTheDocument();
+    expect(await screen.findByText("120 registros em 11 meses")).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: "Zerar tudo" })).toBeInTheDocument();
-    expect(screen.getByText("Limpa toda a base da conta")).toBeInTheDocument();
+    expect(await screen.findByText("Limpa toda a base da conta (300 registros)")).toBeInTheDocument();
     expect(screen.getByText("Ação destrutiva sem retorno")).toBeInTheDocument();
     expect(screen.queryByText(/Serão apagados/)).not.toBeInTheDocument();
   });
 
-  it("names another switcher month Mês selecionado and counts the year from January", async () => {
-    serve({ "2025-03": count(1) });
+  it("names another switcher month Mês selecionado, counts the year from January and deletes that month", async () => {
+    const requests = serve({ "2025-03": count(1), "2025": count(1) });
     open("2025-03", "2024-06-01");
 
     expect(screen.getByRole("radio", { name: "Mês selecionado" })).toBeChecked();
     expect(await screen.findByText("Março 2025 (1 registro)")).toBeInTheDocument();
-    expect(screen.getByText("Todos os 12 meses deste ano")).toBeInTheDocument();
+    expect(await screen.findByText("1 registro em 12 meses")).toBeInTheDocument();
+    await userEvent.type(confirmation(), "CONFIRMAR");
+    await userEvent.click(deleteButton());
+    await waitFor(() => expect(deletedPeriod(requests)).toBe("2025-03"));
   });
 
-  it("counts the year's months from the opening month", () => {
-    serve({});
-    open("2026-11", "2026-08-20");
+  it.each([
+    ["2026-11", "2026-08-20", "4 meses"],
+    ["2025-04", "2025-08-20", "5 meses"],
+    ["2026-11", "2026-11-03", "1 mês"],
+    ["2024-05", "2025-02-01", "0 meses"],
+    ["2027-02", "2026-01-01", "0 meses"],
+  ])("counts the months of %s's year from the opening %s to today", async (month, opening, months) => {
+    serve({ [month.slice(0, 4)]: count(2) });
+    open(month, opening);
 
-    expect(screen.getByText("Todos os 4 meses deste ano")).toBeInTheDocument();
+    expect(await screen.findByText(`2 registros em ${months}`)).toBeInTheDocument();
+  });
+
+  it("keeps Excluir Lançamentos off when the chosen scope has nothing", async () => {
+    serve({ "2026-11": count(0), "2026": count(5), all: count(5) });
+    open();
+
+    await screen.findByText("Novembro 2026 (0 registros)");
+    await userEvent.type(confirmation(), "CONFIRMAR");
+    expect(deleteButton()).toBeDisabled();
+  });
+
+  it("forgets the typed word when the scope changes", async () => {
+    serve({ "2026-11": count(42), "2026": count(120), all: count(300) });
+    open();
+
+    await userEvent.type(confirmation(), "CONFIRMAR");
+    expect(deleteButton()).toBeEnabled();
+    await userEvent.click(screen.getByRole("radio", { name: "Zerar tudo" }));
+
+    expect(confirmation()).toHaveValue("");
+    expect(deleteButton()).toBeDisabled();
   });
 
   it("enables Excluir Lançamentos only on the exact word CONFIRMAR", async () => {
@@ -93,11 +123,14 @@ describe("DeleteEntriesForm", () => {
     await userEvent.type(confirmation(), " CONFIRMAR");
     expect(deleteButton()).toBeDisabled();
     await userEvent.clear(confirmation());
+    await userEvent.type(confirmation(), "CONFIRMAR ");
+    expect(deleteButton()).toBeDisabled();
+    await userEvent.clear(confirmation());
     await userEvent.type(confirmation(), "CONFIRMAR");
     expect(deleteButton()).toBeEnabled();
   });
 
-  it("deletes the month, toasts and clears the word", async () => {
+  it("deletes the month, toasts, clears the word and focuses the scopes", async () => {
     const requests = serve({ "2026-11": count(37) });
     open();
 
@@ -106,15 +139,20 @@ describe("DeleteEntriesForm", () => {
 
     expect(await screen.findByText("37 lançamentos apagados")).toBeInTheDocument();
     expect(confirmation()).toHaveValue("");
+    expect(screen.getByRole("radiogroup")).toHaveFocus();
     expect(deletedPeriod(requests)).toBe("2026-11");
     expect(await screen.findByText("Novembro 2026 (0 registros)")).toBeInTheDocument();
   });
 
   it("deletes the year or everything", async () => {
-    const requests = serve({}, { status: 200, body: { deleted: 1 } });
+    const requests = serve(
+      { "2026-11": count(1), "2026": count(1), all: count(9) },
+      { status: 200, body: { deleted: 1 } },
+    );
     open();
 
     await userEvent.click(screen.getByRole("radio", { name: "Ano de 2026" }));
+    await screen.findByText("1 registro em 11 meses");
     await userEvent.type(confirmation(), "CONFIRMAR");
     await userEvent.click(deleteButton());
     expect(await screen.findByText("1 lançamento apagado")).toBeInTheDocument();

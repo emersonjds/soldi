@@ -23,12 +23,12 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
+import { APP_CONFIG } from "@/config/app-config";
 import { DeleteEntriesForm } from "@/features/delete-entries/delete-entries-form";
 import { CurrencyForm } from "@/features/edit-settings/currency-form";
 import { OpeningForm } from "@/features/edit-settings/opening-form";
 import { ThermometerForm } from "@/features/edit-settings/thermometer-form";
 import { monthParam } from "@/shared/lib/date";
-import { APP_VERSION } from "@/shared/lib/version";
 import { MonthLink } from "@/shared/ui/month-link";
 import { AccountSection } from "@/widgets/settings/account-section";
 import { SettingsNav } from "@/widgets/settings/settings-nav";
@@ -133,7 +133,7 @@ const AjustesPage = () => {
             subtitle="Operações irreversíveis sobre seus lançamentos históricos."
           >
             <WithSettings>
-              {(settings) => <DeleteEntriesForm month={month} opening={settings.opening_date} />}
+              {(settings) => <DeleteEntriesForm key={month} month={month} opening={settings.opening_date} />}
             </WithSettings>
           </SettingsSection>
           <SettingsSection
@@ -146,7 +146,7 @@ const AjustesPage = () => {
           </SettingsSection>
           <SettingsSection id="ajuda" icon={CircleHelp} title="Ajuda & Como Funciona">
             <Rows items={HELP} />
-            <p className="text-muted-foreground text-xs">Versão {APP_VERSION}</p>
+            <p className="text-muted-foreground text-xs">Versão {APP_CONFIG.version}</p>
           </SettingsSection>
         </div>
       </div>

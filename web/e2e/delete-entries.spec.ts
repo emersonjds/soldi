@@ -37,7 +37,7 @@ test("deleting this month's entries empties the ledger and the preview", async (
   await page.goto("/ajustes");
   const data = page.getByRole("region", { name: "Gestão de Dados & Zona de Perigo" });
   await expect(data.getByRole("radio", { name: "Mês atual" })).toBeChecked();
-  await expect(data.getByText(/\(2 registros\)$/)).toBeVisible();
+  await expect(data.getByText(/\d{4} \(2 registros\)$/)).toBeVisible();
   const remove = data.getByRole("button", { name: "Excluir Lançamentos" });
   await expect(remove).toBeDisabled();
 
@@ -45,7 +45,7 @@ test("deleting this month's entries empties the ledger and the preview", async (
   await remove.click();
 
   await expect(page.getByText("2 lançamentos apagados")).toBeVisible();
-  await expect(data.getByText(/\(0 registros\)$/)).toBeVisible();
+  await expect(data.getByText(/\d{4} \(0 registros\)$/)).toBeVisible();
   await expect(page).toHaveURL(/\/ajustes$/);
 
   await page.goto(`/mes?m=${month}`);
