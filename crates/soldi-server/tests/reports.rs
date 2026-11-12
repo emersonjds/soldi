@@ -478,3 +478,33 @@ async fn d28_para_onde_vai_counts_card_spends_in_their_categories_and_not_the_fa
     assert_eq!(november["outflow_total"], "150.00");
     assert_eq!(rows(&october), [("Mercado".into(), "30.00".into())]);
 }
+
+#[sqlx::test]
+async fn d28_an_archived_cards_payment_stays_out_of_para_onde_vai(pool: PgPool) {
+    let ana = TestApp::signed_in(pool, "ana@example.com").await;
+    ana.open_at("0", "2026-11-01").await;
+    let cards = ana.category_id("Cartão").await;
+    let (_, porto) = ana
+        .post(
+            "/api/bills",
+            json!({ "name": "Porto", "due_day": 10, "closing_day": 3, "category_id": cards }),
+        )
+        .await;
+    let id = porto["id"].as_str().unwrap();
+    assert_eq!(
+        ana.delete(&format!("/api/bills/{id}")).await.0,
+        StatusCode::NO_CONTENT
+    );
+    let (status, paid) = ana
+        .post(
+            &format!("/api/bills/{id}/pay?month=2026-11"),
+            json!({ "date": "2026-11-10", "amount": "52" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{paid}");
+
+    let (_, november) = ana.get("/api/reports/categories?month=2026-11").await;
+
+    assert_eq!(november["outflow"], json!([]));
+    assert_eq!(november["outflow_total"], "0.00");
+}

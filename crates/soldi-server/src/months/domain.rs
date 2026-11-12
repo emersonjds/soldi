@@ -1,4 +1,5 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
+use std::ops::Bound;
 
 use chrono::{Datelike, Months, NaiveDate};
 use rust_decimal::Decimal;
@@ -44,7 +45,8 @@ pub struct Payment {
     pub date: NaiveDate,
 }
 
-/// `month` is its first day; `sums` cover `opening_date` to the month's end, `payments` the
+/// `month` is its first day; `sums` cover `opening_date` to the month's end (a card's spends
+/// from `cards_from(opening_date)`), `payments` the
 /// opening date's month to the month's end;
 /// `saved` is the month's bills under `Economia` minus its resgates.
 pub struct MonthInput {
@@ -104,9 +106,16 @@ pub fn first_of(date: NaiveDate) -> NaiveDate {
 /// (card id, first day of the due month) → the fatura's sum (D28).
 pub type Faturas = HashMap<(Uuid, NaiveDate), Decimal>;
 
-/// D28: each card's fatura, keyed by (card id, first day of its due month).
-pub fn faturas(bills: &[MonthBill], sums: &[DaySum]) -> Faturas {
-    let mut found = Faturas::new();
+/// The earliest spend a fatura due on or after `opening` can hold (D28).
+pub fn cards_from(opening: NaiveDate) -> NaiveDate {
+    let first = first_of(opening);
+    first.checked_sub_months(Months::new(2)).unwrap_or(first)
+}
+
+/// D28: each card's fatura, keyed by (card id, first day of its due month). D30a: a fatura paid
+/// below its sum carries the rest into the card's next one.
+pub fn faturas(bills: &[MonthBill], sums: &[DaySum], payments: &[Payment]) -> Faturas {
+    let mut found: BTreeMap<(Uuid, NaiveDate), Decimal> = BTreeMap::new();
     for sum in sums {
         let card = bills.iter().find(|bill| Some(bill.id) == sum.card_id);
         if let Some((card, closing_day)) = card.and_then(|card| Some((card, card.closing_day?))) {
@@ -114,7 +123,28 @@ pub fn faturas(bills: &[MonthBill], sums: &[DaySum]) -> Faturas {
             *found.entry((card.id, first_of(due))).or_default() += sum.amount;
         }
     }
-    found
+    let mut paid: HashMap<(Uuid, NaiveDate), Decimal> = HashMap::new();
+    for payment in payments {
+        *paid
+            .entry((payment.bill_id, first_of(payment.date)))
+            .or_default() += payment.amount;
+    }
+    let mut next = found.keys().next().copied();
+    while let Some(key @ (card, month)) = next {
+        let rest = paid.get(&key).map_or(Decimal::ZERO, |paid| {
+            (found[&key] - paid).max(Decimal::ZERO)
+        });
+        if let Some(following) = month.checked_add_months(Months::new(1))
+            && rest > Decimal::ZERO
+        {
+            *found.entry((card, following)).or_default() += rest;
+        }
+        next = found
+            .range((Bound::Excluded(key), Bound::Unbounded))
+            .next()
+            .map(|(key, _)| *key);
+    }
+    found.into_iter().collect()
 }
 
 /// What `bill` owes in `month`: its amount, or a card's fatura.
@@ -187,9 +217,22 @@ fn landing(
     (before, on)
 }
 
-fn flows_by_day(sums: Vec<DaySum>) -> BTreeMap<NaiveDate, Flows> {
+/// The entries on or after `opening`, a card's spends left to its faturas.
+fn flows_by_day(
+    sums: Vec<DaySum>,
+    bills: &[MonthBill],
+    opening: NaiveDate,
+) -> BTreeMap<NaiveDate, Flows> {
+    let cards: HashSet<Uuid> = bills
+        .iter()
+        .filter(|bill| bill.closing_day.is_some())
+        .map(|bill| bill.id)
+        .collect();
     let mut flows: BTreeMap<NaiveDate, Flows> = BTreeMap::new();
-    for sum in sums.into_iter().filter(|sum| sum.card_id.is_none()) {
+    for sum in sums
+        .into_iter()
+        .filter(|sum| sum.date >= opening && !sum.card_id.is_some_and(|id| cards.contains(&id)))
+    {
         let flow = flows.entry(sum.date).or_default();
         match sum.kind {
             CategoryKind::Income if sum.withdrawn => flow.withdrawn += sum.amount,
@@ -212,8 +255,8 @@ pub fn month_view(input: MonthInput) -> MonthView {
         saved,
         today,
     } = input;
-    let faturas = faturas(&bills, &sums);
-    let flows = flows_by_day(sums);
+    let faturas = faturas(&bills, &sums, &payments);
+    let flows = flows_by_day(sums, &bills, settings.opening_date);
     let end = month_end(month);
     let today_or_end = today.min(end);
     let balance_today = settings.opening_balance
@@ -342,7 +385,7 @@ pub fn month_view(input: MonthInput) -> MonthView {
     }
 }
 
-/// `sums` cover `opening_date` to `horizon_end(today)`, `payments` the opening date's month to it.
+/// `sums` cover `opening_date` (a card's spends `cards_from` it) to `horizon_end(today)`, `payments` the opening date's month to it.
 pub struct ForecastInput {
     pub settings: Settings,
     pub sums: Vec<DaySum>,
@@ -367,8 +410,8 @@ pub fn forecast(input: ForecastInput) -> Forecast {
         payments,
         today,
     } = input;
-    let faturas = faturas(&bills, &sums);
-    let flows = flows_by_day(sums);
+    let faturas = faturas(&bills, &sums, &payments);
+    let flows = flows_by_day(sums, &bills, settings.opening_date);
     let from = today.max(settings.opening_date);
     let to = horizon_end(today);
     let unpaid_months = unpaid(
@@ -711,6 +754,75 @@ mod tests {
         assert_eq!(view.days[19].projected_balance, money("1000"));
         assert_eq!(view.days[20].projected_balance, money("900"));
         assert_eq!(view.projected_balance, money("900"));
+    }
+
+    #[test]
+    fn d30a_an_underpaid_fatura_carries_its_rest_into_the_next_one_and_an_overpaid_carries_nothing()
+    {
+        let spends = || vec![spend("2026-10-05", 1, "50"), spend("2026-11-05", 1, "40")];
+        let paying = |amount: &str| {
+            let mut sums = spends();
+            sums.push(sum("2026-11-10", Bill, amount));
+            (sums, vec![payment(1, 9, amount, "2026-11-10")])
+        };
+        let opening = || settings("1000", "2026-10-01");
+        let porto = || vec![card(1, "Porto", 3, 10)];
+        let month = |month: &str, (sums, paid): (Vec<DaySum>, Vec<Payment>)| {
+            with_bills(month, opening(), sums, porto(), paid, "2026-11-20")
+        };
+
+        let november = month("2026-11", paying("30"));
+        let december = month("2026-12", paying("30"));
+        let mut both_paid = paying("30");
+        both_paid.0.push(sum("2026-12-10", Bill, "60"));
+        both_paid.1.push(payment(1, 10, "60", "2026-12-10"));
+        let settled = month("2026-12", both_paid);
+        let overpaid = month("2026-12", paying("70"));
+
+        assert_eq!(
+            fatura_rows(&november),
+            [(
+                "Porto".into(),
+                money("30"),
+                date("2026-11-10"),
+                true,
+                true,
+                false
+            )]
+        );
+        assert_eq!(
+            fatura_rows(&december),
+            [(
+                "Porto".into(),
+                money("60"),
+                date("2026-12-10"),
+                true,
+                false,
+                false
+            )]
+        );
+        assert_eq!(december.projected_balance, money("910"));
+        assert_eq!(settled.days[30].balance, money("910"));
+        assert_eq!(settled.projected_balance, money("910"));
+        assert_eq!(overpaid.bills_of_month[0].amount, money("40"));
+        assert_eq!(overpaid.projected_balance, money("890"));
+    }
+
+    #[test]
+    fn d28_a_card_id_without_a_card_counts_on_its_date() {
+        let view = with_bills(
+            "2026-11",
+            settings("1000", "2026-11-01"),
+            vec![spend("2026-11-02", 7, "20"), spend("2026-10-30", 7, "5")],
+            vec![card(1, "Porto", 3, 10)],
+            vec![],
+            "2026-11-05",
+        );
+
+        assert_eq!(view.days[1].daily, money("20"));
+        assert_eq!(view.days[1].balance, money("980"));
+        assert_eq!(view.days[0].balance, money("1000"));
+        assert!(view.bills_of_month.is_empty());
     }
 
     fn payment(bill: u128, transaction: u128, amount: &str, on: &str) -> Payment {

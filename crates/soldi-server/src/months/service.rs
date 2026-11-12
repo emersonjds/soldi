@@ -20,7 +20,14 @@ pub async fn get(pool: &PgPool, user: &CurrentUser, month: &str) -> Result<Month
         ));
     }
     let end = domain::month_end(month);
-    let sums = repo::day_sums(&mut conn, user.id, opening, end).await?;
+    let sums = repo::day_sums(
+        &mut conn,
+        user.id,
+        opening,
+        end,
+        domain::cards_from(opening),
+    )
+    .await?;
     let bills = repo::bills(&mut conn, user.id).await?;
     let payments = repo::payments(&mut conn, user.id, domain::first_of(opening), end).await?;
     let saved = repo::saved(&mut conn, user.id, month.max(opening), end).await?;
@@ -42,7 +49,7 @@ pub async fn forecast(pool: &PgPool, user: &CurrentUser) -> Result<Forecast, App
     let settings = settings::repo::find(&mut conn, user.id).await?;
     let opening = settings.opening_date;
     let to = domain::horizon_end(today);
-    let sums = repo::day_sums(&mut conn, user.id, opening, to).await?;
+    let sums = repo::day_sums(&mut conn, user.id, opening, to, domain::cards_from(opening)).await?;
     let bills = repo::bills(&mut conn, user.id).await?;
     let payments = repo::payments(&mut conn, user.id, domain::first_of(opening), to).await?;
     Ok(domain::forecast(domain::ForecastInput {

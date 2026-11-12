@@ -6,22 +6,26 @@ use uuid::Uuid;
 
 use super::domain::{DaySum, MonthBill, Payment};
 
+/// Entries dated `from` to `to`, and a card's spends from `cards_from` (D28).
 pub async fn day_sums(
     conn: &mut PgConnection,
     user_id: Uuid,
     from: NaiveDate,
     to: NaiveDate,
+    cards_from: NaiveDate,
 ) -> Result<Vec<DaySum>, sqlx::Error> {
     sqlx::query_as!(
         DaySum,
         r#"SELECT date, kind AS "kind: CategoryKind", cofrinho_id IS NOT NULL AS "withdrawn!",
                   card_id, SUM(amount) AS "amount!"
            FROM transactions
-           WHERE user_id = $1 AND date BETWEEN $2 AND $3
+           WHERE user_id = $1 AND date <= $3
+             AND (date >= $2 OR (card_id IS NOT NULL AND date >= $4))
            GROUP BY date, kind, cofrinho_id IS NOT NULL, card_id"#,
         user_id,
         from,
-        to
+        to,
+        cards_from
     )
     .fetch_all(&mut *conn)
     .await

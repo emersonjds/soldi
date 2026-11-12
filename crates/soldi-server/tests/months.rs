@@ -641,3 +641,189 @@ async fn d28_an_archived_card_keeps_its_unpaid_fatura_in_the_month(pool: PgPool)
     );
     assert_eq!(november["projected_balance"], "950.00");
 }
+
+async fn pay_card(user: &TestApp, card_id: &str, month: &str, date: &str, amount: &str) {
+    let (status, paid) = user
+        .post(
+            &format!("/api/bills/{card_id}/pay?month={month}"),
+            json!({ "date": date, "amount": amount }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{paid}");
+}
+
+async fn view(user: &TestApp, month: &str) -> Value {
+    let (status, view) = user.get(&format!("/api/months/{month}")).await;
+    assert_eq!(status, StatusCode::OK, "{view}");
+    view
+}
+
+#[sqlx::test]
+async fn d28_spends_before_a_moved_opening_still_fill_the_fatura_due_after_it(pool: PgPool) {
+    let ana = TestApp::signed_in(pool, "ana@example.com").await;
+    open_at(&ana, "1000", "2026-10-01").await;
+    let porto = card(&ana, "Porto").await;
+    spend(&ana, "2026-10-28", "50", &porto).await;
+    spend(&ana, "2026-11-02", "30", &porto).await;
+    open_at(&ana, "1000", "2026-11-01").await;
+
+    let november = view(&ana, "2026-11").await;
+
+    assert_eq!(
+        faturas(&november),
+        [row("Porto", "80.00", "2026-11-10", false)]
+    );
+    assert!(
+        balances(&november, 30)
+            .iter()
+            .all(|balance| *balance == "1000.00")
+    );
+    assert_eq!(november["projected_balance"], "920.00");
+}
+
+#[sqlx::test]
+async fn d30a_an_underpaid_fatura_carries_its_rest_into_the_next_one(pool: PgPool) {
+    let ana = TestApp::signed_in(pool, "ana@example.com").await;
+    open_at(&ana, "1000", "2026-10-01").await;
+    let porto = card(&ana, "Porto").await;
+    spend(&ana, "2026-10-05", "50", &porto).await;
+    spend(&ana, "2026-11-05", "40", &porto).await;
+    pay_card(&ana, &porto, "2026-11", "2026-11-10", "30").await;
+
+    let december = view(&ana, "2026-12").await;
+    assert_eq!(
+        faturas(&december),
+        [row("Porto", "60.00", "2026-12-10", false)]
+    );
+    assert_eq!(december["projected_balance"], "910.00");
+
+    pay_card(&ana, &porto, "2026-12", "2026-12-10", "60").await;
+    let november = view(&ana, "2026-11").await;
+    let december = view(&ana, "2026-12").await;
+    let (_, october_report) = ana.get("/api/reports/categories?month=2026-10").await;
+    let (_, november_report) = ana.get("/api/reports/categories?month=2026-11").await;
+
+    assert_eq!(
+        faturas(&november),
+        [row("Porto", "30.00", "2026-11-10", true)]
+    );
+    assert_eq!(
+        faturas(&december),
+        [row("Porto", "60.00", "2026-12-10", true)]
+    );
+    assert_eq!(last_balance(&december), "910.00");
+    assert_eq!(december["projected_balance"], "910.00");
+    assert_eq!(october_report["outflow"][0]["name"], "Mercado");
+    assert_eq!(october_report["outflow_total"], "50.00");
+    assert_eq!(november_report["outflow"][0]["name"], "Mercado");
+    assert_eq!(november_report["outflow_total"], "40.00");
+}
+
+#[sqlx::test]
+async fn d28_a_december_spend_after_closing_is_januarys_fatura(pool: PgPool) {
+    let ana = TestApp::signed_in(pool, "ana@example.com").await;
+    open_at(&ana, "1000", "2026-11-01").await;
+    let porto = card(&ana, "Porto").await;
+    spend(&ana, "2026-12-02", "20", &porto).await;
+    spend(&ana, "2026-12-05", "40", &porto).await;
+
+    let december = view(&ana, "2026-12").await;
+    let january = view(&ana, "2027-01").await;
+
+    assert_eq!(
+        faturas(&december),
+        [row("Porto", "20.00", "2026-12-10", false)]
+    );
+    assert_eq!(
+        faturas(&january),
+        [row("Porto", "40.00", "2027-01-10", false)]
+    );
+    assert_eq!(january["projected_balance"], "940.00");
+}
+
+#[sqlx::test]
+async fn d28_a_card_parcela_lands_one_fatura_each_month(pool: PgPool) {
+    let ana = TestApp::signed_in(pool, "ana@example.com").await;
+    open_at(&ana, "1000", "2026-11-01").await;
+    let porto = card(&ana, "Porto").await;
+    let mercado = ana.category_id("Mercado").await;
+    let (status, created) = ana
+        .post(
+            "/api/transactions",
+            json!({ "date": "2026-11-05", "amount": "90", "kind": "daily", "installments": 3,
+                    "category_id": mercado, "card_id": porto }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{created}");
+
+    let november = view(&ana, "2026-11").await;
+    let december = view(&ana, "2026-12").await;
+    let january = view(&ana, "2027-01").await;
+    let february = view(&ana, "2027-02").await;
+
+    assert_eq!(faturas(&november), []);
+    assert_eq!(
+        faturas(&december),
+        [row("Porto", "30.00", "2026-12-10", false)]
+    );
+    assert_eq!(
+        faturas(&january),
+        [row("Porto", "30.00", "2027-01-10", false)]
+    );
+    assert_eq!(
+        faturas(&february),
+        [row("Porto", "30.00", "2027-02-10", false)]
+    );
+    assert_eq!(february["projected_balance"], "910.00");
+}
+
+#[sqlx::test]
+async fn d28_a_fatura_paid_before_its_due_date_leaves_the_balance_once(pool: PgPool) {
+    let ana = TestApp::signed_in(pool, "ana@example.com").await;
+    open_at(&ana, "1000", "2026-11-01").await;
+    let porto = card(&ana, "Porto").await;
+    spend(&ana, "2026-11-02", "50", &porto).await;
+    pay_card(&ana, &porto, "2026-11", "2026-11-05", "50").await;
+
+    let november = view(&ana, "2026-11").await;
+    let december = view(&ana, "2026-12").await;
+
+    assert_eq!(
+        faturas(&november),
+        [row("Porto", "50.00", "2026-11-10", true)]
+    );
+    assert_eq!(balances(&november, 5)[3..], ["1000.00", "950.00"]);
+    assert_eq!(november["projected_balance"], "950.00");
+    assert_eq!(faturas(&december), []);
+    assert_eq!(december["projected_balance"], "950.00");
+}
+
+#[sqlx::test]
+async fn d28_the_forecast_drops_a_card_spend_on_its_fatura_due_date(pool: PgPool) {
+    use chrono::Datelike;
+    let ana = TestApp::signed_in(pool, "ana@example.com").await;
+    let today = soldi_server::today_sao_paulo();
+    let first = today.with_day(1).unwrap();
+    open_at(&ana, "1000", &first.to_string()).await;
+    let porto = card(&ana, "Porto").await;
+    spend(&ana, &today.to_string(), "50", &porto).await;
+
+    let (status, forecast) = ana.get("/api/forecast").await;
+
+    assert_eq!(status, StatusCode::OK, "{forecast}");
+    let days = forecast["days"].as_array().unwrap();
+    assert_eq!(days[0]["projected_balance"], "1000.00");
+    assert_eq!(days.last().unwrap()["projected_balance"], "950.00");
+    let drop = days
+        .iter()
+        .position(|day| day["projected_balance"] == "950.00")
+        .unwrap();
+    let due = days[drop]["date"].as_str().unwrap();
+    let month = view(&ana, &due[..7]).await;
+    assert_eq!(faturas(&month), [row("Porto", "50.00", due, false)]);
+    for day in month["days"].as_array().unwrap() {
+        if let Some(ahead) = days.iter().find(|ahead| ahead["date"] == day["date"]) {
+            assert_eq!(ahead["projected_balance"], day["projected_balance"]);
+        }
+    }
+}
