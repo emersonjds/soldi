@@ -354,17 +354,28 @@ describe("Cofrinhos", () => {
     it("words a weekly and a yearly automatic deposit", async () => {
       open(
         items([
-          { ...COFRINHO_RESERVA, next_contribution: { amount: "50.00", day: 12, every: "week" } },
-          { ...COFRINHO_VIAGEM, next_contribution: { amount: "900.00", day: 10, every: "year" } },
+          { ...COFRINHO_RESERVA, next_contribution: { amount: "50.00", day: 12, every: "week", date: "2026-11-12" } },
+          { ...COFRINHO_VIAGEM, next_contribution: { amount: "900.00", day: 10, every: "year", date: "2027-03-10" } },
+          {
+            ...COFRINHO_VIAGEM,
+            category_id: "moto",
+            name: "Moto",
+            next_contribution: { amount: "20.00", day: 15, every: "week", date: "2026-11-15" },
+          },
         ]),
       );
 
-      expect(await region("Reserva")).toHaveTextContent("Aporte automático: R$ 50,00 toda semana");
-      expect(await region("Viagem")).toHaveTextContent("Aporte automático: R$ 900,00 todo ano");
+      expect(await region("Reserva")).toHaveTextContent("Aporte automático: R$ 50,00 toda quinta");
+      expect(await region("Viagem")).toHaveTextContent("Aporte automático: R$ 900,00 todo ano em 10/03");
+      expect(await region("Moto")).toHaveTextContent("Aporte automático: R$ 20,00 todo domingo");
     });
 
     it("shows the balance, the goal caption and the automatic deposit", async () => {
-      open(items([{ ...COFRINHO_RESERVA, next_contribution: { amount: "500.00", day: 5, every: "month" } }]));
+      open(
+        items([
+          { ...COFRINHO_RESERVA, next_contribution: { amount: "500.00", day: 5, every: "month", date: "2026-12-05" } },
+        ]),
+      );
 
       const reserva = await region("Reserva");
       expect(reserva).toHaveTextContent("R$ 300,00 de R$ 10.000,00");

@@ -505,15 +505,15 @@ async fn the_next_contribution_is_the_earliest_future_member_of_the_users_series
     let in_a_month = today.parse::<NaiveDate>().unwrap() + Months::new(1);
     assert_eq!(
         item(&cofrinhos, "Reserva")["next_contribution"],
-        json!({ "amount": "100.00", "day": 1, "every": "month" })
+        json!({ "amount": "100.00", "day": 1, "every": "month", "date": next })
     );
     assert_eq!(
         item(&cofrinhos, "Viagem")["next_contribution"],
-        json!({ "amount": "40.00", "day": in_a_month.day(), "every": "month" })
+        json!({ "amount": "40.00", "day": in_a_month.day(), "every": "month", "date": in_a_month.to_string() })
     );
     assert_eq!(
         item(&cofrinhos, "Reforma")["next_contribution"],
-        json!({ "amount": "9.00", "day": 1, "every": "week" })
+        json!({ "amount": "9.00", "day": 1, "every": "week", "date": later })
     );
 }
 

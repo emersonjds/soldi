@@ -896,6 +896,11 @@ export interface components {
          */
         NextContribution: {
             amount: string;
+            /**
+             * Format: date
+             * @description The next member's date; names the weekday or the day and month the chip shows.
+             */
+            date: string;
             /** Format: int32 */
             day: number;
             every: components["schemas"]["RepeatEvery"];
