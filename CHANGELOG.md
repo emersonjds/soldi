@@ -7,6 +7,18 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.47.1
+
+> Headline: more icons to choose from
+
+### Web
+
+- The category icon picker suggests 46 icons (home, money, health, family, transport, leisure and work), 24 at a time, all drawn at once.
+
+### Server
+
+- The series race tests wait on the database locks instead of sleeping, so CI no longer flakes on them.
+
 ## 0.47.0
 
 > Headline: credit cards with their fatura
