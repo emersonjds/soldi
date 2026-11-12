@@ -52,8 +52,12 @@ export const hasStatus = (error: unknown, status: number) => error instanceof Ap
 export const hasProblem = (error: unknown, slug: string) =>
   error instanceof ApiError && error.type === `urn:soldi:error:${slug}`;
 
+const PROBLEMS: [slug: string, message: string][] = [
+  ["archived-cofrinho", "Esse cofrinho foi excluído; os movimentos dele não podem mais ser alterados."],
+  ["kind-locked", "O tipo dessa categoria não pode mudar."],
+  ["duplicate-name", "Já existe uma categoria com esse nome no outro tipo."],
+  ["category-has-bills", "Uma conta fixa usa essa categoria. Arquive a conta antes de mudar para Diário."],
+];
+
 /** The pt-BR copy of a refused rule more than one screen can meet; otherwise the screen's own. */
-export const problemMessage = (error: unknown) =>
-  hasProblem(error, "archived-cofrinho")
-    ? "Esse cofrinho foi excluído; os movimentos dele não podem mais ser alterados."
-    : undefined;
+export const problemMessage = (error: unknown) => PROBLEMS.find(([slug]) => hasProblem(error, slug))?.[1];

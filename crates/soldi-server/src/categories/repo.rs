@@ -93,6 +93,28 @@ pub async fn find_active_locked(
     .await
 }
 
+/// `find_active` share-locking the row, archived included unless `active`: an entry written
+/// while the category changes kind waits and sees the final kind.
+pub async fn find_shared(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    id: Uuid,
+    active: bool,
+) -> Result<Option<Category>, sqlx::Error> {
+    sqlx::query_as!(
+        Category,
+        r#"SELECT id, name, kind AS "kind: CategoryKind", icon, color, parent_id, is_savings,
+                  target, deadline
+           FROM categories WHERE user_id = $1 AND id = $2 AND (archived_at IS NULL OR NOT $3)
+           FOR SHARE"#,
+        user_id,
+        id,
+        active
+    )
+    .fetch_optional(&mut *conn)
+    .await
+}
+
 /// The user's `Economia` (bill) or `Resgate` (income).
 pub async fn savings(
     conn: &mut PgConnection,
@@ -151,15 +173,15 @@ pub async fn top_colors(
     .await
 }
 
-/// The category's own kind and its active subcategories' kinds.
-pub async fn group_kinds(
+/// The kinds of the category's active subcategories.
+pub async fn child_kinds(
     conn: &mut PgConnection,
     user_id: Uuid,
     id: Uuid,
 ) -> Result<Vec<CategoryKind>, sqlx::Error> {
     sqlx::query_scalar!(
         r#"SELECT DISTINCT kind AS "kind!: CategoryKind" FROM categories
-           WHERE user_id = $1 AND (id = $2 OR (parent_id = $2 AND archived_at IS NULL))"#,
+           WHERE user_id = $1 AND parent_id = $2 AND archived_at IS NULL"#,
         user_id,
         id
     )
@@ -319,4 +341,67 @@ pub async fn archive(
     )
     .fetch_one(&mut *conn)
     .await
+}
+
+/// Whether an active category of `kind` other than `id` already has the category's name.
+pub async fn name_taken(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    id: Uuid,
+    kind: CategoryKind,
+) -> Result<bool, sqlx::Error> {
+    sqlx::query_scalar!(
+        r#"SELECT EXISTS (SELECT 1 FROM categories other, categories this
+           WHERE this.user_id = $1 AND this.id = $2
+             AND other.user_id = $1 AND other.id <> $2 AND other.kind = $3
+             AND lower(other.name) = lower(this.name) AND other.archived_at IS NULL) AS "exists!""#,
+        user_id,
+        id,
+        kind.as_str()
+    )
+    .fetch_one(&mut *conn)
+    .await
+}
+
+/// Whether an unarchived conta fixa, active or paused, points at the category itself.
+pub async fn has_bills(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    id: Uuid,
+) -> Result<bool, sqlx::Error> {
+    sqlx::query_scalar!(
+        r#"SELECT EXISTS (SELECT 1 FROM recurring_bills
+           WHERE user_id = $1 AND category_id = $2 AND archived_at IS NULL) AS "exists!""#,
+        user_id,
+        id
+    )
+    .fetch_one(&mut *conn)
+    .await
+}
+
+/// Moves the category and every entry of its own to `kind`, wearing `color` when given; its
+/// subcategories keep theirs. Kind and color change in one row write so the per-kind color index
+/// never sees the old color in the new kind.
+pub async fn change_kind(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    id: Uuid,
+    kind: CategoryKind,
+    color: Option<&str>,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        "WITH moved AS (
+             UPDATE categories SET kind = $3, color = COALESCE($4, color), updated_at = now()
+             WHERE user_id = $1 AND id = $2
+             RETURNING id)
+         UPDATE transactions SET kind = $3, updated_at = now()
+         WHERE user_id = $1 AND category_id IN (SELECT id FROM moved)",
+        user_id,
+        id,
+        kind.as_str(),
+        color
+    )
+    .execute(&mut *conn)
+    .await?;
+    Ok(())
 }

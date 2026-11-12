@@ -38,6 +38,21 @@ async fn check_category(
     Ok(())
 }
 
+/// A bill pays and resumes only on a `bill` category; an archived one still counts.
+async fn check_bill_kind(
+    conn: &mut PgConnection,
+    user: &CurrentUser,
+    category_id: Uuid,
+) -> Result<(), AppError> {
+    if !repo::is_bill_category(conn, user.id, category_id).await? {
+        return Err(AppError::invalid(
+            "category_id",
+            "must be one of your bill categories",
+        ));
+    }
+    Ok(())
+}
+
 /// R8 (SOL-21): with `transaction_id`, that entry becomes the new bill's payment, in the
 /// same database transaction.
 pub async fn create(
@@ -89,6 +104,9 @@ pub async fn update(
         check_category(&mut conn, user, category_id, "category_id").await?;
     }
     let active = patch.active.unwrap_or(current.active);
+    if active && !current.active {
+        check_bill_kind(&mut conn, user, next.category_id).await?;
+    }
     repo::update(&mut conn, user.id, id, &next, active)
         .await?
         .ok_or(AppError::NotFound)
@@ -116,6 +134,7 @@ pub async fn pay(
         .await?
         .filter(|bill| bill.active)
         .ok_or(AppError::NotFound)?;
+    check_bill_kind(&mut conn, user, bill.category_id).await?;
     let entry = transactions::domain::check(CreateTransaction {
         date: input.date,
         amount: input.amount.unwrap_or(bill.amount),

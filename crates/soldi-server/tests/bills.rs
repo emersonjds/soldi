@@ -575,3 +575,32 @@ async fn a_bill_keeps_its_archived_category_until_another_is_picked(pool: PgPool
     let (status, refused) = ana.patch(&uri, json!({ "category_id": light })).await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{refused}");
 }
+
+#[sqlx::test]
+async fn a_bill_on_a_category_no_longer_bill_is_neither_paid_nor_resumed(pool: PgPool) {
+    let ana = TestApp::signed_in(pool.clone(), "ana@example.com").await;
+    ana.open_at("1000", "2026-11-01").await;
+    let rent_category = category_id(&ana, "Aluguel").await;
+    let bill = create(&ana, rent(rent_category)).await;
+    let uri = bill_uri(&bill);
+    sqlx::query("UPDATE categories SET kind = 'daily', color = 'cat-24' WHERE id = $1")
+        .bind(rent_category)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let (status, paid) = ana
+        .post(&pay_uri(&bill), json!({ "date": "2026-11-05" }))
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{paid}");
+    assert_eq!(
+        ana.patch(&uri, json!({ "active": false })).await.0,
+        StatusCode::OK
+    );
+    let (status, resumed) = ana.patch(&uri, json!({ "active": true })).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{resumed}");
+    assert_eq!(
+        ana.get("/api/transactions?month=2026-11").await.1,
+        json!([])
+    );
+}

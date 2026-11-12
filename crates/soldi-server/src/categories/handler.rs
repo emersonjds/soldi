@@ -60,11 +60,11 @@ pub async fn create_category(
 #[utoipa::path(patch, path = "/api/categories/{id}", tag = "categories", request_body = UpdateCategory,
     params(("id" = Uuid, Path, description = "Category id")),
     responses(
-        (status = 200, body = Category, description = "The category after the change; absent fields stay as they are"),
+        (status = 200, body = Category, description = "The category after the change; absent fields stay as they are; a new `kind` moves this category and its own entries; its subcategories keep theirs"),
         (status = 401, body = Problem, content_type = "application/problem+json"),
         (status = 404, body = Problem, content_type = "application/problem+json", description = "The category or `parent_id` is missing, archived or another user's"),
-        (status = 409, body = Problem, content_type = "application/problem+json"),
-        (status = 422, body = Problem, content_type = "application/problem+json", description = "A bad field, a parent on the other side (income vs outflow) or a non-bill under `Economia` or itself, `nested-subcategory` when the parent is a subcategory or this category has subcategories, `savings-category` when moving `Economia` or `Resgate` or under `Resgate`, `not-a-cofrinho` for a target or deadline outside `Economia`, `color-taken` when the color is taken in any kind the group shows in, or `palette-full` when moving to top-level without a color and all 24 are taken in the kind")))]
+        (status = 409, body = Problem, content_type = "application/problem+json", description = "An active category of the same kind has this name; `duplicate-name` when the new `kind` already holds this category's name"),
+        (status = 422, body = Problem, content_type = "application/problem+json", description = "A bad field, `kind-locked` for a `kind` on `Economia`, a cofrinho, `Resgate` or an income category or a `kind` of `income`, `category-has-bills` when moving to `daily` a category an unarchived conta fixa (active or paused) uses, a parent on the other side (income vs outflow) or a non-bill under `Economia` or itself, `nested-subcategory` when the parent is a subcategory or this category has subcategories, `savings-category` when moving `Economia` or `Resgate` or under `Resgate`, `not-a-cofrinho` for a target or deadline outside `Economia`, `color-taken` when the color is taken in any kind the group shows in, or `palette-full` when moving to top-level without a color, or changing a top-level's `kind`, and all 24 are taken in the kind")))]
 pub async fn update_category(
     State(state): State<AppState>,
     user: CurrentUser,

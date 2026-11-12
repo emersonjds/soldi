@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS (SELECT 1 FROM categories other, categories this\n           WHERE this.user_id = $1 AND this.id = $2\n             AND other.user_id = $1 AND other.id <> $2 AND other.kind = $3\n             AND lower(other.name) = lower(this.name) AND other.archived_at IS NULL) AS \"exists!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "exists!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "9d0514dcde6a137bf202924172da174ee31dff47cf7e6f43d14c4b24a0c1b7a9"
+}

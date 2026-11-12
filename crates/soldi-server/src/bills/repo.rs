@@ -121,6 +121,22 @@ pub async fn bill_category_ids(
     .await
 }
 
+/// Whether the category is one of the user's `bill` categories, archived included.
+pub async fn is_bill_category(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    id: Uuid,
+) -> Result<bool, sqlx::Error> {
+    sqlx::query_scalar!(
+        r#"SELECT EXISTS (SELECT 1 FROM categories
+           WHERE user_id = $1 AND id = $2 AND kind = 'bill') AS "exists!""#,
+        user_id,
+        id
+    )
+    .fetch_one(&mut *conn)
+    .await
+}
+
 pub async fn insert_all(
     conn: &mut PgConnection,
     user_id: Uuid,
