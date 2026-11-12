@@ -287,12 +287,14 @@ async fn the_current_year_runs_to_december_with_later_months_a_forecast_out_of_t
         at(&this_month).unwrap(),
         &json!({ "month": this_month, "income": "1000.00", "saved": "100.00", "rate_pct": "10.0", "forecast": false })
     );
-    // ponytail: in December `next` falls in next year, and the forecast row is covered by domain tests
-    if let Some(row) = at(&next[..7]) {
+    // In December next month belongs to next year, so this year must not list it.
+    if next[..4] == this_month[..4] {
         assert_eq!(
-            row,
+            at(&next[..7]).unwrap(),
             &json!({ "month": &next[..7], "income": "500.00", "saved": "500.00", "rate_pct": "100.0", "forecast": true })
         );
+    } else {
+        assert!(at(&next[..7]).is_none());
     }
     assert_eq!(
         (
