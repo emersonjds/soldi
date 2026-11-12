@@ -328,6 +328,13 @@ pub async fn insert_all(
             "a card is added from Contas fixas",
         ));
     }
+    // D35: `check` already refuses `last_month` without `installments`.
+    if let Some(index) = bills.iter().position(|bill| bill.installments.is_some()) {
+        return Err(AppError::invalid(
+            &format!("bills[{index}].installments"),
+            "a parcelado conta fixa is added from Contas fixas",
+        ));
+    }
     let ids: Vec<_> = bills.iter().map(|bill| bill.category_id).collect();
     let allowed = repo::bill_category_ids(conn, user.id, &ids).await?;
     if let Some(index) = ids.iter().position(|id| !allowed.contains(id)) {
