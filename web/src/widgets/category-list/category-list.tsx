@@ -248,6 +248,7 @@ export const CategoryList = ({ kind, onKindChange }: { kind: Kind; onKindChange:
         category={editing.category}
         parentId={editing.parentId}
         onArchive={archiveLater}
+        onKindChange={onKindChange}
       />
     </div>
   );

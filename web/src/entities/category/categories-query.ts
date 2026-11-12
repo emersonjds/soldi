@@ -35,8 +35,8 @@ export const useCategories = (kind: Kind) =>
   useQuery({ ...categoriesQuery, select: (categories) => ofKind(categories, kind) });
 
 // Cofrinhos are the subcategories of Economia; the cofrinho entity owns that key.
-const refresh = (client: QueryClient) =>
-  Promise.all(["categories", "cofrinhos"].map((key) => client.invalidateQueries({ queryKey: [key] })));
+const refresh = (client: QueryClient, also: string[] = []) =>
+  Promise.all(["categories", "cofrinhos", ...also].map((key) => client.invalidateQueries({ queryKey: [key] })));
 
 /** Shows the new category at once, then refetches the list in the API's order. */
 export const useCreateCategory = () => {
@@ -50,7 +50,10 @@ export const useCreateCategory = () => {
   });
 };
 
-/** Shows the edit at once, rolls it back if refused, then refetches the list in the API's order. */
+/**
+ * Shows the edit at once, rolls it back if refused, then refetches the list in the API's order.
+ * A `kind` waits for the refetch, which also reaches the months, entries and reports it moves.
+ */
 export const useUpdateCategory = () => {
   const client = useQueryClient();
   const { queryKey } = categoriesQuery;
@@ -76,7 +79,7 @@ export const useUpdateCategory = () => {
       return () => client.setQueryData(queryKey, previous);
     },
     onError: (_error, _body, rollback) => rollback?.(),
-    onSettled: () => refresh(client),
+    onSettled: (_data, _error, { kind }) => refresh(client, kind ? ["month", "transactions", "report"] : []),
   });
 };
 

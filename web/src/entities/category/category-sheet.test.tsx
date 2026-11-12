@@ -1,5 +1,5 @@
 import { QueryClientProvider } from "@tanstack/react-query";
-import { screen, waitFor, within } from "@testing-library/react";
+import { cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Toaster } from "sonner";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -575,6 +575,107 @@ describe("CategorySheet", () => {
       expect(within(sheet).queryByLabelText("Subcategoria de")).not.toBeInTheDocument();
       expect(within(sheet).queryByLabelText("Meta")).not.toBeInTheDocument();
       expect(within(sheet).queryByRole("button", { name: "Excluir" })).not.toBeInTheDocument();
+    });
+  });
+
+  describe("changing the kind (SOL-101)", () => {
+    const PORTO: Category = { ...MERCADO, id: "c1000000-0000-4000-8000-000000000030", name: "Porto", color: "cat-9" };
+    const KINDS_LIST = [...LIST, ECONOMIA, RESERVA, PORTO];
+
+    const edit = (category: Category, replies: Record<string, Reply> = {}) =>
+      open({ category }, { "GET /api/categories": { status: 200, body: KINDS_LIST }, ...replies });
+
+    const editSheet = () => screen.findByRole("dialog", { name: /^Editar / });
+
+    it("shows Tipo for a Diário subcategory and a Saída top-level, never for Economia, a cofrinho or income", async () => {
+      edit(RACAO);
+      let sheet = await editSheet();
+      expect(await within(sheet).findByRole("radio", { name: "Diário" })).toHaveAttribute("data-state", "on");
+      expect(within(sheet).getByRole("radio", { name: "Saída" })).toHaveAttribute("data-state", "off");
+
+      for (const category of [ECONOMIA, RESERVA, SALARIO]) {
+        cleanup();
+        edit(category);
+        sheet = await editSheet();
+        if (category === RESERVA) await within(sheet).findByLabelText("Meta");
+        expect(within(sheet).queryByRole("radio", { name: "Saída" })).not.toBeInTheDocument();
+      }
+
+      cleanup();
+      edit(ALUGUEL);
+      sheet = await editSheet();
+      expect(within(sheet).getByRole("radio", { name: "Saída" })).toHaveAttribute("data-state", "on");
+    });
+
+    it("asks before changing, and Cancelar sends nothing", async () => {
+      const { requests } = edit(PORTO);
+      const sheet = await editSheet();
+      await userEvent.click(within(sheet).getByRole("radio", { name: "Saída" }));
+
+      const confirm = await screen.findByRole("alertdialog", { name: "Mudar para Saída?" });
+      expect(
+        within(confirm).getByText("Todos os lançamentos de Porto passam a ser Saída. O saldo não muda."),
+      ).toBeInTheDocument();
+      await userEvent.click(within(confirm).getByRole("button", { name: "Cancelar" }));
+
+      await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+      await userEvent.click(within(sheet).getByRole("radio", { name: "Diário" }));
+      expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+      expect(within(sheet).getByRole("radio", { name: "Diário" })).toHaveAttribute("data-state", "on");
+      expect(requests.some((request) => request.method === "PATCH")).toBe(false);
+    });
+
+    it("changes the kind alone, refreshes the months, entries and reports, and switches the list", async () => {
+      const onKindChange = vi.fn();
+      const requests = stubApi({
+        "GET /api/categories": { status: 200, body: KINDS_LIST },
+        [`PATCH /api/categories/${PORTO.id}`]: { status: 200, body: { ...PORTO, kind: "bill" } },
+      });
+      const { client } = renderWithQuery(
+        <CategorySheet kind="daily" open onOpenChange={vi.fn()} category={PORTO} onKindChange={onKindChange} />,
+      );
+      const invalidate = vi.spyOn(client, "invalidateQueries");
+      const sheet = await editSheet();
+      await userEvent.clear(within(sheet).getByLabelText("Nome"));
+      await userEvent.type(within(sheet).getByLabelText("Nome"), "Porto Seguro");
+      await userEvent.click(within(sheet).getByRole("radio", { name: "Saída" }));
+      const confirm = await screen.findByRole("alertdialog", { name: "Mudar para Saída?" });
+      await userEvent.click(within(confirm).getByRole("button", { name: "Mudar tipo" }));
+
+      expect(await patched(requests)).toEqual({ kind: "bill" });
+      await waitFor(() => expect(onKindChange).toHaveBeenCalledWith("bill"));
+      await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+      expect(within(sheet).getByRole("radio", { name: "Saída" })).toHaveAttribute("data-state", "on");
+      expect(within(sheet).getByLabelText("Nome")).toHaveValue("Porto Seguro");
+      for (const key of ["categories", "month", "transactions", "report"])
+        expect(invalidate).toHaveBeenCalledWith({ queryKey: [key] });
+    });
+
+    it.each([
+      [409, "duplicate-name", "Já existe uma categoria com esse nome no outro tipo."],
+      [422, "kind-locked", "O tipo dessa categoria não pode mudar."],
+      [422, "category-has-bills", "Uma conta fixa usa essa categoria. Arquive a conta antes de mudar para Diário."],
+      [422, "palette-full", "Todas as 24 cores estão em uso no outro tipo. Arquive uma categoria e tente de novo."],
+      [404, "not-found", "Essa categoria não existe mais."],
+      [500, "boom", "Não foi possível mudar o tipo."],
+    ])("words a %i %s in pt-BR, never the server's detail", async (status, slug, message) => {
+      const onKindChange = vi.fn();
+      stubApi({
+        "GET /api/categories": { status: 200, body: KINDS_LIST },
+        [`PATCH /api/categories/${PORTO.id}`]: { status, body: { ...rule(slug), status, detail: "Server words." } },
+      });
+      renderWithQuery(
+        <CategorySheet kind="daily" open onOpenChange={vi.fn()} category={PORTO} onKindChange={onKindChange} />,
+      );
+      const sheet = await editSheet();
+      await userEvent.click(within(sheet).getByRole("radio", { name: "Saída" }));
+      const confirm = await screen.findByRole("alertdialog", { name: "Mudar para Saída?" });
+      await userEvent.click(within(confirm).getByRole("button", { name: "Mudar tipo" }));
+
+      expect(await within(confirm).findByRole("alert")).toHaveTextContent(message);
+      expect(screen.queryByText("Server words.")).not.toBeInTheDocument();
+      expect(onKindChange).not.toHaveBeenCalled();
+      expect(within(sheet).getByRole("radio", { name: "Diário", hidden: true })).toHaveAttribute("data-state", "on");
     });
   });
 });
