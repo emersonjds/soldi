@@ -54,7 +54,7 @@ pub async fn balance(
     .await
 }
 
-/// Per category, the earliest repeated entry dated after `today`.
+/// Per cofrinho, the earliest repeated entry dated after `today`.
 pub async fn next_contributions(
     conn: &mut PgConnection,
     user_id: Uuid,
@@ -64,8 +64,10 @@ pub async fn next_contributions(
         r#"SELECT DISTINCT ON (t.category_id) t.category_id, t.amount,
                   EXTRACT(DAY FROM t.date)::int2 AS "day!"
            FROM transactions t JOIN categories c ON c.user_id = t.user_id AND c.id = t.category_id
+           LEFT JOIN categories p ON p.user_id = c.user_id AND p.id = c.parent_id
            WHERE t.user_id = $1 AND c.kind = 'bill' AND t.series_id IS NOT NULL AND t.date > $2
-           ORDER BY t.category_id, t.date"#,
+             AND (c.is_savings OR COALESCE(p.is_savings, false))
+           ORDER BY t.category_id, t.date, t.created_at, t.id"#,
         user_id,
         today
     )

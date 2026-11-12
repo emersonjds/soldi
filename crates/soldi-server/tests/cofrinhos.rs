@@ -5,6 +5,7 @@ use chrono::{Datelike, Months, NaiveDate};
 use common::TestApp;
 use serde_json::{Value, json};
 use sqlx::PgPool;
+use uuid::Uuid;
 
 struct Setup {
     user: TestApp,
@@ -403,7 +404,8 @@ fn first_of(today: &str) -> NaiveDate {
     format!("{}-01", &today[..7]).parse().unwrap()
 }
 
-async fn repeat(user: &TestApp, date: &str, category_id: &str, amount: &str) {
+/// Returns the series' first member.
+async fn repeat(user: &TestApp, date: &str, category_id: &str, amount: &str) -> Value {
     let (status, created) = user
         .post(
             "/api/transactions",
@@ -411,6 +413,7 @@ async fn repeat(user: &TestApp, date: &str, category_id: &str, amount: &str) {
         )
         .await;
     assert_eq!(status, StatusCode::CREATED, "{created}");
+    created
 }
 
 #[sqlx::test]
@@ -458,7 +461,17 @@ async fn the_next_contribution_is_the_earliest_future_member_of_the_users_series
         )
         .await;
     repeat(&user, &first.to_string(), &reserva, "100").await;
-    repeat(&user, &today, &viagem, "40").await;
+    let todays = repeat(&user, &today, &viagem, "40").await;
+    let (status, edited) = user
+        .patch(
+            &format!(
+                "/api/transactions/{}?scope=this",
+                todays["id"].as_str().unwrap()
+            ),
+            json!({ "amount": "1" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{edited}");
     let next = (first + Months::new(1)).to_string();
     deposit(&user, &next, casa["id"].as_str().unwrap(), "5").await;
     let bia = user.another_user("bia@example.com").await;
@@ -490,6 +503,43 @@ async fn the_next_contribution_is_the_earliest_future_member_of_the_users_series
         json!({ "amount": "40.00", "day": in_a_month.day() })
     );
     assert_eq!(item(&cofrinhos, "Casa")["next_contribution"], Value::Null);
+}
+
+#[sqlx::test]
+async fn next_contributions_holds_only_the_users_cofrinho_series(pool: PgPool) {
+    let Setup { user, reserva, .. } = setup(pool.clone()).await;
+    let first = first_of(&soldi_server::today_sao_paulo().to_string());
+    repeat(&user, &first.to_string(), &reserva, "100").await;
+    let (status, gym) = user
+        .post(
+            "/api/categories",
+            json!({ "name": "Academia", "kind": "bill" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{gym}");
+    repeat(&user, &first.to_string(), gym["id"].as_str().unwrap(), "90").await;
+    let bia = user.another_user("bia@example.com").await;
+    bia.open_at("0", &first.to_string()).await;
+    let bia_economia = bia.category_id("Economia").await;
+    repeat(&bia, &first.to_string(), &bia_economia, "777").await;
+    let ana: Uuid = sqlx::query_scalar("SELECT id FROM users WHERE email = 'ana@example.com'")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+
+    let mut conn = pool.acquire().await.unwrap();
+    let next = soldi_server::cofrinhos::repo::next_contributions(
+        &mut conn,
+        ana,
+        soldi_server::today_sao_paulo(),
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(
+        next.keys().map(Uuid::to_string).collect::<Vec<_>>(),
+        vec![reserva]
+    );
 }
 
 #[sqlx::test]
