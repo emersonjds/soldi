@@ -388,6 +388,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/reports/year": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["year_report"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/settings": {
         parameters: {
             query?: never;
@@ -1055,6 +1071,60 @@ export interface components {
             date: string;
             /** @description Up to 500 characters; blank means none. */
             note?: string | null;
+        };
+        /** @description A credit card's spends in the year by purchase date (D28, D31). */
+        YearCard: {
+            amount: string;
+            /** Format: uuid */
+            card_id: string;
+            name: string;
+        };
+        /**
+         * @description A top-level category's total in the year, its subcategories rolled in; `pct` is its share of
+         *     `spent` (outflow) or `totals.income` (income) with one decimal.
+         */
+        YearGroup: {
+            amount: string;
+            /** Format: uuid */
+            category_id: string;
+            color: string;
+            icon: string;
+            name: string;
+            /** @example 26.0 */
+            pct: string;
+        };
+        /** @description A month of the year and its `Gastos` (D31). */
+        YearMonth: {
+            /** @example 2026-03 */
+            month: string;
+            spent: string;
+        };
+        /**
+         * @description The year's Entradas and Gastos by purchase date (D31), over whole months from the opening month
+         *     or January to today's month or December. `totals` has the month view's shape, Economia deposits
+         *     inside `bills`, but follows D31: `bills` leaves fatura payments out and `daily` holds card
+         *     purchases, so it does not equal the sum of the month views. `spent` (Gastos) leaves deposits and
+         *     fatura payments out. `first_month` and `last_month` are null when nothing is counted.
+         */
+        YearReport: {
+            /** @example 15.0 */
+            card_pct?: string | null;
+            card_spent: string;
+            cards: components["schemas"]["YearCard"][];
+            /** @example 2026-01 */
+            first_month?: string | null;
+            income: components["schemas"]["YearGroup"][];
+            /** @example 2026-11 */
+            last_month?: string | null;
+            spending: components["schemas"]["YearGroup"][];
+            spent: string;
+            top_months: components["schemas"]["YearMonth"][];
+            totals: components["schemas"]["Totals"];
+            /**
+             * Format: int32
+             * @example 2026
+             */
+            year: number;
         };
     };
     responses: never;
@@ -2387,6 +2457,58 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SavingsYear"];
+                };
+            };
+            /** @description No `year` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description `year` is not a year from 2000 to 2100 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    year_report: {
+        parameters: {
+            query: {
+                /**
+                 * @description The year, `YYYY` from 2000 to 2100
+                 * @example 2026
+                 */
+                year: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The year's Entradas and Gastos by purchase date (D31), from the opening month or January to today's month or December; empty before the opening or after today's year */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["YearReport"];
                 };
             };
             /** @description No `year` */

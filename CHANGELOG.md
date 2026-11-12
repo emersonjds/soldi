@@ -7,6 +7,18 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.53.0
+
+> Headline: Meu ano
+
+### Server
+
+- `GET /api/reports/year?year=` sums the year by purchase date (D31): Entradas and Gastos (Saídas without Economia deposits or fatura payments, plus every Diário, card purchases on their day), the top 3 spending months, the top 5 spending and income groups, and card spending per card — in two queries over one snapshot.
+
+### Web
+
+- Meu ano (`/meu-ano`, in the sidebar and as `Economia | Meu ano` on mobile): Resumo do ano with Para onde foi a entrada do ano, Meses com mais gastos, Onde você mais gastou, Maiores entradas and No cartão de crédito (`Pela data da compra, não da fatura.`), each card shown only with content, with the year switcher.
+
 ## 0.52.0
 
 > Headline: Posso comprar isso? has its own page

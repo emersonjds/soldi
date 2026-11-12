@@ -1,6 +1,6 @@
 use chrono::Months;
-use soldi_types::reports::{CategoryReport, SavingsYear};
-use sqlx::PgPool;
+use soldi_types::reports::{CategoryReport, SavingsYear, YearReport};
+use sqlx::{Connection, PgPool};
 
 use super::{domain, repo};
 use crate::error::AppError;
@@ -36,4 +36,27 @@ pub async fn savings(
         None => Vec::new(),
     };
     Ok(domain::savings_year(year, range, today, sums))
+}
+
+/// 3 queries: the opening date, then in one read-only snapshot one row per month and card and one
+/// per top-level category, so both agree.
+pub async fn year(pool: &PgPool, user: &CurrentUser, year: &str) -> Result<YearReport, AppError> {
+    let year = domain::parse_year(year)?;
+    let mut conn = pool.acquire().await?;
+    let opening = settings::repo::find(&mut conn, user.id).await?.opening_date;
+    let range = domain::counted_range(year, opening, crate::today_sao_paulo());
+    let (flows, groups) = match range {
+        Some((from, to)) => {
+            let mut snapshot = conn.begin().await?;
+            sqlx::query("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
+                .execute(&mut *snapshot)
+                .await?;
+            (
+                repo::year_flows(&mut snapshot, user.id, from, to).await?,
+                repo::year_groups(&mut snapshot, user.id, from, to).await?,
+            )
+        }
+        None => (Vec::new(), Vec::new()),
+    };
+    Ok(domain::year_report(year, range, flows, groups))
 }

@@ -386,6 +386,51 @@ export const SAVINGS_YEAR: Schemas["SavingsYear"] = {
   ],
 };
 
+const group = ({ id, name, icon, color }: Schemas["Category"], amount: string, pct: string) => ({
+  category_id: id,
+  name,
+  icon,
+  color,
+  amount,
+  pct,
+});
+
+/** Ana's whole 2025: a seven-digit Entradas, five spending groups, two income groups and two cards. */
+export const YEAR_REPORT: Schemas["YearReport"] = {
+  year: 2025,
+  first_month: "2025-01",
+  last_month: "2025-12",
+  totals: {
+    income: "1234567.89",
+    bills: "60000.00",
+    daily: "30000.00",
+    outflow: "90000.00",
+    performance: "1144567.89",
+    saved: "11500.00",
+    withdrawn: "500.00",
+  },
+  spent: "78000.00",
+  top_months: [
+    { month: "2025-03", spent: "7200.00" },
+    { month: "2025-07", spent: "6800.00" },
+    { month: "2025-12", spent: "3600.00" },
+  ],
+  spending: [
+    group(ALUGUEL, "36000.00", "46.2"),
+    group(MERCADO, "18000.00", "23.1"),
+    group(COMIDA, "12000.00", "15.4"),
+    group(LUZ, "7200.00", "9.2"),
+    group(COMBUSTIVEL, "4800.00", "6.2"),
+  ],
+  income: [group(SALARIO, "1200000.00", "97.2"), group(EXTRA, "34567.89", "2.8")],
+  card_spent: "25350.00",
+  card_pct: "32.5",
+  cards: [
+    { card_id: "d1000000-0000-4000-8000-000000000001", name: "Nubank", amount: "15350.00" },
+    { card_id: "d1000000-0000-4000-8000-000000000002", name: "Itaú", amount: "10000.00" },
+  ],
+};
+
 const cofrinho = (
   { id, name, icon, color, target, deadline }: Schemas["Category"],
   rest: Partial<Schemas["Cofrinho"]> = {},

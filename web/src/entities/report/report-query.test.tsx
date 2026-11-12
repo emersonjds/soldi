@@ -2,9 +2,28 @@ import { waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { renderHookWithQuery } from "@/test/render";
-import { problem, REPORT, SAVINGS_YEAR, stubApi } from "@/test/stub-api";
+import { problem, REPORT, SAVINGS_YEAR, stubApi, YEAR_REPORT } from "@/test/stub-api";
 
-import { useCategoryReport, useSavingsYear } from "./report-query";
+import { useCategoryReport, useSavingsYear, useYearReport } from "./report-query";
+
+describe("useYearReport", () => {
+  it("loads the year's insights", async () => {
+    const requests = stubApi({ "GET /api/reports/year": { status: 200, body: YEAR_REPORT } });
+    const { result, client } = renderHookWithQuery(() => useYearReport(2025));
+
+    await waitFor(() => expect(result.current.data).toEqual(YEAR_REPORT));
+    expect(new URL(requests[0].url).searchParams.get("year")).toBe("2025");
+    expect(client.getQueryData(["report", "year", 2025])).toEqual(YEAR_REPORT);
+  });
+
+  it("asks nothing before the year is known", () => {
+    const requests = stubApi({ "GET /api/reports/year": { status: 200, body: YEAR_REPORT } });
+    const { result } = renderHookWithQuery(() => useYearReport(undefined));
+
+    expect(result.current.fetchStatus).toBe("idle");
+    expect(requests).toHaveLength(0);
+  });
+});
 
 describe("useCategoryReport", () => {
   it("loads where the month's money went, by category", async () => {

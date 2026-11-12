@@ -57,6 +57,7 @@ describe("AppShell", () => {
     ["/ajustes", "Ajustes"],
     ["/ajustes/contas", "Contas Fixas"],
     ["/ajustes/categorias", "Categorias"],
+    ["/meu-ano", "Meu ano"],
   ])(
     "reads ● Soldi, the page name and the avatar in the mobile app bar on %s, with no greeting",
     async (path, name) => {
@@ -167,6 +168,7 @@ describe("AppShell", () => {
     expect(links("Menu")).toEqual([
       ["Mês", "/mes"],
       ["Para onde vai", "/para-onde-vai"],
+      ["Meu ano", "/meu-ano"],
       ["Cofrinhos", "/economia"],
       ["Posso comprar isso?", "/posso-comprar"],
     ]);
@@ -189,7 +191,7 @@ describe("AppShell", () => {
       within(menu)
         .getAllByRole("listitem")
         .map((item) => item.textContent),
-    ).toEqual(["Mês", "Para onde vai", "Cofrinhos", "Posso comprar isso?"]);
+    ).toEqual(["Mês", "Para onde vai", "Meu ano", "Cofrinhos", "Posso comprar isso?"]);
   });
 
   it("marks Contas Fixas, not Ajustes, in the sidebar on its screen", () => {
@@ -232,6 +234,51 @@ describe("AppShell", () => {
       expect(card).toHaveClass("rounded-2xl", "bg-card", "lg:hidden");
     },
   );
+
+  it("lists Meu ano in the sidebar Menu after Para onde vai and marks it on its page", () => {
+    setPathname("/meu-ano");
+    renderWithQuery(<AppShell>conteúdo</AppShell>);
+
+    const menu = within(screen.getByRole("navigation", { name: "Menu lateral" })).getByRole("group", { name: "Menu" });
+    expect(within(menu).getByRole("link", { name: "Meu ano" })).toHaveAttribute("aria-current", "page");
+    expect(
+      within(menu)
+        .getAllByRole("listitem")
+        .map((item) => item.textContent),
+    ).toEqual(["Mês", "Para onde vai", "Meu ano", "Cofrinhos", "Posso comprar isso?"]);
+  });
+
+  it("keeps five tab slots on Meu ano, with Economia current, and no month switcher", () => {
+    setPathname("/meu-ano");
+    renderWithQuery(<AppShell>conteúdo</AppShell>);
+
+    const tabs = screen.getByRole("navigation", { name: "Navegação principal" });
+    const order = [...tabs.querySelectorAll("a, button")].map((el) => el.getAttribute("aria-label") ?? el.textContent);
+    expect(order).toEqual(["Mês", "Para onde vai", "Lançar", "Economia", "Ajustes"]);
+    expect(within(tabs).getByRole("link", { name: "Economia" })).toHaveAttribute("aria-current", "page");
+    expect(screen.queryByRole("group", { name: "Mês" })).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ["/economia", "Economia", "Meu ano"],
+    ["/meu-ano", "Meu ano", "Economia"],
+  ])("switches between Economia and Meu ano below 1024 px on %s", (path, current, other) => {
+    setPathname(path);
+    setSearch("m=2026-12");
+    renderWithQuery(<AppShell>conteúdo</AppShell>);
+
+    const pair = screen.getByRole("navigation", { name: "Economia e Meu ano" });
+    expect(pair).toHaveClass("lg:hidden");
+    expect(within(pair).getByRole("link", { name: current })).toHaveAttribute("aria-current", "page");
+    expect(within(pair).getByRole("link", { name: other })).not.toHaveAttribute("aria-current");
+    expect(within(pair).getByRole("link", { name: "Economia" })).toHaveAttribute("href", "/economia?m=2026-12");
+  });
+
+  it("leaves the Economia and Meu ano switch out of Mês", () => {
+    renderWithQuery(<AppShell>conteúdo</AppShell>);
+
+    expect(screen.queryByRole("navigation", { name: "Economia e Meu ano" })).not.toBeInTheDocument();
+  });
 
   it("keeps the viewed month when moving from Mês to Para onde vai through the sidebar", async () => {
     setSearch("m=2026-12");

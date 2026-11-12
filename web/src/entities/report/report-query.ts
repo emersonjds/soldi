@@ -22,3 +22,13 @@ export const savingsYearQuery = (year: number) =>
 
 export const useSavingsYear = (year: number) =>
   useQuery({ ...savingsYearQuery(year), placeholderData: keepPreviousData });
+
+export const yearReportQuery = (year: number) =>
+  queryOptions({
+    queryKey: ["report", "year", year],
+    queryFn: async () => dataOrThrow(await api.GET("/api/reports/year", { params: { query: { year: String(year) } } })),
+  });
+
+/** Idle while `year` is undefined. */
+export const useYearReport = (year: number | undefined) =>
+  useQuery({ ...yearReportQuery(year ?? 0), enabled: year !== undefined, placeholderData: keepPreviousData });
