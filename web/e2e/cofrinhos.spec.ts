@@ -156,7 +156,7 @@ test("Economia do ano lists each month's saving and opens it on Mês, unclipped 
   };
   await page.getByRole("navigation", { name: "Navegação principal" }).getByRole("link", { name: "Economia" }).click();
   const card = page.getByRole("region", { name: "Economia do ano" });
-  await expect(card.getByRole("heading", { level: 1 })).toHaveText(/^Evolução e Poupança/);
+  await expect(card.getByRole("heading", { level: 2, name: /^Evolução e Poupança/ })).toBeVisible();
   const current = card.getByRole("list", { name: "Meses" }).getByRole("link", {
     name: `${name(today.slice(0, 7))}: guardou R$ 12.345,67, 19,1% das entradas, faixa alta, ajustar`,
   });
@@ -174,6 +174,8 @@ test("Economia do ano lists each month's saving and opens it on Mês, unclipped 
     await expectNoClipped(page);
   }
 
+  // The month list is the mobile layout; from 1024 the table takes its place.
+  await page.setViewportSize({ width: 375, height: 812 });
   await last.click();
   await expect(page).toHaveURL(new RegExp(`/mes\\?m=${previous}$`));
   await expect(page.getByRole("group", { name: "Mês" }).first()).toContainText(name(previous).replace(" de ", " "));
