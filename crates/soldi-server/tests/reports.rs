@@ -363,7 +363,7 @@ async fn a_year_before_the_opening_or_after_today_is_empty(pool: PgPool) {
         assert_eq!(status, StatusCode::OK);
         assert_eq!(
             body,
-            json!({ "year": year.parse::<i32>().unwrap(), "income_total": "0.00", "deposited_total": "0.00", "withdrawn_total": "0.00", "saved_total": "0.00", "rate_pct": null, "months": [] })
+            json!({ "year": year.parse::<i32>().unwrap(), "income_total": "0.00", "deposited_total": "0.00", "withdrawn_total": "0.00", "saved_total": "0.00", "rate_pct": null, "target": null, "months": [] })
         );
     }
 }
@@ -922,5 +922,29 @@ async fn a_fatura_payment_edited_to_diario_or_entrada_never_counts(pool: PgPool)
     assert_eq!(
         cents(&report["income"]),
         money_cents(&report["totals"]["income"])
+    );
+}
+
+#[sqlx::test]
+async fn p5_the_savings_year_carries_the_target_on_the_summarys_totals(pool: PgPool) {
+    let ana = TestApp::signed_in(pool, "ana@example.com").await;
+    let bia = ana.another_user("bia@example.com").await;
+    ana.open_at("0", "2025-01-01").await;
+    log(&ana, "2025-03-05", "income", "64482.80", "Salário").await;
+    log(&ana, "2025-03-06", "bill", "5416.53", "Economia").await;
+    bia.patch("/api/settings", json!({ "savings_target_pct": "50" }))
+        .await;
+
+    let (status, year) = savings(&ana, "2025").await;
+    assert_eq!(status, StatusCode::OK, "{year}");
+    assert_eq!(year["target"], serde_json::Value::Null);
+
+    ana.patch("/api/settings", json!({ "savings_target_pct": "20" }))
+        .await;
+    let (_, year) = savings(&ana, "2025").await;
+    assert_eq!(
+        year["target"],
+        json!({ "pct": "20.00", "amount": "12896.56", "remaining": "7480.03",
+                "progress_pct": "42.0", "done": false })
     );
 }

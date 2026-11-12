@@ -2481,7 +2481,7 @@
       },
       "Cofrinho": {
         "type": "object",
-        "description": "A subcategory of `Economia`, or `Economia` itself as `Sem objetivo` (`parent`). `balance` is\nits entries minus its resgates since the opening date; `progress_pct` is `balance / target`\nwith one decimal, capped at 100, null without a target; `done` is a balance at or above the\ntarget; `monthly_suggestion` is what is left over the months to the deadline, this one\nincluded, null without a deadline or when done; `next_contribution` is the earliest member\ndated after today of a repeated entry into it, null without one.",
+        "description": "A subcategory of `Economia`, or `Economia` itself as `Sem objetivo` (`parent`). `balance` is\nits entries minus its resgates since the opening date; `progress_pct` is `balance / target`\nwith one decimal, capped at 100, null without a target; `done` is a balance at or above the\ntarget; `monthly_suggestion` is what is left over the months to the deadline, this one\nincluded, null without a deadline or when done; `next_contribution` is the earliest member\ndated after today of a repeated entry into it, null without one; `note` is its description,\nnull without one and on `Sem objetivo`.",
         "required": [
           "category_id",
           "name",
@@ -2532,6 +2532,12 @@
               {
                 "type": "null"
               }
+            ]
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
             ]
           },
           "parent": {
@@ -2670,6 +2676,13 @@
           },
           "name": {
             "type": "string"
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Up to 140 characters, trimmed; blank means none. Only for a subcategory of `Economia`."
           },
           "parent_id": {
             "type": [
@@ -3167,6 +3180,38 @@
           }
         }
       },
+      "SavingsTarget": {
+        "type": "object",
+        "description": "The yearly savings target over the year's totals so far: `amount` is `pct` of `income_total`,\n`remaining` what `saved_total` still lacks (never below 0) and `progress_pct` how far it got\nwith one decimal, floored at 0, never capped, null when `amount` is 0; `done` is an `amount`\nabove 0 reached.",
+        "required": [
+          "pct",
+          "amount",
+          "remaining",
+          "done"
+        ],
+        "properties": {
+          "amount": {
+            "type": "string"
+          },
+          "done": {
+            "type": "boolean"
+          },
+          "pct": {
+            "type": "string",
+            "example": "20.00"
+          },
+          "progress_pct": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "example": "42.5"
+          },
+          "remaining": {
+            "type": "string"
+          }
+        }
+      },
       "SavingsYear": {
         "type": "object",
         "description": "A year's savings month by month, newest first, from the opening month (or January) to\nDecember; totals and `rate_pct` are over the months up to today's, not the forecast ones.",
@@ -3201,6 +3246,17 @@
           "saved_total": {
             "type": "string"
           },
+          "target": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/SavingsTarget",
+                "description": "Null without `Settings.savings_target_pct`."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "withdrawn_total": {
             "type": "string"
           },
@@ -3222,7 +3278,7 @@
       },
       "Settings": {
         "type": "object",
-        "description": "Money is a decimal string with up to two places (`\"-500.00\"`). The tiers are the lower\nbounds of the thermometer colors and are strictly increasing:\n`tier_red < tier_zero < tier_yellow < tier_green`.",
+        "description": "Money is a decimal string with up to two places (`\"-500.00\"`). The tiers are the lower\nbounds of the thermometer colors and are strictly increasing:\n`tier_red < tier_zero < tier_yellow < tier_green`. `savings_target_pct` is the yearly savings\ntarget as a percent of the year's income, above 0 and at most 100; null when unset.",
         "required": [
           "opening_balance",
           "opening_date",
@@ -3242,6 +3298,13 @@
           "opening_date": {
             "type": "string",
             "format": "date"
+          },
+          "savings_target_pct": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "example": "20.00"
           },
           "tier_green": {
             "type": "string"
@@ -3514,7 +3577,7 @@
       },
       "UpdateCategory": {
         "type": "object",
-        "description": "Absent fields stay as they are; `kind`, `daily` or `bill`, moves this category alone, top-level\nor subcategory, with all its entries to that kind; its subcategories keep theirs (D27). A\ntop-level keeps its color when free in every kind it then shows in, else takes the lowest free\none; a subcategory's group may recolor the same way. The savings categories, cofrinhos and\nincome ones never change kind. `\"parent_id\": null` makes it top-level, with `color` or the\nlowest token free in the kind. For a subcategory `color` is validated, then ignored: it wears\nits parent's; a parent's new color reaches its subcategories. A move under a group can recolor\nthat group and its subcategories to a color free in every kind it shows in. `null` clears\n`target` or `deadline`, which only a subcategory of `Economia` may set. Leaving `Economia`\nclears both.",
+        "description": "Absent fields stay as they are; `kind`, `daily` or `bill`, moves this category alone, top-level\nor subcategory, with all its entries to that kind; its subcategories keep theirs (D27). A\ntop-level keeps its color when free in every kind it then shows in, else takes the lowest free\none; a subcategory's group may recolor the same way. The savings categories, cofrinhos and\nincome ones never change kind. `\"parent_id\": null` makes it top-level, with `color` or the\nlowest token free in the kind. For a subcategory `color` is validated, then ignored: it wears\nits parent's; a parent's new color reaches its subcategories. A move under a group can recolor\nthat group and its subcategories to a color free in every kind it shows in. `null` clears\n`target`, `deadline` or `note`, which only a subcategory of `Economia` may set; a blank `note`\nclears it too. Leaving `Economia` clears all three.",
         "properties": {
           "color": {
             "type": [
@@ -3551,6 +3614,12 @@
               "null"
             ]
           },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "parent_id": {
             "type": [
               "string",
@@ -3582,7 +3651,7 @@
       },
       "UpdateSettings": {
         "type": "object",
-        "description": "Absent fields stay as they are.",
+        "description": "Absent fields stay as they are; `\"savings_target_pct\": null` clears the target.",
         "properties": {
           "currency": {
             "oneOf": [
@@ -3606,6 +3675,14 @@
               "null"
             ],
             "format": "date"
+          },
+          "savings_target_pct": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Above 0 and at most 100, up to two decimal places.",
+            "example": "20"
           },
           "tier_green": {
             "type": [

@@ -101,7 +101,29 @@ pub struct SavingsYear {
     pub saved_total: Decimal,
     #[schema(value_type = Option<String>, example = "8.4")]
     pub rate_pct: Option<Decimal>,
+    /// Null without `Settings.savings_target_pct`.
+    pub target: Option<SavingsTarget>,
     pub months: Vec<SavingsMonth>,
+}
+
+/// The yearly savings target over the year's totals so far: `amount` is `pct` of `income_total`,
+/// `remaining` what `saved_total` still lacks (never below 0) and `progress_pct` how far it got
+/// with one decimal, floored at 0, never capped, null when `amount` is 0; `done` is an `amount`
+/// above 0 reached.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+pub struct SavingsTarget {
+    #[serde(serialize_with = "crate::money")]
+    #[schema(value_type = String, example = "20.00")]
+    pub pct: Decimal,
+    #[serde(serialize_with = "crate::money")]
+    #[schema(value_type = String)]
+    pub amount: Decimal,
+    #[serde(serialize_with = "crate::money")]
+    #[schema(value_type = String)]
+    pub remaining: Decimal,
+    #[schema(value_type = Option<String>, example = "42.5")]
+    pub progress_pct: Option<Decimal>,
+    pub done: bool,
 }
 
 /// A month of the year and its `Gastos` (D31).

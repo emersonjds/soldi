@@ -22,7 +22,8 @@ async fn sign_up_creates_the_spreadsheet_defaults(pool: PgPool) {
             "tier_zero": "0.00",
             "tier_yellow": "1000.00",
             "tier_green": "2000.00",
-            "currency": "BRL"
+            "currency": "BRL",
+            "savings_target_pct": null
         })
     );
 }
@@ -106,4 +107,42 @@ async fn settings_need_a_session(pool: PgPool) {
         app.patch("/api/settings", json!({})).await.0,
         StatusCode::UNAUTHORIZED
     );
+}
+
+#[sqlx::test]
+async fn p5_the_savings_target_is_a_percent_above_0_up_to_100(pool: PgPool) {
+    let user = TestApp::signed_in(pool, "ana@example.com").await;
+
+    let (status, settings) = user
+        .patch("/api/settings", json!({ "savings_target_pct": "20" }))
+        .await;
+    assert_eq!(status, StatusCode::OK, "{settings}");
+    assert_eq!(settings["savings_target_pct"], "20.00");
+    let (_, full) = user
+        .patch("/api/settings", json!({ "savings_target_pct": "100" }))
+        .await;
+    assert_eq!(full["savings_target_pct"], "100.00");
+
+    for pct in [
+        json!("0"),
+        json!("100.01"),
+        json!("12.345"),
+        json!("-1"),
+        json!(-1),
+    ] {
+        let (status, problem) = user
+            .patch("/api/settings", json!({ "savings_target_pct": pct }))
+            .await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{pct}");
+        assert_eq!(problem["errors"][0]["field"], "savings_target_pct", "{pct}");
+    }
+    assert_eq!(
+        user.get("/api/settings").await.1["savings_target_pct"],
+        "100.00"
+    );
+
+    let (_, cleared) = user
+        .patch("/api/settings", json!({ "savings_target_pct": null }))
+        .await;
+    assert_eq!(cleared["savings_target_pct"], serde_json::Value::Null);
 }

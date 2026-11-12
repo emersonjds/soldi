@@ -15,6 +15,17 @@ pub fn check_money(field: &str, value: Decimal) -> Result<Decimal, AppError> {
     Ok(value)
 }
 
+/// N3: above 0 and at most 100, two decimal places at most, never rounded.
+fn check_target_pct(pct: Decimal) -> Result<Decimal, AppError> {
+    if pct <= Decimal::ZERO || pct > Decimal::ONE_HUNDRED {
+        return Err(AppError::invalid(
+            "savings_target_pct",
+            "must be greater than 0 and at most 100",
+        ));
+    }
+    check_money("savings_target_pct", pct)
+}
+
 /// The thermometer's lower bounds, strictly increasing; the error names the upper of the
 /// first pair out of order.
 pub fn check_tiers(
@@ -56,6 +67,10 @@ pub fn apply(current: Settings, patch: UpdateSettings) -> Result<Settings, AppEr
         tier_yellow: money("tier_yellow", patch.tier_yellow, current.tier_yellow)?,
         tier_green: money("tier_green", patch.tier_green, current.tier_green)?,
         currency: patch.currency.unwrap_or(current.currency),
+        savings_target_pct: match patch.savings_target_pct {
+            Some(pct) => pct.map(check_target_pct).transpose()?,
+            None => current.savings_target_pct,
+        },
     };
     check_tiers(
         next.tier_red,
@@ -93,6 +108,7 @@ mod tests {
             tier_yellow: money("1000.00"),
             tier_green: money("2000.00"),
             currency: Currency::Brl,
+            savings_target_pct: None,
         }
     }
 

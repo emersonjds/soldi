@@ -33,6 +33,12 @@ pub async fn create(
     input: CreateCategory,
 ) -> Result<Category, AppError> {
     let name = domain::check_name(&input.name)?;
+    let note = input
+        .note
+        .as_deref()
+        .map(domain::check_note)
+        .transpose()?
+        .flatten();
     let icon = input.icon.unwrap_or_else(|| domain::DEFAULT_ICON.into());
     domain::check_icon(&icon)?;
     input
@@ -57,6 +63,7 @@ pub async fn create(
         domain::is_cofrinho_parent(parent.as_ref()),
         input.target,
         input.deadline,
+        note.is_some(),
     )?;
     let color = match &parent {
         Some(parent) => parent.color.clone(),
@@ -73,6 +80,7 @@ pub async fn create(
         parent_id: input.parent_id,
         target: input.target,
         deadline: input.deadline,
+        note: note.as_deref(),
     };
     let mut created = repo::insert(conn, user.id, new).await?;
     if let Some(parent_id) = input.parent_id {
@@ -90,6 +98,11 @@ pub async fn update(
     input: UpdateCategory,
 ) -> Result<Category, AppError> {
     let name = input.name.as_deref().map(domain::check_name).transpose()?;
+    let note = input
+        .note
+        .map(|note| note.as_deref().map(domain::check_note).transpose())
+        .transpose()?
+        .map(Option::flatten);
     input.icon.as_deref().map(domain::check_icon).transpose()?;
     input
         .color
@@ -129,10 +142,15 @@ pub async fn update(
         (None, _) => None,
     };
     let cofrinho = domain::is_cofrinho_parent(parent.as_ref());
-    domain::check_goal(cofrinho, input.target.flatten(), input.deadline.flatten())?;
-    let (target, deadline) = match cofrinho {
-        true => (input.target, input.deadline),
-        false => (Some(None), Some(None)),
+    domain::check_goal(
+        cofrinho,
+        input.target.flatten(),
+        input.deadline.flatten(),
+        note.as_ref().is_some_and(Option::is_some),
+    )?;
+    let (target, deadline, note) = match cofrinho {
+        true => (input.target, input.deadline, note),
+        false => (Some(None), Some(None), Some(None)),
     };
     let change = CategoryChange {
         name: name.as_deref(),
@@ -141,6 +159,7 @@ pub async fn update(
         parent_id: input.parent_id,
         target,
         deadline,
+        note: note.as_ref().map(Option::as_deref),
     };
     let mut updated = repo::update(conn, user.id, id, change)
         .await?

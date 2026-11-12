@@ -1314,3 +1314,75 @@ async fn an_archived_daily_subcategory_does_not_keep_its_bill_group_in_daily(poo
     assert_eq!(status, StatusCode::CREATED, "{feira}");
     assert_eq!(feira["color"], "cat-16");
 }
+
+#[sqlx::test]
+async fn p4_a_cofrinho_keeps_a_note_and_loses_it_outside_economia(pool: PgPool) {
+    let user = TestApp::signed_in(pool, "ana@example.com").await;
+    let bia = user.another_user("bia@example.com").await;
+    let economia = user.category_id("Economia").await;
+    let mercado = user.category_id("Mercado").await;
+    let note_of = |cofrinhos: &Value, name: &str| {
+        cofrinhos["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|item| item["name"] == name)
+            .unwrap()["note"]
+            .clone()
+    };
+
+    let (status, carro) = user
+        .post(
+            "/api/categories",
+            json!({ "name": "Troca de Carro", "kind": "bill", "parent_id": economia,
+                    "note": "  Início após a Reserva.  " }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{carro}");
+    let uri = format!("/api/categories/{}", carro["id"].as_str().unwrap());
+    let (_, cofrinhos) = user.get("/api/cofrinhos").await;
+    assert_eq!(
+        note_of(&cofrinhos, "Troca de Carro"),
+        "Início após a Reserva."
+    );
+
+    let (status, problem) = user.patch(&uri, json!({ "note": "a".repeat(141) })).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(problem["errors"][0]["field"], "note");
+    let (status, _) = user.patch(&uri, json!({ "note": "é".repeat(140) })).await;
+    assert_eq!(status, StatusCode::OK);
+    let (status, _) = user.patch(&uri, json!({ "note": null })).await;
+    assert_eq!(status, StatusCode::OK);
+    let (_, cofrinhos) = user.get("/api/cofrinhos").await;
+    assert_eq!(note_of(&cofrinhos, "Troca de Carro"), Value::Null);
+
+    for (uri, body) in [
+        (format!("/api/categories/{mercado}"), json!({ "note": "x" })),
+        (
+            format!("/api/categories/{economia}"),
+            json!({ "note": "x" }),
+        ),
+    ] {
+        let (status, problem) = user.patch(&uri, body).await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+        assert_eq!(problem["type"], "urn:soldi:error:not-a-cofrinho");
+    }
+    let (status, problem) = user
+        .post(
+            "/api/categories",
+            json!({ "name": "Viagem", "kind": "bill", "note": "x" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(problem["type"], "urn:soldi:error:not-a-cofrinho");
+
+    user.patch(&uri, json!({ "note": "Plano" })).await;
+    let (status, _) = user.patch(&uri, json!({ "parent_id": null })).await;
+    assert_eq!(status, StatusCode::OK);
+    user.patch(&uri, json!({ "parent_id": economia })).await;
+    let (_, cofrinhos) = user.get("/api/cofrinhos").await;
+    assert_eq!(note_of(&cofrinhos, "Troca de Carro"), Value::Null);
+
+    let (status, _) = bia.patch(&uri, json!({ "note": "dela" })).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}
