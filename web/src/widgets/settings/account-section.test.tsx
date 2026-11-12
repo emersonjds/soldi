@@ -8,7 +8,7 @@ import { router } from "@/test/next-navigation";
 import { renderWithQuery } from "@/test/render";
 import { ANA, problem, signedIn } from "@/test/stub-api";
 
-import ContaPage from "./page";
+import { AccountSection } from "./account-section";
 
 vi.mock("next/navigation", () => import("@/test/next-navigation"));
 
@@ -18,19 +18,27 @@ const open = (replies: Record<string, Reply> = {}) => {
   const requests = signedIn(replies);
   const { client } = renderWithQuery(
     <>
-      <ContaPage />
+      <AccountSection />
       <Toaster />
     </>,
   );
   return { requests, client };
 };
 
+const openWith = async (button: string, replies: Record<string, Reply> = {}) => {
+  const opened = open(replies);
+  await userEvent.click(await screen.findByRole("button", { name: button }));
+  return opened;
+};
+const openProfile = (replies?: Record<string, Reply>) => openWith("Alterar dados", replies);
+const openPassword = (replies?: Record<string, Reply>) => openWith("Trocar senha", replies);
+
 const sent = (requests: Request[], method: string, path: string) =>
   requests.filter((request) => request.method === method && new URL(request.url).pathname === path);
 const posts = (requests: Request[], path: string) => sent(requests, "POST", path);
 
 const openDeletion = async () => {
-  await userEvent.click(await screen.findByRole("button", { name: "Excluir minha conta" }));
+  await userEvent.click(await screen.findByRole("button", { name: "Excluir conta definitivamente" }));
   return screen.findByRole("alertdialog", { name: "Excluir sua conta?" });
 };
 
@@ -43,17 +51,18 @@ const fillDeletion = async (dialog: HTMLElement, password = "minha-senha-longa")
 const WARNING =
   "Apaga sua conta e todos os seus lançamentos, categorias, contas fixas e cofrinhos. Não dá para desfazer.";
 
-describe("Ajustes › Minha conta", () => {
+describe("AccountSection", () => {
   beforeEach(() => router.replace.mockClear());
 
   it("renames the user and the cached user follows at once", async () => {
-    const { requests, client } = open({ "PATCH /api/me": { status: 200, body: { ...ANA, name: "Ana Paula" } } });
+    const { requests, client } = await openProfile({
+      "PATCH /api/me": { status: 200, body: { ...ANA, name: "Ana Paula" } },
+    });
 
     const name = await screen.findByLabelText("Nome");
     expect(name).toHaveValue("Ana");
     expect(name).toHaveAttribute("autocomplete", "name");
-    expect(screen.getByRole("heading", { level: 1, name: "Minha conta" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Ajustes" })).toHaveAttribute("href", "/ajustes");
+    expect(screen.getByText("ana@example.com", { selector: "p" })).toBeInTheDocument();
     expect(screen.getByLabelText("E-mail")).toHaveValue("ana@example.com");
     expect(screen.getByLabelText("E-mail")).toHaveAttribute("readonly");
     expect(screen.getByText("Para trocar o e-mail, fale com o suporte.")).toBeInTheDocument();
@@ -70,7 +79,7 @@ describe("Ajustes › Minha conta", () => {
   });
 
   it("blocks an empty name and one over 60 characters before sending", async () => {
-    const { requests } = open();
+    const { requests } = await openProfile();
 
     const name = await screen.findByLabelText("Nome");
     await userEvent.clear(name);
@@ -86,7 +95,7 @@ describe("Ajustes › Minha conta", () => {
   });
 
   it("says so when the name is not saved", async () => {
-    open({ "PATCH /api/me": { status: 500, body: problem(500, "Falhou.") } });
+    await openProfile({ "PATCH /api/me": { status: 500, body: problem(500, "Falhou.") } });
 
     await screen.findByLabelText("Nome");
     await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
@@ -95,7 +104,7 @@ describe("Ajustes › Minha conta", () => {
   });
 
   it("changes the password and clears the fields", async () => {
-    const { requests, client } = open({ "POST /api/me/password": { status: 204 } });
+    const { requests, client } = await openPassword({ "POST /api/me/password": { status: 204 } });
 
     const current = await screen.findByLabelText("Senha atual");
     const next = screen.getByLabelText("Nova senha");
@@ -124,7 +133,7 @@ describe("Ajustes › Minha conta", () => {
   });
 
   it("counts characters, not code units, and caps the new password at 128", async () => {
-    const { requests } = open({ "POST /api/me/password": { status: 204 } });
+    const { requests } = await openPassword({ "POST /api/me/password": { status: 204 } });
 
     await userEvent.type(await screen.findByLabelText("Senha atual"), "senha-antiga");
     const next = screen.getByLabelText("Nova senha");
@@ -146,7 +155,7 @@ describe("Ajustes › Minha conta", () => {
   });
 
   it("marks the new password when the server refuses its length", async () => {
-    open({
+    await openPassword({
       "POST /api/me/password": {
         status: 422,
         body: { ...problem(422, "No."), errors: [{ field: "password", message: "too short" }] },
@@ -165,7 +174,7 @@ describe("Ajustes › Minha conta", () => {
   });
 
   it("tells a wrong current password apart from any other failure", async () => {
-    const { client } = open({
+    const { client } = await openPassword({
       "POST /api/me/password": {
         status: 422,
         body: { ...problem(422, "No."), type: "urn:soldi:error:wrong-password" },
@@ -189,7 +198,7 @@ describe("Ajustes › Minha conta", () => {
   });
 
   it("says so when the password change fails for another reason", async () => {
-    open({ "POST /api/me/password": { status: 500, body: problem(500, "Falhou.") } });
+    await openPassword({ "POST /api/me/password": { status: 500, body: problem(500, "Falhou.") } });
 
     await userEvent.type(await screen.findByLabelText("Senha atual"), "senha-antiga");
     await userEvent.type(screen.getByLabelText("Nova senha"), "nova-senha-longa");
@@ -199,7 +208,7 @@ describe("Ajustes › Minha conta", () => {
   });
 
   it("asks to wait when there were too many password attempts", async () => {
-    open({ "POST /api/me/password": { status: 429, body: problem(429, "Too many.") } });
+    await openPassword({ "POST /api/me/password": { status: 429, body: problem(429, "Too many.") } });
 
     await userEvent.type(await screen.findByLabelText("Senha atual"), "senha-antiga");
     await userEvent.type(screen.getByLabelText("Nova senha"), "nova-senha-longa");
@@ -211,7 +220,7 @@ describe("Ajustes › Minha conta", () => {
   it("signs out everywhere only after confirming, then goes to sign-in", async () => {
     const { requests, client } = open({ "POST /api/auth/sign-out-everywhere": { status: 204 } });
 
-    expect(await screen.findByRole("button", { name: "Sair" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Sair da conta (Logout)" })).toBeInTheDocument();
     client.setQueryData(["months", "2026-11"], { balance: "10.00" });
     await userEvent.click(screen.getByRole("button", { name: "Sair de todos os aparelhos" }));
     let dialog = await screen.findByRole("alertdialog", { name: "Sair de todos os aparelhos?" });
@@ -250,8 +259,6 @@ describe("Ajustes › Minha conta", () => {
   it("deletes the account only once the password and EXCLUIR are typed, then goes to sign-in", async () => {
     const { requests, client } = open({ "DELETE /api/me": { status: 204 } });
 
-    const section = await screen.findByRole("region", { name: "Excluir conta" });
-    expect(within(section).getByText(WARNING)).toBeInTheDocument();
     client.setQueryData(["months", "2026-11"], { balance: "10.00" });
     const dialog = await openDeletion();
     expect(within(dialog).getByText(WARNING)).toBeInTheDocument();
@@ -359,5 +366,39 @@ describe("Ajustes › Minha conta", () => {
 
     dialog = await openDeletion();
     expect(within(dialog).getByLabelText("Senha")).toHaveValue("");
+  });
+
+  it("shows the name, e-mail and password tiles with the account actions", async () => {
+    open();
+
+    expect(await screen.findByText("NOME COMPLETO")).toBeInTheDocument();
+    expect(screen.getByText("Ana", { selector: "p" })).toBeInTheDocument();
+    expect(screen.getByText("E-MAIL CADASTRADO")).toBeInTheDocument();
+    expect(screen.getByText("SENHA DE ACESSO")).toBeInTheDocument();
+    expect(screen.getByText("••••••••••••")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Alterar dados" })).toHaveAttribute("aria-haspopup", "dialog");
+    expect(screen.getByRole("button", { name: "Trocar senha" })).toHaveAttribute("aria-haspopup", "dialog");
+    expect(screen.getByRole("button", { name: "Excluir conta definitivamente" })).toHaveClass("text-destructive");
+    expect(screen.getByRole("button", { name: "Sair da conta (Logout)" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Sair de todos os aparelhos" })).toBeInTheDocument();
+    expect(screen.queryByLabelText("Nome")).not.toBeInTheDocument();
+  });
+
+  it("signs out and goes to sign-in", async () => {
+    signedIn({ "POST /api/auth/sign-out": { status: 204 } });
+    renderWithQuery(<AccountSection />);
+
+    await userEvent.click(await screen.findByRole("button", { name: "Sair da conta (Logout)" }));
+
+    await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/entrar"));
+  });
+
+  it("says so when signing out fails", async () => {
+    signedIn({ "POST /api/auth/sign-out": { status: 500, body: problem(500, "Falhou.") } });
+    renderWithQuery(<AccountSection />);
+
+    await userEvent.click(await screen.findByRole("button", { name: "Sair da conta (Logout)" }));
+
+    expect(await screen.findByText("Não foi possível sair. Tente de novo.")).toBeInTheDocument();
   });
 });

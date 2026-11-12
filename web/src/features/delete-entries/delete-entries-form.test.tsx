@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Toaster } from "sonner";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -29,20 +29,20 @@ const serve = (counts: Record<string, Answer>, remove: Answer = { status: 200, b
 
 const count = (value: number) => ({ status: 200, body: { count: value } });
 
-const open = () =>
+const open = (month = "2026-11", opening = "2026-01-10") =>
   renderWithQuery(
     <>
-      <DeleteEntriesForm />
+      <DeleteEntriesForm month={month} opening={opening} />
       <Toaster />
     </>,
   );
 
-const deleteButton = () => screen.getByRole("button", { name: /^Apagar/ });
+const deleteButton = () => screen.getByRole("button", { name: "Excluir Lançamentos" });
 
-const confirmDialog = async () => {
-  await userEvent.click(await screen.findByRole("button", { name: "Apagar 37 lançamentos" }));
-  return screen.findByRole("alertdialog", { name: "Apagar 37 lançamentos?" });
-};
+const confirmation = () => screen.getByPlaceholderText("CONFIRMAR");
+
+const deletedPeriod = (requests: Request[]) =>
+  new URL(requests.find((request) => request.method === "DELETE")?.url ?? "").searchParams.get("period");
 
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ["Date"] });
@@ -51,109 +51,105 @@ beforeEach(() => {
 });
 
 describe("DeleteEntriesForm", () => {
-  it("previews the current month, then the year, then everything", async () => {
-    const requests = serve({ "2026-11": count(37), "2026": count(120), "2026-10": count(5), all: count(310) });
+  it("offers today's month with its count, its year and everything", async () => {
+    serve({ "2026-11": count(42) });
     open();
 
-    expect(screen.getByRole("radio", { name: "Mês" })).toHaveAttribute("data-state", "on");
-    expect(screen.getByLabelText("Mês")).toHaveValue("2026-11");
-    expect(await screen.findByText("Serão apagados 37 lançamentos de novembro de 2026.")).toBeInTheDocument();
-    expect(deleteButton()).toHaveAccessibleName("Apagar 37 lançamentos");
-    expect(deleteButton()).toBeEnabled();
-    expect(screen.getByText("Categorias, contas fixas e cofrinhos continuam, sem os lançamentos.")).toBeInTheDocument();
-
-    fireEvent.change(screen.getByLabelText("Mês"), { target: { value: "" } });
-    expect(screen.getByLabelText("Mês")).toHaveValue("2026-11");
-    fireEvent.change(screen.getByLabelText("Mês"), { target: { value: "2026-10" } });
-    expect(await screen.findByText("Serão apagados 5 lançamentos de outubro de 2026.")).toBeInTheDocument();
-
-    await userEvent.click(screen.getByRole("radio", { name: "Ano" }));
-    expect(screen.queryByLabelText("Mês")).not.toBeInTheDocument();
-    expect(screen.getByLabelText("Ano")).toHaveValue(2026);
-    expect(await screen.findByText("Serão apagados 120 lançamentos de 2026.")).toBeInTheDocument();
-
-    await userEvent.click(screen.getByRole("radio", { name: "Tudo" }));
-    expect(screen.queryByLabelText("Ano")).not.toBeInTheDocument();
-    expect(await screen.findByText("Serão apagados 310 lançamentos de todo o período.")).toBeInTheDocument();
-
-    await userEvent.click(screen.getByRole("radio", { name: "Tudo" }));
-    expect(screen.getByRole("radio", { name: "Tudo" })).toHaveAttribute("data-state", "on");
-    expect(requests.map((request) => new URL(request.url).searchParams.get("period"))).toEqual([
-      "2026-11",
-      "2026-10",
-      "2026",
-      "all",
-    ]);
+    expect(screen.getByRole("radiogroup", { name: "Selecione o escopo para exclusão:" })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "Mês atual" })).toBeChecked();
+    expect(await screen.findByText("Novembro 2026 (42 registros)")).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "Ano de 2026" })).not.toBeChecked();
+    expect(screen.getByText("Todos os 11 meses deste ano")).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "Zerar tudo" })).toBeInTheDocument();
+    expect(screen.getByText("Limpa toda a base da conta")).toBeInTheDocument();
+    expect(screen.getByText("Ação destrutiva sem retorno")).toBeInTheDocument();
+    expect(screen.queryByText(/Serão apagados/)).not.toBeInTheDocument();
   });
 
-  it("labels the period choice as a radio group", () => {
-    serve({ "2026-11": count(37) });
-    open();
+  it("names another switcher month Mês selecionado and counts the year from January", async () => {
+    serve({ "2025-03": count(1) });
+    open("2025-03", "2024-06-01");
 
-    expect(screen.getByRole("radiogroup", { name: "Período" })).toBeInTheDocument();
-    expect(screen.getByText("Período")).toBeVisible();
+    expect(screen.getByRole("radio", { name: "Mês selecionado" })).toBeChecked();
+    expect(await screen.findByText("Março 2025 (1 registro)")).toBeInTheDocument();
+    expect(screen.getByText("Todos os 12 meses deste ano")).toBeInTheDocument();
   });
 
-  it("asks nothing for a year outside 2000 to 2100 and keeps the button off", async () => {
-    const requests = serve({ "2026-11": count(37), "2025": count(3) });
+  it("counts the year's months from the opening month", () => {
+    serve({});
+    open("2026-11", "2026-08-20");
+
+    expect(screen.getByText("Todos os 4 meses deste ano")).toBeInTheDocument();
+  });
+
+  it("enables Excluir Lançamentos only on the exact word CONFIRMAR", async () => {
+    serve({ "2026-11": count(42) });
     open();
-    await screen.findByText(/Serão apagados 37/);
 
-    await userEvent.click(screen.getByRole("radio", { name: "Ano" }));
-    fireEvent.change(screen.getByLabelText("Ano"), { target: { value: "1999" } });
-
-    expect(screen.getByLabelText("Ano")).toHaveAccessibleDescription("Informe um ano entre 2000 e 2100.");
-    expect(screen.getByLabelText("Ano")).toBeInvalid();
-    expect(deleteButton()).toHaveAccessibleName("Apagar lançamentos");
     expect(deleteButton()).toBeDisabled();
-
-    fireEvent.change(screen.getByLabelText("Ano"), { target: { value: "2025" } });
-    await screen.findByText("Serão apagados 3 lançamentos de 2025.");
-    expect(requests.map((request) => new URL(request.url).searchParams.get("period"))).toEqual([
-      "2026-11",
-      "2026",
-      "2025",
-    ]);
+    await userEvent.type(confirmation(), "confirmar");
+    expect(deleteButton()).toBeDisabled();
+    await userEvent.clear(confirmation());
+    await userEvent.type(confirmation(), " CONFIRMAR");
+    expect(deleteButton()).toBeDisabled();
+    await userEvent.clear(confirmation());
+    await userEvent.type(confirmation(), "CONFIRMAR");
+    expect(deleteButton()).toBeEnabled();
   });
 
-  it("refuses a month outside 2000 to 2100 with the year's message", async () => {
+  it("deletes the month, toasts and clears the word", async () => {
     const requests = serve({ "2026-11": count(37) });
     open();
-    await screen.findByText(/Serão apagados 37/);
 
-    const field = screen.getByLabelText("Mês");
-    expect(field).toHaveAttribute("min", "2000-01");
-    expect(field).toHaveAttribute("max", "2100-12");
-    fireEvent.change(field, { target: { value: "1999-05" } });
+    await userEvent.type(confirmation(), "CONFIRMAR");
+    await userEvent.click(deleteButton());
 
-    expect(field).toHaveAccessibleDescription("Informe um ano entre 2000 e 2100.");
-    expect(field).toBeInvalid();
-    expect(deleteButton()).toBeDisabled();
-    expect(requests).toHaveLength(1);
+    expect(await screen.findByText("37 lançamentos apagados")).toBeInTheDocument();
+    expect(confirmation()).toHaveValue("");
+    expect(deletedPeriod(requests)).toBe("2026-11");
+    expect(await screen.findByText("Novembro 2026 (0 registros)")).toBeInTheDocument();
   });
 
-  it("says 1 lançamento in the singular", async () => {
-    serve({ "2026-11": count(1) });
+  it("deletes the year or everything", async () => {
+    const requests = serve({}, { status: 200, body: { deleted: 1 } });
     open();
 
-    expect(await screen.findByText("Será apagado 1 lançamento de novembro de 2026.")).toBeInTheDocument();
-    expect(deleteButton()).toHaveAccessibleName("Apagar 1 lançamento");
+    await userEvent.click(screen.getByRole("radio", { name: "Ano de 2026" }));
+    await userEvent.type(confirmation(), "CONFIRMAR");
+    await userEvent.click(deleteButton());
+    expect(await screen.findByText("1 lançamento apagado")).toBeInTheDocument();
+    expect(deletedPeriod(requests)).toBe("2026");
+
+    await userEvent.click(screen.getByRole("radio", { name: "Zerar tudo" }));
+    await userEvent.type(confirmation(), "CONFIRMAR");
+    await userEvent.click(deleteButton());
+    await waitFor(() =>
+      expect(requests.filter((request) => request.method === "DELETE").map((request) => request.url)).toHaveLength(2),
+    );
+    expect(new URL(requests.filter((request) => request.method === "DELETE")[1].url).searchParams.get("period")).toBe(
+      "all",
+    );
   });
 
-  it("has nothing to delete in an empty period", async () => {
-    serve({ "2026-11": count(0) });
+  it("disables the button while deleting", async () => {
+    serve({ "2026-11": count(37) }, new Promise<never>(() => undefined));
     open();
 
-    expect(await screen.findByText("Nada para apagar neste período.")).toBeInTheDocument();
-    expect(deleteButton()).toBeDisabled();
+    await userEvent.type(confirmation(), "CONFIRMAR");
+    await userEvent.click(deleteButton());
+
+    expect(await screen.findByRole("button", { name: "Excluindo…" })).toBeDisabled();
   });
 
-  it("shows Contando… while counting, button off", () => {
-    serve({ "2026-11": new Promise<never>(() => undefined) });
+  it("keeps the word and says so when deleting fails", async () => {
+    serve({ "2026-11": count(37) }, { status: 500, body: { detail: "Falhou." } });
     open();
 
-    expect(screen.getByText("Contando…")).toBeInTheDocument();
-    expect(deleteButton()).toBeDisabled();
+    await userEvent.type(confirmation(), "CONFIRMAR");
+    await userEvent.click(deleteButton());
+
+    expect(await screen.findByText("Não foi possível apagar. Tente de novo.")).toBeInTheDocument();
+    expect(confirmation()).toHaveValue("CONFIRMAR");
   });
 
   it("says so when counting fails and retries", async () => {
@@ -168,95 +164,7 @@ describe("DeleteEntriesForm", () => {
     open();
 
     expect(await screen.findByText("Não foi possível contar os lançamentos.")).toBeInTheDocument();
-    expect(deleteButton()).toBeDisabled();
-
     await userEvent.click(screen.getByRole("button", { name: "Tentar de novo" }));
-    expect(await screen.findByText("Serão apagados 37 lançamentos de novembro de 2026.")).toBeInTheDocument();
-  });
-
-  it("confirms only on the exact word, and cancel deletes nothing", async () => {
-    const requests = serve({ "2026-11": count(37) });
-    open();
-
-    const dialog = await confirmDialog();
-    expect(dialog).toHaveTextContent(
-      "Serão apagados 37 lançamentos de novembro de 2026. Isso não pode ser desfeito. O saldo dos meses seguintes muda.",
-    );
-    const field = within(dialog).getByLabelText("Digite APAGAR para confirmar");
-    expect(field).toHaveFocus();
-    expect(field).toHaveAttribute("autocorrect", "off");
-    expect(field).toHaveAttribute("spellcheck", "false");
-    expect(field).toHaveAttribute("autocapitalize", "characters");
-    const confirm = within(dialog).getByRole("button", { name: "Apagar" });
-    expect(confirm).toBeDisabled();
-
-    await userEvent.type(field, "apagar");
-    expect(confirm).toBeDisabled();
-    await userEvent.clear(field);
-    await userEvent.type(field, "APAGAR");
-    expect(confirm).toBeEnabled();
-
-    await userEvent.click(within(dialog).getByRole("button", { name: "Cancelar" }));
-    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
-    expect(requests.some((request) => request.method === "DELETE")).toBe(false);
-
-    await confirmDialog();
-    expect(screen.getByLabelText("Digite APAGAR para confirmar")).toHaveValue("");
-  });
-
-  it("deletes, toasts and lands on the empty preview without leaving", async () => {
-    const requests = serve({ "2026-11": count(37) });
-    open();
-
-    const dialog = await confirmDialog();
-    await userEvent.type(within(dialog).getByLabelText("Digite APAGAR para confirmar"), "APAGAR");
-    await userEvent.click(within(dialog).getByRole("button", { name: "Apagar" }));
-
-    expect(await screen.findByText("37 lançamentos apagados")).toBeInTheDocument();
-    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
-    expect(await screen.findByText("Nada para apagar neste período.")).toBeInTheDocument();
-    const remove = requests.find((request) => request.method === "DELETE");
-    expect(new URL(remove?.url ?? "").searchParams.get("period")).toBe("2026-11");
-  });
-
-  it("disables both buttons while deleting", async () => {
-    serve({ "2026-11": count(37) }, new Promise<never>(() => undefined));
-    open();
-
-    const dialog = await confirmDialog();
-    await userEvent.type(within(dialog).getByLabelText("Digite APAGAR para confirmar"), "APAGAR");
-    await userEvent.click(within(dialog).getByRole("button", { name: "Apagar" }));
-
-    expect(await within(dialog).findByRole("button", { name: "Apagando…" })).toBeDisabled();
-    expect(within(dialog).getByRole("button", { name: "Cancelar" })).toBeDisabled();
-  });
-
-  it("keeps the dialog through Esc while deleting, then toasts", async () => {
-    let finish: (reply: Reply) => void = () => undefined;
-    serve({ "2026-11": count(37) }, new Promise<Reply>((resolve) => (finish = resolve)));
-    open();
-
-    const dialog = await confirmDialog();
-    await userEvent.type(within(dialog).getByLabelText("Digite APAGAR para confirmar"), "APAGAR");
-    await userEvent.click(within(dialog).getByRole("button", { name: "Apagar" }));
-    await within(dialog).findByRole("button", { name: "Apagando…" });
-    await userEvent.keyboard("{Escape}");
-
-    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
-    finish({ status: 200, body: { deleted: 37 } });
-    expect(await screen.findByText("37 lançamentos apagados")).toBeInTheDocument();
-  });
-
-  it("keeps the dialog and the typed word when deleting fails", async () => {
-    serve({ "2026-11": count(37) }, { status: 500, body: { detail: "Falhou." } });
-    open();
-
-    const dialog = await confirmDialog();
-    await userEvent.type(within(dialog).getByLabelText("Digite APAGAR para confirmar"), "APAGAR");
-    await userEvent.click(within(dialog).getByRole("button", { name: "Apagar" }));
-
-    expect(await within(dialog).findByText("Não foi possível apagar. Tente de novo.")).toBeInTheDocument();
-    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
-    expect(within(dialog).getByLabelText("Digite APAGAR para confirmar")).toHaveValue("APAGAR");
+    expect(await screen.findByText("Novembro 2026 (37 registros)")).toBeInTheDocument();
   });
 });

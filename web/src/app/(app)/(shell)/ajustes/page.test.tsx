@@ -1,69 +1,103 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { router, setSearch } from "@/test/next-navigation";
+import { setSearch } from "@/test/next-navigation";
 import { renderWithQuery } from "@/test/render";
-import { problem, signedIn } from "@/test/stub-api";
+import { MONTH, problem, signedIn } from "@/test/stub-api";
 
 import AjustesPage from "./page";
 
 vi.mock("next/navigation", () => import("@/test/next-navigation"));
 
-describe("Ajustes", () => {
-  it("groups the settings, each one a link to its screen", () => {
-    signedIn();
-    renderWithQuery(<AjustesPage />);
+type Reply = { status: number; body?: unknown };
 
-    expect(screen.getByRole("heading", { level: 1, name: "Ajustes" })).not.toHaveClass("lg:sr-only");
-    for (const [name, href] of [
-      ["Categorias", "/ajustes/categorias"],
-      ["Contas fixas", "/ajustes/contas"],
-      ["Termômetro", "/ajustes/termometro"],
-      ["Saldo inicial", "/ajustes/saldo-inicial"],
-      ["Apagar lançamentos", "/ajustes/apagar"],
-      ["Moeda", "/ajustes/moeda"],
-      ["Como funciona", "/tour?replay=1"],
-      ["Minha conta", "/ajustes/conta"],
-    ])
-      expect(screen.getByRole("link", { name: new RegExp(`^${name}`) })).toHaveAttribute("href", href);
-    expect(screen.getAllByRole("link")).toHaveLength(8);
-    expect(screen.queryByRole("link", { name: /Importar/ })).not.toBeInTheDocument();
-    expect(screen.getByText("Grupos e subcategorias")).toBeInTheDocument();
-    expect(screen.getByText("Mês, ano ou tudo")).toBeInTheDocument();
-    expect(screen.getByText("Nome, e-mail e senha")).toBeInTheDocument();
-    const conta = within(screen.getByRole("region", { name: "Conta" }));
-    expect(conta.getByRole("link", { name: /^Minha conta/ })).toBeInTheDocument();
-    expect(screen.queryByText(/em breve/i)).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Sair" })).toHaveClass("text-destructive");
+type Seen = Pick<IntersectionObserverEntry, "isIntersecting" | "target">;
+
+const open = (replies: Record<string, Reply> = {}) => {
+  const requests = signedIn({ "GET /api/months/2026-11": { status: 200, body: MONTH }, ...replies });
+  renderWithQuery(<AjustesPage />);
+  return requests;
+};
+
+const SECTIONS = [
+  ["Termômetro & Limites", "termometro", "Calibragem do Termômetro Financeiro"],
+  ["Moeda & Saldo Inicial", "moeda", "Moeda & Saldo Inicial"],
+  ["Organização (Contas)", "organizacao", "Organização (Contas)"],
+  ["Gestão de Dados", "dados", "Gestão de Dados & Zona de Perigo"],
+  ["Minha Conta & Segurança", "conta", "Minha Conta & Segurança"],
+  ["Ajuda & Como Funciona", "ajuda", "Ajuda & Como Funciona"],
+];
+
+const subNav = () => within(screen.getByRole("navigation", { name: "Seções dos ajustes" }));
+
+afterEach(() => vi.unstubAllGlobals());
+
+describe("Ajustes", () => {
+  it("titles the page and lists every section in the sub-nav, in order", async () => {
+    open();
+
+    expect(screen.getByRole("navigation", { name: "breadcrumb" })).toHaveTextContent("ConfiguraçõesAjustes do Sistema");
+    expect(screen.getByRole("heading", { level: 1, name: "Ajustes & Preferências" })).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Personalize os parâmetros de cálculo do termômetro, organização de contas e segurança dos seus dados",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      subNav()
+        .getAllByRole("link")
+        .map((link) => [link.textContent, link.getAttribute("href")]),
+    ).toEqual(SECTIONS.map(([label, anchor]) => [label, `#${anchor}`]));
+    expect(subNav().getByRole("link", { name: "Termômetro & Limites" })).toHaveAttribute("aria-current", "true");
+    for (const [, anchor, title] of SECTIONS)
+      expect(screen.getByRole("region", { name: title })).toHaveAttribute("id", anchor);
+    expect(await screen.findByLabelText("Crítico / Atenção")).toBeInTheDocument();
+    expect(screen.getByLabelText("Saldo Inicial da Conta Corrente")).toBeInTheDocument();
+    expect(screen.getByText("Projeção em tempo real")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Excluir Lançamentos" })).toBeDisabled();
+    expect(await screen.findByText("NOME COMPLETO")).toBeInTheDocument();
   });
 
-  it("keeps the viewed month on every row", () => {
+  it("links Contas fixas, Categorias and Como funciona, keeping the viewed month, and shows the version", () => {
     setSearch("m=2026-12");
-    signedIn();
-    renderWithQuery(<AjustesPage />);
+    open();
 
     expect(screen.getByRole("link", { name: /^Contas fixas/ })).toHaveAttribute("href", "/ajustes/contas?m=2026-12");
-    expect(screen.getByRole("link", { name: /^Minha conta/ })).toHaveAttribute("href", "/ajustes/conta?m=2026-12");
+    expect(screen.getByRole("link", { name: /^Categorias/ })).toHaveAttribute("href", "/ajustes/categorias?m=2026-12");
+    expect(screen.getByRole("link", { name: /^Como funciona/ })).toHaveAttribute("href", "/tour?replay=1&m=2026-12");
+    expect(screen.getByText(/^Versão \d+\.\d+\.\d+$/)).toBeInTheDocument();
     setSearch("");
   });
 
-  it("signs out and goes to sign-in", async () => {
-    const requests = signedIn({ "POST /api/auth/sign-out": { status: 204 } });
-    renderWithQuery(<AjustesPage />);
+  it("marks the section in view in the sub-nav", () => {
+    let report: (entries: Seen[]) => void = () => undefined;
+    vi.stubGlobal(
+      "IntersectionObserver",
+      class {
+        constructor(private readonly callback: (entries: Seen[]) => void) {}
+        observe = (target: Element) => {
+          if (target.tagName === "SECTION") report = this.callback;
+        };
+        unobserve = () => undefined;
+        disconnect = () => undefined;
+      },
+    );
+    open();
 
-    await userEvent.click(screen.getByRole("button", { name: "Sair" }));
+    const moeda = screen.getByRole("region", { name: "Moeda & Saldo Inicial" });
+    act(() => report([{ isIntersecting: true, target: moeda }]));
 
-    await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/entrar"));
-    expect(requests.some((request) => request.method === "POST")).toBe(true);
+    expect(subNav().getByRole("link", { name: "Moeda & Saldo Inicial" })).toHaveAttribute("aria-current", "true");
+    expect(subNav().getByRole("link", { name: "Termômetro & Limites" })).not.toHaveAttribute("aria-current");
   });
 
-  it("says so when signing out fails", async () => {
-    signedIn({ "POST /api/auth/sign-out": { status: 500, body: problem(500, "Falhou.") } });
-    renderWithQuery(<AjustesPage />);
+  it("offers a retry when the settings do not load", async () => {
+    const requests = open({ "GET /api/settings": { status: 500, body: problem(500, "Falhou.") } });
 
-    await userEvent.click(screen.getByRole("button", { name: "Sair" }));
+    const retries = await screen.findAllByRole("button", { name: "Tentar de novo" });
+    await userEvent.click(retries[0]);
 
-    expect(await screen.findByText("Não foi possível sair. Tente de novo.")).toBeInTheDocument();
+    await waitFor(() => expect(requests.filter((request) => request.url.endsWith("/api/settings"))).toHaveLength(2));
   });
 });
