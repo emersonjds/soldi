@@ -35,18 +35,18 @@ test("deleting this month's entries empties the ledger and the preview", async (
   }
 
   await page.goto("/ajustes");
-  await page.getByRole("link", { name: /^Apagar lançamentos/ }).click();
-  await expect(page.getByRole("heading", { level: 1, name: "Apagar lançamentos" })).toBeVisible();
-  await expect(page.getByText(/^Serão apagados 2 lançamentos de /)).toBeVisible();
+  const data = page.getByRole("region", { name: "Gestão de Dados & Zona de Perigo" });
+  await expect(data.getByRole("radio", { name: "Mês atual" })).toBeChecked();
+  await expect(data.getByText(/\d{4} \(2 registros\)$/)).toBeVisible();
+  const remove = data.getByRole("button", { name: "Excluir Lançamentos" });
+  await expect(remove).toBeDisabled();
 
-  await page.getByRole("button", { name: "Apagar 2 lançamentos" }).click();
-  const confirm = page.getByRole("alertdialog", { name: "Apagar 2 lançamentos?" });
-  await confirm.getByLabel("Digite APAGAR para confirmar").fill("APAGAR");
-  await confirm.getByRole("button", { name: "Apagar" }).click();
+  await data.getByPlaceholder("CONFIRMAR").fill("CONFIRMAR");
+  await remove.click();
 
   await expect(page.getByText("2 lançamentos apagados")).toBeVisible();
-  await expect(page.getByText("Nada para apagar neste período.")).toBeVisible();
-  await expect(page).toHaveURL(/\/ajustes\/apagar/);
+  await expect(data.getByText(/\d{4} \(0 registros\)$/)).toBeVisible();
+  await expect(page).toHaveURL(/\/ajustes$/);
 
   await page.goto(`/mes?m=${month}`);
   await expect(page.getByRole("region", { name: "Saldo hoje" })).toBeVisible();

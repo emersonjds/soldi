@@ -10,20 +10,18 @@ export const SignOutButton = () => {
   const signOut = useLeave(async () => okOrThrow(await api.POST("/api/auth/sign-out")));
 
   return (
-    <div className="flex flex-col">
+    <div className="flex flex-col gap-1">
       <Button
-        variant="ghost"
-        className="min-h-16 w-full justify-start gap-3 rounded-none px-4 font-medium text-base text-destructive hover:bg-muted hover:text-destructive"
+        variant="outline"
+        className="h-12 gap-2 px-5 font-semibold text-base"
         disabled={signOut.isPending}
         onClick={() => signOut.mutate()}
       >
-        <span className="flex size-10 items-center justify-center rounded-full bg-expense/10">
-          <LogOut className="size-5" />
-        </span>
-        Sair
+        <LogOut aria-hidden className="size-5" />
+        Sair da conta (Logout)
       </Button>
       {signOut.isError && (
-        <p role="alert" className="px-4 pb-3 text-destructive text-sm">
+        <p role="alert" className="text-destructive text-sm">
           Não foi possível sair. Tente de novo.
         </p>
       )}

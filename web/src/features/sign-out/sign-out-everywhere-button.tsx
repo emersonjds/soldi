@@ -1,6 +1,5 @@
 "use client";
 
-import { MonitorSmartphone } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -25,14 +24,7 @@ export const SignOutEverywhereButton = () => {
   return (
     <AlertDialog>
       <AlertDialogTrigger asChild>
-        <Button
-          variant="ghost"
-          className="min-h-16 w-full justify-start gap-3 rounded-none px-4 font-medium text-base text-destructive hover:bg-muted hover:text-destructive"
-          disabled={signOut.isPending}
-        >
-          <span className="flex size-10 items-center justify-center rounded-full bg-expense/10">
-            <MonitorSmartphone className="size-5" />
-          </span>
+        <Button variant="link" className="min-h-11 px-0 text-muted-foreground text-sm" disabled={signOut.isPending}>
           Sair de todos os aparelhos
         </Button>
       </AlertDialogTrigger>
