@@ -7,6 +7,18 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.41.0
+
+> Headline: Para onde vai looks like Stitch
+
+### Web
+
+- Para onde vai is outflow only: the Saídas / Entradas switch is gone.
+- From 1024px a header row carries `Total Saídas:`, a `Todas as Categorias` select that picks a group like its row, and `Exportar CSV` (`;`-separated, comma decimals, UTF-8 with BOM).
+- Composição de Gastos shows `TOTAL GASTO`, `✓ n categorias` and a 2×2 legend; Top 5 Maiores Gastos do Mês ranks groups with `Representa x% das despesas`; Detalhamento por Grupo shows each group's change (`0% estável`, `+18% vs out`), `Recolher tudo` and `Ativo` on the picked group.
+- The picked group's panel counts its entries, totals the selection, narrows by subcategory and lists up to 3 of last month's entries as `Referência {mmm}`, outside the total.
+- Below 1024 the page opens with its hero and month switcher, then Composição, Detalhamento, Top Categorias and `Transações: {grupo}` with `Ver todas as transações de {grupo}`.
+
 ## 0.40.0
 
 > Headline: Editar série looks like Stitch
