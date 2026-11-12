@@ -2051,3 +2051,44 @@ async fn d28_card_entries_follow_their_series_and_outlive_an_archived_card(pool:
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
     assert_eq!(problem["type"], "urn:soldi:error:category-has-card-entries");
 }
+
+#[sqlx::test]
+async fn d28_an_archived_card_reaches_no_new_or_later_entry(pool: PgPool) {
+    let ana = opened(pool, "ana@example.com").await;
+    let porto = card(&ana, "Porto").await;
+    let gasto = ana.category_id("Gasto").await;
+    let (_, single) = ana
+        .post(
+            "/api/transactions",
+            on_card("2026-11-05", "daily", &gasto, &porto),
+        )
+        .await;
+    let mut monthly = on_card("2026-11-06", "daily", &gasto, &porto);
+    monthly["repeat_months"] = json!(3);
+    let (_, series) = ana.post("/api/transactions", monthly).await;
+    assert_eq!(
+        ana.delete(&format!("/api/bills/{porto}")).await.0,
+        StatusCode::NO_CONTENT
+    );
+
+    for (uri, patch) in [
+        (uri(&single), json!({ "repeat_months": 3 })),
+        (uri(&series), json!({ "repeat_months": 5 })),
+        (
+            format!("{}?scope=following", uri(&series)),
+            json!({ "note": "Feira" }),
+        ),
+    ] {
+        let (status, problem) = ana.patch(&uri, patch.clone()).await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{patch}");
+        assert_eq!(problem["errors"][0]["field"], "card_id", "{patch}");
+    }
+    let (_, january) = ana.get("/api/transactions?month=2027-01").await;
+    assert_eq!(january.as_array().unwrap().len(), 1);
+    assert_eq!(january[0]["note"], Value::Null);
+    let (status, shrunk) = ana
+        .patch(&uri(&series), json!({ "repeat_months": 2 }))
+        .await;
+    assert_eq!(status, StatusCode::OK, "{shrunk}");
+    assert_eq!(shrunk["card_id"], porto);
+}

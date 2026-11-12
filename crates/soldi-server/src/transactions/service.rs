@@ -194,8 +194,12 @@ pub async fn update(
         card_id: patch.card_id.unwrap_or(current.card_id),
     })?;
     domain::check_kind(next.kind, &category)?;
-    // An entry keeps a since-archived card; only a new card must be live.
-    if let Some(card_id) = next.card_id.filter(|id| Some(*id) != current.card_id) {
+    // An entry keeps a since-archived card; a new card, or one written on later members, must be live.
+    let spreads = scope == Scope::Following && current.series.is_some();
+    if let Some(card_id) = next
+        .card_id
+        .filter(|id| spreads || Some(*id) != current.card_id)
+    {
         check_card(&mut tx, user, card_id).await?;
     }
     let moves = scope == Scope::Following && current.series.is_some() && next.date != current.date;
@@ -226,6 +230,9 @@ pub async fn update(
     match (next.repeat_months, &current.series) {
         (Some(months), Some(series)) => resize(&mut tx, user, id, series.id, months, &next).await?,
         (Some(months), None) => {
+            if let Some(card_id) = next.card_id {
+                check_card(&mut tx, user, card_id).await?;
+            }
             let series_id = Uuid::new_v4();
             if !repo::set_series(&mut tx, user.id, id, series_id).await? {
                 return Err(domain::already_repeated());
@@ -262,6 +269,9 @@ async fn resize(
     if i64::from(months) < total {
         repo::delete_beyond(conn, user.id, series_id, months.into()).await?;
     } else if i64::from(months) > total {
+        if let Some(card_id) = next.card_id {
+            check_card(conn, user, card_id).await?;
+        }
         let end = repo::series_end(conn, user.id, series_id).await?;
         let last = *end.first().ok_or(AppError::NotFound)?;
         let day = domain::series_day(last, end.get(1).copied());
