@@ -7,6 +7,14 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.42.1
+
+> Headline: a resgate leaves Guardado
+
+### Web
+
+- Para onde foi a entrada counts only the month's net saving as Guardado: a resgate takes it out and returns to Livre restante, so a cofrinho emptied by a resgate shows no Guardado.
+
 ## 0.42.0
 
 > Headline: Cofrinhos looks like Stitch
