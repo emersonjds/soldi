@@ -805,6 +805,27 @@ describe("Contas fixas", () => {
       expect(await patches(requests)[1].json()).toMatchObject({ installments: 6, last_month: "2026-11-01" });
     });
 
+    it.each([
+      ["an ended plan", { ...FIES, last_month: "2026-10-01" }, new Date(2026, 10, 5, 12)],
+      ["a plan in its last month after its due day", { ...FIES, last_month: "2026-11-01" }, new Date(2026, 10, 25, 12)],
+    ])("renames %s without restarting its parcelas", async (_, bill, today) => {
+      vi.setSystemTime(today);
+      const { requests } = open({
+        bills: [bill],
+        replies: { [`PATCH /api/bills/${bill.id}`]: { status: 200, body: bill } },
+      });
+      await userEvent.click(await screen.findByRole("button", { name: /^Fies/ }));
+      const sheet = await screen.findByRole("dialog", { name: "Editar conta" });
+      await userEvent.type(within(sheet).getByLabelText("Nome da conta fixa"), " 2");
+      await userEvent.click(within(sheet).getByRole("button", { name: "Salvar Conta Fixa" }));
+
+      await waitFor(() => expect(patches(requests)).toHaveLength(1));
+      const body = await patches(requests)[0].json();
+      expect(body).toMatchObject({ name: "Fies 2" });
+      expect(body).not.toHaveProperty("installments");
+      expect(body).not.toHaveProperty("last_month");
+    });
+
     it("turns an existing Fixo parcelado, with no Cartão de crédito switch", async () => {
       vi.setSystemTime(new Date(2026, 10, 12, 12));
       const { requests } = open({

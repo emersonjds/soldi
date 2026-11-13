@@ -189,7 +189,8 @@ export const BillForm = ({
     if (!amount) return;
     if (!draft.parcelado) return onSave({ ...fields, amount });
     if (!lastMonth) return;
-    const changed = count !== bill?.installments || lastMonth !== bill?.last_month;
+    const initial = draftOf(bill, prefill);
+    const changed = draft.installments !== initial.installments || draft.current !== initial.current;
     onSave({ ...fields, amount, ...(changed && { installments: count, last_month: lastMonth }) });
   };
 
