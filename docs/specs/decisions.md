@@ -346,3 +346,5 @@ Rejected:
 - A stored infinite flag with no rows, which breaks every report that reads rows.
 
 Detail: `docs/specs/cards/SOL-118.md` › Technical design, plan `docs/specs/plans/SOL-118.md`.
+
+Update to D36 (2026-11-12, owner, SOL-118 revision): an open series may be a card spend (a subscription). Each grown member copies `card_id` and lands in the fatura of its own date (D28); stopping removes only members after the stop, so paid faturas never change.
