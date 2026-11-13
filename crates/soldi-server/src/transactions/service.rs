@@ -52,7 +52,12 @@ pub async fn extend_open_series(
         else {
             continue;
         };
-        let dates = domain::open_dates(series.every, &end, until)?;
+        let mut dates = domain::open_dates(series.every, &end, until)?;
+        // ponytail: D30, growth stops before the first paid fatura, one query per dropped date;
+        // a "first paid fatura from" query if a long weekly series meets one.
+        while !faturas_open(&mut tx, user, last.card_id, &dates).await? {
+            dates.pop();
+        }
         if !dates.is_empty() {
             let amounts = vec![last.amount; dates.len()];
             repo::insert_copies(
@@ -175,6 +180,23 @@ async fn check_cofrinho_active(
         ));
     }
     Ok(())
+}
+
+/// D30b: whether no spend on `card_id` dated one of `dates` lands in a paid fatura.
+async fn faturas_open(
+    conn: &mut PgConnection,
+    user: &CurrentUser,
+    card_id: Option<Uuid>,
+    dates: &[NaiveDate],
+) -> Result<bool, AppError> {
+    match check_fatura_open(conn, user, card_id, dates).await {
+        Ok(()) => Ok(true),
+        Err(AppError::Rule {
+            slug: "fatura-paid",
+            ..
+        }) => Ok(false),
+        Err(error) => Err(error),
+    }
 }
 
 /// D30b: refuses when the fatura of any `(card, date)` is paid; one check per card.
@@ -425,6 +447,20 @@ pub async fn update(
     // D28: an open series grows onto its card, which must still be live.
     if let Some(card_id) = next.card_id.filter(|_| patch.open_ended == Some(true)) {
         check_card(&mut tx, user, card_id).await?;
+        // D30b: growth through the horizon must not land in a paid fatura.
+        let (end, every) = match &current.series {
+            Some(series) => (
+                repo::series_end(&mut tx, user.id, series.id).await?,
+                series.every,
+            ),
+            None => (vec![next.date], next.repeat_every.unwrap_or_default()),
+        };
+        let until = domain::open_until(
+            crate::today_sao_paulo(),
+            months::domain::month_end(next.date),
+        );
+        let dates = domain::open_dates(every, &end, until)?;
+        check_fatura_open(&mut tx, user, Some(card_id), &dates).await?;
     }
     match (patch.open_ended, &current.series) {
         (Some(true), Some(series)) if !series.open_ended => {

@@ -1272,3 +1272,67 @@ async fn d36_parar_a_card_subscription_leaves_a_paid_fatura_as_it_is(pool: PgPoo
     assert_eq!(later, json!([]));
     assert_eq!(rows_and_months(&pool, "bia@example.com").await, (12, 12));
 }
+
+async fn pay_fatura(user: &TestApp, card_id: &str, ahead: u32) {
+    let (status, payment) = user
+        .post(
+            &format!("/api/bills/{card_id}/pay?month={}", month_ahead(ahead)),
+            json!({ "date": due(ahead), "amount": "30" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{payment}");
+}
+
+#[sqlx::test]
+async fn d36_a_card_subscription_stops_growing_at_a_paid_fatura(pool: PgPool) {
+    let (ana, bia, porto, nubank) = two_cards(pool.clone()).await;
+    subscription(&ana, &porto).await;
+    subscription(&bia, &nubank).await;
+    pay_fatura(&ana, &porto, 15).await;
+
+    let (status, _) = ana.get(&format!("/api/months/{}", month_ahead(18))).await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(card_spends(&ana, 13).await, 1);
+    assert_eq!(card_spends(&ana, 15).await, 0);
+    let (_, paid) = ana.get(&format!("/api/months/{}", month_ahead(15))).await;
+    assert_eq!(faturas(&paid), [row("Porto", "30.00", &due(15), true)]);
+    assert_eq!(card_spends(&bia, 15).await, 1);
+}
+
+async fn card_spends(user: &TestApp, ahead: u32) -> usize {
+    let (_, ledger) = user
+        .get(&format!("/api/transactions?month={}", month_ahead(ahead)))
+        .await;
+    ledger
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|entry| !entry["card_id"].is_null())
+        .count()
+}
+
+#[sqlx::test]
+async fn d36_tornar_sem_fim_on_a_card_refuses_a_paid_fatura_ahead(pool: PgPool) {
+    let (ana, _, porto, _) = two_cards(pool).await;
+    let category_id = ana.category_id("Mercado").await;
+    let (_, created) = ana
+        .post(
+            "/api/transactions",
+            json!({ "date": soldi_server::today_sao_paulo().to_string(), "amount": "30",
+                    "kind": "daily", "category_id": category_id, "card_id": porto }),
+        )
+        .await;
+    pay_fatura(&ana, &porto, 5).await;
+
+    let (status, problem) = ana
+        .patch(
+            &format!("/api/transactions/{}", created["id"].as_str().unwrap()),
+            json!({ "open_ended": true }),
+        )
+        .await;
+
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+    assert_eq!(problem["type"], "urn:soldi:error:fatura-paid");
+    assert_eq!(card_spends(&ana, 5).await, 0);
+}
