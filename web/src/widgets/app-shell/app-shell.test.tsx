@@ -368,7 +368,7 @@ describe("AppShell", () => {
     const bar = screen.getByRole("banner");
     expect(within(bar).getByText("Dezembro 2026")).toBeInTheDocument();
     await userEvent.click(within(bar).getByRole("button", { name: "Próximo mês" }));
-    expect(router.replace).toHaveBeenLastCalledWith("/para-onde-vai?m=2027-01", { scroll: false });
+    expect(window.location.pathname + window.location.search).toBe("/para-onde-vai?m=2027-01");
     unmount();
 
     setSearch("m=2026-11");
@@ -385,7 +385,7 @@ describe("AppShell", () => {
     renderWithQuery(<AppShell>conteúdo</AppShell>);
 
     await userEvent.click(screen.getAllByRole("button", { name: "Próximo mês" })[0]);
-    expect(router.replace).toHaveBeenLastCalledWith("/ajustes/categorias?k=bill&m=2027-01", { scroll: false });
+    expect(window.location.pathname + window.location.search).toBe("/ajustes/categorias?k=bill&m=2027-01");
   });
 
   it("takes the sidebar user card and the top-bar avatar to Minha conta, with no version and no sign-out", async () => {

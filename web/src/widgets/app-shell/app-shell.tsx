@@ -3,7 +3,7 @@
 import { type ReactNode, Suspense, useState } from "react";
 
 import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 
 import { Calendar, CalendarRange, PieChart, PiggyBank, Plus, ReceiptText, Settings, Sparkles } from "lucide-react";
 
@@ -30,6 +30,7 @@ import { EditBillSheet } from "@/features/edit-bill/edit-bill-sheet";
 import { cn, getInitials } from "@/lib/utils";
 import { monthParam, todayISO } from "@/shared/lib/date";
 import { TIER_LABEL } from "@/shared/lib/tier";
+import { replaceUrl } from "@/shared/lib/url";
 import { MonthLink } from "@/shared/ui/month-link";
 import { MonthSwitcher } from "@/shared/ui/month-switcher";
 import { TierPill } from "@/shared/ui/tier-pill";
@@ -90,14 +91,13 @@ const HERO_SWITCHER_PAGES = ["/mes", "/para-onde-vai"];
 
 /** The month of `?m=`, moved in place; `hero` on Mês's indigo hero. */
 export const ShellMonthSwitcher = ({ pathname, tone = "surface" }: { pathname: string; tone?: "hero" | "surface" }) => {
-  const router = useRouter();
   const search = useSearchParams();
   const month = monthParam(search.get("m"));
   const settings = useSettings();
   const moveTo = (next: string) => {
     const params = new URLSearchParams(search.toString());
     params.set("m", next);
-    router.replace(`${pathname}?${params}`, { scroll: false });
+    replaceUrl(`${pathname}?${params}`);
   };
   return (
     <MonthSwitcher

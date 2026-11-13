@@ -552,7 +552,7 @@ describe("Mês", () => {
     const switcher = within(hero).getByRole("group", { name: "Mês" });
     expect(switcher).toHaveTextContent("Dezembro 2026");
     await userEvent.click(within(switcher).getByRole("button", { name: "Próximo mês" }));
-    expect(router.replace).toHaveBeenCalledWith("/mes?m=2027-01", { scroll: false });
+    expect(window.location.pathname + window.location.search).toBe("/mes?m=2027-01");
   });
 
   it("ignores a malformed month in the address", async () => {
@@ -1082,7 +1082,7 @@ describe("Mês", () => {
     const strip = await screen.findByRole("region", { name: "Próximos meses" });
     await userEvent.click(await within(strip).findByRole("button", { name: /^dezembro de 2026/ }));
 
-    expect(router.replace).toHaveBeenCalledWith("/mes?m=2026-12", { scroll: false });
+    expect(window.location.pathname + window.location.search).toBe("/mes?m=2026-12");
     expect(scrollTo).toHaveBeenCalledWith({ top: 0 });
   });
 
