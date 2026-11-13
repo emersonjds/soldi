@@ -112,6 +112,12 @@ async fn a_bad_field_saves_nothing_and_names_its_path(pool: PgPool) {
             json!([good, { "name": "Porto", "due_day": 10, "closing_day": 3, "category_id": light }]),
             "bills[1].closing_day",
         ),
+        (
+            "10",
+            json!([good, { "name": "Fies", "amount": "300", "due_day": 10, "installments": 6,
+                           "last_month": "2027-01-01", "category_id": light }]),
+            "bills[1].installments",
+        ),
     ] {
         let body = json!({ "opening_balance": opening_balance, "opening_date": "2026-11-01", "bills": bills });
         let (status, problem) = ana.post("/api/onboarding", body).await;

@@ -48,7 +48,7 @@ test("a weekly 4x entry lands four rows a week apart", async ({ page, request })
   await launch.getByRole("radio", { name: "Conta" }).click();
   await launch.getByLabel("Valor").fill("100,00");
   await launch.getByLabel("Observação").fill("Diarista");
-  await launch.getByRole("switch", { name: "Repetir lançamento (Série)" }).click();
+  await launch.getByRole("switch", { name: "Recorrente" }).click();
   await launch.getByRole("radio", { name: "Semanal" }).click();
   await launch.getByRole("radio", { name: "Outro" }).click();
   await launch.getByLabel("Semanas").fill("4");
@@ -89,8 +89,8 @@ test("Toda a série from the second entry rewrites and deletes the first too, af
   await launch.getByLabel("Valor").fill("100,00");
   await pickDate(launch, "Outra data", `${first}-01`);
   await launch.getByLabel("Observação").fill("Internet");
-  await launch.getByRole("switch", { name: "Repetir lançamento (Série)" }).click();
-  await launch.getByRole("radio", { name: "3×" }).click();
+  await launch.getByRole("switch", { name: "Recorrente" }).click();
+  await launch.getByRole("radio", { name: "3", exact: true }).click();
   await launch.getByRole("button", { name: "Salvar" }).click();
   await expect(page.getByText("3 lançamentos criados")).toBeVisible();
 
@@ -163,8 +163,8 @@ test("an entry repeated 3x shows in three months; edit and delete reach this one
   await launch.getByLabel("Valor").fill("100,00");
   await pickDate(launch, "Outra data", `${first}-01`);
   await launch.getByLabel("Observação").fill("Internet");
-  await launch.getByRole("switch", { name: "Repetir lançamento (Série)" }).click();
-  await launch.getByRole("radio", { name: "3×" }).click();
+  await launch.getByRole("switch", { name: "Recorrente" }).click();
+  await launch.getByRole("radio", { name: "3", exact: true }).click();
   await launch.getByRole("button", { name: "Salvar" }).click();
   await expect(page.getByText("3 lançamentos criados")).toBeVisible();
 
@@ -244,7 +244,10 @@ test("a 12x series shrinks to 6 from its first entry and grows back to 12 from i
     await internet.click();
     await page.getByRole("dialog", { name: "Internet" }).getByRole("button", { name: "Editar" }).click();
     const edit = page.getByRole("dialog", { name: "Editar Lançamento Recorrente" });
-    await edit.getByRole("radiogroup", { name: "Duração da série" }).getByRole("radio", { name: count }).click();
+    await edit
+      .getByRole("radiogroup", { name: "Quantas vezes" })
+      .getByRole("radio", { name: count, exact: true })
+      .click();
     await edit.getByRole("button", { name: "Salvar Alterações na Série" }).click();
   };
 
@@ -254,18 +257,19 @@ test("a 12x series shrinks to 6 from its first entry and grows back to 12 from i
   await launch.getByLabel("Valor").fill("100,00");
   await pickDate(launch, "Outra data", `${first}-01`);
   await launch.getByLabel("Observação").fill("Internet");
-  await launch.getByRole("switch", { name: "Repetir lançamento (Série)" }).click();
+  await launch.getByRole("switch", { name: "Recorrente" }).click();
+  await launch.getByRole("radio", { name: "12", exact: true }).click();
   await launch.getByRole("button", { name: "Salvar" }).click();
   await expect(page.getByText("12 lançamentos criados")).toBeVisible();
 
-  await resize(first, "6 meses");
+  await resize(first, "6");
   await expect(page.getByText("Série ajustada com sucesso para 6 meses futuros.")).toBeVisible();
   await visit(sixth);
   await expect(internet).toContainText("Saída · 6/66 de 6");
   await visit(seventh);
   await expect(ledger).toHaveCount(0);
 
-  await resize(sixth, "12 meses");
+  await resize(sixth, "12");
   await expect(page.getByText("Série ajustada com sucesso para 12 meses futuros.")).toBeVisible();
   await visit(twelfth);
   await expect(internet).toContainText("Saída · 12/1212 de 12");
@@ -308,7 +312,8 @@ test("a 12x series on the 5th moves to the 10th from its third entry on", async 
   await launch.getByLabel("Valor").fill("100,00");
   await pickDate(launch, "Outra data", `${first}-05`);
   await launch.getByLabel("Observação").fill("Internet");
-  await launch.getByRole("switch", { name: "Repetir lançamento (Série)" }).click();
+  await launch.getByRole("switch", { name: "Recorrente" }).click();
+  await launch.getByRole("radio", { name: "12", exact: true }).click();
   await launch.getByRole("button", { name: "Salvar" }).click();
   await expect(page.getByText("12 lançamentos criados")).toBeVisible();
 
@@ -330,4 +335,99 @@ test("a 12x series on the 5th moves to the 10th from its third entry on", async 
   await expect(onDay(`${twelfth}-10`)).toContainText("Saída · 12/1212 de 12");
   await visit(second);
   await expect(onDay(`${second}-05`)).toContainText("Saída · 2/122 de 12");
+});
+
+/** A fresh account through the API, opened at the first of this month, tour seen. */
+const signUpByApi = async (page: Page, name: string) => {
+  const api = page.request;
+  await api.post("/api/auth/sign-up", {
+    data: { email: `e2e-${name}-${Date.now()}@example.com`, password: "uma-senha-bem-longa" },
+  });
+  await api.post("/api/onboarding", { data: { opening_balance: "1000.00", opening_date: `${monthFrom(0)}-01` } });
+  await api.post("/api/me/tour-seen");
+  await page.setViewportSize({ width: 375, height: 812 });
+};
+
+test("a Recorrente Sempre salário reads Todo mês in every month ahead and Parar recorrência keeps this month only", async ({
+  page,
+  request,
+}) => {
+  await requireServer(request);
+  test.setTimeout(90_000);
+  await signUpByApi(page, "sempre");
+
+  const ledger = page.getByRole("region", { name: "Lançamentos" });
+  const salary = ledger.getByRole("button", { name: /^Salário/ });
+  const visit = async (month: string) => {
+    await page.goto(`/mes?m=${month}`);
+    await expect(page.getByRole("region", { name: "Saldo hoje" })).toBeVisible();
+    await page.waitForLoadState("networkidle");
+  };
+
+  await visit(monthFrom(0));
+  await page.getByRole("navigation", { name: "Navegação principal" }).getByRole("button", { name: "Lançar" }).click();
+  const launch = page.getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ });
+  await launch.getByRole("radio", { name: "Entrada" }).click();
+  await launch.getByLabel("Valor").fill("5.000,00");
+  await launch.getByLabel("Observação").fill("Salário");
+  await launch.getByRole("switch", { name: "Recorrente" }).click();
+  await expect(launch.getByRole("radio", { name: "Sempre" })).toBeChecked();
+  await expect(launch.getByText(/^Repete todo dia \d+, sem data para parar\.$/)).toBeVisible();
+  await expect(launch.getByRole("button", { name: "Já começou em outra parcela?" })).toHaveCount(0);
+  await expectNoClipped(page);
+  await launch.getByRole("button", { name: "Salvar" }).click();
+  await expect(page.getByText("Lançado", { exact: true })).toBeVisible();
+
+  for (const offset of [0, 1, 11]) {
+    await visit(monthFrom(offset));
+    await expect(salary).toContainText("Entrada · Todo mês");
+    await expect(salary).toContainText("R$ 5.000,00");
+  }
+
+  await visit(monthFrom(0));
+  await salary.click();
+  await page.getByRole("dialog", { name: "Salário" }).getByRole("button", { name: "Editar" }).click();
+  const edit = page.getByRole("dialog", { name: "Editar Lançamento Recorrente" });
+  await expectNoClipped(page);
+  await edit.getByRole("button", { name: "Parar recorrência" }).click();
+  await expect(page.getByText("Recorrência parada. Sai dos próximos meses.")).toBeVisible();
+
+  await visit(monthFrom(1));
+  await expect(salary).toHaveCount(0);
+  await visit(monthFrom(0));
+  await expect(salary).toContainText("R$ 5.000,00");
+});
+
+test("a Diário on a card with Recorrente Sempre lands in the faturas ahead", async ({ page, request }) => {
+  await requireServer(request);
+  test.setTimeout(90_000);
+  await signUpByApi(page, "subscription");
+  const categories: { id: string; kind: string; is_savings: boolean }[] = await (
+    await page.request.get("/api/categories")
+  ).json();
+  const bill = categories.find((category) => category.kind === "bill" && !category.is_savings);
+  const card = await page.request.post("/api/bills", {
+    data: { name: "Nubank", category_id: bill?.id, closing_day: 5, due_day: 12 },
+  });
+  expect(card.ok()).toBe(true);
+
+  await page.goto(`/mes?m=${monthFrom(0)}`);
+  await page.getByRole("navigation", { name: "Navegação principal" }).getByRole("button", { name: "Lançar" }).click();
+  const launch = page.getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ });
+  await launch.getByRole("radio", { name: "Diário" }).click();
+  await launch.getByLabel("Valor").fill("39,90");
+  await launch.getByLabel("Cartão").selectOption({ label: "Nubank" });
+  await launch.getByLabel("Observação").fill("Spotify");
+  await launch.getByRole("switch", { name: "Recorrente" }).click();
+  await launch.getByRole("button", { name: "Salvar" }).click();
+  await expect(page.getByText("Lançado", { exact: true })).toBeVisible();
+
+  // One member per month, so every fatura from the third month on holds exactly one.
+  await page.goto(`/mes?m=${monthFrom(3)}`);
+  await expect(
+    page.getByRole("region", { name: "Lançamentos" }).getByRole("button", { name: /^Spotify/ }),
+  ).toContainText("Diário · Todo mês");
+  await expect(
+    page.getByRole("region", { name: "Contas a pagar" }).getByRole("listitem", { name: /Nubank/ }),
+  ).toContainText("R$ 39,90");
 });

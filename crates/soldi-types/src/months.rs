@@ -86,6 +86,10 @@ pub struct BillOfMonth {
     pub lands_on: Option<NaiveDate>,
     /// A credit card's fatura (D28).
     pub is_card: bool,
+    /// The parcela of a parcelado bill this row is, counted in the row's own month (D35).
+    pub installment: Option<i16>,
+    /// The parcelado bill's number of parcelas.
+    pub installments: Option<i16>,
 }
 
 /// The month's savings (SOL-20): `saved` is `totals.saved`; `rate_pct` is `saved / income` as a

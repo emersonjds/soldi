@@ -2,7 +2,7 @@ use chrono::{Datelike, Months, NaiveDate};
 use soldi_types::bills::CreateBill;
 
 use crate::error::{AppError, reject_nul};
-use crate::months::domain::first_of;
+use crate::months::domain::{first_of, month_index};
 use crate::settings::domain::check_money;
 
 /// The bill with its name trimmed; error fields start with `prefix` (`"bills[2]."`). D28: a
@@ -36,6 +36,31 @@ pub fn check(bill: CreateBill, prefix: &str) -> Result<CreateBill, AppError> {
     };
     if !(1..=31).contains(&bill.due_day) {
         return Err(AppError::invalid(&field("due_day"), "must be 1 to 31"));
+    }
+    match (bill.installments, bill.last_month) {
+        (None, None) => {}
+        (Some(_), _) | (_, Some(_)) if bill.closing_day.is_some() => {
+            return Err(AppError::invalid(
+                &field("installments"),
+                "a card has no parcelas",
+            ));
+        }
+        (Some(n), _) if !(2..=60).contains(&n) => {
+            return Err(AppError::invalid(&field("installments"), "must be 2 to 60"));
+        }
+        (Some(_), None) => {
+            return Err(AppError::invalid(
+                &field("last_month"),
+                "is required with installments",
+            ));
+        }
+        (None, Some(_)) => {
+            return Err(AppError::invalid(
+                &field("installments"),
+                "is required with last_month",
+            ));
+        }
+        (Some(_), Some(_)) => {}
     }
     Ok(CreateBill {
         name: name.to_string(),
@@ -77,6 +102,43 @@ pub fn fatura_paid() -> AppError {
     AppError::rule("fatura-paid", "This fatura is already paid.")
 }
 
+/// D35: a parcelado bill ends on a month's first day, from `this_month` to `installments`
+/// months ahead.
+pub fn check_plan(
+    installments: i16,
+    last_month: NaiveDate,
+    this_month: NaiveDate,
+) -> Result<(), AppError> {
+    let latest = this_month
+        .checked_add_months(Months::new(u32::try_from(installments).unwrap_or(0)))
+        .unwrap_or(this_month);
+    if last_month != first_of(last_month) || !(this_month..=latest).contains(&last_month) {
+        return Err(AppError::invalid(
+            "last_month",
+            "must be a month from now to the last parcela",
+        ));
+    }
+    Ok(())
+}
+
+/// D35: the parcela `month` holds when parcela `installments` falls in `last_month`.
+pub fn installment_of(month: NaiveDate, last_month: NaiveDate, installments: i16) -> Option<i16> {
+    let k = i32::from(installments) - (month_index(last_month) - month_index(month));
+    i16::try_from(k)
+        .ok()
+        .filter(|k| (1..=installments).contains(k))
+}
+
+/// D35: Parar ends after this month, or after a month already paid ahead.
+pub fn stop_month(today: NaiveDate, last_paid: Option<NaiveDate>) -> NaiveDate {
+    let this = first_of(today);
+    last_paid.map_or(this, |paid| this.max(first_of(paid)))
+}
+
+pub fn bill_ended() -> AppError {
+    AppError::rule("bill-ended", "This bill ended before that month.")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -89,6 +151,8 @@ mod tests {
             due_day,
             category_id: Uuid::nil(),
             closing_day: None,
+            installments: None,
+            last_month: None,
         }
     }
 
@@ -100,7 +164,7 @@ mod tests {
         }
     }
 
-    fn field(result: Result<CreateBill, AppError>) -> String {
+    fn field<T: std::fmt::Debug>(result: Result<T, AppError>) -> String {
         match result {
             Err(AppError::Validation(errors)) => errors[0].field.clone(),
             other => panic!("{other:?}"),
@@ -182,6 +246,70 @@ mod tests {
                 fatura_due(day(on), closing, due),
                 day(expected),
                 "{on} {closing} {due}"
+            );
+        }
+    }
+
+    fn d(text: &str) -> NaiveDate {
+        text.parse().unwrap()
+    }
+
+    #[test]
+    fn d35_a_parcela_counts_back_from_the_last_month() {
+        let last = d("2027-01-01");
+        assert_eq!(installment_of(d("2027-01-01"), last, 6), Some(6));
+        assert_eq!(installment_of(d("2026-12-01"), last, 6), Some(5));
+        assert_eq!(installment_of(d("2026-08-01"), last, 6), Some(1));
+        assert_eq!(installment_of(d("2026-07-01"), last, 6), None);
+        assert_eq!(installment_of(d("2027-02-01"), last, 6), None);
+    }
+
+    #[test]
+    fn d35_parar_keeps_this_month_or_a_month_paid_ahead() {
+        assert_eq!(stop_month(d("2026-11-12"), None), d("2026-11-01"));
+        assert_eq!(
+            stop_month(d("2026-11-12"), Some(d("2026-10-05"))),
+            d("2026-11-01")
+        );
+        assert_eq!(
+            stop_month(d("2026-11-12"), Some(d("2026-12-03"))),
+            d("2026-12-01")
+        );
+    }
+
+    #[test]
+    fn d35_a_plan_needs_both_fields_2_to_60_parcelas_and_no_card() {
+        let plan = |installments: Option<i16>, last_month: Option<&str>| CreateBill {
+            installments,
+            last_month: last_month.map(d),
+            ..bill("Fies", "300", 10)
+        };
+        assert!(check(plan(Some(6), Some("2027-01-01")), "").is_ok());
+        for (input, expected) in [
+            (plan(Some(6), None), "last_month"),
+            (plan(None, Some("2027-01-01")), "installments"),
+            (plan(Some(1), Some("2027-01-01")), "installments"),
+            (plan(Some(61), Some("2027-01-01")), "installments"),
+            (
+                CreateBill {
+                    installments: Some(6),
+                    last_month: Some(d("2027-01-01")),
+                    ..card(None, 3)
+                },
+                "installments",
+            ),
+        ] {
+            assert_eq!(field(check(input, "")), expected);
+        }
+        let november = d("2026-11-01");
+        assert!(check_plan(6, d("2027-01-01"), november).is_ok());
+        assert!(check_plan(6, november, november).is_ok());
+        assert!(check_plan(6, d("2027-05-01"), november).is_ok());
+        for last in ["2026-10-01", "2027-06-01", "2027-01-05"] {
+            assert_eq!(
+                field(check_plan(6, d(last), november)),
+                "last_month",
+                "{last}"
             );
         }
     }

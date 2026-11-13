@@ -2414,3 +2414,537 @@ async fn d32_d33_an_all_move_keeps_each_weekly_and_yearly_member_in_its_period(p
     );
     assert_ranked(&yearly, 3);
 }
+
+async fn parcelas_from(user: &TestApp, count: i64, first: i64) -> Value {
+    let market = user.category_id("Mercado").await;
+    let (status, created) = user
+        .post(
+            "/api/transactions",
+            json!({ "date": "2026-11-05", "amount": "1000.01", "kind": "daily", "category_id": market,
+                    "installments": count, "first_installment": first }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{created}");
+    created
+}
+
+#[sqlx::test]
+async fn sol118_a_purchase_from_parcela_4_of_10_writes_seven_parcelas(pool: PgPool) {
+    let ana = opened(pool.clone(), "ana@example.com").await;
+    let bia = opened(pool, "bia@example.com").await;
+    repeat(&bia, "2026-11-05", "10", 3).await;
+
+    let created = parcelas_from(&ana, 10, 4).await;
+
+    assert_eq!(place(&created), (4, 10));
+    assert_eq!(created["amount"], "100.00");
+    let entries = run(&ana, "2026-11", 7).await;
+    assert_eq!(field_of(&entries[..6], "amount"), ["100.00"; 6]);
+    assert_eq!(entries[6]["amount"], "100.01");
+    let places: Vec<_> = entries.iter().map(place).collect();
+    assert_eq!(places, (4..=10).map(|k| (k, 10)).collect::<Vec<_>>());
+    assert_eq!(cents(&entries), 70_001);
+    assert_empty(&ana, "2027-06", 1).await;
+    assert_eq!(place(&only(&bia, "2027-01").await), (3, 3));
+    assert_eq!(place(&parcelas_from(&ana, 10, 10).await), (10, 10));
+}
+
+#[sqlx::test]
+async fn sol118_first_installment_needs_installments_and_stays_inside_them(pool: PgPool) {
+    let user = opened(pool, "ana@example.com").await;
+    let market = user.category_id("Mercado").await;
+
+    for (installments, first) in [(None, 2), (Some(10), 0), (Some(10), 11)] {
+        let (status, problem) = user
+            .post(
+                "/api/transactions",
+                json!({ "date": "2026-11-05", "amount": "100", "kind": "daily", "category_id": market,
+                        "installments": installments, "first_installment": first }),
+            )
+            .await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+        assert_eq!(problem["errors"][0]["field"], "first_installment");
+    }
+    assert!(month(&user, "2026-11").await.is_empty());
+}
+
+#[sqlx::test]
+async fn sol118_a_resize_counts_the_parcelas_paid_before(pool: PgPool) {
+    let user = opened(pool, "ana@example.com").await;
+    let first = parcelas_from(&user, 10, 4).await;
+
+    let (status, shrunk) = user
+        .patch(&uri(&first), json!({ "repeat_months": 8 }))
+        .await;
+
+    assert_eq!(status, StatusCode::OK, "{shrunk}");
+    assert_eq!(place(&shrunk), (4, 8));
+    let places: Vec<_> = run(&user, "2026-11", 5).await.iter().map(place).collect();
+    assert_eq!(places, (4..=8).map(|k| (k, 8)).collect::<Vec<_>>());
+    assert_empty(&user, "2027-04", 3).await;
+    let (status, grown) = user
+        .patch(&uri(&first), json!({ "repeat_months": 10 }))
+        .await;
+    assert_eq!(status, StatusCode::OK, "{grown}");
+    assert_eq!(place(&only(&user, "2027-05").await), (10, 10));
+    assert_empty(&user, "2027-06", 1).await;
+}
+
+fn today() -> chrono::NaiveDate {
+    soldi_server::today_sao_paulo()
+}
+
+/// The last day of the forecast horizon: the month eleven months after today's.
+fn horizon_end() -> chrono::NaiveDate {
+    use chrono::Datelike;
+    let first = today().with_day(1).unwrap();
+    (first + chrono::Months::new(12)).pred_opt().unwrap()
+}
+
+fn this_month() -> String {
+    today().format("%Y-%m").to_string()
+}
+
+/// A Fixo entry with no end dated today; `extra` overrides or adds fields.
+fn fixo_body(kind: &str, category_id: &str, extra: Value) -> Value {
+    let mut body = json!({ "date": today().to_string(), "amount": "30", "kind": kind,
+                           "category_id": category_id, "open_ended": true });
+    body.as_object_mut()
+        .unwrap()
+        .extend(extra.as_object().unwrap().clone());
+    body
+}
+
+async fn fixo(user: &TestApp, kind: &str, category: &str, extra: Value) -> Value {
+    let category_id = user.category_id(category).await;
+    let (status, created) = user
+        .post("/api/transactions", fixo_body(kind, &category_id, extra))
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{created}");
+    created
+}
+
+#[sqlx::test]
+async fn d36_a_fixo_salario_is_written_through_the_horizon(pool: PgPool) {
+    let ana = opened(pool.clone(), "ana@example.com").await;
+    let bia = opened(pool, "bia@example.com").await;
+    spend(&bia, &today().to_string(), "10", "Mercado").await;
+
+    let created = fixo(&ana, "income", "Salário", json!({ "amount": "5305" })).await;
+
+    assert_eq!(created["series"]["open_ended"], true);
+    assert_eq!(created["series"]["every"], "month");
+    assert_eq!(place(&created), (1, 12));
+    let entries = run(&ana, &this_month(), 12).await;
+    assert_eq!(field_of(&entries, "amount"), ["5305.00"; 12]);
+    assert!(
+        entries
+            .iter()
+            .all(|entry| entry["series"]["open_ended"] == true)
+    );
+    assert_eq!(place(&entries[11]), (12, 12));
+    assert_eq!(entries[11]["date"], created["series"]["last_date"]);
+    assert_eq!(only(&bia, &this_month()).await["series"], Value::Null);
+}
+
+#[sqlx::test]
+async fn d36_open_ended_is_for_entradas_and_diario_alone(pool: PgPool) {
+    let user = opened(pool, "ana@example.com").await;
+    let market = user.category_id("Mercado").await;
+    let rent = user.category_id("Aluguel").await;
+
+    for (extra, field) in [
+        (json!({ "kind": "bill", "category_id": rent }), "open_ended"),
+        (json!({ "repeat_months": 6 }), "open_ended"),
+        (json!({ "installments": 6 }), "open_ended"),
+        (
+            json!({ "installments": 6, "first_installment": 2 }),
+            "open_ended",
+        ),
+        (json!({ "first_installment": 2 }), "first_installment"),
+    ] {
+        let (status, problem) = user
+            .post("/api/transactions", fixo_body("daily", &market, extra))
+            .await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+        assert_eq!(problem["errors"][0]["field"], field, "{problem}");
+    }
+    assert!(month(&user, &this_month()).await.is_empty());
+
+    let weekly = fixo(&user, "daily", "Mercado", json!({ "repeat_every": "week" })).await;
+
+    assert_eq!(weekly["series"]["every"], "week");
+    let entries = entries_from(&user, &this_month(), 12).await;
+    let dates: Vec<chrono::NaiveDate> = entries
+        .iter()
+        .map(|entry| entry["date"].as_str().unwrap().parse().unwrap())
+        .collect();
+    assert_eq!(dates[0], today());
+    assert!(
+        dates
+            .windows(2)
+            .all(|pair| (pair[1] - pair[0]).num_days() == 7)
+    );
+    let last = *dates.last().unwrap();
+    assert!(last <= horizon_end() && horizon_end() < last + chrono::Days::new(7));
+    let total = i64::try_from(dates.len()).unwrap();
+    assert_eq!(place(entries.last().unwrap()), (total, total));
+}
+
+/// Deletes the series' members after next month: a series written long ago.
+async fn trim(pool: &PgPool, series: &Value) {
+    sqlx::query(
+        "DELETE FROM transactions WHERE series_id = $1::uuid
+           AND date > (now() AT TIME ZONE 'America/Sao_Paulo')::date + interval '1 month'",
+    )
+    .bind(series["series"]["id"].as_str().unwrap())
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+async fn members(pool: &PgPool, series: &Value) -> i64 {
+    sqlx::query_scalar("SELECT count(*) FROM transactions WHERE series_id = $1::uuid")
+        .bind(series["series"]["id"].as_str().unwrap())
+        .fetch_one(pool)
+        .await
+        .unwrap()
+}
+
+/// A transaction holding the series' advisory lock, as `repo::lock_series` takes it.
+async fn hold_series(pool: &PgPool, series: &Value) -> sqlx::Transaction<'static, sqlx::Postgres> {
+    let mut lock = pool.begin().await.unwrap();
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))")
+        .bind(series["series"]["id"].as_str().unwrap())
+        .execute(&mut *lock)
+        .await
+        .unwrap();
+    lock
+}
+
+#[sqlx::test]
+async fn d36_concurrent_reads_grow_an_open_series_once(pool: PgPool) {
+    let ana = opened(pool.clone(), "ana@example.com").await;
+    let bia = opened(pool.clone(), "bia@example.com").await;
+    let created = fixo(&ana, "income", "Salário", json!({})).await;
+    let hers = fixo(&bia, "income", "Salário", json!({})).await;
+    trim(&pool, &created).await;
+    trim(&pool, &hers).await;
+    let behind_hers = members(&pool, &hers).await;
+    let lock = hold_series(&pool, &created).await;
+
+    let both = async { tokio::join!(ana.get("/api/forecast"), ana.get("/api/forecast")) };
+    let release = async {
+        tokio::time::timeout(std::time::Duration::from_secs(10), waiting(&pool, 2))
+            .await
+            .expect("both reads wait on the series lock");
+        lock.commit().await.unwrap();
+    };
+    let ((first, second), ()) = tokio::join!(both, release);
+
+    assert_eq!(first.0, StatusCode::OK, "{}", first.1);
+    assert_eq!(second.0, StatusCode::OK, "{}", second.1);
+    assert_eq!(members(&pool, &created).await, 12);
+    let entries = run(&ana, &this_month(), 12).await;
+    assert_eq!(place(&entries[11]), (12, 12));
+    assert_eq!(members(&pool, &hers).await, behind_hers);
+}
+
+#[sqlx::test]
+async fn d36_weekly_and_yearly_open_series_grow_by_their_step(pool: PgPool) {
+    let ana = opened(pool.clone(), "ana@example.com").await;
+    let bia = opened(pool.clone(), "bia@example.com").await;
+    let weekly = fixo(&ana, "daily", "Mercado", json!({ "repeat_every": "week" })).await;
+    let yearly = fixo(&ana, "income", "Salário", json!({ "repeat_every": "year" })).await;
+    let hers = fixo(&bia, "daily", "Mercado", json!({ "repeat_every": "week" })).await;
+    trim(&pool, &weekly).await;
+    trim(&pool, &hers).await;
+    let behind_hers = members(&pool, &hers).await;
+    assert_eq!(members(&pool, &yearly).await, 1);
+
+    let (status, forecast) = ana.get("/api/forecast").await;
+    assert_eq!(status, StatusCode::OK, "{forecast}");
+    let dates: Vec<chrono::NaiveDate> = sqlx::query_scalar(
+        "SELECT date FROM transactions WHERE series_id = $1::uuid ORDER BY date",
+    )
+    .bind(weekly["series"]["id"].as_str().unwrap())
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(dates[0], today());
+    assert!(
+        dates
+            .windows(2)
+            .all(|pair| (pair[1] - pair[0]).num_days() == 7)
+    );
+    let last = *dates.last().unwrap();
+    assert!(last <= horizon_end() && horizon_end() < last + chrono::Days::new(7));
+    assert_eq!(members(&pool, &yearly).await, 1);
+
+    let three_years = (today() + chrono::Months::new(36))
+        .format("%Y-%m")
+        .to_string();
+    let (status, view) = ana.get(&format!("/api/months/{three_years}")).await;
+    assert_eq!(status, StatusCode::OK, "{view}");
+    let entry = month(&ana, &three_years)
+        .await
+        .into_iter()
+        .find(|entry| entry["series"]["id"] == yearly["series"]["id"])
+        .unwrap();
+    assert_eq!(place(&entry), (4, 4));
+    assert_eq!(entry["amount"], "30.00");
+    assert_eq!(members(&pool, &hers).await, behind_hers);
+}
+
+/// The series' members flagged open.
+async fn open_members(pool: &PgPool, series: &Value) -> i64 {
+    sqlx::query_scalar(
+        "SELECT count(*) FROM transactions WHERE series_id = $1::uuid AND series_open",
+    )
+    .bind(series["series"]["id"].as_str().unwrap())
+    .fetch_one(pool)
+    .await
+    .unwrap()
+}
+
+/// The series' member `position` (1-based, by date), read through the ledger.
+async fn member(user: &TestApp, series: &Value, position: u32) -> Value {
+    let of = (today() + chrono::Months::new(position - 1))
+        .format("%Y-%m")
+        .to_string();
+    month(user, &of)
+        .await
+        .into_iter()
+        .find(|entry| entry["series"]["id"] == series["series"]["id"])
+        .unwrap()
+}
+
+#[sqlx::test]
+async fn d36_parar_serie_keeps_this_member_and_the_earlier_ones(pool: PgPool) {
+    let ana = opened(pool.clone(), "ana@example.com").await;
+    let bia = opened(pool.clone(), "bia@example.com").await;
+    let created = fixo(&ana, "income", "Salário", json!({})).await;
+    let hers = fixo(&bia, "income", "Salário", json!({})).await;
+    let second = member(&ana, &created, 2).await;
+
+    let (status, stopped) = ana
+        .patch(&uri(&second), json!({ "open_ended": false }))
+        .await;
+
+    assert_eq!(status, StatusCode::OK, "{stopped}");
+    assert_eq!(stopped["series"]["open_ended"], false);
+    assert_eq!(place(&stopped), (2, 2));
+    let (status, _) = ana.get("/api/forecast").await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(members(&pool, &created).await, 2);
+    assert_eq!(open_members(&pool, &created).await, 0);
+    let kept = run(&ana, &this_month(), 2).await;
+    assert_eq!(field_of(&kept, "amount"), ["30.00"; 2]);
+    assert_eq!(kept[0]["id"], created["id"]);
+    assert_eq!(kept[1]["id"], second["id"]);
+
+    let (status, undone) = ana
+        .patch(&uri(&second), json!({ "open_ended": true }))
+        .await;
+
+    assert_eq!(status, StatusCode::OK, "{undone}");
+    assert_eq!(undone["series"]["open_ended"], true);
+    let (status, _) = ana.get("/api/forecast").await;
+    assert_eq!(status, StatusCode::OK);
+    let entries = run(&ana, &this_month(), 12).await;
+    assert_eq!(place(&entries[11]), (12, 12));
+    assert_eq!(members(&pool, &hers).await, 12);
+    assert_eq!(open_members(&pool, &hers).await, 12);
+}
+
+#[sqlx::test]
+async fn d36_a_12x_series_turns_fixo_without_doubling_a_month(pool: PgPool) {
+    let ana = opened(pool.clone(), "ana@example.com").await;
+    let bia = opened(pool.clone(), "bia@example.com").await;
+    let salary = ana.category_id("Salário").await;
+    let (status, created) = ana
+        .post(
+            "/api/transactions",
+            json!({ "date": today().to_string(), "amount": "1000", "kind": "income",
+                    "category_id": salary, "repeat_months": 12 }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{created}");
+    let hers = repeat(&bia, &today().to_string(), "10", 12).await;
+
+    let (status, fixed) = ana
+        .patch(&uri(&created), json!({ "open_ended": true }))
+        .await;
+
+    assert_eq!(status, StatusCode::OK, "{fixed}");
+    assert_eq!(fixed["series"]["open_ended"], true);
+    assert_eq!(open_members(&pool, &created).await, 12);
+    let (status, _) = ana.get("/api/forecast").await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(members(&pool, &created).await, 12);
+    let fourteen = (today() + chrono::Months::new(14))
+        .format("%Y-%m")
+        .to_string();
+    let (status, _) = ana.get(&format!("/api/months/{fourteen}")).await;
+    assert_eq!(status, StatusCode::OK);
+    let entries = run(&ana, &this_month(), 15).await;
+    assert_eq!(place(&entries[14]), (15, 15));
+    assert_eq!(members(&pool, &hers).await, 12);
+    assert_eq!(open_members(&pool, &hers).await, 0);
+}
+
+#[sqlx::test]
+async fn d36_a_card_subscription_grows_on_its_card_until_the_card_is_archived(pool: PgPool) {
+    let ana = opened(pool.clone(), "ana@example.com").await;
+    let bia = opened(pool.clone(), "bia@example.com").await;
+    let porto = card(&ana, "Porto").await;
+    let market = ana.category_id("Mercado").await;
+    let bounded = |months: i16| {
+        let mut body = on_card(&today().to_string(), "daily", &market, &porto);
+        body["repeat_months"] = json!(months);
+        body
+    };
+    let (status, three) = ana.post("/api/transactions", bounded(3)).await;
+    assert_eq!(status, StatusCode::CREATED, "{three}");
+    let hers = fixo(&bia, "daily", "Mercado", json!({})).await;
+
+    let (status, fixed) = ana.patch(&uri(&three), json!({ "open_ended": true })).await;
+    let subscription = fixo(&ana, "daily", "Mercado", json!({ "card_id": porto })).await;
+
+    assert_eq!(status, StatusCode::OK, "{fixed}");
+    assert_eq!(fixed["series"]["open_ended"], true);
+    assert_eq!(subscription["card_id"], porto);
+    assert_eq!(subscription["series"]["open_ended"], true);
+    let (status, _) = ana.get("/api/forecast").await;
+    assert_eq!(status, StatusCode::OK);
+    for series in [&three, &subscription] {
+        assert_eq!(members(&pool, series).await, 12);
+        assert_eq!(member(&ana, series, 12).await["card_id"], porto);
+    }
+
+    let (status, two) = ana.post("/api/transactions", bounded(2)).await;
+    assert_eq!(status, StatusCode::CREATED, "{two}");
+    trim(&pool, &subscription).await;
+    let behind = members(&pool, &subscription).await;
+    assert_eq!(
+        ana.delete(&format!("/api/bills/{porto}")).await.0,
+        StatusCode::NO_CONTENT
+    );
+    let (status, problem) = ana.patch(&uri(&two), json!({ "open_ended": true })).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+    assert_eq!(problem["errors"][0]["field"], "card_id");
+    let (status, _) = ana.get("/api/forecast").await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(members(&pool, &subscription).await, behind);
+    assert_eq!(members(&pool, &hers).await, 12);
+    assert_eq!(member(&bia, &hers, 12).await["card_id"], Value::Null);
+}
+
+#[sqlx::test]
+async fn d36_open_series_edges(pool: PgPool) {
+    let ana = opened(pool.clone(), "ana@example.com").await;
+    let bia = opened(pool.clone(), "bia@example.com").await;
+    let salary = ana.category_id("Salário").await;
+    let (_, standalone) = ana
+        .post(
+            "/api/transactions",
+            json!({ "date": today().to_string(), "amount": "50", "kind": "income",
+                    "category_id": salary }),
+        )
+        .await;
+
+    let (status, problem) = ana
+        .patch(
+            &uri(&standalone),
+            json!({ "open_ended": true, "repeat_months": 6 }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+    assert_eq!(problem["errors"][0]["field"], "open_ended");
+    let bill_entry = spend(&ana, &today().to_string(), "10", "Mercado").await;
+    let rent = ana.category_id("Aluguel").await;
+    let (status, problem) = ana
+        .patch(
+            &uri(&bill_entry),
+            json!({ "open_ended": true, "kind": "bill", "category_id": rent }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+    assert_eq!(problem["errors"][0]["field"], "open_ended");
+    let (_, bill) = ana
+        .post(
+            "/api/bills",
+            json!({ "name": "Aluguel", "amount": "1500", "due_day": 5, "category_id": rent }),
+        )
+        .await;
+    let (status, payment) = ana
+        .post(
+            &format!("/api/bills/{}/pay", bill["id"].as_str().unwrap()),
+            json!({ "date": today().to_string() }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{payment}");
+    let (status, problem) = ana
+        .patch(&uri(&payment), json!({ "open_ended": true }))
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+    assert_eq!(
+        problem["type"],
+        "urn:soldi:error:repeat-not-allowed-on-bill-payment"
+    );
+
+    let (status, weekly) = ana
+        .patch(
+            &uri(&standalone),
+            json!({ "open_ended": true, "repeat_every": "week" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{weekly}");
+    assert_eq!(weekly["series"]["open_ended"], true);
+    assert_eq!(weekly["series"]["every"], "week");
+    let (status, _) = ana.get("/api/forecast").await;
+    assert_eq!(status, StatusCode::OK);
+    let dates: Vec<chrono::NaiveDate> = sqlx::query_scalar(
+        "SELECT date FROM transactions WHERE series_id = $1::uuid ORDER BY date",
+    )
+    .bind(weekly["series"]["id"].as_str().unwrap())
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(dates[0], today());
+    assert!(
+        dates
+            .windows(2)
+            .all(|pair| (pair[1] - pair[0]).num_days() == 7)
+    );
+    assert!(horizon_end() < *dates.last().unwrap() + chrono::Days::new(7));
+
+    let created = fixo(&ana, "income", "Salário", json!({})).await;
+    let third = member(&ana, &created, 3).await;
+    let (status, problem) = ana.patch(&uri(&third), json!({ "repeat_months": 6 })).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+    assert_eq!(problem["errors"][0]["field"], "repeat_months");
+    let (status, problem) = bia
+        .patch(&uri(&third), json!({ "open_ended": false }))
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND, "{problem}");
+    let (status, _) = bia
+        .delete(&format!("{}?scope=following", uri(&third)))
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(members(&pool, &created).await, 12);
+
+    let (status, _) = ana
+        .delete(&format!("{}?scope=following", uri(&third)))
+        .await;
+
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    let (status, _) = ana.get("/api/forecast").await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(members(&pool, &created).await, 2);
+    assert_eq!(open_members(&pool, &created).await, 0);
+    assert_eq!(
+        member(&ana, &created, 2).await["series"]["open_ended"],
+        false
+    );
+}

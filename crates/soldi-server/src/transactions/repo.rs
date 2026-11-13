@@ -27,6 +27,7 @@ struct Row {
     series_total: i64,
     series_last_date: Option<NaiveDate>,
     series_every: Option<RepeatEvery>,
+    series_open: bool,
     card_id: Option<Uuid>,
 }
 
@@ -50,6 +51,7 @@ impl From<Row> for Transaction {
                     total: row.series_total,
                     last_date,
                     every: row.series_every.unwrap_or_default(),
+                    open_ended: row.series_open,
                 }),
             category: Category {
                 id: row.category_id,
@@ -84,8 +86,10 @@ pub async fn list(
                   c.color AS category_color, c.parent_id AS category_parent_id,
                   c.is_savings AS category_is_savings, c.target AS category_target,
                   c.deadline AS category_deadline, t.series_id,
-                  s.position AS "series_position!", s.total AS "series_total!",
-                  s.last_date AS series_last_date, t.series_every AS "series_every: RepeatEvery"
+                  s.position + t.series_offset AS "series_position!",
+                  s.total + t.series_offset AS "series_total!",
+                  s.last_date AS series_last_date, t.series_every AS "series_every: RepeatEvery",
+                  t.series_open
            FROM transactions t JOIN categories c ON c.user_id = t.user_id AND c.id = t.category_id
            LEFT JOIN LATERAL (
                SELECT count(*) AS total, max(m.date) AS last_date, count(*) FILTER (WHERE (m.date, m.id) <= (t.date, t.id)) AS position
@@ -121,8 +125,10 @@ pub async fn movements(
                   c.color AS category_color, c.parent_id AS category_parent_id,
                   c.is_savings AS category_is_savings, c.target AS category_target,
                   c.deadline AS category_deadline, t.series_id,
-                  s.position AS "series_position!", s.total AS "series_total!",
-                  s.last_date AS series_last_date, t.series_every AS "series_every: RepeatEvery"
+                  s.position + t.series_offset AS "series_position!",
+                  s.total + t.series_offset AS "series_total!",
+                  s.last_date AS series_last_date, t.series_every AS "series_every: RepeatEvery",
+                  t.series_open
            FROM transactions t JOIN categories c ON c.user_id = t.user_id AND c.id = t.category_id
            LEFT JOIN LATERAL (
                SELECT count(*) AS total, max(m.date) AS last_date, count(*) FILTER (WHERE (m.date, m.id) <= (t.date, t.id)) AS position
@@ -159,8 +165,10 @@ pub async fn find(
                   c.color AS category_color, c.parent_id AS category_parent_id,
                   c.is_savings AS category_is_savings, c.target AS category_target,
                   c.deadline AS category_deadline, t.series_id,
-                  s.position AS "series_position!", s.total AS "series_total!",
-                  s.last_date AS series_last_date, t.series_every AS "series_every: RepeatEvery"
+                  s.position + t.series_offset AS "series_position!",
+                  s.total + t.series_offset AS "series_total!",
+                  s.last_date AS series_last_date, t.series_every AS "series_every: RepeatEvery",
+                  t.series_open
            FROM transactions t JOIN categories c ON c.user_id = t.user_id AND c.id = t.category_id
            LEFT JOIN LATERAL (
                SELECT count(*) AS total, max(m.date) AS last_date, count(*) FILTER (WHERE (m.date, m.id) <= (t.date, t.id)) AS position
@@ -187,8 +195,8 @@ pub async fn insert(
     sqlx::query_scalar!(
         "INSERT INTO transactions
              (user_id, date, amount, kind, category_id, note, recurring_bill_id, cofrinho_id,
-              series_id, card_id, series_every)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id",
+              series_id, card_id, series_every, series_offset, series_open)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id",
         user_id,
         input.date,
         input.amount,
@@ -199,13 +207,16 @@ pub async fn insert(
         cofrinho_id,
         series_id,
         input.card_id,
-        every.map(RepeatEvery::as_str)
+        every.map(RepeatEvery::as_str),
+        input.first_installment.map_or(0, |first| first - 1),
+        input.open_ended
     )
     .fetch_one(&mut *conn)
     .await
 }
 
-/// Copies of `entry` on each of `dates`, in `series_id`, with `amounts[i]` on `dates[i]`.
+/// Copies of `entry` on each of `dates`, in `series_id`, with `amounts[i]` on `dates[i]`; they
+/// take the series' `series_open` and `series_offset` from a member already written.
 pub async fn insert_copies(
     conn: &mut PgConnection,
     user_id: Uuid,
@@ -217,9 +228,12 @@ pub async fn insert_copies(
 ) -> Result<(), sqlx::Error> {
     sqlx::query!(
         "INSERT INTO transactions
-             (user_id, date, amount, kind, category_id, note, series_id, card_id, series_every)
-         SELECT $1, c.d, c.a, $4, $5, $6, $7, $8, $9
-         FROM UNNEST($2::date[], $3::numeric[]) AS c(d, a)",
+             (user_id, date, amount, kind, category_id, note, series_id, card_id, series_every,
+              series_open, series_offset)
+         SELECT $1, c.d, c.a, $4, $5, $6, $7, $8, $9, s.series_open, s.series_offset
+         FROM UNNEST($2::date[], $3::numeric[]) AS c(d, a)
+         CROSS JOIN (SELECT series_open, series_offset FROM transactions
+                     WHERE user_id = $1 AND series_id = $7 LIMIT 1) s",
         user_id,
         dates,
         amounts,
@@ -242,18 +256,60 @@ pub async fn set_series(
     id: Uuid,
     series_id: Uuid,
     every: RepeatEvery,
+    open: bool,
 ) -> Result<bool, sqlx::Error> {
     let result = sqlx::query!(
-        "UPDATE transactions SET series_id = $3, series_every = $4, updated_at = now()
+        "UPDATE transactions SET series_id = $3, series_every = $4, series_open = $5,
+                updated_at = now()
          WHERE user_id = $1 AND id = $2 AND series_id IS NULL",
         user_id,
         id,
         series_id,
-        every.as_str()
+        every.as_str(),
+        open
     )
     .execute(&mut *conn)
     .await?;
     Ok(result.rows_affected() == 1)
+}
+
+/// D36: opens or closes every member of the series.
+pub async fn set_open(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    series_id: Uuid,
+    open: bool,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        "UPDATE transactions SET series_open = $3, updated_at = now()
+         WHERE user_id = $1 AND series_id = $2 AND series_open <> $3",
+        user_id,
+        series_id,
+        open
+    )
+    .execute(&mut *conn)
+    .await?;
+    Ok(())
+}
+
+/// D36: deletes the series' members after entry `id` dated `date`, in series order.
+pub async fn delete_after(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    series_id: Uuid,
+    date: NaiveDate,
+    id: Uuid,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        "DELETE FROM transactions WHERE user_id = $1 AND series_id = $2 AND (date, id) > ($3, $4)",
+        user_id,
+        series_id,
+        date,
+        id
+    )
+    .execute(&mut *conn)
+    .await?;
+    Ok(())
 }
 
 /// R6: the series' members dated after `from` take `entry`'s kind, category and note, its card
@@ -345,6 +401,31 @@ pub async fn lock_series(conn: &mut PgConnection, series_id: Uuid) -> Result<(),
     Ok(())
 }
 
+/// D36: the last member of each of the user's open series whose next member falls by `until`, a
+/// month's last day: one step after the last member lands in the next member's month. A series
+/// whose card is archived stops growing (D28).
+pub async fn open_series_behind(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    until: NaiveDate,
+) -> Result<Vec<Uuid>, sqlx::Error> {
+    sqlx::query_scalar!(
+        r#"SELECT id AS "id!" FROM (
+               SELECT DISTINCT ON (series_id) id, date, series_every, card_id FROM transactions
+               WHERE user_id = $1 AND series_open ORDER BY series_id, date DESC, id DESC) last
+           WHERE last.date + CASE last.series_every WHEN 'week' THEN interval '7 days'
+                                                    WHEN 'year' THEN interval '1 year'
+                                                    ELSE interval '1 month' END <= $2::date
+             AND NOT EXISTS (SELECT 1 FROM recurring_bills card
+                             WHERE card.user_id = $1 AND card.id = last.card_id
+                               AND card.archived_at IS NOT NULL)"#,
+        user_id,
+        until
+    )
+    .fetch_all(&mut *conn)
+    .await
+}
+
 /// M3 (D32): the dates of the series' last four members, last first.
 pub async fn series_end(
     conn: &mut PgConnection,
@@ -404,7 +485,7 @@ pub async fn set_dates(
     Ok(())
 }
 
-/// L3: deletes the series' members ranked after the first `keep` by `(date, id)`.
+/// L3: deletes the series' members positioned after `keep` by `(date, id)`, `series_offset` counted.
 pub async fn delete_beyond(
     conn: &mut PgConnection,
     user_id: Uuid,
@@ -413,8 +494,10 @@ pub async fn delete_beyond(
 ) -> Result<(), sqlx::Error> {
     sqlx::query!(
         "DELETE FROM transactions WHERE user_id = $1 AND id IN (
-             SELECT id FROM transactions WHERE user_id = $1 AND series_id = $2
-             ORDER BY date, id OFFSET $3)",
+             SELECT id FROM (
+                 SELECT id, series_offset + row_number() OVER (ORDER BY date, id) AS position
+                 FROM transactions WHERE user_id = $1 AND series_id = $2) m
+             WHERE m.position > $3)",
         user_id,
         series_id,
         keep
@@ -593,6 +676,8 @@ mod tests {
                 due_day: 7,
                 category_id: rent,
                 closing_day: None,
+                installments: None,
+                last_month: None,
             },
         )
         .await
@@ -606,6 +691,8 @@ mod tests {
             repeat_months: None,
             repeat_every: None,
             installments: None,
+            first_installment: None,
+            open_ended: false,
             card_id: None,
         };
         let member = insert(

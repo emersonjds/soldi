@@ -471,6 +471,48 @@ describe("Contas a pagar", () => {
     expect(rowOf("Água")).not.toHaveTextContent("Pago com atraso");
   });
 
+  describe("a parcelado conta fixa (SOL-118)", () => {
+    const FIES: Schemas["BillOfMonth"] = {
+      ...BILLS_OF_MONTH[1],
+      bill_id: "bill-fies",
+      name: "Fies",
+      due_date: "2026-12-10",
+      overdue: false,
+      installment: 5,
+      installments: 6,
+    };
+
+    const nameLine = (name: string) => within(rowOf(name)).getByText("Fies").parentElement;
+
+    it("reads the parcela after the name, wrapping under it at 375 px before the amount moves", async () => {
+      show([{ ...FIES, installment: 4 }], {}, "2026-12");
+      await loaded();
+      expect(nameLine("Fies")).toHaveTextContent("Fies · 4/6");
+      expect(nameLine("Fies")).toHaveClass("flex-wrap");
+      expect(within(rowOf("Fies")).getByText("· 4/6")).toHaveClass("whitespace-nowrap");
+    });
+
+    it("names the last parcela", async () => {
+      show([{ ...FIES, installment: 6 }], {}, "2026-12");
+      await loaded();
+      expect(nameLine("Fies")).toHaveTextContent("Fies · última parcela");
+      expect(rowOf("Fies")).not.toHaveTextContent("6/6");
+    });
+
+    it("keeps a carried parcela's position and says when it was due", async () => {
+      show([{ ...FIES, installment: 4, due_date: "2026-11-10", overdue: true }], {}, "2026-12");
+      await loaded();
+      expect(nameLine("Fies de novembro")).toHaveTextContent("Fies · 4/6 · venceu em novembro");
+    });
+
+    it("leaves a bill without parcelas as it was", async () => {
+      show([{ ...FIES, name: "Inglês", installment: null, installments: null }], {}, "2026-12");
+      await loaded();
+      expect(within(rowOf("Inglês")).getByText("Inglês")).toHaveTextContent(/^Inglês$/);
+      expect(rowOf("Inglês")).not.toHaveTextContent("·");
+    });
+  });
+
   it("renders nothing without a bill (D25)", () => {
     signedIn();
     renderWithQuery(<BillsOfMonth view={{ ...MONTH, bills_of_month: [] }} />);

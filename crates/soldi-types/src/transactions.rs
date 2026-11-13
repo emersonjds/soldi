@@ -30,12 +30,16 @@ pub struct Transaction {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct TransactionSeries {
     pub id: Uuid,
-    /// 1-based, by date.
+    /// 1-based, by date; counts the parcelas paid before the first written one.
     pub position: i64,
+    /// The members, the parcelas paid before the first written one included; on an open series,
+    /// the members written so far.
     pub total: i64,
     /// The date of the series' last member; growth continues after it, by `every`.
     pub last_date: NaiveDate,
     pub every: RepeatEvery,
+    /// Grows with no end: members are written ahead as months are read (D36).
+    pub open_ended: bool,
 }
 
 /// The step between a series' entries (D32); a running series never changes it.
@@ -105,6 +109,14 @@ pub struct CreateTransaction {
     #[serde(default)]
     #[schema(minimum = 2, maximum = 60)]
     pub installments: Option<i16>,
+    /// The parcela this entry is, 1 to `installments`; earlier ones are not written. Absent: 1.
+    #[serde(default)]
+    #[schema(minimum = 1, maximum = 60)]
+    pub first_installment: Option<i16>,
+    /// Repeats every `repeat_every` with no end; members are written ahead as months are read
+    /// (D36). `income` or `daily` (a card spend included), not with `repeat_months` or `installments`.
+    #[serde(default)]
+    pub open_ended: bool,
     /// One of the caller's unarchived cards; only on a `daily` entry.
     #[serde(default)]
     pub card_id: Option<Uuid>,
@@ -135,6 +147,10 @@ pub struct UpdateTransaction {
     /// equal the series' step.
     #[serde(default)]
     pub repeat_every: Option<RepeatEvery>,
+    /// D36: `true` makes the entry's series, or the entry itself, Fixo with no end (Tornar fixo);
+    /// `false` on an open member deletes the later members and closes the series (Parar série).
+    #[serde(default)]
+    pub open_ended: Option<bool>,
     /// A new card must be one of the caller's unarchived cards; keeping an archived one is fine.
     #[serde(default, deserialize_with = "crate::nullable_field")]
     #[schema(value_type = Option<Uuid>, nullable)]

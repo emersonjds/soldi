@@ -2,19 +2,26 @@ use soldi_types::bills::{Bill, CreateBill};
 use sqlx::PgConnection;
 use uuid::Uuid;
 
-/// Unarchived bills by due day, then name; inactive ones only with `include_inactive`.
+/// Unarchived bills by due day, then name; ones that ended before `this_month` only with
+/// `include_inactive`.
 pub async fn list(
     conn: &mut PgConnection,
     user_id: Uuid,
     include_inactive: bool,
+    this_month: chrono::NaiveDate,
 ) -> Result<Vec<Bill>, sqlx::Error> {
     sqlx::query_as!(
         Bill,
-        "SELECT id, category_id, name, amount, due_day, active, closing_day FROM recurring_bills
-         WHERE user_id = $1 AND (active OR $2) AND archived_at IS NULL
-         ORDER BY due_day, lower(name), id",
+        r#"SELECT id, category_id, name, amount, due_day,
+                  (last_month IS NULL OR installments IS NOT NULL) AS "active!", closing_day,
+                  last_month, installments
+         FROM recurring_bills
+         WHERE user_id = $1 AND archived_at IS NULL
+           AND ($2 OR last_month IS NULL OR last_month >= $3)
+         ORDER BY due_day, lower(name), id"#,
         user_id,
-        include_inactive
+        include_inactive,
+        this_month
     )
     .fetch_all(&mut *conn)
     .await
@@ -28,8 +35,11 @@ pub async fn find(
 ) -> Result<Option<Bill>, sqlx::Error> {
     sqlx::query_as!(
         Bill,
-        "SELECT id, category_id, name, amount, due_day, active, closing_day FROM recurring_bills
-         WHERE user_id = $1 AND id = $2 AND archived_at IS NULL",
+        r#"SELECT id, category_id, name, amount, due_day,
+                  (last_month IS NULL OR installments IS NOT NULL) AS "active!", closing_day,
+                  last_month, installments
+         FROM recurring_bills
+         WHERE user_id = $1 AND id = $2 AND archived_at IS NULL"#,
         user_id,
         id
     )
@@ -45,8 +55,11 @@ pub async fn find_payable(
 ) -> Result<Option<Bill>, sqlx::Error> {
     sqlx::query_as!(
         Bill,
-        "SELECT id, category_id, name, amount, due_day, active, closing_day FROM recurring_bills
-         WHERE user_id = $1 AND id = $2 AND (archived_at IS NULL OR closing_day IS NOT NULL)",
+        r#"SELECT id, category_id, name, amount, due_day,
+                  (last_month IS NULL OR installments IS NOT NULL) AS "active!", closing_day,
+                  last_month, installments
+         FROM recurring_bills
+         WHERE user_id = $1 AND id = $2 AND (archived_at IS NULL OR closing_day IS NOT NULL)"#,
         user_id,
         id
     )
@@ -62,8 +75,11 @@ pub async fn find_card(
 ) -> Result<Option<Bill>, sqlx::Error> {
     sqlx::query_as!(
         Bill,
-        "SELECT id, category_id, name, amount, due_day, active, closing_day FROM recurring_bills
-         WHERE user_id = $1 AND id = $2 AND archived_at IS NULL AND closing_day IS NOT NULL",
+        r#"SELECT id, category_id, name, amount, due_day,
+                  (last_month IS NULL OR installments IS NOT NULL) AS "active!", closing_day,
+                  last_month, installments
+         FROM recurring_bills
+         WHERE user_id = $1 AND id = $2 AND archived_at IS NULL AND closing_day IS NOT NULL"#,
         user_id,
         id
     )
@@ -78,49 +94,74 @@ pub async fn insert(
 ) -> Result<Bill, sqlx::Error> {
     sqlx::query_as!(
         Bill,
-        "INSERT INTO recurring_bills (user_id, name, amount, due_day, category_id, closing_day)
-         VALUES ($1, $2, $3, $4, $5, $6)
-         RETURNING id, category_id, name, amount, due_day, active, closing_day",
+        r#"INSERT INTO recurring_bills
+             (user_id, name, amount, due_day, category_id, closing_day, installments, last_month)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         RETURNING id, category_id, name, amount, due_day,
+                   (last_month IS NULL OR installments IS NOT NULL) AS "active!", closing_day,
+                   last_month, installments"#,
         user_id,
         bill.name,
         bill.amount,
         bill.due_day,
         bill.category_id,
-        bill.closing_day
+        bill.closing_day,
+        bill.installments,
+        bill.last_month
     )
     .fetch_one(&mut *conn)
     .await
 }
 
-/// `Ok(None)` when the user has no unarchived bill with this id. D13: resuming a paused bill
-/// moves `active_since` to the São Paulo today.
+/// `Ok(None)` when the user has no unarchived bill with this id. D13: `restart` moves
+/// `active_since` to the São Paulo today.
 pub async fn update(
     conn: &mut PgConnection,
     user_id: Uuid,
     id: Uuid,
     bill: &CreateBill,
-    active: bool,
+    last_month: Option<chrono::NaiveDate>,
+    restart: bool,
 ) -> Result<Option<Bill>, sqlx::Error> {
     sqlx::query_as!(
         Bill,
-        "UPDATE recurring_bills
-         SET name = $3, amount = $4, due_day = $5, category_id = $6, active = $7, closing_day = $8,
-             active_since = CASE WHEN $7 AND NOT active
-                                 THEN (now() AT TIME ZONE 'America/Sao_Paulo')::date
+        r#"UPDATE recurring_bills
+         SET name = $3, amount = $4, due_day = $5, category_id = $6, closing_day = $7,
+             last_month = $8, installments = $10,
+             active_since = CASE WHEN $9 THEN (now() AT TIME ZONE 'America/Sao_Paulo')::date
                                  ELSE active_since END,
              updated_at = now()
          WHERE user_id = $1 AND id = $2 AND archived_at IS NULL
-         RETURNING id, category_id, name, amount, due_day, active, closing_day",
+         RETURNING id, category_id, name, amount, due_day,
+                   (last_month IS NULL OR installments IS NOT NULL) AS "active!", closing_day,
+                   last_month, installments"#,
         user_id,
         id,
         bill.name,
         bill.amount,
         bill.due_day,
         bill.category_id,
-        active,
-        bill.closing_day
+        bill.closing_day,
+        last_month,
+        restart,
+        bill.installments
     )
     .fetch_optional(&mut *conn)
+    .await
+}
+
+/// The date of the bill's latest entry.
+pub async fn last_paid(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    bill_id: Uuid,
+) -> Result<Option<chrono::NaiveDate>, sqlx::Error> {
+    sqlx::query_scalar!(
+        "SELECT max(date) FROM transactions WHERE user_id = $1 AND recurring_bill_id = $2",
+        user_id,
+        bill_id
+    )
+    .fetch_one(&mut *conn)
     .await
 }
 
@@ -263,8 +304,11 @@ pub async fn find_any_card(
 ) -> Result<Option<Bill>, sqlx::Error> {
     sqlx::query_as!(
         Bill,
-        "SELECT id, category_id, name, amount, due_day, active, closing_day FROM recurring_bills
-         WHERE user_id = $1 AND id = $2 AND closing_day IS NOT NULL",
+        r#"SELECT id, category_id, name, amount, due_day,
+                  (last_month IS NULL OR installments IS NOT NULL) AS "active!", closing_day,
+                  last_month, installments
+         FROM recurring_bills
+         WHERE user_id = $1 AND id = $2 AND closing_day IS NOT NULL"#,
         user_id,
         id
     )
@@ -298,6 +342,10 @@ mod tests {
         .unwrap()
     }
 
+    fn this_month() -> chrono::NaiveDate {
+        crate::months::domain::first_of(crate::today_sao_paulo())
+    }
+
     fn bill(name: &str, amount: &str, due_day: i16, category_id: Uuid) -> CreateBill {
         CreateBill {
             name: name.into(),
@@ -305,6 +353,8 @@ mod tests {
             due_day,
             category_id,
             closing_day: None,
+            installments: None,
+            last_month: None,
         }
     }
 
@@ -331,14 +381,20 @@ mod tests {
             .await
             .unwrap();
 
-        let listed = list(&mut conn, ana, false).await.unwrap();
+        let listed = list(&mut conn, ana, false, this_month()).await.unwrap();
 
         let names: Vec<&str> = listed.iter().map(|bill| bill.name.as_str()).collect();
         assert_eq!(names, ["Aluguel", "Água", "Luz"]);
         assert_eq!(listed[2].amount, Some("120.50".parse().unwrap()));
         assert_eq!((listed[2].due_day, listed[2].category_id), (10, light));
         assert!(listed[2].active);
-        assert_eq!(list(&mut conn, bia, false).await.unwrap().len(), 1);
+        assert_eq!(
+            list(&mut conn, bia, false, this_month())
+                .await
+                .unwrap()
+                .len(),
+            1
+        );
     }
 
     #[sqlx::test]
@@ -361,12 +417,12 @@ mod tests {
             .execute(&mut *conn)
             .await
             .unwrap();
-        sqlx::query!("UPDATE recurring_bills SET active = false WHERE name = 'Pausada'")
+        sqlx::query!("UPDATE recurring_bills SET last_month = '2026-01-01' WHERE name = 'Pausada'")
             .execute(&mut *conn)
             .await
             .unwrap();
 
-        let listed = list(&mut conn, ana, false).await.unwrap();
+        let listed = list(&mut conn, ana, false, this_month()).await.unwrap();
 
         assert_eq!(listed.len(), 1);
         assert_eq!(listed[0].name, "Luz");

@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE transactions SET series_id = $3, series_every = $4, series_open = $5,\n                updated_at = now()\n         WHERE user_id = $1 AND id = $2 AND series_id IS NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f18670639a539350309529aa551dfd01b28044b40ac8e447c39ae4c467f20fc7"
+}

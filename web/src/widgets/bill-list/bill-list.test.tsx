@@ -684,4 +684,249 @@ describe("Contas fixas", () => {
       });
     });
   });
+
+  describe("parcelado (SOL-118)", () => {
+    const FIES: Schemas["Bill"] = {
+      ...BILL_ALUGUEL,
+      id: "b1000000-0000-4000-8000-000000000010",
+      name: "Fies",
+      amount: "500.00",
+      due_day: 20,
+      installments: 6,
+      last_month: "2026-12-01",
+    };
+
+    const newBill = async () => {
+      await userEvent.click(await screen.findByRole("button", { name: "Nova Conta Fixa" }));
+      return screen.findByRole("dialog", { name: "Nova conta" });
+    };
+
+    it("puts Parcelado beside Cartão de crédito; turning one on turns the other off", async () => {
+      open();
+      const sheet = await newBill();
+      const parcelado = within(sheet).getByRole("switch", { name: "Parcelado" });
+      const card = within(sheet).getByRole("switch", { name: "Cartão de crédito" });
+
+      await userEvent.click(parcelado);
+      expect(parcelado).toBeChecked();
+      await userEvent.click(card);
+      expect(card).toBeChecked();
+      expect(parcelado).not.toBeChecked();
+      expect(within(sheet).queryByLabelText("Quantas parcelas")).not.toBeInTheDocument();
+      await userEvent.click(parcelado);
+      expect(card).not.toBeChecked();
+      expect(within(sheet).getByLabelText("Valor mensal fixo estimado")).toBeInTheDocument();
+    });
+
+    it("asks how many parcelas, 2 to 60, and the current one, 1 by default and not past the last", async () => {
+      const { requests } = open();
+      const sheet = await newBill();
+      await userEvent.click(within(sheet).getByRole("switch", { name: "Parcelado" }));
+
+      const count = within(sheet).getByLabelText("Quantas parcelas");
+      const current = within(sheet).getByLabelText("Parcela atual");
+      expect(current).toHaveValue("1");
+      expect(count.compareDocumentPosition(current) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(count).toHaveClass("text-base", "h-12");
+      await userEvent.type(within(sheet).getByLabelText("Nome da conta fixa"), "Fies");
+      await userEvent.type(within(sheet).getByLabelText("Valor mensal fixo estimado"), "50000");
+      await userEvent.type(within(sheet).getByLabelText("Dia do vencimento recorrente"), "20");
+      await userEvent.type(count, "61");
+      await userEvent.click(within(sheet).getByRole("button", { name: "Salvar Conta Fixa" }));
+      expect(within(sheet).getByText("Escolha de 2 a 60 parcelas.")).toBeInTheDocument();
+      expect(count).toHaveAttribute("aria-invalid", "true");
+
+      await userEvent.clear(count);
+      await userEvent.type(count, "6");
+      await userEvent.clear(current);
+      await userEvent.type(current, "7");
+      await userEvent.click(within(sheet).getByRole("button", { name: "Salvar Conta Fixa" }));
+      expect(within(sheet).queryByText("Escolha de 2 a 60 parcelas.")).not.toBeInTheDocument();
+      expect(current).toHaveAttribute("aria-invalid", "true");
+      expect(within(sheet).getByText("Escolha uma parcela de 1 a 6.")).toBeInTheDocument();
+      expect(sent(requests, "POST")).toHaveLength(0);
+    });
+
+    it("reads where the parcelas run and saves their last month", async () => {
+      vi.setSystemTime(new Date(2026, 10, 12, 12));
+      const { requests } = open({ replies: { "POST /api/bills": { status: 201, body: FIES } } });
+      const sheet = await newBill();
+      await userEvent.click(within(sheet).getByRole("switch", { name: "Parcelado" }));
+      await userEvent.type(within(sheet).getByLabelText("Nome da conta fixa"), "Fies");
+      await userEvent.type(within(sheet).getByLabelText("Valor mensal fixo estimado"), "50000");
+      await userEvent.type(within(sheet).getByLabelText("Dia do vencimento recorrente"), "20");
+      await userEvent.selectOptions(within(sheet).getByLabelText("Categoria"), "Aluguel");
+      await userEvent.type(within(sheet).getByLabelText("Quantas parcelas"), "6");
+      await userEvent.clear(within(sheet).getByLabelText("Parcela atual"));
+      await userEvent.type(within(sheet).getByLabelText("Parcela atual"), "5");
+
+      expect(within(sheet).getByText("Parcela 5/6 em nov/26 · termina em dez/26")).toBeInTheDocument();
+      expect(within(sheet).getByText("Mensal (todo mês)")).toHaveTextContent("Mensal (todo mês)Parcelado");
+      await userEvent.click(within(sheet).getByRole("button", { name: "Salvar Conta Fixa" }));
+
+      await waitFor(() => expect(sent(requests, "POST")).toHaveLength(1));
+      expect(await sent(requests, "POST")[0].json()).toEqual({
+        name: "Fies",
+        amount: "500.00",
+        due_day: 20,
+        category_id: ALUGUEL.id,
+        installments: 6,
+        last_month: "2026-12-01",
+      });
+    });
+
+    it("edits a parcelado bill from its current parcela, with no Ativa, and sends its parcelas only when they change", async () => {
+      const { requests } = open({
+        bills: [BILL_ALUGUEL, FIES],
+        replies: { [`PATCH /api/bills/${FIES.id}`]: { status: 200, body: FIES } },
+      });
+
+      await userEvent.click(await screen.findByRole("button", { name: /^Fies/ }));
+      const sheet = await screen.findByRole("dialog", { name: "Editar conta" });
+      expect(within(sheet).queryByRole("switch")).not.toBeInTheDocument();
+      expect(within(sheet).getByLabelText("Quantas parcelas")).toHaveValue("6");
+      expect(within(sheet).getByLabelText("Parcela atual")).toHaveValue("5");
+      expect(within(sheet).getByText("Parcela 5/6 em nov/26 · termina em dez/26")).toBeInTheDocument();
+      await userEvent.click(within(sheet).getByRole("button", { name: "Salvar Conta Fixa" }));
+      await waitFor(() => expect(patches(requests)).toHaveLength(1));
+      expect(await patches(requests)[0].json()).toEqual({
+        name: "Fies",
+        amount: "500.00",
+        due_day: 20,
+        category_id: FIES.category_id,
+      });
+
+      await userEvent.click(await screen.findByRole("button", { name: /^Fies/ }));
+      const again = await screen.findByRole("dialog", { name: "Editar conta" });
+      await userEvent.clear(within(again).getByLabelText("Parcela atual"));
+      await userEvent.type(within(again).getByLabelText("Parcela atual"), "6");
+      await userEvent.click(within(again).getByRole("button", { name: "Salvar Conta Fixa" }));
+      await waitFor(() => expect(patches(requests)).toHaveLength(2));
+      expect(await patches(requests)[1].json()).toMatchObject({ installments: 6, last_month: "2026-11-01" });
+    });
+
+    it.each([
+      ["an ended plan", { ...FIES, last_month: "2026-10-01" }, new Date(2026, 10, 5, 12)],
+      ["a plan in its last month after its due day", { ...FIES, last_month: "2026-11-01" }, new Date(2026, 10, 25, 12)],
+    ])("renames %s without restarting its parcelas", async (_, bill, today) => {
+      vi.setSystemTime(today);
+      const { requests } = open({
+        bills: [bill],
+        replies: { [`PATCH /api/bills/${bill.id}`]: { status: 200, body: bill } },
+      });
+      await userEvent.click(await screen.findByRole("button", { name: /^Fies/ }));
+      const sheet = await screen.findByRole("dialog", { name: "Editar conta" });
+      await userEvent.type(within(sheet).getByLabelText("Nome da conta fixa"), " 2");
+      await userEvent.click(within(sheet).getByRole("button", { name: "Salvar Conta Fixa" }));
+
+      await waitFor(() => expect(patches(requests)).toHaveLength(1));
+      const body = await patches(requests)[0].json();
+      expect(body).toMatchObject({ name: "Fies 2" });
+      expect(body).not.toHaveProperty("installments");
+      expect(body).not.toHaveProperty("last_month");
+    });
+
+    it("never sends Ativa with the parcelas when a Fixo is stopped and turned parcelado", async () => {
+      vi.setSystemTime(new Date(2026, 10, 12, 12));
+      const { requests } = open({
+        replies: { [`PATCH /api/bills/${BILL_ALUGUEL.id}`]: { status: 200, body: BILL_ALUGUEL } },
+      });
+      await userEvent.click(await screen.findByRole("button", { name: /^Aluguel Residencial/ }));
+      const sheet = await screen.findByRole("dialog", { name: "Editar conta" });
+      await userEvent.click(within(sheet).getByRole("switch", { name: "Ativa" }));
+      await userEvent.click(within(sheet).getByRole("switch", { name: "Parcelado" }));
+      await userEvent.type(within(sheet).getByLabelText("Quantas parcelas"), "6");
+      await userEvent.click(within(sheet).getByRole("button", { name: "Salvar Conta Fixa" }));
+
+      await waitFor(() => expect(patches(requests)).toHaveLength(1));
+      const body = await patches(requests)[0].json();
+      expect(body).toMatchObject({ installments: 6 });
+      expect(body).not.toHaveProperty("active");
+    });
+
+    it("turns an existing Fixo parcelado, with no Cartão de crédito switch", async () => {
+      vi.setSystemTime(new Date(2026, 10, 12, 12));
+      const { requests } = open({
+        replies: { [`PATCH /api/bills/${BILL_ALUGUEL.id}`]: { status: 200, body: BILL_ALUGUEL } },
+      });
+      await userEvent.click(await screen.findByRole("button", { name: /^Aluguel Residencial/ }));
+      const sheet = await screen.findByRole("dialog", { name: "Editar conta" });
+      expect(within(sheet).queryByRole("switch", { name: "Cartão de crédito" })).not.toBeInTheDocument();
+
+      await userEvent.click(within(sheet).getByRole("switch", { name: "Parcelado" }));
+      expect(within(sheet).queryByRole("switch", { name: "Ativa" })).not.toBeInTheDocument();
+      const day = within(sheet).getByLabelText("Dia do vencimento recorrente");
+      await userEvent.clear(day);
+      await userEvent.type(day, "20");
+      await userEvent.type(within(sheet).getByLabelText("Quantas parcelas"), "6");
+      await userEvent.clear(within(sheet).getByLabelText("Parcela atual"));
+      await userEvent.type(within(sheet).getByLabelText("Parcela atual"), "5");
+      await userEvent.click(within(sheet).getByRole("button", { name: "Salvar Conta Fixa" }));
+
+      await waitFor(() => expect(patches(requests)).toHaveLength(1));
+      expect(await patches(requests)[0].json()).toMatchObject({ installments: 6, last_month: "2026-12-01" });
+    });
+
+    it("says a stopped Fixo leaves the next months and keeps this one and the earlier ones", async () => {
+      open();
+      await userEvent.click(await screen.findByRole("button", { name: /^Aluguel Residencial/ }));
+      const sheet = await screen.findByRole("dialog", { name: "Editar conta" });
+      const stopped = "Parada. Sai dos próximos meses; este e os anteriores ficam como estão.";
+      expect(within(sheet).queryByText(stopped)).not.toBeInTheDocument();
+      await userEvent.click(within(sheet).getByRole("switch", { name: "Ativa" }));
+      expect(within(sheet).getByText(stopped)).toBeInTheDocument();
+    });
+
+    describe("in the list", () => {
+      const ENDED: Schemas["Bill"] = { ...FIES, id: "b1000000-0000-4000-8000-000000000011", last_month: "2026-10-01" };
+      const STOPPED: Schemas["Bill"] = { ...BILL_PAUSED, last_month: "2026-11-01" };
+      const STOPPED_LONG_AGO: Schemas["Bill"] = {
+        ...BILL_PAUSED,
+        id: "b1000000-0000-4000-8000-000000000012",
+        name: "Inglês",
+        last_month: "2026-09-01",
+      };
+      const row = async (name: RegExp) => (await screen.findByRole("button", { name })).closest("li") as HTMLElement;
+      const tab = (name: RegExp) => userEvent.click(screen.getByRole("tab", { name }));
+
+      it("reads until when a running parcelado lasts, among Despesas, with no switch", async () => {
+        open({ bills: [FIES] });
+
+        const fies = await row(/^Fies/);
+        expect(within(fies).getByText("Fies").parentElement).toHaveTextContent("Fies · até dez/26");
+        expect(within(fies).getByText("Fies").parentElement).toHaveClass("flex-wrap");
+        expect(within(fies).getByText("· até dez/26")).toHaveClass("whitespace-nowrap");
+        expect(within(fies).queryByRole("switch")).not.toBeInTheDocument();
+        expect(within(fies).queryByText("Pausada")).not.toBeInTheDocument();
+        await tab(/^Despesas/);
+        expect(names()).toEqual(["Fies"]);
+      });
+
+      it("reads when an ended parcelado finished, among Pausadas, and leaves it out of the total", async () => {
+        open({ bills: [BILL_ALUGUEL, ENDED] });
+
+        const fies = await row(/^Fies/);
+        expect(fies).toHaveTextContent("Fies · terminou em out/26");
+        expect(within(fies).queryByRole("switch")).not.toBeInTheDocument();
+        expect(within(fies).queryByText("Pausada")).not.toBeInTheDocument();
+        expect(within(await total()).getByText("R$ 2.259,56")).toBeInTheDocument();
+        expect(within(await total()).getByText("1 conta")).toBeInTheDocument();
+        await tab(/^Pausadas/);
+        expect(names()).toEqual(["Fies"]);
+      });
+
+      it("keeps the Pausada pill and switch on a stopped Fixo, and says when it ended once its month is behind", async () => {
+        open({ bills: [STOPPED, STOPPED_LONG_AGO] });
+
+        const gym = await row(/^Academia/);
+        expect(within(gym).getByText("Pausada")).toBeInTheDocument();
+        expect(within(gym).getByRole("switch", { name: "Ativa: Academia" })).not.toBeChecked();
+        expect(gym).not.toHaveTextContent("terminou");
+        const english = await row(/^Inglês/);
+        expect(english).toHaveTextContent("Inglês · terminou em set/26");
+        expect(within(english).getByText("Pausada")).toBeInTheDocument();
+        expect(within(english).getByRole("switch", { name: "Ativa: Inglês" })).not.toBeChecked();
+      });
+    });
+  });
 });

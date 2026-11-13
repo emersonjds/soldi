@@ -137,6 +137,9 @@ const Row = ({
   const late = carriedFrom(bill, month);
   const title = billTitle(bill);
   const label = late ? `${title} de ${late}` : title;
+  const parcel =
+    bill.installments &&
+    (bill.installment === bill.installments ? "última parcela" : `${bill.installment}/${bill.installments}`);
   const amount = (
     <Money
       amount={bill.amount}
@@ -158,14 +161,24 @@ const Row = ({
       <RoundCheck bill={bill} label={label} onToggle={bill.paid ? onUnpay : onPay} busy={busy} />
       <CategoryIcon icon={bill.icon} color={bill.color} tintedOnDesktop />
       <span className="flex min-w-0 flex-1 flex-col items-start gap-1">
-        <span
-          title={title}
-          className={cn(
-            "max-w-full truncate font-medium text-base",
-            bill.paid && "lg:text-muted-foreground lg:line-through",
+        <span className="flex max-w-full flex-wrap items-baseline gap-x-1">
+          <span
+            title={title}
+            className={cn(
+              "max-w-full truncate font-medium text-base",
+              bill.paid && "lg:text-muted-foreground lg:line-through",
+            )}
+          >
+            {title}
+          </span>
+          {parcel && (
+            <>
+              {" "}
+              <span className="whitespace-nowrap text-muted-foreground text-sm">
+                · {[parcel, late && `venceu em ${late}`].filter(Boolean).join(" · ")}
+              </span>
+            </>
           )}
-        >
-          {title}
         </span>
         <Caption bill={bill} paidOn={paidOn} />
       </span>
