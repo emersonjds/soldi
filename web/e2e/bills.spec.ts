@@ -106,3 +106,55 @@ test("Contas fixas sums the active bills against the month's income, pauses one 
     }
   }
 });
+
+test("a parcelado conta fixa shows its parcela each month and leaves after the last", async ({ page, request }) => {
+  await requireServer(request);
+  test.setTimeout(90_000);
+  // The server's São Paulo calendar, not the runner's clock.
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
+  const month = (offset: number) => {
+    const date = new Date(Date.UTC(Number(today.slice(0, 4)), Number(today.slice(5, 7)) - 1 + offset, 1));
+    return date.toISOString().slice(0, 7);
+  };
+  const abbrev = (yearMonth: string) =>
+    `${["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"][Number(yearMonth.slice(5)) - 1]}/${yearMonth.slice(2, 4)}`;
+  const api = page.request;
+  await api.post("/api/auth/sign-up", {
+    data: { email: `e2e-parcelado-${Date.now()}@example.com`, password: "uma-senha-bem-longa" },
+  });
+  await api.post("/api/onboarding", { data: { opening_balance: "1000.00", opening_date: `${month(0)}-01` } });
+  await api.post("/api/me/tour-seen");
+  await page.setViewportSize({ width: 375, height: 812 });
+
+  // Due on the 28th: this month while the 28th is ahead, else the next.
+  const first = Number(today.slice(8)) <= 28 ? month(0) : month(1);
+  const [second, after] = [month(first === month(0) ? 1 : 2), month(first === month(0) ? 2 : 3)];
+
+  await page.goto("/ajustes/contas");
+  await page.getByRole("button", { name: "Nova Conta Fixa" }).click();
+  await page.getByLabel("Nome da conta fixa").fill("Fies");
+  await page.getByLabel("Valor mensal fixo estimado").fill("500,00");
+  await page.getByRole("switch", { name: "Parcelado" }).click();
+  await page.getByLabel("Dia do vencimento recorrente").fill("28");
+  await page.getByLabel("Quantas parcelas").fill("3");
+  await page.getByLabel("Parcela atual").fill("2");
+  await expect(page.getByText(`Parcela 2/3 em ${abbrev(first)} · termina em ${abbrev(second)}`)).toBeVisible();
+  await page.getByLabel("Categoria").selectOption({ index: 1 });
+  await expectNoClipped(page);
+  await page.getByRole("button", { name: "Salvar Conta Fixa" }).click();
+  await expect(page.getByText("Conta salva")).toBeVisible();
+  await expect(page.getByRole("list", { name: "Contas fixas" })).toContainText(`Fies · até ${abbrev(second)}`);
+
+  const fies = page.getByRole("region", { name: "Contas a pagar" }).getByRole("listitem", { name: /^Fies/ });
+  for (const [shown, parcela] of [
+    [first, "2/3"],
+    [second, "última parcela"],
+  ]) {
+    await page.goto(`/mes?m=${shown}`);
+    await expect(fies).toContainText(`Fies · ${parcela}`);
+  }
+  await page.goto(`/mes?m=${after}`);
+  await expect(page.getByRole("region", { name: "Saldo hoje" })).toBeVisible();
+  await page.waitForLoadState("networkidle");
+  await expect(fies).toHaveCount(0);
+});
