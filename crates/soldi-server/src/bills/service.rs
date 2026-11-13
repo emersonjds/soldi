@@ -208,7 +208,9 @@ pub async fn update(
             "a parcelado bill ends on its last parcela",
         ));
     }
-    // D35: Parar keeps this month and any month paid ahead; Retomar after the end restarts D17.
+    // D35: Parar keeps this month and any month paid ahead; Retomar after the end restarts D17,
+    // and so does a plan on a stopped Fixo.
+    let ended = current.last_month.is_some_and(|last| last < this_month);
     let (last_month, restart) = match patch.active {
         Some(false) if current.active => {
             let paid = repo::last_paid(&mut conn, user.id, id).await?;
@@ -219,10 +221,11 @@ pub async fn update(
         }
         Some(true) if !current.active => {
             check_bill_kind(&mut conn, user, next.category_id).await?;
-            (
-                None,
-                current.last_month.is_some_and(|last| last < this_month),
-            )
+            (None, ended)
+        }
+        None if plan.is_some() && !current.active => {
+            check_bill_kind(&mut conn, user, next.category_id).await?;
+            (plan, ended)
         }
         _ => (plan.or(current.last_month), false),
     };

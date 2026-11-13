@@ -265,6 +265,25 @@ async fn d13_a_bill_owes_from_today_when_created_or_resumed(pool: PgPool) {
 }
 
 #[sqlx::test]
+async fn d17_a_stopped_fixo_turned_parcelado_owes_from_today(pool: PgPool) {
+    let ana = TestApp::signed_in(pool.clone(), "ana@example.com").await;
+    let created = create(&ana, rent(category_id(&ana, "Aluguel").await)).await;
+    let uri = bill_uri(&created);
+    ana.patch(&uri, json!({ "active": false })).await;
+    end_last_month(&pool).await;
+    set_active_since(&pool, "2026-01-01").await;
+
+    let last = this_month() + chrono::Months::new(2);
+    let (status, plan) = ana
+        .patch(&uri, json!({ "installments": 3, "last_month": last }))
+        .await;
+
+    assert_eq!(status, StatusCode::OK, "{plan}");
+    assert_eq!(plan["active"], true);
+    assert_eq!(active_since(&pool).await, soldi_server::today_sao_paulo());
+}
+
+#[sqlx::test]
 async fn d35_a_stopped_bill_pays_its_own_months_and_refuses_later_ones(pool: PgPool) {
     let ana = TestApp::signed_in(pool, "ana@example.com").await;
     let bia = ana.another_user("bia@example.com").await;
