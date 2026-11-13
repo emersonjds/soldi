@@ -8,6 +8,7 @@ import {
   CalendarDays,
   Check,
   CircleCheck,
+  CircleStop,
   CircleX,
   CreditCard,
   InfinityIcon,
@@ -33,7 +34,7 @@ import { CategoryChips, useCategoryChips } from "@/entities/category/category-ch
 import { useSettings } from "@/entities/settings/settings-query";
 import { ScopeRadio } from "@/entities/transaction/scope-radio";
 import { SeriesAllDialog } from "@/entities/transaction/series-all-dialog";
-import { type Every, repeatSummary, resizeLine, UNITS } from "@/entities/transaction/series-step";
+import { type Every, OPEN_LABEL, repeatSummary, resizeLine, UNITS } from "@/entities/transaction/series-step";
 import {
   type NewTransaction,
   type Scope,
@@ -126,6 +127,7 @@ const TransactionForm = ({
   onConvert,
   onDiscard,
   onDelete,
+  onOpenEnded,
 }: {
   initial: Draft;
   transaction?: Transaction;
@@ -136,6 +138,8 @@ const TransactionForm = ({
   onConvert?: (source: Source) => void;
   /** Excluir da Série...; absent, not offered. */
   onDelete?: () => void;
+  /** Parar recorrência (`false`) or Tornar sem fim (`true`) on a series member. */
+  onOpenEnded?: (openEnded: boolean) => void;
 }) => {
   const [draft, setDraft] = useState(initial);
   const [submitted, setSubmitted] = useState(false);
@@ -551,6 +555,17 @@ const TransactionForm = ({
           />
           {amountField}
           {monthsField}
+          {onOpenEnded && (
+            <Button
+              type="button"
+              variant="outline"
+              className="h-12 text-base"
+              onClick={() => onOpenEnded(!series.open_ended)}
+            >
+              {series.open_ended ? <CircleStop aria-hidden /> : <InfinityIcon aria-hidden />}
+              {series.open_ended ? "Parar recorrência" : "Tornar sem fim"}
+            </Button>
+          )}
           {dateField}
           {categoryField}
           {cardField}
@@ -705,6 +720,22 @@ export const TransactionSheet = ({
     );
   };
 
+  const setOpenEnded = (id: string, openEnded: boolean) => {
+    onOpenChange(false);
+    update.mutate(
+      { id, open_ended: openEnded },
+      {
+        onSuccess: () => {
+          if (openEnded) return toast.success("Série atualizada");
+          toast.success("Recorrência parada. Sai dos próximos meses.", {
+            action: { label: "Desfazer", onClick: () => setOpenEnded(id, true) },
+          });
+        },
+        onError: (error) => toast.error(problemMessage(error) ?? "Não foi possível salvar o lançamento."),
+      },
+    );
+  };
+
   // Lançar posts the entry first; Editar links the one that exists.
   const convert = async (source: Source, bill: BillPrefill) => {
     onOpenChange(false);
@@ -767,7 +798,9 @@ export const TransactionSheet = ({
         transaction?.series && (
           <p className="-mb-4 flex items-center gap-2 pr-12 font-medium text-primary text-sm">
             <InfinityIcon aria-hidden className="size-4" />
-            Parte de uma série de {transaction.series.total} {UNITS[transaction.series.every].many}
+            {transaction.series.open_ended
+              ? `Lançamento recorrente, ${OPEN_LABEL[transaction.series.every].toLowerCase()}`
+              : `Parte de uma série de ${transaction.series.total} ${UNITS[transaction.series.every].many}`}
           </p>
         )
       }
@@ -783,6 +816,7 @@ export const TransactionSheet = ({
         onSave={save}
         onConvert={billSheet && setConverting}
         onDiscard={() => onOpenChange(false)}
+        onOpenEnded={transaction?.series ? (openEnded) => setOpenEnded(transaction.id, openEnded) : undefined}
         onDelete={
           onDelete &&
           (() => {

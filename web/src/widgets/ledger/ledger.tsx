@@ -15,6 +15,7 @@ import { billKey } from "@/entities/month/forecast-alert";
 import { visibleDays } from "@/entities/month/schedule";
 import { ScopeRadio } from "@/entities/transaction/scope-radio";
 import { SeriesAllDialog } from "@/entities/transaction/series-all-dialog";
+import { OPEN_LABEL } from "@/entities/transaction/series-step";
 import {
   type Scope,
   type Transaction,
@@ -135,9 +136,17 @@ const Row = ({ transaction, entry, cause, onOpen }: RowProps) => (
           {transaction.series && (
             <>
               <span aria-hidden className="rounded-full bg-muted px-2 font-medium text-foreground">
-                {`↻ ${KIND_LABEL[transaction.kind]} · ${transaction.series.position}/${transaction.series.total}`}
+                {`↻ ${KIND_LABEL[transaction.kind]} · ${
+                  transaction.series.open_ended
+                    ? OPEN_LABEL[transaction.series.every]
+                    : `${transaction.series.position}/${transaction.series.total}`
+                }`}
               </span>
-              <span className="sr-only">{`${transaction.series.position} de ${transaction.series.total}`}</span>
+              <span className="sr-only">
+                {transaction.series.open_ended
+                  ? OPEN_LABEL[transaction.series.every]
+                  : `${transaction.series.position} de ${transaction.series.total}`}
+              </span>
             </>
           )}
         </span>

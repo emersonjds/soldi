@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Toaster } from "sonner";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -844,6 +844,86 @@ describe("TransactionSheet", () => {
     const body = await sent("PATCH");
     expect(body).not.toHaveProperty("repeat_months");
     expect(body).not.toHaveProperty("open_ended");
+  });
+
+  describe("Parar recorrência and Tornar sem fim", () => {
+    const open = { ...MEMBER, series: { ...MEMBER.series, open_ended: true } };
+    const patches = (requests: Request[]) => requests.filter((request) => request.method === "PATCH");
+
+    it("stops an open member from this one on, toasts, and Desfazer reopens it", async () => {
+      const { requests } = setup({ transaction: open }, resize);
+
+      expect(await screen.findByText("Lançamento recorrente, todo mês")).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Tornar sem fim" })).not.toBeInTheDocument();
+      const stop = screen.getByRole("button", { name: "Parar recorrência" });
+      expect(stop).toHaveClass("h-12", "text-base");
+      await userEvent.click(stop);
+
+      expect(await screen.findByText("Recorrência parada. Sai dos próximos meses.")).toBeInTheDocument();
+      const [first] = patches(requests);
+      expect(new URL(first.url).searchParams.get("scope")).toBeNull();
+      expect(await first.json()).toEqual({ open_ended: false });
+
+      // The sheet stays open under a mocked onOpenChange; its overlay blocks pointer events.
+      fireEvent.click(screen.getByRole("button", { name: "Desfazer" }));
+      await waitFor(() => expect(patches(requests)).toHaveLength(2));
+      expect(await patches(requests)[1].json()).toEqual({ open_ended: true });
+    });
+
+    it("reads a weekly open member as toda semana", async () => {
+      setup({ transaction: { ...open, series: { ...open.series, every: "week" as const } } }, resize);
+
+      expect(await screen.findByText("Lançamento recorrente, toda semana")).toBeInTheDocument();
+    });
+
+    it("shows its fixed copy when the stop would touch a paid fatura, never the server's", async () => {
+      setup(
+        { transaction: open },
+        {
+          [`PATCH /api/transactions/${MEMBER.id}`]: {
+            status: 422,
+            body: { type: "urn:soldi:error:fatura-paid", title: "Paid.", status: 422, detail: "Server words." },
+          },
+        },
+      );
+
+      await userEvent.click(await screen.findByRole("button", { name: "Parar recorrência" }));
+
+      expect(await screen.findByText("Essa fatura já foi paga.")).toBeInTheDocument();
+      expect(screen.queryByText("Server words.")).not.toBeInTheDocument();
+    });
+
+    it("falls back to the generic copy on any other refusal", async () => {
+      setup(
+        { transaction: open },
+        { [`PATCH /api/transactions/${MEMBER.id}`]: { status: 500, body: problem(500, "Boom") } },
+      );
+
+      await userEvent.click(await screen.findByRole("button", { name: "Parar recorrência" }));
+
+      expect(await screen.findByText("Não foi possível salvar o lançamento.")).toBeInTheDocument();
+    });
+
+    it("turns a bounded member into an open series", async () => {
+      const { sent } = setup({ transaction: MEMBER }, resize);
+
+      expect(await screen.findByText("Parte de uma série de 12 meses")).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Parar recorrência" })).not.toBeInTheDocument();
+      const turn = screen.getByRole("button", { name: "Tornar sem fim" });
+      expect(turn).toHaveClass("h-12", "text-base");
+      await userEvent.click(turn);
+
+      expect(await sent("PATCH")).toEqual({ open_ended: true });
+      expect(await screen.findByText("Série atualizada")).toBeInTheDocument();
+    });
+
+    it("offers neither on an entry outside a series", async () => {
+      setup({ transaction: ALUGUEL_ROW });
+
+      await screen.findByLabelText("Observação");
+      expect(screen.queryByRole("button", { name: "Parar recorrência" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Tornar sem fim" })).not.toBeInTheDocument();
+    });
   });
 
   it("saves an edit to the only member left in a series without a count or a scope to pick", async () => {

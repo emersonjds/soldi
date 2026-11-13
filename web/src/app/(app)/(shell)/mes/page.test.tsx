@@ -616,6 +616,31 @@ describe("Mês", () => {
     expect(within(row).getByText("3 de 12")).toHaveClass("sr-only");
   });
 
+  it.each([
+    ["month", "Todo mês"],
+    ["week", "Toda semana"],
+    ["year", "Todo ano"],
+  ] as const)("marks an open %s series member with no end", async (every, label) => {
+    open({
+      "GET /api/transactions": {
+        status: 200,
+        body: [
+          {
+            ...TRANSACTIONS[1],
+            series: { id: "s1", position: 3, total: 12, last_date: "2027-08-04", open_ended: true, every },
+          },
+        ],
+      },
+    });
+
+    const row = await within(await screen.findByRole("region", { name: "Lançamentos" })).findByRole("button", {
+      name: /Aluguel/,
+    });
+    expect(within(row).getByText(`↻ Saída · ${label}`)).toHaveAttribute("aria-hidden", "true");
+    expect(within(row).getByText(label)).toHaveClass("sr-only");
+    expect(row).not.toHaveTextContent("3/12");
+  });
+
   it("asks how much of a series to delete, then deletes without Desfazer", async () => {
     const member = {
       ...TRANSACTIONS[1],
