@@ -342,11 +342,6 @@ async fn d35_a_parcelado_bill_edits_its_plan_but_never_hides_a_paid_month(pool: 
         ),
         (&uri, json!({ "installments": 6 }), "last_month"),
         (&uri, json!({ "active": false }), "active"),
-        (
-            &bill_uri(&fixo),
-            json!({ "installments": 6, "last_month": month(2) }),
-            "installments",
-        ),
     ] {
         let (status, problem) = ana.patch(uri, body.clone()).await;
         assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
@@ -363,6 +358,17 @@ async fn d35_a_parcelado_bill_edits_its_plan_but_never_hides_a_paid_month(pool: 
             &shorter["active"]
         ),
         (&json!(4), &json!(month(1).to_string()), &json!(true))
+    );
+    let (status, fies) = ana
+        .patch(
+            &bill_uri(&fixo),
+            json!({ "installments": 6, "last_month": month(2) }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{fies}");
+    assert_eq!(
+        (&fies["installments"], &fies["last_month"]),
+        (&json!(6), &json!(month(2).to_string()))
     );
     let cards = category_id(&ana, "Cartão").await;
     let (status, card) = ana

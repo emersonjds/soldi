@@ -3900,7 +3900,7 @@
               "null"
             ],
             "format": "int32",
-            "description": "Only on a parcelado bill, sent with `last_month`.",
+            "description": "Sent with `last_month`; turns a conta fixa parcelado or edits its parcelas. Not on a card.",
             "maximum": 60,
             "minimum": 2
           },
@@ -3910,7 +3910,7 @@
               "null"
             ],
             "format": "date",
-            "description": "Only on a parcelado bill, sent with `installments`; not before the latest paid month."
+            "description": "Sent with `installments`; not before the latest paid month."
           },
           "name": {
             "type": [

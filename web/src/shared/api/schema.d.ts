@@ -1159,12 +1159,12 @@ export interface components {
             due_day?: number | null;
             /**
              * Format: int32
-             * @description Only on a parcelado bill, sent with `last_month`.
+             * @description Sent with `last_month`; turns a conta fixa parcelado or edits its parcelas. Not on a card.
              */
             installments?: number | null;
             /**
              * Format: date
-             * @description Only on a parcelado bill, sent with `installments`; not before the latest paid month.
+             * @description Sent with `installments`; not before the latest paid month.
              */
             last_month?: string | null;
             name?: string | null;

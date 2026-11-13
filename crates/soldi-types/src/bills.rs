@@ -74,11 +74,11 @@ pub struct UpdateBill {
     #[serde(default)]
     #[schema(minimum = 1, maximum = 31)]
     pub closing_day: Option<i16>,
-    /// Only on a parcelado bill, sent with `last_month`.
+    /// Sent with `last_month`; turns a conta fixa parcelado or edits its parcelas. Not on a card.
     #[serde(default)]
     #[schema(minimum = 2, maximum = 60)]
     pub installments: Option<i16>,
-    /// Only on a parcelado bill, sent with `installments`; not before the latest paid month.
+    /// Sent with `installments`; not before the latest paid month.
     #[serde(default)]
     pub last_month: Option<chrono::NaiveDate>,
 }

@@ -185,12 +185,6 @@ pub async fn update(
         return Err(domain::fatura_paid());
     }
     let plan = if patch.installments.is_some() || patch.last_month.is_some() {
-        if current.installments.is_none() {
-            return Err(AppError::invalid(
-                "installments",
-                "only a parcelado bill has parcelas",
-            ));
-        }
         let (Some(n), Some(last)) = (patch.installments, patch.last_month) else {
             return Err(AppError::invalid(
                 "last_month",
