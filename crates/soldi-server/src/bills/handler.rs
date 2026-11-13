@@ -82,7 +82,7 @@ pub async fn create_bill(
         (status = 200, body = Bill, description = "The bill after the change; absent fields stay as they are"),
         (status = 401, body = Problem, content_type = "application/problem+json"),
         (status = 404, body = Problem, content_type = "application/problem+json", description = "Missing, archived or another user's"),
-        (status = 422, body = Problem, content_type = "application/problem+json", description = "Same rules as create, on the bill after the change; `closing_day` on a conta fixa, `active: false` on a card, `active` on a parcelado bill; `installments` or `last_month` on a bill that is not parcelado, sent apart, or `last_month` before the latest paid month; `fatura-paid` when a card's `closing_day` changes while a fatura from this month on is paid (D30b)")))]
+        (status = 422, body = Problem, content_type = "application/problem+json", description = "Same rules as create, on the bill after the change; `closing_day` on a conta fixa, `active: false` on a card, `active` on a parcelado bill or with `installments`/`last_month`; `installments` or `last_month` on a card, sent apart, or `last_month` before the latest paid month; `fatura-paid` when a card's `closing_day` changes while a fatura from this month on is paid (D30b)")))]
 pub async fn update_bill(
     State(state): State<AppState>,
     user: CurrentUser,
