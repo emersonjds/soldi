@@ -79,8 +79,8 @@ test.describe("on a touch screen", () => {
 
     await page.getByRole("navigation", { name: "Navegação principal" }).getByRole("button", { name: "Lançar" }).click();
     const launch = page.getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ });
-    await launch.getByRole("switch", { name: "Repetir lançamento (Série)" }).click();
-    await launch.getByRole("radio", { name: "12×" }).click();
+    await launch.getByRole("switch", { name: "Recorrente" }).click();
+    await launch.getByRole("radio", { name: "12", exact: true }).click();
     await expect(launch.getByRole("button", { name: "Apagar" })).toBeVisible();
     expect(await launch.evaluate((sheet) => sheet.scrollHeight > sheet.clientHeight)).toBe(true);
     await launch.evaluate((sheet) => sheet.scrollTo(0, 0));

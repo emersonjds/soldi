@@ -6,10 +6,13 @@ use super::domain::{self, MonthInput};
 use super::repo;
 use crate::error::AppError;
 use crate::extract::CurrentUser;
-use crate::settings;
+use crate::{settings, transactions};
 
 pub async fn get(pool: &PgPool, user: &CurrentUser, month: &str) -> Result<MonthView, AppError> {
     let month = domain::parse_month(month)?;
+    let today = crate::today_sao_paulo();
+    let until = transactions::domain::open_until(today, domain::month_end(month));
+    transactions::service::extend_open_series(pool, user, until).await?;
     let mut conn = pool.acquire().await?;
     let settings = settings::repo::find(&mut conn, user.id).await?;
     let opening = settings.opening_date;
@@ -38,13 +41,15 @@ pub async fn get(pool: &PgPool, user: &CurrentUser, month: &str) -> Result<Month
         bills,
         payments,
         saved,
-        today: crate::today_sao_paulo(),
+        today,
     }))
 }
 
-/// D16: 4 queries whatever the horizon.
+/// D16: 4 queries whatever the horizon, after D36 growth (1 more, writes only when behind).
 pub async fn forecast(pool: &PgPool, user: &CurrentUser) -> Result<Forecast, AppError> {
     let today = crate::today_sao_paulo();
+    let until = transactions::domain::open_until(today, domain::horizon_end(today));
+    transactions::service::extend_open_series(pool, user, until).await?;
     let mut conn = pool.acquire().await?;
     let settings = settings::repo::find(&mut conn, user.id).await?;
     let opening = settings.opening_date;

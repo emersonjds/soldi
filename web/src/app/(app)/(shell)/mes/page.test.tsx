@@ -599,7 +599,10 @@ describe("Mês", () => {
       "GET /api/transactions": {
         status: 200,
         body: [
-          { ...TRANSACTIONS[1], series: { id: "s1", position: 3, total: 12, last_date: "2027-08-04", every: "month" } },
+          {
+            ...TRANSACTIONS[1],
+            series: { id: "s1", position: 3, total: 12, last_date: "2027-08-04", open_ended: false, every: "month" },
+          },
         ],
       },
     });
@@ -613,10 +616,35 @@ describe("Mês", () => {
     expect(within(row).getByText("3 de 12")).toHaveClass("sr-only");
   });
 
+  it.each([
+    ["month", "Todo mês"],
+    ["week", "Toda semana"],
+    ["year", "Todo ano"],
+  ] as const)("marks an open %s series member with no end", async (every, label) => {
+    open({
+      "GET /api/transactions": {
+        status: 200,
+        body: [
+          {
+            ...TRANSACTIONS[1],
+            series: { id: "s1", position: 3, total: 12, last_date: "2027-08-04", open_ended: true, every },
+          },
+        ],
+      },
+    });
+
+    const row = await within(await screen.findByRole("region", { name: "Lançamentos" })).findByRole("button", {
+      name: /Aluguel/,
+    });
+    expect(within(row).getByText(`↻ Saída · ${label}`)).toHaveAttribute("aria-hidden", "true");
+    expect(within(row).getByText(label)).toHaveClass("sr-only");
+    expect(row).not.toHaveTextContent("3/12");
+  });
+
   it("asks how much of a series to delete, then deletes without Desfazer", async () => {
     const member = {
       ...TRANSACTIONS[1],
-      series: { id: "s1", position: 3, total: 12, last_date: "2027-08-04", every: "month" },
+      series: { id: "s1", position: 3, total: 12, last_date: "2027-08-04", open_ended: false, every: "month" },
     };
     const requests = open({
       "GET /api/transactions": { status: 200, body: [member] },
@@ -651,7 +679,7 @@ describe("Mês", () => {
   it("deletes the whole series from member 2 after asking", async () => {
     const member = {
       ...TRANSACTIONS[1],
-      series: { id: "s1", position: 2, total: 12, last_date: "2027-09-04", every: "month" },
+      series: { id: "s1", position: 2, total: 12, last_date: "2027-09-04", open_ended: false, every: "month" },
     };
     const requests = open({
       "GET /api/transactions": { status: 200, body: [member] },
@@ -680,7 +708,7 @@ describe("Mês", () => {
   it("deletes only this member by default", async () => {
     const member = {
       ...TRANSACTIONS[1],
-      series: { id: "s1", position: 1, total: 2, last_date: "2026-12-04", every: "month" },
+      series: { id: "s1", position: 1, total: 2, last_date: "2026-12-04", open_ended: false, every: "month" },
     };
     open({
       "GET /api/transactions": { status: 200, body: [member] },
@@ -701,10 +729,35 @@ describe("Mês", () => {
     expect(screen.queryByRole("button", { name: "Desfazer" })).not.toBeInTheDocument();
   });
 
+  it("deletes the only member of a series without asking which", async () => {
+    const member = {
+      ...TRANSACTIONS[1],
+      series: { id: "s1", position: 1, total: 1, last_date: "2026-11-04", open_ended: false, every: "month" },
+    };
+    const requests = open({
+      "GET /api/transactions": { status: 200, body: [member] },
+      [`DELETE /api/transactions/${member.id}`]: { status: 204 },
+    });
+
+    await userEvent.click(
+      await within(await screen.findByRole("region", { name: "Lançamentos" })).findByRole("button", {
+        name: /Aluguel/,
+      }),
+    );
+    const actions = await screen.findByRole("dialog", { name: "Aluguel" });
+    await userEvent.click(within(actions).getByRole("button", { name: "Excluir" }));
+    expect(within(actions).queryByRole("radiogroup", { name: "Excluir quais?" })).not.toBeInTheDocument();
+    await userEvent.click(within(actions).getByRole("button", { name: "Excluir" }));
+
+    expect(await screen.findByText("Lançamento excluído")).toBeInTheDocument();
+    const deleted = requests.find((request) => request.method === "DELETE");
+    expect(new URL(deleted?.url ?? "").searchParams.get("scope")).toBe("this");
+  });
+
   it("opens the delete scope from Excluir da Série... in the series sheet", async () => {
     const member = {
       ...TRANSACTIONS[1],
-      series: { id: "s1", position: 3, total: 12, last_date: "2027-08-04", every: "month" },
+      series: { id: "s1", position: 3, total: 12, last_date: "2027-08-04", open_ended: false, every: "month" },
     };
     open({ "GET /api/transactions": { status: 200, body: [member] } });
 

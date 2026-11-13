@@ -21,9 +21,59 @@ pub async fn list(
     category_id: Option<Uuid>,
 ) -> Result<Vec<Transaction>, AppError> {
     let first = months::domain::parse_month(month)?;
-    let mut conn = pool.acquire().await?;
     let to = months::domain::month_end(first);
+    let until = domain::open_until(crate::today_sao_paulo(), to);
+    extend_open_series(pool, user, until).await?;
+    let mut conn = pool.acquire().await?;
     Ok(repo::list(&mut conn, user.id, first, to, category_id).await?)
+}
+
+/// D36: grows the user's open series through `until`, copying each one's last member under its lock.
+pub async fn extend_open_series(
+    pool: &PgPool,
+    user: &CurrentUser,
+    until: NaiveDate,
+) -> Result<(), AppError> {
+    let behind = repo::open_series_behind(&mut *pool.acquire().await?, user.id, until).await?;
+    for id in behind {
+        let mut tx = pool.begin().await?;
+        let Some(series) = repo::find(&mut tx, user.id, id)
+            .await?
+            .and_then(|last| last.series)
+        else {
+            continue;
+        };
+        repo::lock_series(&mut tx, series.id).await?;
+        let end = repo::series_end(&mut tx, user.id, series.id).await?;
+        // Re-read under the lock: a concurrent read may have grown it, or Parar série closed it.
+        let Some(last) = repo::find(&mut tx, user.id, id)
+            .await?
+            .filter(|last| last.series.as_ref().is_some_and(|s| s.open_ended))
+        else {
+            continue;
+        };
+        let mut dates = domain::open_dates(series.every, &end, until)?;
+        // ponytail: D30, growth stops before the first paid fatura, one query per dropped date;
+        // a "first paid fatura from" query if a long weekly series meets one.
+        while !faturas_open(&mut tx, user, last.card_id, &dates).await? {
+            dates.pop();
+        }
+        if !dates.is_empty() {
+            let amounts = vec![last.amount; dates.len()];
+            repo::insert_copies(
+                &mut tx,
+                user.id,
+                &domain::copy_of(&last),
+                series.id,
+                series.every,
+                &dates,
+                &amounts,
+            )
+            .await?;
+        }
+        tx.commit().await?;
+    }
+    Ok(())
 }
 
 pub async fn count(pool: &PgPool, user: &CurrentUser, period: &str) -> Result<i64, AppError> {
@@ -132,6 +182,23 @@ async fn check_cofrinho_active(
     Ok(())
 }
 
+/// D30b: whether no spend on `card_id` dated one of `dates` lands in a paid fatura.
+async fn faturas_open(
+    conn: &mut PgConnection,
+    user: &CurrentUser,
+    card_id: Option<Uuid>,
+    dates: &[NaiveDate],
+) -> Result<bool, AppError> {
+    match check_fatura_open(conn, user, card_id, dates).await {
+        Ok(()) => Ok(true),
+        Err(AppError::Rule {
+            slug: "fatura-paid",
+            ..
+        }) => Ok(false),
+        Err(error) => Err(error),
+    }
+}
+
 /// D30b: refuses when the fatura of any `(card, date)` is paid; one check per card.
 async fn check_faturas_open(
     conn: &mut PgConnection,
@@ -176,23 +243,35 @@ pub async fn create(
         check_card(&mut tx, user, card_id).await?;
     }
     check_opening(&mut tx, user, input.date).await?;
-    let count = input.repeat_months.or(input.installments);
+    let skip = input.first_installment.map_or(0, |first| first - 1);
+    let count = input
+        .repeat_months
+        .or(input.installments.map(|parcelas| parcelas - skip));
     let every = input.repeat_every.unwrap_or_default();
     let copies = match count {
         Some(count) => domain::repeat_dates(input.date, count, every)?,
+        None if input.open_ended => {
+            let until = domain::open_until(
+                crate::today_sao_paulo(),
+                months::domain::month_end(input.date),
+            );
+            domain::open_dates(every, &[input.date], until)?
+        }
         None => vec![],
     };
     let dates = [&[input.date], copies.as_slice()].concat();
     check_fatura_open(&mut tx, user, input.card_id, &dates).await?;
     let amounts = match input.installments {
-        Some(parcelas) => domain::installment_amounts(input.amount, parcelas),
-        None => vec![input.amount; usize::try_from(count.unwrap_or(1)).unwrap_or(1)],
+        Some(parcelas) => domain::installment_amounts(input.amount, parcelas)
+            [usize::try_from(skip).unwrap_or(0)..]
+            .to_vec(),
+        None => vec![input.amount; dates.len()],
     };
     let first = CreateTransaction {
         amount: amounts[0],
         ..input
     };
-    let series_id = count.map(|_| Uuid::new_v4());
+    let series_id = (count.is_some() || first.open_ended).then(Uuid::new_v4);
     let id = repo::insert(
         &mut tx,
         user.id,
@@ -204,7 +283,7 @@ pub async fn create(
     )
     .await?;
     let mut series = None;
-    if let (Some(count), Some(series_id)) = (count, series_id) {
+    if let Some(series_id) = series_id {
         repo::insert_copies(
             &mut tx,
             user.id,
@@ -217,10 +296,11 @@ pub async fn create(
         .await?;
         series = Some(TransactionSeries {
             id: series_id,
-            position: 1,
-            total: count.into(),
+            position: i64::from(1 + skip),
+            total: i64::try_from(dates.len()).unwrap_or(0) + i64::from(skip),
             last_date: copies.last().copied().unwrap_or(first.date),
             every,
+            open_ended: first.open_ended,
         });
     }
     tx.commit().await?;
@@ -259,8 +339,14 @@ pub async fn update(
         .series
         .as_ref()
         .map_or(RepeatEvery::Month, |series| series.every);
-    if patch.repeat_months.is_some() {
+    if patch.repeat_months.is_some() || patch.open_ended.is_some() {
         domain::check_repeatable(&current)?;
+    }
+    if patch.repeat_months.is_some() && current.series.as_ref().is_some_and(|s| s.open_ended) {
+        return Err(AppError::invalid(
+            "repeat_months",
+            "an open series has no length; stop it instead",
+        ));
     }
     if current.recurring_bill_id.is_some() && patch.kind.is_some_and(|kind| kind != current.kind) {
         return Err(AppError::invalid(
@@ -280,6 +366,8 @@ pub async fn update(
         repeat_months: patch.repeat_months,
         repeat_every: patch.repeat_every.filter(|_| current.series.is_none()),
         installments: None,
+        first_installment: None,
+        open_ended: patch.open_ended == Some(true),
         card_id: patch.card_id.unwrap_or(current.card_id),
     })?;
     domain::check_kind(next.kind, &category)?;
@@ -356,6 +444,46 @@ pub async fn update(
             repo::set_dates(&mut tx, user.id, &ids, &dates).await?;
         }
     }
+    // D28: an open series grows onto its card, which must still be live.
+    if let Some(card_id) = next.card_id.filter(|_| patch.open_ended == Some(true)) {
+        check_card(&mut tx, user, card_id).await?;
+        // D30b: growth through the horizon must not land in a paid fatura.
+        let (end, every) = match &current.series {
+            Some(series) => (
+                repo::series_end(&mut tx, user.id, series.id).await?,
+                series.every,
+            ),
+            None => (vec![next.date], next.repeat_every.unwrap_or_default()),
+        };
+        let until = domain::open_until(
+            crate::today_sao_paulo(),
+            months::domain::month_end(next.date),
+        );
+        let dates = domain::open_dates(every, &end, until)?;
+        check_fatura_open(&mut tx, user, Some(card_id), &dates).await?;
+    }
+    match (patch.open_ended, &current.series) {
+        (Some(true), Some(series)) if !series.open_ended => {
+            repo::set_open(&mut tx, user.id, series.id, true).await?;
+        }
+        (Some(true), None) => {
+            let every = next.repeat_every.unwrap_or_default();
+            if !repo::set_series(&mut tx, user.id, id, Uuid::new_v4(), every, true).await? {
+                return Err(domain::already_repeated());
+            }
+        }
+        (Some(false), Some(series)) if series.open_ended => {
+            let after = repo::members_from(&mut tx, user.id, series.id, next.date).await?;
+            let after = after
+                .into_iter()
+                .filter(|(member, date, _)| (*date, *member) > (next.date, id))
+                .map(|(_, date, card_id)| (card_id, date));
+            check_faturas_open(&mut tx, user, after).await?;
+            repo::delete_after(&mut tx, user.id, series.id, next.date, id).await?;
+            repo::set_open(&mut tx, user.id, series.id, false).await?;
+        }
+        _ => {}
+    }
     match (next.repeat_months, &current.series) {
         (Some(months), Some(series)) => resize(&mut tx, user, id, series.id, months, &next).await?,
         (Some(months), None) => {
@@ -364,7 +492,7 @@ pub async fn update(
             }
             let series_id = Uuid::new_v4();
             let every = next.repeat_every.unwrap_or_default();
-            if !repo::set_series(&mut tx, user.id, id, series_id, every).await? {
+            if !repo::set_series(&mut tx, user.id, id, series_id, every, false).await? {
                 return Err(domain::already_repeated());
             }
             let dates = domain::repeat_dates(next.date, months, every)?;
@@ -457,6 +585,7 @@ pub async fn delete(
     match reach {
         Some((series_id, from)) => {
             repo::delete_following(&mut tx, user.id, series_id, from).await?;
+            repo::set_open(&mut tx, user.id, series_id, false).await?;
         }
         None => {
             repo::delete(&mut tx, user.id, id).await?;

@@ -541,6 +541,7 @@ export interface components {
          *     last day of a shorter month.
          */
         Bill: {
+            /** @description False once Parar ended a bill without `installments`. */
             active: boolean;
             /** @description Always set on a conta fixa, never on a card. */
             amount?: string | null;
@@ -555,6 +556,16 @@ export interface components {
             due_day: number;
             /** Format: uuid */
             id: string;
+            /**
+             * Format: int32
+             * @description Set on a parcelado bill: `last_month` holds parcela `installments`.
+             */
+            installments?: number | null;
+            /**
+             * Format: date
+             * @description The last month the bill owes (its first day); null: no end.
+             */
+            last_month?: string | null;
             name: string;
         };
         /**
@@ -575,6 +586,16 @@ export interface components {
             due_date: string;
             /** @description The category's lucide icon. */
             icon: string;
+            /**
+             * Format: int32
+             * @description The parcela of a parcelado bill this row is, counted in the row's own month (D35).
+             */
+            installment?: number | null;
+            /**
+             * Format: int32
+             * @description The parcelado bill's number of parcelas.
+             */
+            installments?: number | null;
             /** @description A credit card's fatura (D28). */
             is_card: boolean;
             /**
@@ -743,6 +764,17 @@ export interface components {
              * @description 1 to 31.
              */
             due_day: number;
+            /**
+             * Format: int32
+             * @description 2 to 60; makes the bill parcelado. Needs `last_month`; not on a card.
+             */
+            installments?: number | null;
+            /**
+             * Format: date
+             * @description A month's first day, from this month to `installments` months ahead: the month of the
+             *     last parcela. Only with `installments`.
+             */
+            last_month?: string | null;
             /** @description 1 to 100 characters. */
             name: string;
         };
@@ -788,6 +820,11 @@ export interface components {
             date: string;
             /**
              * Format: int32
+             * @description The parcela this entry is, 1 to `installments`; earlier ones are not written. Absent: 1.
+             */
+            first_installment?: number | null;
+            /**
+             * Format: int32
              * @description 2 to 60 monthly parcelas splitting `amount`, the total: each `amount / n` truncated to
              *     cents, the last takes the remainder (D16); dated like `repeat_months`; not with it.
              */
@@ -796,6 +833,11 @@ export interface components {
             kind: components["schemas"]["CategoryKind"];
             /** @description Up to 500 characters; blank means none. */
             note?: string | null;
+            /**
+             * @description Repeats every `repeat_every` with no end; members are written ahead as months are read
+             *     (D36). `income` or `daily` (a card spend included), not with `repeat_months` or `installments`.
+             */
+            open_ended?: boolean;
             repeat_every?: components["schemas"]["RepeatEvery"] | null;
             /**
              * Format: int32
@@ -1087,17 +1129,24 @@ export interface components {
              * @description The date of the series' last member; growth continues after it, by `every`.
              */
             last_date: string;
+            /** @description Grows with no end: members are written ahead as months are read (D36). */
+            open_ended: boolean;
             /**
              * Format: int64
-             * @description 1-based, by date.
+             * @description 1-based, by date; counts the parcelas paid before the first written one.
              */
             position: number;
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description The members, the parcelas paid before the first written one included; on an open series,
+             *     the members written so far.
+             */
             total: number;
         };
         /**
-         * @description Absent fields stay as they are. `active: false` keeps the bill out of the month; a card has
-         *     no pause. `closing_day` changes only on a card.
+         * @description Absent fields stay as they are. `active: false` is Parar: the bill owes up to this month or its
+         *     latest paid month; `true` is Retomar. Refused on a card and on a parcelado bill. `closing_day`
+         *     changes only on a card.
          */
         UpdateBill: {
             active?: boolean | null;
@@ -1108,6 +1157,16 @@ export interface components {
             closing_day?: number | null;
             /** Format: int32 */
             due_day?: number | null;
+            /**
+             * Format: int32
+             * @description Sent with `last_month`; turns a conta fixa parcelado or edits its parcelas. Not on a card.
+             */
+            installments?: number | null;
+            /**
+             * Format: date
+             * @description Sent with `installments`; not before the latest paid month.
+             */
+            last_month?: string | null;
             name?: string | null;
         };
         /**
@@ -1173,6 +1232,11 @@ export interface components {
             date?: string | null;
             kind?: components["schemas"]["CategoryKind"] | null;
             note?: string | null;
+            /**
+             * @description D36: `true` makes the entry's series, or the entry itself, Fixo with no end (Tornar fixo);
+             *     `false` on an open member deletes the later members and closes the series (Parar série).
+             */
+            open_ended?: boolean | null;
             repeat_every?: components["schemas"]["RepeatEvery"] | null;
             /**
              * Format: int32
@@ -1654,7 +1718,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Name not 1 to 100 characters, amount not above zero or with more than two places, missing on a conta fixa or present on a card (`amount`), `closing_day` not 1 to 31, due day not 1 to 31, `category_id` not one of the caller's active bill categories or, on a card, `Economia` or a cofrinho, or `cannot-become-bill` when the entry is not a `bill` entry, already a bill's payment, a resgate or a series member */
+            /** @description Name not 1 to 100 characters, amount not above zero or with more than two places, missing on a conta fixa or present on a card (`amount`), `closing_day` not 1 to 31, due day not 1 to 31, `category_id` not one of the caller's active bill categories or, on a card, `Economia` or a cofrinho, `installments` not 2 to 60, missing with `last_month` or on a card, `last_month` missing with `installments`, not a month's first day or not from this month to `installments` months ahead, or `cannot-become-bill` when the entry is not a `bill` entry, already a bill's payment, a resgate or a series member */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -1745,7 +1809,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Same rules as create, on the bill after the change; `closing_day` on a conta fixa, `active: false` on a card; `fatura-paid` when a card's `closing_day` changes while a fatura from this month on is paid (D30b) */
+            /** @description Same rules as create, on the bill after the change; `closing_day` on a conta fixa, `active: false` on a card, `active` on a parcelado bill or with `installments`/`last_month`; `installments` or `last_month` on a card, sent apart, or `last_month` before the latest paid month; `fatura-paid` when a card's `closing_day` changes while a fatura from this month on is paid (D30b) */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -1795,7 +1859,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Missing, paused, archived (a card stays payable) or another user's */
+            /** @description Missing, archived (a card stays payable) or another user's */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -1813,7 +1877,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description `date` outside `month`, `month` not `YYYY-MM`, `amount` missing on a card, amount not above zero or with more than two places, or a date before the opening date (`before-opening-date`) */
+            /** @description `date` outside `month`, `month` not `YYYY-MM`, `amount` missing on a card, amount not above zero or with more than two places, or a date before the opening date (`before-opening-date`); `bill-ended` for a month after the bill's `last_month` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -3002,7 +3066,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description The entry; with `repeat_months` or `installments`, the first of its series (parcela 1), the rest written in the same database transaction */
+            /** @description The entry; with `repeat_months` or `installments`, the first of its series (parcela `first_installment`, 1 when absent), the rest written in the same database transaction; with `open_ended`, the members through the forecast horizon (or the entry's month, when later), more as months are read (D36) */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -3028,7 +3092,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Amount not above zero or with more than two places, note over 500 characters, `card_id` on a non-`daily` entry or not one of the caller's unarchived cards, a kind other than the category's (`category_id`), `repeat_months` not 2 to 60, `installments` not 2 to 60, with `repeat_months`, or leaving a parcela at zero, `repeat_every` without `repeat_months` (`needs repeat_months`) or other than `month` with `installments` (`installments are monthly`), a date outside 2000 to 2100 or a series passing 2100 (`must keep every entry up to 2100`), a date before the opening date (`before-opening-date`), or `fatura-paid` when a spend on a card lands in an already paid fatura (D30b) */
+            /** @description Amount not above zero or with more than two places, note over 500 characters, `card_id` on a non-`daily` entry or not one of the caller's unarchived cards, a kind other than the category's (`category_id`), `repeat_months` not 2 to 60, `installments` not 2 to 60, with `repeat_months`, or leaving a parcela at zero, `first_installment` without `installments` (`needs installments`) or outside 1 to `installments`, `open_ended` with `repeat_months` or `installments` or on a `bill` entry, `repeat_every` without `repeat_months` or `open_ended` (`needs repeat_months`) or other than `month` with `installments` (`installments are monthly`), a date outside 2000 to 2100 or a series passing 2100 (`must keep every entry up to 2100`), a date before the opening date (`before-opening-date`), or `fatura-paid` when a spend on a card lands in an already paid fatura (D30b) */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -3128,7 +3192,7 @@ export interface operations {
     delete_transaction: {
         parameters: {
             query?: {
-                /** @description `following` also deletes the series' members dated after this one; `all` deletes every member (D33) */
+                /** @description `following` also deletes the series' members dated after this one and closes an open series (D36); `all` deletes every member (D33) */
                 scope?: components["schemas"]["Scope"];
             };
             header?: never;
@@ -3203,7 +3267,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description The entry after the change, with the series' new total; absent fields stay as they are */
+            /** @description The entry after the change, with the series' new total; absent fields stay as they are. `open_ended: true` opens the series (a standalone entry becomes its first member), grown on the next read; `open_ended: false` on an open member deletes the members after it and closes the series (D36); on a card, each grown member lands in the fatura of its own date and a series on an archived card stops growing (D28) */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -3238,7 +3302,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Same rules as create, on the entry after the change, `before-opening-date` included (an archived card it already carries stays allowed); with `repeat_months`, `repeat-not-allowed-on-bill-payment` or `repeat-not-allowed-on-cofrinho-withdrawal` on an entry outside a series, `validation` on `repeat_months` outside 2..60 or below this member's position, on `date` when the series would pass 2100 (`must keep every entry up to 2100`); `validation` on `repeat_every` when it differs from a member's series step (`a series keeps its step`) or comes without `repeat_months` outside a series (`needs repeat_months`); with `following` or `all` on a series member, `before-opening-date` when the earliest moved member would land before the opening date, `validation` on `date` when the new date leaves this entry's month (`must stay in this entry's month when the series moves`), or on a weekly series its ISO week (`must stay in this entry's week when the series moves`), when two of the moved members share a month (`must not move a series with two entries in one month`) or a week (`must not move a series with two entries in one week`), or when a moved member would pass 2100 (`must keep every entry up to 2100`); `archived-cofrinho` when the entry, or with `following` a later (with `all` any) series member, is a deposit into or a resgate from a deleted cofrinho; `fatura-paid` when the amount, date or card changes on this entry or, with `following` a later (with `all` any) member, and its fatura on its own card is paid, or the change lands it in a paid fatura of the card it ends on (D30b); nothing is written */
+            /** @description Same rules as create, on the entry after the change, `before-opening-date` included (an archived card it already carries stays allowed); with `repeat_months` or `open_ended`, `repeat-not-allowed-on-bill-payment` or `repeat-not-allowed-on-cofrinho-withdrawal` on an entry outside a series, `validation` on `repeat_months` outside 2..60, below this member's position or on a member of an open series (`an open series has no length; stop it instead`), on `date` when the series would pass 2100 (`must keep every entry up to 2100`); `validation` on `repeat_every` when it differs from a member's series step (`a series keeps its step`) or comes without `repeat_months` outside a series (`needs repeat_months`); with `following` or `all` on a series member, `before-opening-date` when the earliest moved member would land before the opening date, `validation` on `date` when the new date leaves this entry's month (`must stay in this entry's month when the series moves`), or on a weekly series its ISO week (`must stay in this entry's week when the series moves`), when two of the moved members share a month (`must not move a series with two entries in one month`) or a week (`must not move a series with two entries in one week`), or when a moved member would pass 2100 (`must keep every entry up to 2100`); `archived-cofrinho` when the entry, or with `following` a later (with `all` any) series member, is a deposit into or a resgate from a deleted cofrinho; `fatura-paid` when the amount, date or card changes on this entry or, with `following` a later (with `all` any) member, and its fatura on its own card is paid, or the change lands it in a paid fatura of the card it ends on, or `open_ended: false` would delete a later member of a paid fatura, or `open_ended: true` on a card would grow into a paid fatura (D30b); `validation` on `card_id` when `open_ended: true` meets an archived card; nothing is written */
             422: {
                 headers: {
                     [name: string]: unknown;

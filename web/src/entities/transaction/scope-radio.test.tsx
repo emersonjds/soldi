@@ -4,7 +4,14 @@ import { describe, expect, it, vi } from "vitest";
 
 import { ScopeRadio } from "./scope-radio";
 
-const SERIES = { id: "s1", position: 3, total: 12, last_date: "2027-09-04", every: "month" as const };
+const SERIES = {
+  id: "s1",
+  position: 3,
+  total: 12,
+  last_date: "2027-09-04",
+  open_ended: false,
+  every: "month" as const,
+};
 
 const renderAt = (position: number, mode: "edit" | "delete" = "edit", onChange = vi.fn()) =>
   render(
@@ -102,5 +109,19 @@ describe("ScopeRadio", () => {
       "Todos os 12 lançamentos da série.",
     );
     expect(screen.queryByText(/alterada/)).not.toBeInTheDocument();
+  });
+
+  it.each(["edit", "delete"] as const)("offers no scope on a one-member series (%s)", (mode) => {
+    const { container } = render(
+      <ScopeRadio
+        legend="Escopo"
+        mode={mode}
+        series={{ ...SERIES, position: 1, total: 1 }}
+        date="2026-11-04"
+        value="this"
+        onChange={vi.fn()}
+      />,
+    );
+    expect(container).toBeEmptyDOMElement();
   });
 });

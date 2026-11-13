@@ -14,7 +14,7 @@ const restLine = (rest: number) => {
   return `As outras ${rest} parcelas futuras continuam iguais.`;
 };
 
-/** `Só este lançamento` or the members from this one on, which is the whole series from the first; a line under each says which, in `mode`'s words. */
+/** `Só este lançamento` or the members from this one on, which is the whole series from the first; a line under each says which, in `mode`'s words. Nothing on a one-member series. */
 export const ScopeRadio = ({
   legend,
   mode,
@@ -33,6 +33,8 @@ export const ScopeRadio = ({
 }) => {
   const id = useId();
   const { position, total } = series;
+  // A one-member series has nothing else to scope over: the caller's default `this` stands.
+  if (total === 1) return null;
   const month = monthSlashYear(date);
   const only =
     mode === "edit"

@@ -6,6 +6,7 @@ import {
   dayMonth,
   isMonth,
   isoWeekStart,
+  monthAbbrev,
   monthName,
   monthYear,
   repeatDates,
@@ -28,6 +29,11 @@ describe("monthYear", () => {
   it("writes a deadline as the month and year", () => {
     expect(monthYear("2027-06-30")).toBe("jun 2027");
     expect(monthYear("2026-12-01")).toBe("dez 2026");
+  });
+
+  it("writes a month as mmm/aa", () => {
+    expect(monthAbbrev("2026-12-01")).toBe("dez/26");
+    expect(monthAbbrev("2030-01")).toBe("jan/30");
   });
 
   it("writes a date as DD/MM", () => {

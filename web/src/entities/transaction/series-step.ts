@@ -33,6 +33,9 @@ export const UNITS: Record<
   },
 };
 
+/** The chip of an open series, in place of `k/N`. */
+export const OPEN_LABEL: Record<Every, string> = { month: "Todo mês", week: "Toda semana", year: "Todo ano" };
+
 const year = (date: string, added: number) => String(Number(date.slice(0, 4)) + added);
 
 /** `repete todo dia 10 até out 2027` | `repete toda semana até 31 dez 2026` | `repete todo ano em 10 nov até 2037`. */

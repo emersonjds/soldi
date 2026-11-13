@@ -16,6 +16,7 @@ import {
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { hasEnded } from "@/entities/bill/bill-plan";
 import { type Bill, useArchiveBill, useBills, useUpdateBill } from "@/entities/bill/bill-queries";
 import { statusPill } from "@/entities/bill/bill-status";
 import { categoriesQuery, categoryLabel } from "@/entities/category/categories-query";
@@ -25,7 +26,7 @@ import { BillFormPanel, EditBillSheet } from "@/features/edit-bill/edit-bill-she
 import { useIsXl } from "@/hooks/use-xl";
 import { cn } from "@/lib/utils";
 import type { Schemas } from "@/shared/api/client";
-import { monthName, todayISO } from "@/shared/lib/date";
+import { monthAbbrev, monthName, todayISO } from "@/shared/lib/date";
 import { wholeShare } from "@/shared/lib/percent";
 import { cents, fromCents } from "@/shared/lib/tier";
 import { BrandButton } from "@/shared/ui/brand-button";
@@ -77,6 +78,10 @@ const Row = ({
 }) => {
   // Editar moves focus to the form, so the menu must not hand it back to ⋮; Radix holds it in the menu until it closes.
   const editing = useRef(false);
+  const parcelado = bill.installments != null;
+  let end: string | undefined;
+  if (bill.last_month && hasEnded(bill, todayISO())) end = `terminou em ${monthAbbrev(bill.last_month)}`;
+  else if (bill.last_month && parcelado) end = `até ${monthAbbrev(bill.last_month)}`;
   return (
     <li
       className={cn(
@@ -91,14 +96,20 @@ const Row = ({
       >
         <CategoryIcon icon={category?.icon ?? ""} color={category?.color ?? ""} />
         <span className="flex min-w-0 flex-col">
-          <span className="flex min-w-0 items-center gap-2">
+          <span className="flex min-w-0 flex-wrap items-center gap-x-2">
             <span
               className={cn("truncate font-semibold text-base", !active && "text-muted-foreground")}
               title={bill.name}
             >
               {bill.name}
             </span>
-            {!active && (
+            {end && (
+              <>
+                {" "}
+                <span className="whitespace-nowrap text-muted-foreground text-sm">· {end}</span>
+              </>
+            )}
+            {!active && !parcelado && (
               <span className={cn(statusPill, "min-h-6 shrink-0 bg-muted text-muted-foreground")}>Pausada</span>
             )}
           </span>
@@ -122,7 +133,7 @@ const Row = ({
         </span>
       )}
       <span className="flex items-center justify-end">
-        {hasAmount(bill) && (
+        {hasAmount(bill) && !parcelado && (
           <Switch
             aria-label={`Ativa: ${bill.name}`}
             checked={active}
@@ -286,7 +297,7 @@ export const BillList = ({ month }: { month: string }) => {
   const [filter, setFilter] = useState<Filter>("all");
   const [sort, setSort] = useState<Sort>("due");
 
-  const isActive = (bill: Bill) => toggled[bill.id] ?? bill.active;
+  const isActive = (bill: Bill) => (toggled[bill.id] ?? bill.active) && !hasEnded(bill, todayISO());
   const isSaving = (bill: Bill) => toggled[bill.id] !== undefined;
 
   const edit = (bill?: Bill) => {

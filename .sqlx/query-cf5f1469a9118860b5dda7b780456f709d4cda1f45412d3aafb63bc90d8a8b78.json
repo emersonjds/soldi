@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO transactions\n             (user_id, date, amount, kind, category_id, note, series_id, card_id, series_every,\n              series_open, series_offset)\n         SELECT $1, c.d, c.a, $4, $5, $6, $7, $8, $9, s.series_open, s.series_offset\n         FROM UNNEST($2::date[], $3::numeric[]) AS c(d, a)\n         CROSS JOIN (SELECT series_open, series_offset FROM transactions\n                     WHERE user_id = $1 AND series_id = $7 LIMIT 1) s",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "DateArray",
+        "NumericArray",
+        "Text",
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "cf5f1469a9118860b5dda7b780456f709d4cda1f45412d3aafb63bc90d8a8b78"
+}

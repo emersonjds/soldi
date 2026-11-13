@@ -19,8 +19,9 @@ pub fn check(input: CreateTransaction) -> Result<CreateTransaction, AppError> {
     let note = input.note.as_deref().map(check_note).transpose()?.flatten();
     input.repeat_months.map(check_repeat).transpose()?;
     check_installments(&input, amount)?;
+    check_open_ended(&input)?;
     match (input.repeat_every, input.repeat_months, input.installments) {
-        (Some(_), None, None) => {
+        (Some(_), None, None) if !input.open_ended => {
             return Err(AppError::invalid("repeat_every", "needs repeat_months"));
         }
         (Some(every), None, Some(_)) if every != RepeatEvery::Month => {
@@ -70,7 +71,10 @@ pub fn installment_amounts(total: Decimal, count: i16) -> Vec<Decimal> {
 
 fn check_installments(input: &CreateTransaction, amount: Decimal) -> Result<(), AppError> {
     let Some(count) = input.installments else {
-        return Ok(());
+        return match input.first_installment {
+            Some(_) => Err(AppError::invalid("first_installment", "needs installments")),
+            None => Ok(()),
+        };
     };
     if input.repeat_months.is_some() {
         return Err(AppError::invalid(
@@ -81,10 +85,39 @@ fn check_installments(input: &CreateTransaction, amount: Decimal) -> Result<(), 
     if !(2..=60).contains(&count) {
         return Err(AppError::invalid("installments", "must be 2 to 60"));
     }
+    if input
+        .first_installment
+        .is_some_and(|first| !(1..=count).contains(&first))
+    {
+        return Err(AppError::invalid(
+            "first_installment",
+            "must be 1 to installments",
+        ));
+    }
     if installment_amounts(amount, count)[0] <= Decimal::ZERO {
         return Err(AppError::invalid(
             "installments",
             "must leave every installment above zero",
+        ));
+    }
+    Ok(())
+}
+
+/// D36: a Fixo with no end is an Entrada or a Diário, a card's included; a Saída with no end is a conta fixa.
+fn check_open_ended(input: &CreateTransaction) -> Result<(), AppError> {
+    if !input.open_ended {
+        return Ok(());
+    }
+    if input.repeat_months.is_some() || input.installments.is_some() {
+        return Err(AppError::invalid(
+            "open_ended",
+            "cannot be combined with repeat_months or installments",
+        ));
+    }
+    if input.kind == CategoryKind::Bill {
+        return Err(AppError::invalid(
+            "open_ended",
+            "a Saída with no end is a conta fixa",
         ));
     }
     Ok(())
@@ -131,6 +164,34 @@ pub fn growth_dates(
             }))
         }
     }
+}
+
+/// D36: open series are written through the forecast horizon, or `viewed` when later, never past
+/// 60 months from today nor 2100.
+pub fn open_until(today: NaiveDate, viewed: NaiveDate) -> NaiveDate {
+    use crate::months::domain::horizon_end;
+    let cap = horizon_end(today.checked_add_months(Months::new(48)).unwrap_or(today));
+    let until = horizon_end(today).max(viewed).min(cap);
+    NaiveDate::from_ymd_opt(2100, 12, 31).map_or(until, |end| until.min(end))
+}
+
+/// D36: the members an open series still needs after `end` (its last members, last first) to reach `until`.
+pub fn open_dates(
+    every: RepeatEvery,
+    end: &[NaiveDate],
+    until: NaiveDate,
+) -> Result<Vec<NaiveDate>, AppError> {
+    use crate::months::domain::month_index;
+    let Some(&last) = end.first() else {
+        return Ok(Vec::new());
+    };
+    let steps = match every {
+        RepeatEvery::Month => month_index(until) - month_index(last),
+        RepeatEvery::Week => i32::try_from((until - last).num_days() / 7).unwrap_or(0),
+        RepeatEvery::Year => until.year() - last.year(),
+    };
+    let dates = growth_dates(every, end, u32::try_from(steps).unwrap_or(0))?;
+    Ok(dates.into_iter().filter(|date| *date <= until).collect())
 }
 
 /// M3 for a yearly series: a last member clamped on its month's last day takes the largest day of
@@ -377,6 +438,23 @@ pub fn transaction(
     }
 }
 
+/// The entry as a draft to copy: same day, amount, kind, category, note and card.
+pub fn copy_of(entry: &Transaction) -> CreateTransaction {
+    CreateTransaction {
+        date: entry.date,
+        amount: entry.amount,
+        kind: entry.kind,
+        category_id: entry.category.id,
+        note: entry.note.clone(),
+        repeat_months: None,
+        repeat_every: None,
+        installments: None,
+        first_installment: None,
+        open_ended: false,
+        card_id: entry.card_id,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -392,6 +470,8 @@ mod tests {
             repeat_months: None,
             repeat_every: None,
             installments: None,
+            first_installment: None,
+            open_ended: false,
             card_id: None,
         }
     }
@@ -440,6 +520,7 @@ mod tests {
             total: 2,
             last_date: date("2026-12-05"),
             every: RepeatEvery::Month,
+            open_ended: false,
         })
     }
 
@@ -918,6 +999,40 @@ mod tests {
         assert_eq!(
             field(check_kind(CategoryKind::Bill, &market)),
             "category_id"
+        );
+    }
+
+    #[test]
+    fn d36_open_series_reach_the_horizon_or_the_viewed_month_within_60_months() {
+        let today = date("2026-11-12");
+        assert_eq!(open_until(today, date("2026-11-30")), date("2027-10-31"));
+        assert_eq!(open_until(today, date("2028-03-31")), date("2028-03-31"));
+        assert_eq!(open_until(today, date("2040-01-31")), date("2031-10-31"));
+        assert_eq!(
+            open_until(date("2099-06-01"), date("2099-06-30")),
+            date("2100-05-31")
+        );
+    }
+
+    #[test]
+    fn d36_open_dates_fill_up_to_until_by_step() {
+        let until = date("2027-10-31");
+        let none: Vec<NaiveDate> = vec![];
+        assert_eq!(
+            open_dates(RepeatEvery::Month, &[date("2027-08-15")], until).unwrap(),
+            [date("2027-09-15"), date("2027-10-15")]
+        );
+        assert_eq!(
+            open_dates(RepeatEvery::Month, &[date("2027-10-15")], until).unwrap(),
+            none
+        );
+        assert_eq!(
+            open_dates(RepeatEvery::Week, &[date("2027-10-15")], until).unwrap(),
+            [date("2027-10-22"), date("2027-10-29")]
+        );
+        assert_eq!(
+            open_dates(RepeatEvery::Year, &[date("2026-12-01")], until).unwrap(),
+            none
         );
     }
 }

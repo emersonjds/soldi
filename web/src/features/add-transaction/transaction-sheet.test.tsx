@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Toaster } from "sonner";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -29,7 +29,7 @@ const MERCADO_ROW = TRANSACTIONS[0];
 const ALUGUEL_ROW = TRANSACTIONS[1];
 const MEMBER = {
   ...ALUGUEL_ROW,
-  series: { id: "s1", position: 3, total: 12, last_date: "2027-09-04", every: "month" as const },
+  series: { id: "s1", position: 3, total: 12, last_date: "2027-09-04", open_ended: false, every: "month" as const },
 };
 
 const PETS: Schemas["Category"] = {
@@ -347,17 +347,32 @@ describe("TransactionSheet", () => {
       expect(await sent("POST")).not.toHaveProperty("card_id");
     });
 
-    it("keeps the card on every parcela", async () => {
+    it("keeps the card on every member of a counted Recorrente", async () => {
       const { sent } = setup({}, withCard);
 
       await userEvent.selectOptions(await cardField(), "Porto");
-      await userEvent.click(screen.getByRole("switch", { name: "Parcelar compra" }));
-      await userEvent.click(screen.getByRole("radio", { name: "3×" }));
+      await userEvent.click(screen.getByRole("switch", { name: "Recorrente" }));
+      await userEvent.click(screen.getByRole("radio", { name: "3" }));
       await userEvent.click(screen.getByLabelText(/^Valor d/));
       await userEvent.keyboard("90");
       await userEvent.click(screen.getByRole("button", { name: "Salvar Lançamento" }));
 
-      expect(await sent("POST")).toMatchObject({ installments: 3, card_id: PORTO.id });
+      expect(await sent("POST")).toMatchObject({ repeat_months: 3, repeat_every: "month", card_id: PORTO.id });
+    });
+
+    it("sends Sempre on a card spend as an open series on the card", async () => {
+      const { sent } = setup({}, withCard);
+
+      await userEvent.selectOptions(await cardField(), "Porto");
+      await userEvent.click(screen.getByRole("switch", { name: "Recorrente" }));
+      expect(screen.getByRole("radio", { name: "Sempre" })).toBeChecked();
+      await userEvent.click(screen.getByLabelText(/^Valor d/));
+      await userEvent.keyboard("2190");
+      await userEvent.click(screen.getByRole("button", { name: "Salvar Lançamento" }));
+
+      const body = await sent("POST");
+      expect(body).toMatchObject({ amount: "21.90", open_ended: true, repeat_every: "month", card_id: PORTO.id });
+      expect(body).not.toHaveProperty("repeat_months");
     });
 
     it("preselects the card when editing and Nenhum takes it off", async () => {
@@ -401,30 +416,182 @@ describe("TransactionSheet", () => {
     expect(requests.filter((request) => request.url.endsWith("/api/transactions"))).toHaveLength(0);
   });
 
-  it("repeats a launch: Repetir on preselects 12x, a preset changes the count and the last month", async () => {
+  it("repeats a launch: Recorrente on preselects Sempre, a count changes the summary and the POST", async () => {
     const { sent } = setup();
 
-    const repeat = await screen.findByRole("switch", { name: "Repetir lançamento (Série)" });
+    const repeat = await screen.findByRole("switch", { name: "Recorrente" });
     expect(repeat).not.toBeChecked();
-    expect(screen.queryByRole("radio", { name: "12×" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("radio", { name: "Sempre" })).not.toBeInTheDocument();
     await userEvent.type(screen.getByLabelText(/^Valor d/), "15000");
     await userEvent.click(repeat);
 
-    expect(screen.getByRole("radio", { name: "12×" })).toBeChecked();
-    expect(screen.getByText("12× de R$ 150,00 · repete todo dia 5 até out 2027")).toBeInTheDocument();
+    const counts = screen.getByRole("radiogroup", { name: "Quantas vezes" });
+    expect(
+      within(counts)
+        .getAllByRole("radio")
+        .map((chip) => chip.textContent),
+    ).toEqual(["Sempre", "2", "3", "6", "12", "Outro"]);
+    expect(screen.getByText("Quantas vezes")).toBeVisible();
+    expect(screen.getByRole("radio", { name: "Sempre" })).toBeChecked();
+    expect(screen.getByText("Repete todo dia 5, sem data para parar.")).toBeInTheDocument();
     expect(screen.queryByText("Em meses mais curtos, cai no último dia.")).not.toBeInTheDocument();
-    await userEvent.click(screen.getByRole("radio", { name: "3×" }));
+    await userEvent.click(screen.getByRole("radio", { name: "3" }));
     expect(screen.getByText("3× de R$ 150,00 · repete todo dia 5 até jan 2027")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Salvar Lançamento" }));
 
-    expect(await sent("POST")).toMatchObject({ amount: "150.00", repeat_months: 3 });
+    const body = await sent("POST");
+    expect(body).toMatchObject({ amount: "150.00", repeat_months: 3, repeat_every: "month" });
+    expect(body).not.toHaveProperty("open_ended");
     expect(await screen.findByText("3 lançamentos criados")).toBeInTheDocument();
+  });
+
+  it("sends Sempre on an Entrada as an open series, with no Começa na parcela", async () => {
+    const { sent } = setup({ initialKind: "income" });
+
+    await userEvent.type(await screen.findByLabelText(/^Valor d/), "500000");
+    await userEvent.click(screen.getByRole("switch", { name: "Recorrente" }));
+    expect(screen.queryByRole("button", { name: "Já começou em outra parcela?" })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("radio", { name: "6" }));
+    expect(screen.queryByRole("button", { name: "Já começou em outra parcela?" })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("radio", { name: "Sempre" }));
+    await userEvent.click(screen.getByRole("button", { name: "Salvar Lançamento" }));
+
+    const body = await sent("POST");
+    expect(body).toMatchObject({ kind: "income", amount: "5000.00", open_ended: true, repeat_every: "month" });
+    expect(body).not.toHaveProperty("repeat_months");
+    expect(await screen.findByText("Lançado")).toBeInTheDocument();
+  });
+
+  it("refuses Sempre on a Conta, offering Criar como Conta Fixa; a count still submits", async () => {
+    const { requests, sent } = setup({ initialKind: "bill", billSheet });
+
+    await userEvent.type(await screen.findByLabelText(/^Valor d/), "9000");
+    await userEvent.click(screen.getByRole("switch", { name: "Recorrente" }));
+    expect(screen.getByRole("radio", { name: "Sempre" })).toBeChecked();
+    expect(screen.getByRole("button", { name: "Criar como Conta Fixa" })).toBeInTheDocument();
+    expect(screen.queryByText(/sem data para parar/)).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Salvar Lançamento" }));
+    expect(requests.filter((request) => request.method === "POST")).toHaveLength(0);
+
+    await userEvent.click(screen.getByRole("radio", { name: "3" }));
+    expect(screen.queryByRole("button", { name: "Criar como Conta Fixa" })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Salvar Lançamento" }));
+    expect(await sent("POST")).toMatchObject({ kind: "bill", repeat_months: 3 });
+  });
+
+  it("converts a Conta on Sempre into a bill from the plain entry", async () => {
+    const { requests } = setup(
+      { initialKind: "bill", billSheet },
+      {
+        "POST /api/transactions": { status: 201, body: ALUGUEL_ROW },
+        "POST /api/bills": { status: 201, body: BILL_ALUGUEL },
+      },
+    );
+
+    await userEvent.type(await screen.findByLabelText(/^Valor d/), "9000");
+    await userEvent.click(screen.getByRole("switch", { name: "Recorrente" }));
+    await userEvent.click(screen.getByRole("button", { name: "Criar como Conta Fixa" }));
+    await userEvent.click(screen.getByRole("button", { name: "Criar conta" }));
+
+    expect(await screen.findByText("Conta fixa criada")).toBeInTheDocument();
+    const post = requests.find((request) => request.url.endsWith("/api/transactions"));
+    const body = await post?.json();
+    expect(body).toMatchObject({ kind: "bill", amount: "90.00" });
+    expect(body).not.toHaveProperty("open_ended");
+    expect(body).not.toHaveProperty("repeat_every");
+  });
+
+  it("words Sempre in each step: todo dia, toda {weekday}, todo dia/mês", async () => {
+    setup();
+
+    await userEvent.click(await screen.findByRole("switch", { name: "Recorrente" }));
+    await userEvent.click(screen.getByRole("radio", { name: "Semanal" }));
+    expect(screen.getByText("Repete toda quinta-feira, sem data para parar.")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("radio", { name: "Anual" }));
+    expect(screen.getByText("Repete todo 5/11, sem data para parar.")).toBeInTheDocument();
+    await pickDate("Outra data", "2026-11-01");
+    await userEvent.click(screen.getByRole("radio", { name: "Semanal" }));
+    expect(screen.getByText("Repete todo domingo, sem data para parar.")).toBeInTheDocument();
+  });
+
+  it("starts a counted Recorrente at a later parcela: hidden on Sempre, 1 to N, posted as parcelas", async () => {
+    const { requests, sent } = setup();
+
+    await userEvent.type(await screen.findByLabelText(/^Valor d/), "10000");
+    await userEvent.click(screen.getByRole("switch", { name: "Recorrente" }));
+    const link = "Já começou em outra parcela?";
+    expect(screen.queryByRole("button", { name: link })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("radio", { name: "6" }));
+    expect(screen.queryByLabelText("Começa na parcela")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: link }));
+    const first = screen.getByLabelText("Começa na parcela");
+    expect(first).toHaveValue("1");
+    expect(first).toHaveClass("text-base");
+    await userEvent.clear(first);
+    await userEvent.type(first, "7");
+    await userEvent.click(screen.getByRole("button", { name: "Salvar Lançamento" }));
+
+    expect(first).toHaveAccessibleDescription("Escolha de 1 a 6.");
+    expect(requests.filter((request) => request.method === "POST")).toHaveLength(0);
+    await userEvent.clear(first);
+    await userEvent.type(first, "4");
+    expect(screen.getByText("3× de R$ 100,00 · repete todo dia 5 até jan 2027")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Salvar Lançamento" }));
+
+    const body = await sent("POST");
+    expect(body).toMatchObject({ amount: "600.00", installments: 6, first_installment: 4 });
+    expect(body).not.toHaveProperty("repeat_months");
+    expect(body).not.toHaveProperty("repeat_every");
+    expect(await screen.findByText("3 lançamentos criados")).toBeInTheDocument();
+  });
+
+  it("sends a count from parcela 1 as a plain repeat", async () => {
+    const { sent } = setup();
+
+    await userEvent.type(await screen.findByLabelText(/^Valor d/), "10000");
+    await userEvent.click(screen.getByRole("switch", { name: "Recorrente" }));
+    await userEvent.click(screen.getByRole("radio", { name: "2" }));
+    await userEvent.click(screen.getByRole("button", { name: "Já começou em outra parcela?" }));
+    await userEvent.click(screen.getByRole("button", { name: "Salvar Lançamento" }));
+
+    const body = await sent("POST");
+    expect(body).toMatchObject({ amount: "100.00", repeat_months: 2 });
+    expect(body).not.toHaveProperty("first_installment");
+  });
+
+  it("clears every Recorrente field from the payload when it turns off", async () => {
+    const { sent } = setup();
+
+    await userEvent.type(await screen.findByLabelText(/^Valor d/), "10000");
+    const repeat = screen.getByRole("switch", { name: "Recorrente" });
+    await userEvent.click(repeat);
+    await userEvent.click(screen.getByRole("radio", { name: "Semanal" }));
+    await userEvent.click(screen.getByRole("radio", { name: "6" }));
+    await userEvent.click(repeat);
+    expect(screen.queryByRole("radiogroup", { name: "Quantas vezes" })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Salvar Lançamento" }));
+
+    const body = await sent("POST");
+    for (const field of ["repeat_months", "repeat_every", "open_ended", "installments", "first_installment"])
+      expect(body).not.toHaveProperty(field);
+  });
+
+  it("keeps the duration chips and fields thumb-sized at 375px", async () => {
+    setup();
+
+    await userEvent.click(await screen.findByRole("switch", { name: "Recorrente" }));
+    const counts = screen.getByRole("radiogroup", { name: "Quantas vezes" });
+    expect(counts).toHaveClass("grid-cols-3");
+    for (const chip of within(counts).getAllByRole("radio")) expect(chip).toHaveClass("h-11");
+    await userEvent.click(screen.getByRole("radio", { name: "Outro" }));
+    expect(screen.getByLabelText("Meses")).toHaveClass("text-base", "md:text-base");
   });
 
   it("tells only the last month while the amount is missing", async () => {
     setup();
 
-    await userEvent.click(await screen.findByRole("switch", { name: "Repetir lançamento (Série)" }));
+    await userEvent.click(await screen.findByRole("switch", { name: "Recorrente" }));
+    await userEvent.click(screen.getByRole("radio", { name: "12" }));
 
     expect(screen.getByText("repete todo dia 5 até out 2027")).toBeInTheDocument();
     expect(screen.queryByText(/12× de/)).not.toBeInTheDocument();
@@ -435,14 +602,14 @@ describe("TransactionSheet", () => {
 
     await userEvent.type(await screen.findByLabelText(/^Valor d/), "1000");
     await pickDate("Outra data", "2026-10-31");
-    await userEvent.click(screen.getByRole("switch", { name: "Repetir lançamento (Série)" }));
+    await userEvent.click(screen.getByRole("switch", { name: "Recorrente" }));
     expect(screen.getByText("Em meses mais curtos, cai no último dia.")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("radio", { name: "Outro" }));
     const months = screen.getByLabelText("Meses");
     await userEvent.type(months, "61");
     await userEvent.click(screen.getByRole("button", { name: "Salvar Lançamento" }));
 
-    expect(months).toHaveAccessibleDescription("Escolha de 2 a 60 meses.");
+    expect(months).toHaveAccessibleDescription("Escolha de 2 a 60 vezes.");
     expect(months).toHaveAttribute("aria-invalid", "true");
     expect(requests.filter((request) => request.method === "POST")).toHaveLength(0);
     await userEvent.clear(months);
@@ -456,8 +623,8 @@ describe("TransactionSheet", () => {
   it("turns a standalone entry into a series from Editar", async () => {
     const { sent } = setup({ transaction: MERCADO_ROW });
 
-    await userEvent.click(await screen.findByRole("switch", { name: "Repetir lançamento (Série)" }));
-    await userEvent.click(screen.getByRole("radio", { name: "2×" }));
+    await userEvent.click(await screen.findByRole("switch", { name: "Recorrente" }));
+    await userEvent.click(screen.getByRole("radio", { name: "2" }));
     await userEvent.click(screen.getByRole("button", { name: "Salvar Lançamento" }));
 
     expect(await sent("PATCH")).toMatchObject({ repeat_months: 2 });
@@ -468,7 +635,7 @@ describe("TransactionSheet", () => {
     setup({ transaction: { ...ALUGUEL_ROW, recurring_bill_id: "b1" } });
 
     expect(await screen.findByText("Já é uma conta fixa recorrente.")).toBeInTheDocument();
-    expect(screen.queryByRole("switch", { name: "Repetir lançamento (Série)" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("switch", { name: "Recorrente" })).not.toBeInTheDocument();
   });
 
   it("keeps a bill payment a Saída: no Tipo to pick, and a refused kind says why", async () => {
@@ -498,7 +665,7 @@ describe("TransactionSheet", () => {
     setup({ transaction: { ...TRANSACTIONS[2], cofrinho_id: "c1" } });
 
     expect(await screen.findByRole("dialog", { name: "Editar lançamento" })).toBeInTheDocument();
-    expect(screen.queryByRole("switch", { name: "Repetir lançamento (Série)" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("switch", { name: "Recorrente" })).not.toBeInTheDocument();
     expect(screen.queryByText("Já é uma conta fixa recorrente.")).not.toBeInTheDocument();
   });
 
@@ -514,11 +681,11 @@ describe("TransactionSheet", () => {
     expect(within(dialog).getByText(/^Você está editando/)).toHaveTextContent(
       'Você está editando a parcela 3 de 12: "Aluguel" (R$ 1.200,00)',
     );
-    expect(screen.queryByRole("switch", { name: "Repetir lançamento (Série)" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("switch", { name: "Recorrente" })).not.toBeInTheDocument();
     expect(screen.queryByRole("group", { name: "Tipo" })).not.toBeInTheDocument();
     const scope = screen.getByRole("radiogroup", { name: "Escopo da Alteração" });
     const amount = screen.getByLabelText("Valor por parcela");
-    const months = screen.getByRole("radiogroup", { name: "Duração da série" });
+    const months = screen.getByRole("radiogroup", { name: "Quantas vezes" });
     const day = screen.getByText("Dia de vencimento");
     const note = screen.getByLabelText("Observação");
     const follows = (first: Element, second: Element) =>
@@ -568,15 +735,15 @@ describe("TransactionSheet", () => {
   it("resizes a series member: Duração da série on the total, chips below the position off, helpers name the change", async () => {
     const { sent } = setup({ transaction: MEMBER }, resize);
 
-    const months = await screen.findByRole("radiogroup", { name: "Duração da série" });
-    expect(screen.getByText("Duração da série")).toBeVisible();
-    expect(within(months).getByRole("radio", { name: "12 meses" })).toBeChecked();
-    expect(within(months).getByRole("radio", { name: "3 meses" })).toBeEnabled();
+    const months = await screen.findByRole("radiogroup", { name: "Quantas vezes" });
+    expect(screen.getByText("Quantas vezes")).toBeVisible();
+    expect(within(months).getByRole("radio", { name: "12" })).toBeChecked();
+    expect(within(months).getByRole("radio", { name: "3" })).toBeEnabled();
     expect(screen.queryByText(/Série encurtada|Série estendida/)).not.toBeInTheDocument();
 
-    await userEvent.click(within(months).getByRole("radio", { name: "6 meses" }));
+    await userEvent.click(within(months).getByRole("radio", { name: "6" }));
     expect(screen.getByText("Série encurtada: Remove os 6 últimos meses. Termina em Março/2027.")).toBeInTheDocument();
-    await userEvent.click(within(months).getByRole("radio", { name: "Customizado" }));
+    await userEvent.click(within(months).getByRole("radio", { name: "Outro" }));
     const custom = screen.getByLabelText("Meses");
     await userEvent.clear(custom);
     await userEvent.type(custom, "15");
@@ -595,11 +762,11 @@ describe("TransactionSheet", () => {
     const first = {
       ...MEMBER,
       date: "2026-03-04",
-      series: { id: "s1", position: 1, total: 12, last_date: "2027-02-04", every: "month" as const },
+      series: { id: "s1", position: 1, total: 12, last_date: "2027-02-04", open_ended: false, every: "month" as const },
     };
     setup({ transaction: first }, { [`PATCH /api/transactions/${MEMBER.id}`]: { status: 200, body: first } });
 
-    await userEvent.click(await screen.findByRole("radio", { name: "6 meses" }));
+    await userEvent.click(await screen.findByRole("radio", { name: "6" }));
     expect(screen.getByText("Série encurtada: Remove os 6 últimos meses. Termina em Agosto/2026.")).toBeInTheDocument();
     expect(screen.getByText("Economia projetada de R$ 7.200,00 no orçamento previsto.")).toBeInTheDocument();
   });
@@ -607,7 +774,7 @@ describe("TransactionSheet", () => {
   it("projects no saving when an income series shortens", async () => {
     setup({ transaction: { ...TRANSACTIONS[2], series: MEMBER.series } });
 
-    await userEvent.click(await screen.findByRole("radio", { name: "6 meses" }));
+    await userEvent.click(await screen.findByRole("radio", { name: "6" }));
     expect(screen.getByText(/Série encurtada/)).toBeInTheDocument();
     expect(screen.queryByText(/Economia projetada/)).not.toBeInTheDocument();
   });
@@ -615,23 +782,23 @@ describe("TransactionSheet", () => {
   it("resets to the current total, not 12, on Ciclo Atual", async () => {
     setup({ transaction: { ...MEMBER, series: { ...MEMBER.series, total: 6 } } });
 
-    await userEvent.click(await screen.findByRole("radio", { name: "12 meses" }));
-    expect(screen.getByRole("radio", { name: "12 meses" })).toBeChecked();
+    await userEvent.click(await screen.findByRole("radio", { name: "12" }));
+    expect(screen.getByRole("radio", { name: "12" })).toBeChecked();
     await userEvent.click(screen.getByRole("button", { name: "Ciclo Atual" }));
-    expect(screen.getByRole("radio", { name: "6 meses" })).toBeChecked();
+    expect(screen.getByRole("radio", { name: "6" })).toBeChecked();
     expect(screen.queryByText(/Série estendida/)).not.toBeInTheDocument();
   });
 
   it("says Remove o último mês for one month and sends no count when it stays on the total", async () => {
     const { sent } = setup({ transaction: MEMBER }, resize);
 
-    await userEvent.click(await screen.findByRole("radio", { name: "Customizado" }));
+    await userEvent.click(await screen.findByRole("radio", { name: "Outro" }));
     const custom = screen.getByLabelText("Meses");
     await userEvent.clear(custom);
     await userEvent.type(custom, "11");
     expect(screen.getByText("Série encurtada: Remove o último mês. Termina em Agosto/2027.")).toBeInTheDocument();
     expect(screen.getByText("Economia projetada de R$ 1.200,00 no orçamento previsto.")).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("radio", { name: "12 meses" }));
+    await userEvent.click(screen.getByRole("radio", { name: "12" }));
     expect(screen.queryByText(/Série encurtada|Série estendida/)).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Salvar Alterações na Série" }));
 
@@ -639,46 +806,171 @@ describe("TransactionSheet", () => {
     expect(await screen.findByText("Lançamento atualizado")).toBeInTheDocument();
   });
 
-  it("preselects Customizado for a total off the presets and asks for at least the member's position", async () => {
+  it("preselects Outro for a total off the presets and asks for at least the member's position", async () => {
     const { requests } = setup(
       { transaction: { ...MEMBER, series: { ...MEMBER.series, position: 5, total: 7 } } },
       resize,
     );
 
-    expect(await screen.findByRole("radio", { name: "Customizado" })).toBeChecked();
+    expect(await screen.findByRole("radio", { name: "Outro" })).toBeChecked();
     const custom = screen.getByLabelText("Meses");
     expect(custom).toHaveValue("7");
-    expect(screen.getByRole("radio", { name: "3 meses" })).toBeDisabled();
-    expect(screen.getByRole("radio", { name: "6 meses" })).toBeEnabled();
+    expect(screen.getByRole("radio", { name: "3" })).toBeDisabled();
+    expect(screen.getByRole("radio", { name: "6" })).toBeEnabled();
     await userEvent.clear(custom);
     await userEvent.type(custom, "4");
     await userEvent.click(screen.getByRole("button", { name: "Salvar Alterações na Série" }));
 
-    expect(custom).toHaveAccessibleDescription("Escolha de 5 a 60 meses.");
+    expect(custom).toHaveAccessibleDescription("Escolha de 5 a 60 vezes.");
     expect(requests.filter((request) => request.method === "PATCH")).toHaveLength(0);
   });
 
-  it("saves an edit to the only member left in a series without a count", async () => {
-    const { sent } = setup({ transaction: { ...MEMBER, series: { ...MEMBER.series, position: 1, total: 1 } } }, resize);
+  it("keeps Sempre off a bounded series in Editar", async () => {
+    setup({ transaction: MEMBER }, resize);
+
+    expect(await screen.findByRole("radio", { name: "12" })).toBeChecked();
+    expect(screen.getByRole("radio", { name: "Sempre" })).toBeDisabled();
+  });
+
+  it("reads an open series as Sempre in Editar and sends no count", async () => {
+    const open = { ...MEMBER, series: { ...MEMBER.series, open_ended: true } };
+    const { sent } = setup({ transaction: open }, resize);
+
+    expect(await screen.findByRole("radio", { name: "Sempre" })).toBeChecked();
+    expect(screen.getByRole("radio", { name: "6" })).toBeDisabled();
+    expect(screen.queryByText(/Série encurtada|Série estendida/)).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Salvar Alterações na Série" }));
+
+    const body = await sent("PATCH");
+    expect(body).not.toHaveProperty("repeat_months");
+    expect(body).not.toHaveProperty("open_ended");
+  });
+
+  describe("Parar recorrência and Tornar sem fim", () => {
+    const open = { ...MEMBER, series: { ...MEMBER.series, open_ended: true } };
+    const patches = (requests: Request[]) => requests.filter((request) => request.method === "PATCH");
+
+    it("stops an open member from this one on, toasts, and Desfazer reopens it", async () => {
+      const { requests } = setup({ transaction: open }, resize);
+
+      expect(await screen.findByText("Lançamento recorrente, todo mês")).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Tornar sem fim" })).not.toBeInTheDocument();
+      const stop = screen.getByRole("button", { name: "Parar recorrência" });
+      expect(stop).toHaveClass("h-12", "text-base");
+      await userEvent.click(stop);
+
+      expect(await screen.findByText("Recorrência parada. Sai dos próximos meses.")).toBeInTheDocument();
+      const [first] = patches(requests);
+      expect(new URL(first.url).searchParams.get("scope")).toBeNull();
+      expect(await first.json()).toEqual({ open_ended: false });
+
+      // The sheet stays open under a mocked onOpenChange; its overlay blocks pointer events.
+      fireEvent.click(screen.getByRole("button", { name: "Desfazer" }));
+      await waitFor(() => expect(patches(requests)).toHaveLength(2));
+      expect(await patches(requests)[1].json()).toEqual({ open_ended: true });
+    });
+
+    it("reads a weekly open member as toda semana", async () => {
+      setup({ transaction: { ...open, series: { ...open.series, every: "week" as const } } }, resize);
+
+      expect(await screen.findByText("Lançamento recorrente, toda semana")).toBeInTheDocument();
+    });
+
+    it("shows its fixed copy when the stop would touch a paid fatura, never the server's", async () => {
+      setup(
+        { transaction: open },
+        {
+          [`PATCH /api/transactions/${MEMBER.id}`]: {
+            status: 422,
+            body: { type: "urn:soldi:error:fatura-paid", title: "Paid.", status: 422, detail: "Server words." },
+          },
+        },
+      );
+
+      await userEvent.click(await screen.findByRole("button", { name: "Parar recorrência" }));
+
+      expect(await screen.findByText("Essa fatura já foi paga.")).toBeInTheDocument();
+      expect(screen.queryByText("Server words.")).not.toBeInTheDocument();
+    });
+
+    it("falls back to the generic copy on any other refusal", async () => {
+      setup(
+        { transaction: open },
+        { [`PATCH /api/transactions/${MEMBER.id}`]: { status: 500, body: problem(500, "Boom") } },
+      );
+
+      await userEvent.click(await screen.findByRole("button", { name: "Parar recorrência" }));
+
+      expect(await screen.findByText("Não foi possível salvar o lançamento.")).toBeInTheDocument();
+    });
+
+    it("never offers Tornar sem fim on a bill member, which only a Conta Fixa repeats", async () => {
+      setup({ transaction: MEMBER }, resize);
+
+      expect(await screen.findByText("Parte de uma série de 12 meses")).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Tornar sem fim" })).not.toBeInTheDocument();
+    });
+
+    it("turns a bounded member into an open series", async () => {
+      const { sent } = setup({ transaction: { ...MEMBER, kind: "daily" as const } }, resize);
+
+      expect(await screen.findByText("Parte de uma série de 12 meses")).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Parar recorrência" })).not.toBeInTheDocument();
+      const turn = screen.getByRole("button", { name: "Tornar sem fim" });
+      expect(turn).toHaveClass("h-12", "text-base");
+      await userEvent.click(turn);
+
+      expect(await sent("PATCH")).toEqual({ open_ended: true });
+      expect(await screen.findByText("Série atualizada")).toBeInTheDocument();
+    });
+
+    it("offers neither on an entry outside a series", async () => {
+      setup({ transaction: ALUGUEL_ROW });
+
+      await screen.findByLabelText("Observação");
+      expect(screen.queryByRole("button", { name: "Parar recorrência" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Tornar sem fim" })).not.toBeInTheDocument();
+    });
+  });
+
+  it("saves an edit to the only member left in a series without a count or a scope to pick", async () => {
+    const { requests } = setup(
+      { transaction: { ...MEMBER, series: { ...MEMBER.series, position: 1, total: 1 } } },
+      resize,
+    );
 
     const amount = await screen.findByLabelText("Valor por parcela");
+    expect(screen.queryByRole("radiogroup", { name: "Escopo da Alteração" })).not.toBeInTheDocument();
     await userEvent.clear(amount);
     await userEvent.type(amount, "9990");
     await userEvent.click(screen.getByRole("button", { name: "Salvar Alterações na Série" }));
 
-    const body = await sent("PATCH");
+    await waitFor(() => expect(requests.some((request) => request.method === "PATCH")).toBe(true));
+    const patch = requests.find((request) => request.method === "PATCH");
+    expect(new URL(patch?.url ?? "").searchParams.get("scope")).toBe("this");
+    const body = await patch?.json();
     expect(body).toMatchObject({ amount: "99.90" });
     expect(body).not.toHaveProperty("repeat_months");
+  });
+
+  it("pads the selected duration chip so its check clears the edge", async () => {
+    setup();
+
+    await userEvent.click(await screen.findByRole("switch", { name: "Recorrente" }));
+    for (const name of ["Sempre", "6", "Outro"]) {
+      await userEvent.click(screen.getByRole("radio", { name }));
+      expect(screen.getByRole("radio", { name })).toHaveClass("gap-1.5", "pl-3!");
+    }
   });
 
   it("locks Duração da série while the member's date moves and sends no count", async () => {
     const { sent } = setup({ transaction: MEMBER }, resize);
 
-    const months = await screen.findByRole("radiogroup", { name: "Duração da série" });
-    await userEvent.click(within(months).getByRole("radio", { name: "6 meses" }));
+    const months = await screen.findByRole("radiogroup", { name: "Quantas vezes" });
+    await userEvent.click(within(months).getByRole("radio", { name: "6" }));
     expect(screen.getByText(/Série encurtada/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Hoje" }));
-    expect(within(months).getByRole("radio", { name: "12 meses" })).toBeDisabled();
+    expect(within(months).getByRole("radio", { name: "12" })).toBeDisabled();
     expect(screen.queryByText(/Série encurtada|Série estendida/)).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Salvar Alterações na Série" }));
 
@@ -696,7 +988,7 @@ describe("TransactionSheet", () => {
     expect(
       screen.getByText("Os próximos lançamentos também serão movidos automaticamente para o dia 10."),
     ).toBeInTheDocument();
-    expect(screen.getByRole("radio", { name: "12 meses" })).toBeDisabled();
+    expect(screen.getByRole("radio", { name: "12" })).toBeDisabled();
     await userEvent.click(screen.getByRole("button", { name: "Salvar Alterações na Série" }));
 
     const body = await sent("PATCH");
@@ -799,22 +1091,24 @@ describe("TransactionSheet", () => {
     expect(await screen.findByText("Não foi possível salvar o lançamento.")).toBeInTheDocument();
   });
 
-  it("offers Transformar em conta fixa only for a Saída without Repetir", async () => {
+  it("offers Transformar em conta fixa only for a Saída without a counted Recorrente", async () => {
     setup({ billSheet });
 
     const link = "Criar como Conta Fixa";
-    expect(await screen.findByRole("switch", { name: "Repetir lançamento (Série)" })).toBeInTheDocument();
+    expect(await screen.findByRole("switch", { name: "Recorrente" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: link })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("radio", { name: "Conta" }));
     expect(screen.getByText(/Prefere transformar em conta fixa recorrente\?/)).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("switch", { name: "Repetir lançamento (Série)" }));
+    await userEvent.click(screen.getByRole("switch", { name: "Recorrente" }));
+    expect(screen.getByRole("button", { name: link })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("radio", { name: "12" }));
     expect(screen.queryByRole("button", { name: link })).not.toBeInTheDocument();
   });
 
   it("offers no Transformar em conta fixa when the host has no bill sheet", async () => {
     setup({ initialKind: "bill" });
 
-    expect(await screen.findByRole("switch", { name: "Repetir lançamento (Série)" })).toBeInTheDocument();
+    expect(await screen.findByRole("switch", { name: "Recorrente" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Criar como Conta Fixa" })).not.toBeInTheDocument();
   });
 
@@ -907,88 +1201,6 @@ describe("TransactionSheet", () => {
     expect(await sent("POST")).toMatchObject({ amount: "35.90", kind: "daily" });
   });
 
-  it("parcela 1.000,01 em 10x: summary and Salvar posts the total once", async () => {
-    const { sent } = setup();
-    await userEvent.click(screen.getByLabelText(/^Valor d/));
-    await userEvent.keyboard("1000,01");
-    await userEvent.click(screen.getByRole("switch", { name: "Repetir lançamento (Série)" }));
-    await userEvent.click(screen.getByRole("switch", { name: "Parcelar compra" }));
-    expect(screen.getByRole("switch", { name: "Repetir lançamento (Série)" })).not.toBeChecked();
-    expect(screen.getByRole("radiogroup", { name: "Quantas parcelas" })).toBeInTheDocument();
-    expect(screen.getByText("Projeção: 12× de R$ 83,33")).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("radio", { name: "Outro" }));
-    await userEvent.type(screen.getByLabelText("Parcelas"), "10");
-
-    expect(screen.getByText("Divide o valor total de R$ 1.000,01 em 10 parcelas automáticas")).toBeInTheDocument();
-    expect(screen.getByText("Projeção: 10× de R$ 100,00")).toBeInTheDocument();
-    expect(
-      screen.getByText("Última parcela será ajustada para R$ 100,01 devido a centavos residuais."),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Salvar Lançamento" }).closest(FOOTER)).not.toBeNull();
-    await userEvent.click(screen.getByRole("button", { name: "Salvar Lançamento" }));
-
-    const body = await sent("POST");
-    expect(body).toMatchObject({ amount: "1000.01", installments: 10 });
-    expect(body).not.toHaveProperty("repeat_months");
-    expect(await screen.findByText("10 parcelas lançadas")).toBeInTheDocument();
-  });
-
-  it("sums an even split in one line, and Repetir turns Parcelar off", async () => {
-    setup();
-    await userEvent.click(screen.getByLabelText(/^Valor d/));
-    await userEvent.keyboard("300,00");
-    await userEvent.click(await screen.findByRole("switch", { name: "Parcelar compra" }));
-    await userEvent.click(screen.getByRole("radio", { name: "3×" }));
-    expect(screen.getByText("Divide o valor total de R$ 300,00 em 3 parcelas automáticas")).toBeInTheDocument();
-    expect(screen.getByText("Projeção: 3× de R$ 100,00")).toBeInTheDocument();
-    expect(screen.queryByText(/centavos residuais/)).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Criar como Conta Fixa" })).not.toBeInTheDocument();
-    await userEvent.click(screen.getByRole("switch", { name: "Repetir lançamento (Série)" }));
-    expect(screen.getByRole("switch", { name: "Parcelar compra" })).not.toBeChecked();
-  });
-
-  it("asks for 2 to 60 parcelas in Outro", async () => {
-    const { requests } = setup();
-    await userEvent.click(screen.getByLabelText(/^Valor d/));
-    await userEvent.keyboard("300,00");
-    await userEvent.click(await screen.findByRole("switch", { name: "Parcelar compra" }));
-    await userEvent.click(screen.getByRole("radio", { name: "Outro" }));
-    const parcelas = screen.getByLabelText("Parcelas");
-    await userEvent.type(parcelas, "61");
-    await userEvent.click(screen.getByRole("button", { name: "Salvar Lançamento" }));
-    expect(parcelas).toHaveAccessibleDescription("Escolha de 2 a 60 parcelas.");
-    expect(requests.filter((request) => request.method === "POST")).toHaveLength(0);
-  });
-
-  it("refuses a parcela at zero and offers Parcelar only on Saída and Diário", async () => {
-    const { requests } = setup();
-    await userEvent.click(screen.getByLabelText(/^Valor d/));
-    await userEvent.keyboard("0,05");
-    await userEvent.click(await screen.findByRole("switch", { name: "Parcelar compra" }));
-    await userEvent.click(screen.getByRole("radio", { name: "Outro" }));
-    await userEvent.type(screen.getByLabelText("Parcelas"), "6");
-    await userEvent.click(screen.getByRole("button", { name: "Salvar Lançamento" }));
-    expect(screen.getByRole("alert")).toHaveTextContent("Valor pequeno demais para 6 parcelas.");
-    expect(requests.filter((request) => request.method === "POST")).toHaveLength(0);
-
-    await userEvent.click(screen.getByRole("radio", { name: "Entrada" }));
-    expect(screen.queryByRole("switch", { name: "Parcelar compra" })).not.toBeInTheDocument();
-  });
-
-  it("drops Parcelar on Entrada", async () => {
-    setup();
-    await userEvent.click(await screen.findByRole("switch", { name: "Parcelar compra" }));
-    await userEvent.click(screen.getByRole("radio", { name: "Entrada" }));
-    await userEvent.click(screen.getByRole("radio", { name: "Conta" }));
-    expect(screen.getByRole("switch", { name: "Parcelar compra" })).not.toBeChecked();
-  });
-
-  it("offers no Parcelar when editing", async () => {
-    setup({ transaction: MERCADO_ROW });
-    await screen.findByRole("dialog", { name: "Editar lançamento" });
-    expect(screen.queryByRole("switch", { name: "Parcelar compra" })).not.toBeInTheDocument();
-  });
-
   it("is a 560px centered dialog from 1024px: Novo Lançamento, its description shown, Hoje with the day, no Quando foi?, no Enter hint", async () => {
     window.innerWidth = 1440;
     setup();
@@ -1046,7 +1258,7 @@ describe("TransactionSheet", () => {
 
     const erase = await screen.findByRole("button", { name: "Apagar" });
     const save = screen.getByRole("button", { name: "Salvar Lançamento" });
-    const repeat = screen.getByRole("switch", { name: "Repetir lançamento (Série)" });
+    const repeat = screen.getByRole("switch", { name: "Recorrente" });
     expect(erase.closest(FOOTER)).toBe(save.closest(FOOTER));
     expect(erase.compareDocumentPosition(save) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(repeat.compareDocumentPosition(erase) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -1056,7 +1268,8 @@ describe("TransactionSheet", () => {
     setup();
     await userEvent.type(await screen.findByLabelText(/^Valor d/), "3990");
     await pickDate("Outra data", "2026-11-10");
-    await userEvent.click(screen.getByRole("switch", { name: "Repetir lançamento (Série)" }));
+    await userEvent.click(screen.getByRole("switch", { name: "Recorrente" }));
+    await userEvent.click(screen.getByRole("radio", { name: "12" }));
 
     expect(screen.getByText("12× de R$ 39,90 · repete todo dia 10 até out 2027")).toBeInTheDocument();
   });
@@ -1064,7 +1277,7 @@ describe("TransactionSheet", () => {
   describe("series step", () => {
     const WEEKLY = {
       ...MEMBER,
-      series: { id: "s1", position: 3, total: 8, last_date: "2026-12-10", every: "week" as const },
+      series: { id: "s1", position: 3, total: 8, last_date: "2026-12-10", open_ended: false, every: "week" as const },
     };
     const weekly = { [`PATCH /api/transactions/${WEEKLY.id}`]: { status: 200, body: WEEKLY } };
 
@@ -1073,14 +1286,15 @@ describe("TransactionSheet", () => {
 
       await userEvent.type(await screen.findByLabelText(/^Valor d/), "15000");
       expect(screen.queryByRole("group", { name: "Frequência" })).not.toBeInTheDocument();
-      await userEvent.click(screen.getByRole("switch", { name: "Repetir lançamento (Série)" }));
+      await userEvent.click(screen.getByRole("switch", { name: "Recorrente" }));
       expect(screen.getByRole("radio", { name: "Mensal" })).toBeChecked();
+      await userEvent.click(screen.getByRole("radio", { name: "12" }));
       await userEvent.click(screen.getByRole("radio", { name: "Semanal" }));
       expect(screen.getByText("12× de R$ 150,00 · repete toda semana até 21 jan 2027")).toBeInTheDocument();
       await userEvent.click(screen.getByRole("radio", { name: "Anual" }));
       expect(screen.getByText("12× de R$ 150,00 · repete todo ano em 5 nov até 2037")).toBeInTheDocument();
       await userEvent.click(screen.getByRole("radio", { name: "Semanal" }));
-      await userEvent.click(screen.getByRole("radio", { name: "3×" }));
+      await userEvent.click(screen.getByRole("radio", { name: "3" }));
       expect(screen.getByText("3× de R$ 150,00 · repete toda semana até 19 nov 2026")).toBeInTheDocument();
       await userEvent.click(screen.getByRole("button", { name: "Salvar Lançamento" }));
 
@@ -1091,27 +1305,27 @@ describe("TransactionSheet", () => {
     it("words the custom count in the step's unit", async () => {
       setup();
 
-      await userEvent.click(await screen.findByRole("switch", { name: "Repetir lançamento (Série)" }));
+      await userEvent.click(await screen.findByRole("switch", { name: "Recorrente" }));
       await userEvent.click(screen.getByRole("radio", { name: "Anual" }));
       await userEvent.click(screen.getByRole("radio", { name: "Outro" }));
       await userEvent.type(screen.getByLabelText("Anos"), "61");
       await userEvent.click(screen.getByRole("button", { name: "Salvar Lançamento" }));
 
-      expect(screen.getByLabelText("Anos")).toHaveAccessibleDescription("Escolha de 2 a 60 anos.");
+      expect(screen.getByLabelText("Anos")).toHaveAccessibleDescription("Escolha de 2 a 60 vezes.");
     });
 
-    it("hides the segment for Parcelar compra and resets it to Mensal when Repetir turns off", async () => {
+    it("resets the step to Mensal and the count to Sempre when Recorrente turns off", async () => {
       setup();
 
-      const repeat = await screen.findByRole("switch", { name: "Repetir lançamento (Série)" });
+      const repeat = await screen.findByRole("switch", { name: "Recorrente" });
       await userEvent.click(repeat);
       await userEvent.click(screen.getByRole("radio", { name: "Anual" }));
+      await userEvent.click(screen.getByRole("radio", { name: "3" }));
       await userEvent.click(repeat);
+      expect(screen.queryByRole("radiogroup", { name: "Frequência" })).not.toBeInTheDocument();
       await userEvent.click(repeat);
       expect(screen.getByRole("radio", { name: "Mensal" })).toBeChecked();
-      await userEvent.click(screen.getByRole("switch", { name: "Parcelar compra" }));
-
-      expect(screen.queryByRole("group", { name: "Frequência" })).not.toBeInTheDocument();
+      expect(screen.getByRole("radio", { name: "Sempre" })).toBeChecked();
     });
 
     it("edits a weekly series in weeks: eyebrow, chips, resize line and toast", async () => {
@@ -1119,12 +1333,12 @@ describe("TransactionSheet", () => {
 
       expect(await screen.findByText("Parte de uma série de 8 semanas")).toBeInTheDocument();
       expect(screen.queryByRole("group", { name: "Frequência" })).not.toBeInTheDocument();
-      expect(screen.getByRole("radio", { name: "3 semanas" })).toBeEnabled();
-      await userEvent.click(screen.getByRole("radio", { name: "6 semanas" }));
+      expect(screen.getByRole("radio", { name: "3" })).toBeEnabled();
+      await userEvent.click(screen.getByRole("radio", { name: "6" }));
       expect(
         screen.getByText("Série encurtada: Remove as 2 últimas semanas. Termina em 26/11/2026."),
       ).toBeInTheDocument();
-      await userEvent.click(screen.getByRole("radio", { name: "Customizado" }));
+      await userEvent.click(screen.getByRole("radio", { name: "Outro" }));
       const custom = screen.getByLabelText("Semanas");
       await userEvent.clear(custom);
       await userEvent.type(custom, "10");

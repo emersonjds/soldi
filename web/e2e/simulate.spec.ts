@@ -11,7 +11,7 @@ const monthFrom = (offset: number) => {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 };
 
-test("Parcelar 3x writes three parcelas", async ({ page, request }) => {
+test("Recorrente 3x writes three parcelas", async ({ page, request }) => {
   await requireServer(request);
   test.setTimeout(90_000);
 
@@ -32,12 +32,12 @@ test("Parcelar 3x writes three parcelas", async ({ page, request }) => {
   const tabs = page.getByRole("navigation", { name: "Navegação principal" });
   await tabs.getByRole("button", { name: "Lançar" }).click();
   await launch.getByRole("radio", { name: "Conta" }).click();
-  await launch.getByLabel("Valor").fill("300,00");
-  await launch.getByRole("switch", { name: "Parcelar compra" }).click();
-  await launch.getByRole("radio", { name: "3×" }).click();
-  await expect(launch).toContainText("Projeção: 3× de R$ 100,00");
+  await launch.getByLabel("Valor").fill("100,00");
+  await launch.getByRole("switch", { name: "Recorrente" }).click();
+  await launch.getByRole("radio", { name: "3", exact: true }).click();
+  await expect(launch).toContainText("3× de R$ 100,00 · repete todo dia");
   await launch.getByRole("button", { name: "Salvar" }).click();
-  await expect(page.getByText("3 parcelas lançadas")).toBeVisible();
+  await expect(page.getByText("3 lançamentos criados")).toBeVisible();
   await page.goto(`/mes?m=${monthFrom(1)}`);
   await expect(page.getByRole("region", { name: "Lançamentos" })).toContainText("R$ 100,00");
 });

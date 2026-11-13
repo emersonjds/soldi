@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { repeatSummary, resizeLine, seriesEnd } from "./series-step";
+import { OPEN_LABEL, repeatSummary, resizeLine, seriesEnd } from "./series-step";
+
+describe("OPEN_LABEL", () => {
+  it("names an open series by its step", () => {
+    expect(OPEN_LABEL).toEqual({ month: "Todo mês", week: "Toda semana", year: "Todo ano" });
+  });
+});
 
 describe("repeatSummary", () => {
   it("says when a series ends, in its step's words", () => {

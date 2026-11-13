@@ -17,7 +17,8 @@ pub async fn list(
     include_inactive: bool,
 ) -> Result<Vec<Bill>, AppError> {
     let mut conn = pool.acquire().await?;
-    Ok(repo::list(&mut conn, user.id, include_inactive).await?)
+    let this_month = first_of(crate::today_sao_paulo());
+    Ok(repo::list(&mut conn, user.id, include_inactive, this_month).await?)
 }
 
 /// Rule 11: one of the caller's active `bill` categories.
@@ -102,6 +103,9 @@ pub async fn create(
     transaction_id: Option<Uuid>,
 ) -> Result<Bill, AppError> {
     let input = domain::check(input, "")?;
+    if let (Some(n), Some(last)) = (input.installments, input.last_month) {
+        domain::check_plan(n, last, first_of(crate::today_sao_paulo()))?;
+    }
     if transaction_id.is_some() && input.closing_day.is_some() {
         return Err(AppError::invalid(
             "transaction_id",
@@ -159,6 +163,10 @@ pub async fn update(
             due_day: patch.due_day.unwrap_or(current.due_day),
             category_id: patch.category_id.unwrap_or(current.category_id),
             closing_day: patch.closing_day.or(current.closing_day),
+            installments: patch.installments.or(current.installments),
+            last_month: patch
+                .last_month
+                .or(current.installments.and(current.last_month)),
         },
         "",
     )?;
@@ -169,17 +177,59 @@ pub async fn update(
             check_card_category(&mut conn, user, category_id).await?;
         }
     }
+    let this_month = first_of(crate::today_sao_paulo());
     if current.closing_day.is_some()
         && next.closing_day != current.closing_day
-        && repo::paid_since(&mut conn, user.id, id, first_of(crate::today_sao_paulo())).await?
+        && repo::paid_since(&mut conn, user.id, id, this_month).await?
     {
         return Err(domain::fatura_paid());
     }
-    let active = patch.active.unwrap_or(current.active);
-    if active && !current.active {
-        check_bill_kind(&mut conn, user, next.category_id).await?;
+    let plan = if patch.installments.is_some() || patch.last_month.is_some() {
+        let (Some(n), Some(last)) = (patch.installments, patch.last_month) else {
+            return Err(AppError::invalid(
+                "last_month",
+                "send installments and last_month together",
+            ));
+        };
+        domain::check_plan(n, last, this_month)?;
+        if repo::last_paid(&mut conn, user.id, id)
+            .await?
+            .is_some_and(|paid| last < first_of(paid))
+        {
+            return Err(AppError::invalid("last_month", "must keep the paid months"));
+        }
+        Some(last)
+    } else {
+        None
+    };
+    if (current.installments.is_some() || plan.is_some()) && patch.active.is_some() {
+        return Err(AppError::invalid(
+            "active",
+            "a parcelado bill ends on its last parcela",
+        ));
     }
-    repo::update(&mut conn, user.id, id, &next, active)
+    // D35: Parar keeps this month and any month paid ahead; Retomar after the end restarts D17,
+    // and so does a plan on a stopped Fixo.
+    let ended = current.last_month.is_some_and(|last| last < this_month);
+    let (last_month, restart) = match patch.active {
+        Some(false) if current.active => {
+            let paid = repo::last_paid(&mut conn, user.id, id).await?;
+            (
+                Some(domain::stop_month(crate::today_sao_paulo(), paid)),
+                false,
+            )
+        }
+        Some(true) if !current.active => {
+            check_bill_kind(&mut conn, user, next.category_id).await?;
+            (None, ended)
+        }
+        None if plan.is_some() && !current.active => {
+            check_bill_kind(&mut conn, user, next.category_id).await?;
+            (plan, ended)
+        }
+        _ => (plan.or(current.last_month), false),
+    };
+    repo::update(&mut conn, user.id, id, &next, last_month, restart)
         .await?
         .ok_or(AppError::NotFound)
 }
@@ -192,7 +242,8 @@ pub async fn archive(pool: &PgPool, user: &CurrentUser, id: Uuid) -> Result<(), 
     }
 }
 
-/// Rules 2 to 4 and 12: one bill entry a month, inside `month` when given. D28: a card's
+/// Rules 2 to 4 and 12: one bill entry a month, inside `month` when given; D35: none after
+/// `last_month`. D28: a card's
 /// fatura needs its amount and stays payable once the card is archived.
 pub async fn pay(
     pool: &PgPool,
@@ -205,7 +256,6 @@ pub async fn pay(
     let mut conn = pool.acquire().await?;
     let bill = repo::find_payable(&mut conn, user.id, id)
         .await?
-        .filter(|bill| bill.active)
         .ok_or(AppError::NotFound)?;
     check_bill_kind(&mut conn, user, bill.category_id).await?;
     let amount = input
@@ -221,10 +271,16 @@ pub async fn pay(
         repeat_months: None,
         repeat_every: None,
         installments: None,
+        first_installment: None,
+        open_ended: false,
         card_id: None,
     })?;
     if month.is_some_and(|first| !(first..=month_end(first)).contains(&entry.date)) {
         return Err(AppError::invalid("date", "must be in the month"));
+    }
+    let paid_month = month.unwrap_or(first_of(entry.date));
+    if bill.last_month.is_some_and(|last| paid_month > last) {
+        return Err(domain::bill_ended());
     }
     transactions::service::check_opening(&mut conn, user, entry.date).await?;
     let transaction_id =
@@ -269,6 +325,13 @@ pub async fn insert_all(
         return Err(AppError::invalid(
             &format!("bills[{index}].closing_day"),
             "a card is added from Contas fixas",
+        ));
+    }
+    // D35: `check` already refuses `last_month` without `installments`.
+    if let Some(index) = bills.iter().position(|bill| bill.installments.is_some()) {
+        return Err(AppError::invalid(
+            &format!("bills[{index}].installments"),
+            "a parcelado conta fixa is added from Contas fixas",
         ));
     }
     let ids: Vec<_> = bills.iter().map(|bill| bill.category_id).collect();

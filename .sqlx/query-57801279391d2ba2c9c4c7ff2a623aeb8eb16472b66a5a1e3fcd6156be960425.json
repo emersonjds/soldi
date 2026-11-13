@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id AS \"id!\" FROM (\n               SELECT DISTINCT ON (series_id) id, date, series_every, card_id FROM transactions\n               WHERE user_id = $1 AND series_open ORDER BY series_id, date DESC, id DESC) last\n           WHERE last.date + CASE last.series_every WHEN 'week' THEN interval '7 days'\n                                                    WHEN 'year' THEN interval '1 year'\n                                                    ELSE interval '1 month' END <= $2::date\n             AND NOT EXISTS (SELECT 1 FROM recurring_bills card\n                             WHERE card.user_id = $1 AND card.id = last.card_id\n                               AND card.archived_at IS NOT NULL)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "transactions",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Date"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "57801279391d2ba2c9c4c7ff2a623aeb8eb16472b66a5a1e3fcd6156be960425"
+}
