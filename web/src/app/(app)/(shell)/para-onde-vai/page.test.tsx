@@ -46,7 +46,7 @@ describe("Para onde vai", () => {
     expect(hero).toHaveClass("lg:hidden");
     expect(hero).toHaveTextContent("FLUXO DE DESPESAS • CONSOLIDADO");
     await userEvent.click(within(hero).getByRole("button", { name: "Próximo mês" }));
-    expect(router.replace).toHaveBeenLastCalledWith("/para-onde-vai?m=2026-12", { scroll: false });
+    expect(window.location.pathname + window.location.search).toBe("/para-onde-vai?m=2026-12");
 
     expect(await screen.findByText("Total gasto")).toBeInTheDocument();
     expect(row("Aluguel")).toHaveTextContent("86,7% das despesas");

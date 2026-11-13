@@ -7,6 +7,14 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.57.3
+
+> Headline: the month moves again
+
+### Web
+
+- The month switcher, the Próximos meses chips and the Categorias kind tabs move again in the published app; they changed only the address in development (SOL-120).
+
 ## 0.57.2
 
 > Headline: a month ahead lists all its entries
