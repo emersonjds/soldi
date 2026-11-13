@@ -805,6 +805,29 @@ describe("Contas fixas", () => {
       expect(await patches(requests)[1].json()).toMatchObject({ installments: 6, last_month: "2026-11-01" });
     });
 
+    it("turns an existing Fixo parcelado, with no Cartão de crédito switch", async () => {
+      vi.setSystemTime(new Date(2026, 10, 12, 12));
+      const { requests } = open({
+        replies: { [`PATCH /api/bills/${BILL_ALUGUEL.id}`]: { status: 200, body: BILL_ALUGUEL } },
+      });
+      await userEvent.click(await screen.findByRole("button", { name: /^Aluguel Residencial/ }));
+      const sheet = await screen.findByRole("dialog", { name: "Editar conta" });
+      expect(within(sheet).queryByRole("switch", { name: "Cartão de crédito" })).not.toBeInTheDocument();
+
+      await userEvent.click(within(sheet).getByRole("switch", { name: "Parcelado" }));
+      expect(within(sheet).queryByRole("switch", { name: "Ativa" })).not.toBeInTheDocument();
+      const day = within(sheet).getByLabelText("Dia do vencimento recorrente");
+      await userEvent.clear(day);
+      await userEvent.type(day, "20");
+      await userEvent.type(within(sheet).getByLabelText("Quantas parcelas"), "6");
+      await userEvent.clear(within(sheet).getByLabelText("Parcela atual"));
+      await userEvent.type(within(sheet).getByLabelText("Parcela atual"), "5");
+      await userEvent.click(within(sheet).getByRole("button", { name: "Salvar Conta Fixa" }));
+
+      await waitFor(() => expect(patches(requests)).toHaveLength(1));
+      expect(await patches(requests)[0].json()).toMatchObject({ installments: 6, last_month: "2026-12-01" });
+    });
+
     it("says a stopped Fixo leaves the next months and keeps this one and the earlier ones", async () => {
       open();
       await userEvent.click(await screen.findByRole("button", { name: /^Aluguel Residencial/ }));
