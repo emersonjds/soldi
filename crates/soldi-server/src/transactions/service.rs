@@ -422,6 +422,10 @@ pub async fn update(
             repo::set_dates(&mut tx, user.id, &ids, &dates).await?;
         }
     }
+    // D28: an open series grows onto its card, which must still be live.
+    if let Some(card_id) = next.card_id.filter(|_| patch.open_ended == Some(true)) {
+        check_card(&mut tx, user, card_id).await?;
+    }
     match (patch.open_ended, &current.series) {
         (Some(true), Some(series)) if !series.open_ended => {
             repo::set_open(&mut tx, user.id, series.id, true).await?;
@@ -433,6 +437,12 @@ pub async fn update(
             }
         }
         (Some(false), Some(series)) if series.open_ended => {
+            let after = repo::members_from(&mut tx, user.id, series.id, next.date).await?;
+            let after = after
+                .into_iter()
+                .filter(|(member, date, _)| (*date, *member) > (next.date, id))
+                .map(|(_, date, card_id)| (card_id, date));
+            check_faturas_open(&mut tx, user, after).await?;
             repo::delete_after(&mut tx, user.id, series.id, next.date, id).await?;
             repo::set_open(&mut tx, user.id, series.id, false).await?;
         }

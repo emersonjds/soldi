@@ -103,7 +103,7 @@ fn check_installments(input: &CreateTransaction, amount: Decimal) -> Result<(), 
     Ok(())
 }
 
-/// D36: a Fixo with no end is an Entrada or a Diário off a card; a Saída with no end is a conta fixa.
+/// D36: a Fixo with no end is an Entrada or a Diário, a card's included; a Saída with no end is a conta fixa.
 fn check_open_ended(input: &CreateTransaction) -> Result<(), AppError> {
     if !input.open_ended {
         return Ok(());
@@ -119,9 +119,6 @@ fn check_open_ended(input: &CreateTransaction) -> Result<(), AppError> {
             "open_ended",
             "a Saída with no end is a conta fixa",
         ));
-    }
-    if input.card_id.is_some() {
-        return Err(AppError::invalid("open_ended", "not on a card yet"));
     }
     Ok(())
 }

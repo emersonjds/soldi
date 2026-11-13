@@ -1179,3 +1179,96 @@ async fn d36_a_read_with_nothing_behind_takes_no_series_lock(pool: PgPool) {
     lock.commit().await.unwrap();
     assert_eq!(rows_and_months(&pool, "ana@example.com").await, (12, 12));
 }
+
+async fn subscription(user: &TestApp, card_id: &str) -> Value {
+    let category_id = user.category_id("Mercado").await;
+    let (status, created) = user
+        .post(
+            "/api/transactions",
+            json!({ "date": soldi_server::today_sao_paulo().to_string(), "amount": "30",
+                    "kind": "daily", "category_id": category_id, "card_id": card_id,
+                    "open_ended": true }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{created}");
+    created
+}
+
+fn due(months: u32) -> String {
+    format!("{}-10", month_ahead(months))
+}
+
+/// Ana and Bia opened this month, each with a card.
+async fn two_cards(pool: PgPool) -> (TestApp, TestApp, String, String) {
+    let ana = TestApp::signed_in(pool, "ana@example.com").await;
+    let bia = ana.another_user("bia@example.com").await;
+    let first = format!("{}-01", month_ahead(0));
+    open_at(&ana, "0", &first).await;
+    open_at(&bia, "0", &first).await;
+    let porto = card(&ana, "Porto").await;
+    let nubank = card(&bia, "Nubank").await;
+    (ana, bia, porto, nubank)
+}
+
+#[sqlx::test]
+async fn d36_a_card_subscription_lands_in_the_fatura_of_each_month(pool: PgPool) {
+    let (ana, bia, porto, nubank) = two_cards(pool.clone()).await;
+    subscription(&ana, &porto).await;
+    let today = soldi_server::today_sao_paulo().to_string();
+    spend(&bia, &today, "70", &nubank).await;
+
+    for ahead in [2, 6, 20] {
+        let (status, view) = ana
+            .get(&format!("/api/months/{}", month_ahead(ahead)))
+            .await;
+        assert_eq!(status, StatusCode::OK, "{view}");
+        assert_eq!(
+            faturas(&view),
+            [row("Porto", "30.00", &due(ahead), false)],
+            "{ahead}"
+        );
+    }
+    assert_eq!(rows_and_months(&pool, "bia@example.com").await, (1, 1));
+}
+
+#[sqlx::test]
+async fn d36_parar_a_card_subscription_leaves_a_paid_fatura_as_it_is(pool: PgPool) {
+    let (ana, bia, porto, nubank) = two_cards(pool.clone()).await;
+    let created = subscription(&ana, &porto).await;
+    subscription(&bia, &nubank).await;
+    let (status, payment) = ana
+        .post(
+            &format!("/api/bills/{porto}/pay?month={}", month_ahead(2)),
+            json!({ "date": due(2), "amount": "30" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{payment}");
+    let first = format!("/api/transactions/{}", created["id"].as_str().unwrap());
+
+    for (status, problem) in [
+        ana.patch(&first, json!({ "open_ended": false })).await,
+        ana.delete(&format!("{first}?scope=following")).await,
+    ] {
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+        assert_eq!(problem["type"], "urn:soldi:error:fatura-paid");
+    }
+    let (_, ledger) = ana
+        .get(&format!("/api/transactions?month={}", month_ahead(4)))
+        .await;
+    let fifth = ledger[0]["id"].as_str().unwrap();
+    let (status, stopped) = ana
+        .patch(
+            &format!("/api/transactions/{fifth}"),
+            json!({ "open_ended": false }),
+        )
+        .await;
+
+    assert_eq!(status, StatusCode::OK, "{stopped}");
+    let (_, paid) = ana.get(&format!("/api/months/{}", month_ahead(2))).await;
+    assert_eq!(faturas(&paid), [row("Porto", "30.00", &due(2), true)]);
+    let (_, later) = ana
+        .get(&format!("/api/transactions?month={}", month_ahead(8)))
+        .await;
+    assert_eq!(later, json!([]));
+    assert_eq!(rows_and_months(&pool, "bia@example.com").await, (12, 12));
+}

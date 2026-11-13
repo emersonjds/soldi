@@ -2548,15 +2548,13 @@ async fn d36_a_fixo_salario_is_written_through_the_horizon(pool: PgPool) {
 }
 
 #[sqlx::test]
-async fn d36_open_ended_is_for_entradas_and_diario_off_card_alone(pool: PgPool) {
+async fn d36_open_ended_is_for_entradas_and_diario_alone(pool: PgPool) {
     let user = opened(pool, "ana@example.com").await;
     let market = user.category_id("Mercado").await;
     let rent = user.category_id("Aluguel").await;
-    let porto = card(&user, "Porto").await;
 
     for (extra, field) in [
         (json!({ "kind": "bill", "category_id": rent }), "open_ended"),
-        (json!({ "card_id": porto }), "open_ended"),
         (json!({ "repeat_months": 6 }), "open_ended"),
         (json!({ "installments": 6 }), "open_ended"),
         (
@@ -2793,6 +2791,53 @@ async fn d36_a_12x_series_turns_fixo_without_doubling_a_month(pool: PgPool) {
     assert_eq!(place(&entries[14]), (15, 15));
     assert_eq!(members(&pool, &hers).await, 12);
     assert_eq!(open_members(&pool, &hers).await, 0);
+}
+
+#[sqlx::test]
+async fn d36_a_card_subscription_grows_on_its_card_until_the_card_is_archived(pool: PgPool) {
+    let ana = opened(pool.clone(), "ana@example.com").await;
+    let bia = opened(pool.clone(), "bia@example.com").await;
+    let porto = card(&ana, "Porto").await;
+    let market = ana.category_id("Mercado").await;
+    let bounded = |months: i16| {
+        let mut body = on_card(&today().to_string(), "daily", &market, &porto);
+        body["repeat_months"] = json!(months);
+        body
+    };
+    let (status, three) = ana.post("/api/transactions", bounded(3)).await;
+    assert_eq!(status, StatusCode::CREATED, "{three}");
+    let hers = fixo(&bia, "daily", "Mercado", json!({})).await;
+
+    let (status, fixed) = ana.patch(&uri(&three), json!({ "open_ended": true })).await;
+    let subscription = fixo(&ana, "daily", "Mercado", json!({ "card_id": porto })).await;
+
+    assert_eq!(status, StatusCode::OK, "{fixed}");
+    assert_eq!(fixed["series"]["open_ended"], true);
+    assert_eq!(subscription["card_id"], porto);
+    assert_eq!(subscription["series"]["open_ended"], true);
+    let (status, _) = ana.get("/api/forecast").await;
+    assert_eq!(status, StatusCode::OK);
+    for series in [&three, &subscription] {
+        assert_eq!(members(&pool, series).await, 12);
+        assert_eq!(member(&ana, series, 12).await["card_id"], porto);
+    }
+
+    let (status, two) = ana.post("/api/transactions", bounded(2)).await;
+    assert_eq!(status, StatusCode::CREATED, "{two}");
+    trim(&pool, &subscription).await;
+    let behind = members(&pool, &subscription).await;
+    assert_eq!(
+        ana.delete(&format!("/api/bills/{porto}")).await.0,
+        StatusCode::NO_CONTENT
+    );
+    let (status, problem) = ana.patch(&uri(&two), json!({ "open_ended": true })).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+    assert_eq!(problem["errors"][0]["field"], "card_id");
+    let (status, _) = ana.get("/api/forecast").await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(members(&pool, &subscription).await, behind);
+    assert_eq!(members(&pool, &hers).await, 12);
+    assert_eq!(member(&bia, &hers, 12).await["card_id"], Value::Null);
 }
 
 #[sqlx::test]

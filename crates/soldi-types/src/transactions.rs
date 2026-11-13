@@ -114,7 +114,7 @@ pub struct CreateTransaction {
     #[schema(minimum = 1, maximum = 60)]
     pub first_installment: Option<i16>,
     /// Repeats every `repeat_every` with no end; members are written ahead as months are read
-    /// (D36). `income` or `daily`, no `card_id`, not with `repeat_months` or `installments`.
+    /// (D36). `income` or `daily` (a card spend included), not with `repeat_months` or `installments`.
     #[serde(default)]
     pub open_ended: bool,
     /// One of the caller's unarchived cards; only on a `daily` entry.
