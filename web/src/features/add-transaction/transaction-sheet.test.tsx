@@ -904,8 +904,15 @@ describe("TransactionSheet", () => {
       expect(await screen.findByText("Não foi possível salvar o lançamento.")).toBeInTheDocument();
     });
 
+    it("never offers Tornar sem fim on a bill member, which only a Conta Fixa repeats", async () => {
+      setup({ transaction: MEMBER }, resize);
+
+      expect(await screen.findByText("Parte de uma série de 12 meses")).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Tornar sem fim" })).not.toBeInTheDocument();
+    });
+
     it("turns a bounded member into an open series", async () => {
-      const { sent } = setup({ transaction: MEMBER }, resize);
+      const { sent } = setup({ transaction: { ...MEMBER, kind: "daily" as const } }, resize);
 
       expect(await screen.findByText("Parte de uma série de 12 meses")).toBeInTheDocument();
       expect(screen.queryByRole("button", { name: "Parar recorrência" })).not.toBeInTheDocument();

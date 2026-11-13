@@ -816,7 +816,11 @@ export const TransactionSheet = ({
         onSave={save}
         onConvert={billSheet && setConverting}
         onDiscard={() => onOpenChange(false)}
-        onOpenEnded={transaction?.series ? (openEnded) => setOpenEnded(transaction.id, openEnded) : undefined}
+        onOpenEnded={
+          transaction?.series && (transaction.series.open_ended || transaction.kind !== "bill")
+            ? (openEnded) => setOpenEnded(transaction.id, openEnded)
+            : undefined
+        }
         onDelete={
           onDelete &&
           (() => {
