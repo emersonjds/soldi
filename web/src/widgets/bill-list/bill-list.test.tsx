@@ -826,6 +826,24 @@ describe("Contas fixas", () => {
       expect(body).not.toHaveProperty("last_month");
     });
 
+    it("never sends Ativa with the parcelas when a Fixo is stopped and turned parcelado", async () => {
+      vi.setSystemTime(new Date(2026, 10, 12, 12));
+      const { requests } = open({
+        replies: { [`PATCH /api/bills/${BILL_ALUGUEL.id}`]: { status: 200, body: BILL_ALUGUEL } },
+      });
+      await userEvent.click(await screen.findByRole("button", { name: /^Aluguel Residencial/ }));
+      const sheet = await screen.findByRole("dialog", { name: "Editar conta" });
+      await userEvent.click(within(sheet).getByRole("switch", { name: "Ativa" }));
+      await userEvent.click(within(sheet).getByRole("switch", { name: "Parcelado" }));
+      await userEvent.type(within(sheet).getByLabelText("Quantas parcelas"), "6");
+      await userEvent.click(within(sheet).getByRole("button", { name: "Salvar Conta Fixa" }));
+
+      await waitFor(() => expect(patches(requests)).toHaveLength(1));
+      const body = await patches(requests)[0].json();
+      expect(body).toMatchObject({ installments: 6 });
+      expect(body).not.toHaveProperty("active");
+    });
+
     it("turns an existing Fixo parcelado, with no Cartão de crédito switch", async () => {
       vi.setSystemTime(new Date(2026, 10, 12, 12));
       const { requests } = open({

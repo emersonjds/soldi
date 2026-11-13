@@ -384,6 +384,25 @@ async fn d35_a_parcelado_bill_edits_its_plan_but_never_hides_a_paid_month(pool: 
 }
 
 #[sqlx::test]
+async fn d35_a_plan_never_comes_with_ativa(pool: PgPool) {
+    let ana = TestApp::signed_in(pool, "ana@example.com").await;
+    let fixo = create(&ana, rent(category_id(&ana, "Aluguel").await)).await;
+    let last = this_month() + chrono::Months::new(2);
+
+    for active in [false, true] {
+        let (status, problem) = ana
+            .patch(
+                &bill_uri(&fixo),
+                json!({ "active": active, "installments": 6, "last_month": last }),
+            )
+            .await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+        assert_eq!(problem["errors"][0]["field"], "active");
+    }
+    assert_eq!(ana.get("/api/bills").await.1, json!([fixo]));
+}
+
+#[sqlx::test]
 async fn d35_a_card_still_has_no_pause(pool: PgPool) {
     let ana = TestApp::signed_in(pool, "ana@example.com").await;
     let card = create(&ana, porto(&ana.category_id("Cartão").await)).await;

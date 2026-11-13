@@ -181,7 +181,8 @@ export const BillForm = ({
     event.preventDefault();
     setSubmitted(true);
     if (!name || !day || !categoryId) return;
-    const fields = { name, due_day: day, category_id: categoryId, active: draft.active };
+    const active = draft.parcelado ? (bill?.active ?? true) : draft.active;
+    const fields = { name, due_day: day, category_id: categoryId, active };
     if (draft.card) {
       if (closingDay) onSave({ ...fields, closing_day: closingDay });
       return;

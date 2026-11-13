@@ -202,7 +202,7 @@ pub async fn update(
     } else {
         None
     };
-    if current.installments.is_some() && patch.active.is_some() {
+    if (current.installments.is_some() || plan.is_some()) && patch.active.is_some() {
         return Err(AppError::invalid(
             "active",
             "a parcelado bill ends on its last parcela",
