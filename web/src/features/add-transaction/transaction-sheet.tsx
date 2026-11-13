@@ -5,7 +5,6 @@ import { type FormEvent, type ReactNode, useState } from "react";
 import {
   ArrowDown,
   ArrowRight,
-  Calculator,
   CalendarDays,
   Check,
   CircleCheck,
@@ -48,7 +47,6 @@ import { cn } from "@/lib/utils";
 import { ApiError, problemMessage, type Schemas } from "@/shared/api/client";
 import { useCurrency } from "@/shared/lib/currency";
 import { isoWeekStart, todayISO, weekdayName } from "@/shared/lib/date";
-import { installmentCents } from "@/shared/lib/installments";
 import { formatMoney, positiveAmount } from "@/shared/lib/money";
 import { cents, fromCents } from "@/shared/lib/tier";
 import { AmountKeypad, useKeypad } from "@/shared/ui/amount-keypad";
@@ -65,8 +63,9 @@ const KINDS: { value: Kind; label: string; icon: LucideIcon }[] = [
   { value: "daily", label: "Diário", icon: ShoppingBag },
 ];
 
-const PRESETS = ["2", "3", "6", "12", "other"];
-const SERIES_PRESETS = ["3", "6", "12", "other"];
+/** `always`: Sempre, an open series (D36). */
+const PRESETS = ["always", "2", "3", "6", "12", "other"];
+const PRESET_LABELS: Record<string, string> = { always: "Sempre", other: "Outro" };
 
 const caption = "font-semibold text-muted-foreground text-xs uppercase tracking-[0.12em]";
 
@@ -82,9 +81,11 @@ type Draft = {
   date: string;
   note: string;
   repeat: boolean;
-  installments: boolean;
   preset: string;
   custom: string;
+  /** Começa na parcela, shown. */
+  starting: boolean;
+  first: string;
   scope: Scope;
   every: Every;
 };
@@ -105,6 +106,11 @@ const FIELD_MESSAGES: [server: string, message: string][] = [
   ],
   [PAYMENT_KIND, "Um pagamento de conta fixa continua sendo Saída."],
 ];
+
+const presetOf = (open: boolean, total: string) => {
+  if (open) return "always";
+  return PRESETS.includes(total) ? total : "other";
+};
 
 const prefillOf = ({ note, category, amount, date }: Source): BillPrefill => ({
   name: (note ?? category.name).slice(0, 100),
@@ -144,18 +150,28 @@ const TransactionForm = ({
   const category = draft.category ?? categories.data?.[0];
   const cardId = (draft.kind === "daily" && draft.cardId) || null;
   const amount = positiveAmount(draft.amount);
+  const openEnded = draft.preset === "always";
   const months = Number(draft.preset === "other" ? draft.custom : draft.preset);
   const series = transaction?.series;
-  const presets = series ? SERIES_PRESETS : PRESETS;
   const minMonths = Math.max(2, series?.position ?? 2);
   const monthsValid = Number.isInteger(months) && months >= minMonths && months <= 60;
   const canRepeat = !transaction?.recurring_bill_id && !transaction?.cofrinho_id && !series;
-  const installments = draft.installments && !transaction && draft.kind !== "income";
-  const counted = draft.repeat || installments || Boolean(series);
-  // A moved date can change the member's position; Meses na série waits for the next save.
+  const counted = draft.repeat || Boolean(series);
+  // A moved date can change the member's position; Quantas vezes waits for the next save.
   const moved = Boolean(series) && draft.date !== transaction?.date;
-  const resizing = Boolean(series) && !moved && months !== series?.total;
+  // An open member has no length to resize (D36).
+  const resizing = Boolean(series) && !series?.open_ended && !moved && months !== series?.total;
   const every = draft.every;
+  const counting = draft.repeat && !openEnded;
+  // `first_installment` rides only on monthly `installments` (D16), never on an Entrada.
+  const canStart = counting && !transaction && draft.kind !== "income" && every === "month";
+  const starting = canStart && draft.starting;
+  const first = Number(draft.first);
+  const firstValid = Number.isInteger(first) && first >= 1 && first <= months;
+  const offset = starting && firstValid && first > 1;
+  const written = offset ? months - first + 1 : months;
+  // `open_ended` 422s on a bill (D36): Criar como Conta Fixa instead.
+  const refused = draft.repeat && openEnded && draft.kind === "bill";
   const unit = UNITS[every];
   const weekly = every === "week";
   // D20, D32: a move keeps each member in its own month (its own ISO week when weekly).
@@ -168,23 +184,21 @@ const TransactionForm = ({
     !weekly && day >= 29 ? " Nos meses mais curtos, no último dia." : ""
   }`;
   const resized = resizing && monthsValid ? months : undefined;
-  const monthsChecked = draft.repeat || installments || resizing;
+  const monthsChecked = counting || resizing;
   const monthsError = submitted && monthsChecked && !monthsValid;
-  let monthsLabel = "Quantas vezes";
-  if (installments) monthsLabel = "Quantas parcelas";
-  if (series) monthsLabel = "Duração da série";
-  const split = installments && amount && monthsValid ? installmentCents(cents(amount), months) : null;
-  const splitValid = !split || split[0] > 0;
+  const firstError = submitted && starting && monthsValid && !firstValid;
+  const weekday = weekdayName(draft.date);
+  const openLine = {
+    month: `todo dia ${day}`,
+    week: `${/^(sábado|domingo)/.test(weekday) ? "todo" : "toda"} ${weekday}`,
+    year: `todo ${day}/${draft.date.slice(5, 7)}`,
+  }[every];
   const money = (value: number) => formatMoney(fromCents(value), currency);
 
   let amountLabel = draft.kind === "income" ? "Valor da entrada" : "Valor do gasto";
   if (series) amountLabel = "Valor por parcela";
   let dateLegendClass = isLg ? "sr-only" : undefined;
   if (series) dateLegendClass = caption;
-  const presetLabel = (preset: string) => {
-    if (series) return preset === "other" ? "Customizado" : `${preset} ${unit.many}`;
-    return preset === "other" ? "Outro" : `${preset}×`;
-  };
 
   const resizeNote = series && resized && resizeLine(every, series.last_date, resized - series.total);
   // Shortening an Entrada series loses money: no saving.
@@ -195,19 +209,29 @@ const TransactionForm = ({
 
   const set = (patch: Partial<Draft>) => setDraft((current) => ({ ...current, ...patch }));
 
-  const fields = (): NewTransaction | undefined => {
+  /** `repeat` false: the plain entry, for Criar como Conta Fixa. */
+  const fields = (repeat = draft.repeat): NewTransaction | undefined => {
     setSubmitted(true);
-    if (!amount || !category || (monthsChecked && !monthsValid) || !splitValid || periodChanged) return;
+    const counts = repeat && counting;
+    if (!amount || !category || periodChanged) return;
+    if ((counts || resizing) && !monthsValid) return;
+    if (counts && starting && !firstValid) return;
     const note = draft.note.trim();
+    const parcelas = counts && offset;
+    let repeatMonths = resized;
+    if (counts) repeatMonths = parcelas ? undefined : months;
     return {
       date: draft.date,
-      amount,
+      // Parcelas split a total (D16): the total of N equal ones.
+      amount: parcelas ? fromCents(cents(amount) * months) : amount,
       kind: draft.kind,
       category_id: category.id,
       note: note || null,
-      repeat_months: draft.repeat ? months : resized,
-      repeat_every: draft.repeat ? every : undefined,
-      installments: installments ? months : undefined,
+      repeat_months: repeatMonths,
+      repeat_every: repeat && !parcelas ? every : undefined,
+      open_ended: repeat && openEnded ? true : undefined,
+      installments: parcelas ? months : undefined,
+      first_installment: parcelas ? first : undefined,
       // Absent keeps the stored card; `null` takes it off.
       card_id: cardId === (transaction?.card_id ?? null) ? undefined : cardId,
       category,
@@ -216,7 +240,7 @@ const TransactionForm = ({
 
   const save = (confirmed = false) => {
     const valid = fields();
-    if (!valid) return;
+    if (!valid || refused) return;
     // D33: asked here, before onSave closes the sheet and this dialog with it.
     if (series && draft.scope === "all" && !confirmed) return setAsking(true);
     onSave(valid, series ? draft.scope : undefined, moving);
@@ -227,11 +251,11 @@ const TransactionForm = ({
     save();
   };
 
-  const convertible = onConvert && (transaction?.kind ?? draft.kind) === "bill" && !draft.repeat && !installments;
+  const convertible = onConvert && (transaction?.kind ?? draft.kind) === "bill" && !counting;
 
   // Editar converts the stored entry; its unsaved edits stay out.
   const convert = () => {
-    const source = transaction ?? fields();
+    const source = transaction ?? fields(false);
     if (source) onConvert?.(source);
   };
 
@@ -338,20 +362,6 @@ const TransactionForm = ({
   );
   const monthsField = (canRepeat || series) && (
     <div className="flex flex-col gap-3">
-      {series && (
-        <div className="flex items-center justify-between gap-3">
-          <span className={caption}>Duração da série</span>
-          <Button
-            type="button"
-            variant="ghost"
-            disabled={moved}
-            onClick={() => set({ preset: initial.preset, custom: initial.custom })}
-            className="h-11 px-3 font-medium text-primary text-sm"
-          >
-            Ciclo Atual
-          </Button>
-        </div>
-      )}
       {canRepeat && (
         <label
           htmlFor="transaction-repeat-switch"
@@ -359,13 +369,15 @@ const TransactionForm = ({
         >
           <span id="transaction-repeat" className="flex items-center gap-2 font-medium text-base">
             <Repeat aria-hidden className="size-5 shrink-0 text-muted-foreground" />
-            Repetir lançamento (Série)
+            Recorrente
           </span>
           <Switch
             id="transaction-repeat-switch"
             aria-labelledby="transaction-repeat"
             checked={draft.repeat}
-            onCheckedChange={(repeat) => set({ repeat, installments: false, every: "month" })}
+            onCheckedChange={(repeat) =>
+              set({ repeat, every: "month", preset: "always", custom: "", starting: false, first: "1" })
+            }
           />
         </label>
       )}
@@ -385,46 +397,41 @@ const TransactionForm = ({
           ))}
         </ToggleGroup>
       )}
-      {!transaction && draft.kind !== "income" && (
-        <label
-          htmlFor="transaction-split-switch"
-          className="flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-xl bg-muted px-4"
-        >
-          <span id="transaction-split" className="flex items-center gap-2 font-medium text-base">
-            <Calculator aria-hidden className="size-5 shrink-0 text-muted-foreground" />
-            Parcelar compra
-          </span>
-          <Switch
-            id="transaction-split-switch"
-            aria-labelledby="transaction-split"
-            checked={installments}
-            onCheckedChange={(on) => set({ installments: on, repeat: false })}
-          />
-        </label>
-      )}
       {counted && (
         <>
+          <div className="flex min-h-11 items-center justify-between gap-3">
+            <span className={caption}>Quantas vezes</span>
+            {series && (
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={moved}
+                onClick={() => set({ preset: initial.preset, custom: initial.custom })}
+                className="h-11 px-3 font-medium text-primary text-sm"
+              >
+                Ciclo Atual
+              </Button>
+            )}
+          </div>
           <ToggleGroup
             type="single"
             spacing={0}
             value={draft.preset}
             onValueChange={(preset: string) => preset && set({ preset })}
-            aria-label={monthsLabel}
-            disabled={moved}
-            className={cn(
-              "grid w-full rounded-2xl bg-muted p-1",
-              series ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-5",
-            )}
+            aria-label="Quantas vezes"
+            disabled={moved || series?.open_ended}
+            className="grid w-full grid-cols-3 rounded-2xl bg-muted p-1"
           >
-            {presets.map((preset) => (
+            {PRESETS.map((preset) => (
               <ToggleGroupItem
                 key={preset}
                 value={preset}
-                disabled={preset !== "other" && Number(preset) < minMonths}
-                className={cn(chip, series && "gap-1")}
+                // Sempre on a bounded member is Tornar sem fim, not a resize.
+                disabled={Boolean(series) && (preset === "always" || Number(preset) < minMonths)}
+                className={cn(chip, "gap-1")}
               >
-                {series && draft.preset === preset && <Check aria-hidden className="size-4" />}
-                {presetLabel(preset)}
+                {draft.preset === preset && <Check aria-hidden className="size-4" />}
+                {PRESET_LABELS[preset] ?? preset}
               </ToggleGroupItem>
             ))}
           </ToggleGroup>
@@ -432,7 +439,7 @@ const TransactionForm = ({
             <div className="flex flex-col gap-1.5">
               <Input
                 inputMode="numeric"
-                aria-label={installments ? "Parcelas" : unit.label}
+                aria-label={unit.label}
                 placeholder={`De ${minMonths} a 60`}
                 value={draft.custom}
                 disabled={moved}
@@ -443,15 +450,49 @@ const TransactionForm = ({
               />
               {monthsError && (
                 <p id="transaction-months-error" role="alert" className="text-destructive text-sm">
-                  {installments ? "Escolha de 2 a 60 parcelas." : `Escolha de ${minMonths} a 60 ${unit.many}.`}
+                  {`Escolha de ${minMonths} a 60 vezes.`}
                 </p>
               )}
             </div>
           )}
-          {draft.repeat && monthsValid && (
+          {canStart && !draft.starting && (
+            <button
+              type="button"
+              onClick={() => set({ starting: true })}
+              className="inline-flex min-h-11 items-center self-start font-semibold text-primary text-sm underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring"
+            >
+              Já começou em outra parcela?
+            </button>
+          )}
+          {starting && (
+            <Field className="gap-1.5">
+              <FieldLabel htmlFor="transaction-first">Começa na parcela</FieldLabel>
+              <Input
+                id="transaction-first"
+                inputMode="numeric"
+                value={draft.first}
+                onChange={(event) => set({ first: event.target.value.replace(/\D/g, "").slice(0, 2) })}
+                aria-invalid={firstError}
+                aria-describedby={firstError ? "transaction-first-error" : undefined}
+                className="h-12 rounded-xl bg-muted text-base tabular-nums md:text-base"
+              />
+              {firstError && (
+                <p id="transaction-first-error" role="alert" className="text-destructive text-sm">
+                  {`Escolha de 1 a ${months}.`}
+                </p>
+              )}
+            </Field>
+          )}
+          {counting && monthsValid && (
             <p className="flex items-center gap-2 text-muted-foreground text-sm">
               <Lightbulb aria-hidden className="size-4 shrink-0" />
-              {`${amount ? `${months}× de ${formatMoney(amount, currency)} · ` : ""}${repeatSummary(every, draft.date, months)}`}
+              {`${amount ? `${written}× de ${formatMoney(amount, currency)} · ` : ""}${repeatSummary(every, draft.date, written)}`}
+            </p>
+          )}
+          {draft.repeat && openEnded && !refused && (
+            <p className="flex items-center gap-2 text-muted-foreground text-sm">
+              <Lightbulb aria-hidden className="size-4 shrink-0" />
+              {`Repete ${openLine}, sem data para parar.`}
             </p>
           )}
           {resizeNote && (
@@ -461,20 +502,6 @@ const TransactionForm = ({
             </p>
           )}
           {saving && <p className="font-medium text-sm">{`Economia projetada de ${saving} no orçamento previsto.`}</p>}
-          {amount && split && splitValid && (
-            <div className="flex flex-col gap-1 text-muted-foreground text-sm">
-              <p>{`Divide o valor total de ${formatMoney(amount, currency)} em ${months} parcelas automáticas`}</p>
-              <p className="font-medium text-foreground">{`Projeção: ${months}× de ${money(split[0])}`}</p>
-              {split[0] !== split[months - 1] && (
-                <p>{`Última parcela será ajustada para ${money(split[months - 1])} devido a centavos residuais.`}</p>
-              )}
-            </div>
-          )}
-          {submitted && !splitValid && (
-            <p role="alert" className="text-destructive text-sm">
-              Valor pequeno demais para {months} parcelas.
-            </p>
-          )}
           {!series && every === "month" && day >= 29 && (
             <p className="text-muted-foreground text-xs">Em meses mais curtos, cai no último dia.</p>
           )}
@@ -536,10 +563,7 @@ const TransactionForm = ({
               type="single"
               spacing={0}
               value={draft.kind}
-              onValueChange={(kind: Kind | "") =>
-                kind &&
-                set({ kind, category: undefined, cardId: "", installments: draft.installments && kind !== "income" })
-              }
+              onValueChange={(kind: Kind | "") => kind && set({ kind, category: undefined, cardId: "" })}
               aria-label="Tipo"
               className="grid w-full grid-cols-3 rounded-2xl bg-muted p-1"
             >
@@ -650,7 +674,8 @@ export const TransactionSheet = ({
     onOpenChange(false);
     const every = transaction?.series?.every ?? "month";
     const done = (fallback: string) => {
-      if (fields.installments) return toast.success(`${fields.installments} parcelas lançadas`);
+      if (fields.installments)
+        return toast.success(`${fields.installments - (fields.first_installment ?? 1) + 1} lançamentos criados`);
       toast.success(fields.repeat_months ? `${fields.repeat_months} lançamentos criados` : fallback);
     };
     if (!transaction) return create.mutate(fields, { onSuccess: () => done("Lançado"), onError: failed });
@@ -702,13 +727,15 @@ export const TransactionSheet = ({
 
   const repeat = {
     repeat: false,
-    installments: false,
-    preset: "12",
+    preset: "always",
     custom: "",
+    starting: false,
+    first: "1",
     scope: "this",
     every: transaction?.series?.every ?? "month",
   } as const;
-  const total = String(transaction?.series?.total ?? "");
+  const series = transaction?.series;
+  const total = String(series?.total ?? "");
   const initial: Draft = transaction
     ? {
         kind: transaction.kind,
@@ -718,7 +745,7 @@ export const TransactionSheet = ({
         date: transaction.date,
         note: transaction.note ?? "",
         ...repeat,
-        ...(total && { preset: SERIES_PRESETS.includes(total) ? total : "other", custom: total }),
+        ...(series && { preset: presetOf(series.open_ended, total), custom: total }),
       }
     : {
         kind: initialKind,
