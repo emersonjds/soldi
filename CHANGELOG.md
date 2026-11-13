@@ -7,6 +7,23 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.58.0
+
+> Headline: Recorrente, with or without an end
+
+### Server
+
+- A conta fixa ends at a month (`last_month`): Parar keeps this month and every earlier one, paid entries included; a parcelado conta fixa (`installments`) reads its parcela every month and stops after the last (D35). `Bill.active` is now derived; the `active` column is gone (migration 0026).
+- A series may stay open (`open_ended`) and grows as months are read, up to the 12-month horizon or the month viewed, capped at 60 months (D36, migration 0027). Card spends may be open too (subscriptions), never into a paid fatura.
+- `first_installment` starts a series at parcela k of N; PATCH `open_ended` turns a series sem fim or stops it from a member.
+
+### Web
+
+- Lançar: one `Recorrente` switch with `Quantas vezes` `Sempre · 2 · 3 · 6 · 12 · Outro` for Entrada, Saída, Diário and card spends; `Já começou em outra parcela?` starts at a later parcela.
+- Lançamentos read `Todo mês` / `Toda semana` / `Todo ano` on an open series, `k/N` on a bounded one; a member offers `Parar recorrência` or `Tornar sem fim`.
+- Contas fixas: `Parcelado` with `Quantas parcelas` and `Parcela atual`, also on an existing conta fixa; rows read `até mmm/aa` or `terminou em mmm/aa`; Contas a pagar shows the parcela.
+- A one-member series is edited and deleted without a scope choice; the selected count chip's check has room.
+
 ## 0.57.3
 
 > Headline: the month moves again
