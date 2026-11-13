@@ -3,7 +3,7 @@
 import { Suspense } from "react";
 
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 
 import {
   Breadcrumb,
@@ -14,11 +14,11 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import { monthParam } from "@/shared/lib/date";
+import { replaceUrl } from "@/shared/lib/url";
 import { PageLoading } from "@/shared/ui/page-state";
 import { CategoryList, kindParam } from "@/widgets/category-list/category-list";
 
 const CategoriasScreen = () => {
-  const router = useRouter();
   const search = useSearchParams();
   return (
     <CategoryList
@@ -27,7 +27,7 @@ const CategoriasScreen = () => {
       onKindChange={(next) => {
         const params = new URLSearchParams(search.toString());
         params.set("k", next);
-        router.replace(`/ajustes/categorias?${params}`, { scroll: false });
+        replaceUrl(`/ajustes/categorias?${params}`);
       }}
     />
   );

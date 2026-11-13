@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useState } from "react";
 
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 
 import { flushSync } from "react-dom";
 
@@ -12,6 +12,7 @@ import { useTransactions } from "@/entities/transaction/transaction-queries";
 import { TransactionSheet } from "@/features/add-transaction/transaction-sheet";
 import { EditBillSheet } from "@/features/edit-bill/edit-bill-sheet";
 import { monthParam } from "@/shared/lib/date";
+import { replaceUrl } from "@/shared/lib/url";
 import { PageError } from "@/shared/ui/page-state";
 import { ShellMonthSwitcher } from "@/widgets/app-shell/app-shell";
 import { BillsOfMonth } from "@/widgets/bills-of-month/bills-of-month";
@@ -23,7 +24,6 @@ import { RedDayAlert } from "@/widgets/red-day-alert/red-day-alert";
 import { SpendingGlance } from "@/widgets/spending-glance/spending-glance";
 
 const MonthScreen = () => {
-  const router = useRouter();
   const search = useSearchParams();
   const month = monthParam(search.get("m"));
   const fromTour = search.get("lancar") === "1";
@@ -125,7 +125,7 @@ const MonthScreen = () => {
           <MonthsAhead
             viewing={month}
             onOpen={(next) => {
-              router.replace(`/mes?m=${next}`, { scroll: false });
+              replaceUrl(`/mes?m=${next}`);
               window.scrollTo({ top: 0 });
             }}
             className="max-lg:order-4"

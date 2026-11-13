@@ -299,7 +299,7 @@ describe("Ajustes › Categorias", () => {
 
     await userEvent.click(screen.getByRole("radio", { name: /^Entradas & Receitas/ }));
 
-    expect(router.replace).toHaveBeenCalledWith("/ajustes/categorias?m=2026-11&k=income", { scroll: false });
+    expect(window.location.pathname + window.location.search).toBe("/ajustes/categorias?m=2026-11&k=income");
   });
 
   it("reads the kind from ?k=", async () => {
@@ -353,7 +353,7 @@ describe("Ajustes › Categorias", () => {
 
     await waitFor(() => expect(sent(requests, "POST")).toHaveLength(1));
     expect(await sent(requests, "POST")[0].json()).toMatchObject({ name: "Bônus", kind: "income" });
-    await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/ajustes/categorias?k=income", { scroll: false }));
+    await waitFor(() => expect(window.location.pathname + window.location.search).toBe("/ajustes/categorias?k=income"));
   });
 
   it("creates a subcategory from the card's Adicionar subcategoria, its parent preset", async () => {
@@ -467,7 +467,7 @@ describe("Ajustes › Categorias", () => {
       await userEvent.click(within(panel).getByRole("radio", { name: "Fixa" }));
       const confirm = await screen.findByRole("alertdialog", { name: "Mudar para Saída?" });
       await userEvent.click(within(confirm).getByRole("button", { name: "Mudar tipo" }));
-      await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/ajustes/categorias?k=bill", { scroll: false }));
+      await waitFor(() => expect(window.location.pathname + window.location.search).toBe("/ajustes/categorias?k=bill"));
 
       setSearch("k=bill");
       rerender();
