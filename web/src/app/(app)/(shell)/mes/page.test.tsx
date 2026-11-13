@@ -704,6 +704,31 @@ describe("Mês", () => {
     expect(screen.queryByRole("button", { name: "Desfazer" })).not.toBeInTheDocument();
   });
 
+  it("deletes the only member of a series without asking which", async () => {
+    const member = {
+      ...TRANSACTIONS[1],
+      series: { id: "s1", position: 1, total: 1, last_date: "2026-11-04", open_ended: false, every: "month" },
+    };
+    const requests = open({
+      "GET /api/transactions": { status: 200, body: [member] },
+      [`DELETE /api/transactions/${member.id}`]: { status: 204 },
+    });
+
+    await userEvent.click(
+      await within(await screen.findByRole("region", { name: "Lançamentos" })).findByRole("button", {
+        name: /Aluguel/,
+      }),
+    );
+    const actions = await screen.findByRole("dialog", { name: "Aluguel" });
+    await userEvent.click(within(actions).getByRole("button", { name: "Excluir" }));
+    expect(within(actions).queryByRole("radiogroup", { name: "Excluir quais?" })).not.toBeInTheDocument();
+    await userEvent.click(within(actions).getByRole("button", { name: "Excluir" }));
+
+    expect(await screen.findByText("Lançamento excluído")).toBeInTheDocument();
+    const deleted = requests.find((request) => request.method === "DELETE");
+    expect(new URL(deleted?.url ?? "").searchParams.get("scope")).toBe("this");
+  });
+
   it("opens the delete scope from Excluir da Série... in the series sheet", async () => {
     const member = {
       ...TRANSACTIONS[1],

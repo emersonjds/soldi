@@ -110,4 +110,18 @@ describe("ScopeRadio", () => {
     );
     expect(screen.queryByText(/alterada/)).not.toBeInTheDocument();
   });
+
+  it.each(["edit", "delete"] as const)("offers no scope on a one-member series (%s)", (mode) => {
+    const { container } = render(
+      <ScopeRadio
+        legend="Escopo"
+        mode={mode}
+        series={{ ...SERIES, position: 1, total: 1 }}
+        date="2026-11-04"
+        value="this"
+        onChange={vi.fn()}
+      />,
+    );
+    expect(container).toBeEmptyDOMElement();
+  });
 });

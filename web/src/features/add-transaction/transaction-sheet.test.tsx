@@ -846,17 +846,34 @@ describe("TransactionSheet", () => {
     expect(body).not.toHaveProperty("open_ended");
   });
 
-  it("saves an edit to the only member left in a series without a count", async () => {
-    const { sent } = setup({ transaction: { ...MEMBER, series: { ...MEMBER.series, position: 1, total: 1 } } }, resize);
+  it("saves an edit to the only member left in a series without a count or a scope to pick", async () => {
+    const { requests } = setup(
+      { transaction: { ...MEMBER, series: { ...MEMBER.series, position: 1, total: 1 } } },
+      resize,
+    );
 
     const amount = await screen.findByLabelText("Valor por parcela");
+    expect(screen.queryByRole("radiogroup", { name: "Escopo da Alteração" })).not.toBeInTheDocument();
     await userEvent.clear(amount);
     await userEvent.type(amount, "9990");
     await userEvent.click(screen.getByRole("button", { name: "Salvar Alterações na Série" }));
 
-    const body = await sent("PATCH");
+    await waitFor(() => expect(requests.some((request) => request.method === "PATCH")).toBe(true));
+    const patch = requests.find((request) => request.method === "PATCH");
+    expect(new URL(patch?.url ?? "").searchParams.get("scope")).toBe("this");
+    const body = await patch?.json();
     expect(body).toMatchObject({ amount: "99.90" });
     expect(body).not.toHaveProperty("repeat_months");
+  });
+
+  it("pads the selected duration chip so its check clears the edge", async () => {
+    setup();
+
+    await userEvent.click(await screen.findByRole("switch", { name: "Recorrente" }));
+    for (const name of ["Sempre", "6", "Outro"]) {
+      await userEvent.click(screen.getByRole("radio", { name }));
+      expect(screen.getByRole("radio", { name })).toHaveClass("gap-1.5", "pl-3!");
+    }
   });
 
   it("locks Duração da série while the member's date moves and sends no count", async () => {

@@ -428,7 +428,8 @@ const TransactionForm = ({
                 value={preset}
                 // Sempre on a bounded member is Tornar sem fim, not a resize.
                 disabled={Boolean(series) && (preset === "always" || Number(preset) < minMonths)}
-                className={cn(chip, "gap-1")}
+                // The base item's px-2 outranks a plain pl-3.
+                className={cn(chip, "gap-1.5", draft.preset === preset && "pl-3!")}
               >
                 {draft.preset === preset && <Check aria-hidden className="size-4" />}
                 {PRESET_LABELS[preset] ?? preset}
