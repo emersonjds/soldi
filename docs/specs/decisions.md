@@ -315,11 +315,11 @@ Detail: `docs/specs/cards/SOL-118.md` › Technical design.
 
 ## D36 — An open-ended Fixo is a series that grows as months are read (2026-11-12, SOL-118 panel, architect arbitrated; reverses D24's "recurring income" cut and narrows D14's "open-ended repeat is a conta fixa")
 
-`open_ended` on an Entrada or Diário entry (not on a card yet, SOL-119) starts an ordinary D14 series. Every member carries `transactions.series_open`.
+`open_ended` on an Entrada or Diário entry (a spend on a card included) starts an ordinary D14 series. Every member carries `transactions.series_open`.
 
 Growth:
 
-- Before the month view, the forecast and the ledger list read rows, the server appends copies of each open series' last member through `max(horizon_end(today), the viewed month)`.
+- Before the month view, the forecast, the ledger list and a card's fatura (SOL-119) read rows, the server appends copies of each open series' last member through `max(horizon_end(today), the viewed month)`; the fatura grows through six months past its own.
 - It uses D19's growth under the series lock, capped at 60 months from today and at 2100.
 - It usually costs one indexed query and no write; concurrent reads write once.
 - A salary therefore counts in every month of Mês and Próximos meses without typing, as committed rows (D16), never as a guess.
@@ -335,7 +335,7 @@ A Saída with no end is still a conta fixa (D8, D14). D8's "no rows ahead" for b
 
 Trade-offs:
 
-- Three GETs may write, bounded and idempotent.
+- Four GETs may write (the month view, the forecast, the ledger list and `GET /api/months/{month}/faturas/{card_id}`), bounded and idempotent.
 - Rows exist up to 60 months ahead.
 - Deleting only the very last member of an open series is refilled on the next read.
 
