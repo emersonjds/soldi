@@ -394,3 +394,11 @@ What an enumerator pays instead:
 - **Mail.** Sign-up sends no mail. Verification mails cost 3 per account and 10 per address an hour, plus 20 per address a day across all accounts, so throwaway accounts from one address can aim at most 20 Soldi mails a day at inboxes they do not own; a refused request is the usual 429.
 
 Revisit when Soldi adds verify-before-account (then sign-up answers the same 202 for both cases and the 409 goes), when sign-up gets an invite or captcha step, or if the logs show distributed probing (many addresses each under the ceiling).
+
+## D42 — Per-account write budget, an entry ceiling, and fixed error text for Sentry (2026-11-14, orchestrator, SOL-137 and SOL-139 from the Lagune scan)
+
+**Writes.** Every signed-in write (any method but GET, HEAD, OPTIONS and TRACE, checked in the `CurrentUser` extractor right after the session) spends two per-account budgets: 120 a minute and 2,000 an hour. Past either, the usual 429 `rate-limited` with `Retry-After`; reads never spend them and other accounts are untouched. Generous for a person clicking, bounded for a script. Same in-process limiter and caveats as D39.
+
+**Entries.** An account holds at most 50,000 entries. A create, a `repeat_months` that starts or grows a series, a bill payment or a resgate that would pass it answers 422 `quota` (web copy: "Sua conta chegou ao limite de 50.000 lançamentos."), and nothing is written. Open series stop growing at the ceiling on read, silently, and the read still answers. The count runs before the insert, so concurrent requests can overshoot by one request's entries each; the write budget bounds that. Bills and categories have no ceiling of their own: one row per write, bounded by the write budget.
+
+**Sentry text.** An internal error carries a fixed category (`database`, `mail`, `other`) and its cause. The cause (sqlx or HTTP client text) is logged at WARN, which stays in the Railway log because the Sentry layer forwards ERROR only; the ERROR line says only `internal error: <category>`. The detached mail tasks log the same fixed text. `before_send` is unchanged.
