@@ -21,7 +21,7 @@ const TOPS: [(&str, CategoryKind, &str, &str); 14] = {
         ("Casa", Bill, "home", "cat-6"),
         ("Educação", Bill, "graduation-cap", "cat-7"),
         ("Veículo", Bill, "car", "cat-8"),
-        ("Cartão", Bill, "credit-card", "cat-9"),
+        (CARD_GROUP, Bill, "credit-card", "cat-9"),
         ("Assinaturas", Bill, "repeat", "cat-10"),
         ("Família", Daily, "users", "cat-12"),
     ]
@@ -67,12 +67,16 @@ const SAVINGS: [(&str, CategoryKind, &str); 2] = [
 
 pub const DEFAULT_ICON: &str = "circle-dashed";
 
+/// D43: the seeded name of the account's card group.
+pub const CARD_GROUP: &str = "Cartão";
+
 pub struct Seed {
     pub name: &'static str,
     pub kind: CategoryKind,
     pub icon: &'static str,
     pub color: String,
     pub is_savings: bool,
+    pub is_card_group: bool,
     pub parent: Option<&'static str>,
 }
 
@@ -86,6 +90,7 @@ pub fn defaults() -> Vec<Seed> {
         icon,
         color: color.to_string(),
         is_savings,
+        is_card_group: name == CARD_GROUP,
         parent: None,
     };
     let tops = TOPS
@@ -105,6 +110,7 @@ pub fn defaults() -> Vec<Seed> {
             .find(|top| top.0 == parent)
             .map_or_else(String::new, |top| top.3.to_string()),
         is_savings: false,
+        is_card_group: false,
         parent: Some(parent),
     });
     tops.chain(children).collect()
@@ -225,20 +231,21 @@ pub fn is_cofrinho_parent(parent: Option<&Category>) -> bool {
 }
 
 /// A category, top-level or subcategory, moves between `daily` and `bill`; `Economia`, its
-/// cofrinhos and the income categories, `Resgate` included, keep their kind. `parent` is the category's parent.
+/// cofrinhos, the card group and the income categories, `Resgate` included, keep their kind. `parent` is the category's parent.
 pub fn check_kind_change(
     category: &Category,
     parent: Option<&Category>,
     kind: CategoryKind,
 ) -> Result<(), AppError> {
     if category.is_savings
+        || category.is_card_group
         || is_cofrinho_parent(parent)
         || category.kind == CategoryKind::Income
         || kind == CategoryKind::Income
     {
         return Err(AppError::rule(
             "kind-locked",
-            "Economia, its cofrinhos, Resgate and income categories keep their kind.",
+            "Economia, its cofrinhos, Cartão, Resgate and income categories keep their kind.",
         ));
     }
     Ok(())
@@ -465,6 +472,7 @@ mod tests {
             color: "cat-1".into(),
             parent_id: parent_id.map(Uuid::from_u128),
             is_savings: false,
+            is_card_group: false,
             target: None,
             deadline: None,
         }
@@ -570,5 +578,24 @@ mod tests {
         ] {
             assert_eq!(slug(check_kind_change(category, parent, kind)), expected);
         }
+    }
+
+    #[test]
+    fn the_card_group_keeps_its_kind() {
+        let cartao = Category {
+            is_card_group: true,
+            ..category(1, CategoryKind::Bill, None)
+        };
+        assert_eq!(
+            slug(check_kind_change(&cartao, None, CategoryKind::Daily)),
+            "kind-locked"
+        );
+        let seeds = defaults();
+        let groups: Vec<_> = seeds
+            .iter()
+            .filter(|seed| seed.is_card_group)
+            .map(|seed| (seed.name, seed.kind, seed.parent))
+            .collect();
+        assert_eq!(groups, [(CARD_GROUP, CategoryKind::Bill, None)]);
     }
 }

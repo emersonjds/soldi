@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, name, kind AS \"kind: CategoryKind\", icon, color, parent_id, is_savings,\n                  target, deadline\n           FROM categories WHERE user_id = $1 AND kind = $2 AND is_savings",
+  "query": "INSERT INTO categories (user_id, name, kind, icon, color, parent_id, target, deadline, note)\n           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)\n           RETURNING id, name, kind AS \"kind: CategoryKind\", icon, color, parent_id, is_savings, is_card_group,\n                     target, deadline",
   "describe": {
     "columns": [
       {
@@ -82,6 +82,17 @@
       },
       {
         "ordinal": 7,
+        "name": "is_card_group",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "categories",
+            "name": "is_card_group"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
         "name": "target",
         "type_info": "Numeric",
         "origin": {
@@ -92,7 +103,7 @@
         }
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "deadline",
         "type_info": "Date",
         "origin": {
@@ -106,6 +117,13 @@
     "parameters": {
       "Left": [
         "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Uuid",
+        "Numeric",
+        "Date",
         "Text"
       ]
     },
@@ -117,9 +135,10 @@
       false,
       true,
       false,
+      false,
       true,
       true
     ]
   },
-  "hash": "24226ebf4fc999b41124e559e6a3a10fc04add8ee9eecc04ddce3891e945a56b"
+  "hash": "472e5ada0e047c140185ad3fe71826a3a1486cb41b2354ff55f36db9a4a71a42"
 }

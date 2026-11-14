@@ -19,15 +19,18 @@ pub async fn seed(
     let icons: Vec<&str> = tops.iter().map(|seed| seed.icon).collect();
     let colors: Vec<&str> = tops.iter().map(|seed| seed.color.as_str()).collect();
     let savings: Vec<bool> = tops.iter().map(|seed| seed.is_savings).collect();
+    let card_groups: Vec<bool> = tops.iter().map(|seed| seed.is_card_group).collect();
     sqlx::query!(
-        "INSERT INTO categories (user_id, name, kind, icon, color, is_savings)
-         SELECT $1, * FROM UNNEST($2::text[], $3::text[], $4::text[], $5::text[], $6::bool[])",
+        "INSERT INTO categories (user_id, name, kind, icon, color, is_savings, is_card_group)
+         SELECT $1, * FROM UNNEST($2::text[], $3::text[], $4::text[], $5::text[], $6::bool[],
+                                  $7::bool[])",
         user_id,
         &names as &[&str],
         &kinds as &[&str],
         &icons as &[&str],
         &colors as &[&str],
-        &savings
+        &savings,
+        &card_groups
     )
     .execute(&mut *conn)
     .await?;
@@ -62,7 +65,7 @@ pub async fn list(
     sqlx::query_as!(
         Category,
         r#"SELECT c.id, c.name, c.kind AS "kind: CategoryKind", c.icon, c.color, c.parent_id,
-                  c.is_savings, c.target, c.deadline
+                  c.is_savings, c.is_card_group, c.target, c.deadline
            FROM categories c LEFT JOIN categories p ON p.user_id = c.user_id AND p.id = c.parent_id
            WHERE c.user_id = $1 AND c.archived_at IS NULL AND p.archived_at IS NULL
              AND ($2 OR NOT (c.is_savings AND c.kind = 'income'))
@@ -83,7 +86,7 @@ pub async fn find_active(
 ) -> Result<Option<Category>, sqlx::Error> {
     sqlx::query_as!(
         Category,
-        r#"SELECT id, name, kind AS "kind: CategoryKind", icon, color, parent_id, is_savings,
+        r#"SELECT id, name, kind AS "kind: CategoryKind", icon, color, parent_id, is_savings, is_card_group,
                   target, deadline
            FROM categories WHERE user_id = $1 AND id = $2 AND archived_at IS NULL"#,
         user_id,
@@ -102,7 +105,7 @@ pub async fn find_active_locked(
 ) -> Result<Option<Category>, sqlx::Error> {
     sqlx::query_as!(
         Category,
-        r#"SELECT id, name, kind AS "kind: CategoryKind", icon, color, parent_id, is_savings,
+        r#"SELECT id, name, kind AS "kind: CategoryKind", icon, color, parent_id, is_savings, is_card_group,
                   target, deadline
            FROM categories WHERE user_id = $1 AND id = $2 AND archived_at IS NULL
            FOR NO KEY UPDATE"#,
@@ -123,7 +126,7 @@ pub async fn find_shared(
 ) -> Result<Option<Category>, sqlx::Error> {
     sqlx::query_as!(
         Category,
-        r#"SELECT id, name, kind AS "kind: CategoryKind", icon, color, parent_id, is_savings,
+        r#"SELECT id, name, kind AS "kind: CategoryKind", icon, color, parent_id, is_savings, is_card_group,
                   target, deadline
            FROM categories WHERE user_id = $1 AND id = $2 AND (archived_at IS NULL OR NOT $3)
            FOR SHARE"#,
@@ -143,7 +146,7 @@ pub async fn savings(
 ) -> Result<Category, sqlx::Error> {
     sqlx::query_as!(
         Category,
-        r#"SELECT id, name, kind AS "kind: CategoryKind", icon, color, parent_id, is_savings,
+        r#"SELECT id, name, kind AS "kind: CategoryKind", icon, color, parent_id, is_savings, is_card_group,
                   target, deadline
            FROM categories WHERE user_id = $1 AND kind = $2 AND is_savings"#,
         user_id,
@@ -265,7 +268,7 @@ pub async fn insert(
         Category,
         r#"INSERT INTO categories (user_id, name, kind, icon, color, parent_id, target, deadline, note)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-           RETURNING id, name, kind AS "kind: CategoryKind", icon, color, parent_id, is_savings,
+           RETURNING id, name, kind AS "kind: CategoryKind", icon, color, parent_id, is_savings, is_card_group,
                      target, deadline"#,
         user_id,
         new.name,
@@ -326,7 +329,7 @@ pub async fn update(
                deadline = CASE WHEN $10 THEN $11 ELSE deadline END,
                note = CASE WHEN $12 THEN $13 ELSE note END, updated_at = now()
            WHERE user_id = $1 AND id = $2 AND archived_at IS NULL
-           RETURNING id, name, kind AS "kind: CategoryKind", icon, color, parent_id, is_savings,
+           RETURNING id, name, kind AS "kind: CategoryKind", icon, color, parent_id, is_savings, is_card_group,
                      target, deadline"#,
         user_id,
         id,

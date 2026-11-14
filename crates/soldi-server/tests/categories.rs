@@ -159,6 +159,26 @@ async fn the_savings_categories_are_never_archived_nor_nested(pool: PgPool) {
 }
 
 #[sqlx::test]
+async fn sol140_only_cartao_is_the_card_group_and_it_keeps_its_kind(pool: PgPool) {
+    let user = TestApp::signed_in(pool, "ana@example.com").await;
+    let (_, list) = user.get("/api/categories?include_system=true").await;
+    let groups: Vec<_> = list
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|category| category["is_card_group"] == true)
+        .map(|category| category["name"].clone())
+        .collect();
+    assert_eq!(groups, vec![json!("Cartão")]);
+    let id = user.category_id("Cartão").await;
+    let (status, problem) = user
+        .patch(&format!("/api/categories/{id}"), json!({ "kind": "daily" }))
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+    assert_eq!(problem["type"], "urn:soldi:error:kind-locked");
+}
+
+#[sqlx::test]
 async fn a_cofrinho_is_a_child_of_economia_with_a_target_and_a_deadline(pool: PgPool) {
     let user = TestApp::signed_in(pool, "ana@example.com").await;
     let economia = user.category_id("Economia").await;

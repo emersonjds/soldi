@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, name, kind AS \"kind: CategoryKind\", icon, color, parent_id, is_savings,\n                  target, deadline\n           FROM categories WHERE user_id = $1 AND id = $2 AND (archived_at IS NULL OR NOT $3)\n           FOR SHARE",
+  "query": "UPDATE categories\n           SET name = COALESCE($3, name), icon = COALESCE($4, icon), color = COALESCE($5, color),\n               parent_id = CASE WHEN $6 THEN $7 ELSE parent_id END,\n               target = CASE WHEN $8 THEN $9 ELSE target END,\n               deadline = CASE WHEN $10 THEN $11 ELSE deadline END,\n               note = CASE WHEN $12 THEN $13 ELSE note END, updated_at = now()\n           WHERE user_id = $1 AND id = $2 AND archived_at IS NULL\n           RETURNING id, name, kind AS \"kind: CategoryKind\", icon, color, parent_id, is_savings, is_card_group,\n                     target, deadline",
   "describe": {
     "columns": [
       {
@@ -82,6 +82,17 @@
       },
       {
         "ordinal": 7,
+        "name": "is_card_group",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "categories",
+            "name": "is_card_group"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
         "name": "target",
         "type_info": "Numeric",
         "origin": {
@@ -92,7 +103,7 @@
         }
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "deadline",
         "type_info": "Date",
         "origin": {
@@ -107,7 +118,17 @@
       "Left": [
         "Uuid",
         "Uuid",
-        "Bool"
+        "Text",
+        "Text",
+        "Text",
+        "Bool",
+        "Uuid",
+        "Bool",
+        "Numeric",
+        "Bool",
+        "Date",
+        "Bool",
+        "Text"
       ]
     },
     "nullable": [
@@ -118,9 +139,10 @@
       false,
       true,
       false,
+      false,
       true,
       true
     ]
   },
-  "hash": "4d3800d5f98566d29bdb522d66cf9a5dc8d3d817f2cfd33d9def73e24bd23d2d"
+  "hash": "5d7fc92a496fb7779977d42c06e8fe98c6a8ca2595520df16de37f5671191a35"
 }
