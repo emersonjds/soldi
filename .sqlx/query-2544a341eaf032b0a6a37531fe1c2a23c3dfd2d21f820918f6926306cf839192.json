@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM trusted_devices WHERE user_id = $1 AND id NOT IN (\n             SELECT id FROM trusted_devices WHERE user_id = $1 ORDER BY created_at DESC LIMIT 20)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2544a341eaf032b0a6a37531fe1c2a23c3dfd2d21f820918f6926306cf839192"
+}

@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS (SELECT 1 FROM password_resets WHERE user_id = $1 AND expires_at > now()\n           AND created_at > now() - interval '15 minutes') AS \"recent!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "recent!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "0c02b83761c6a5c329210fcdaa318439cf9aa9a9d7f920902ea3e898559771d1"
+}

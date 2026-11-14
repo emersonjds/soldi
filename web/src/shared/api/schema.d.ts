@@ -1445,7 +1445,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Accepted whether or not an account has this e-mail; when one has, a reset link valid for 1 hour is e-mailed to it and older links stop working */
+            /** @description Accepted whether or not an account has this e-mail; when one has, a reset link valid for 1 hour is e-mailed to it and older links stop working, unless a link went out in the last 15 minutes: then nothing is sent and that link stays valid */
             202: {
                 headers: {
                     [name: string]: unknown;
@@ -1525,7 +1525,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Signed in; sets the session cookie */
+            /** @description Signed in; sets the session cookie and, unless the request carried one of this account, a trusted-device cookie that later skips the per-e-mail attempt ceiling */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1597,7 +1597,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Every session of the caller revoked, this one included; cookie cleared */
+            /** @description Every session and trusted device of the caller revoked, this one included; cookie cleared */
             204: {
                 headers: {
                     [name: string]: unknown;

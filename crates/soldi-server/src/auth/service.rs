@@ -51,6 +51,20 @@ pub async fn sign_in(pool: &PgPool, input: SignIn) -> Result<(User, String), App
     Ok((found.user, session))
 }
 
+/// The device cookie `token` belongs to the account with this (normalized) e-mail.
+pub async fn device_is_trusted(pool: &PgPool, email: &str, token: &str) -> Result<bool, AppError> {
+    let mut conn = pool.acquire().await?;
+    Ok(repo::device_is_trusted(&mut conn, email, &domain::hash_token(token)).await?)
+}
+
+/// A new device token for the user; only its hash is stored.
+pub async fn trust_device(pool: &PgPool, user_id: Uuid) -> Result<String, AppError> {
+    let token = domain::new_secret();
+    let mut conn = pool.acquire().await?;
+    repo::insert_trusted_device(&mut conn, user_id, &domain::hash_token(&token)).await?;
+    Ok(token)
+}
+
 /// Revokes the session that made the request; other devices stay signed in.
 pub async fn sign_out(pool: &PgPool, user: &CurrentUser) -> Result<(), AppError> {
     let mut conn = pool.acquire().await?;
@@ -60,8 +74,10 @@ pub async fn sign_out(pool: &PgPool, user: &CurrentUser) -> Result<(), AppError>
 
 /// Revokes every session of the user, this one included.
 pub async fn sign_out_everywhere(pool: &PgPool, user: &CurrentUser) -> Result<(), AppError> {
-    let mut conn = pool.acquire().await?;
-    Ok(repo::delete_all_sessions(&mut conn, user.id).await?)
+    let mut tx = pool.begin().await?;
+    repo::delete_all_sessions(&mut tx, user.id).await?;
+    repo::delete_trusted_devices(&mut tx, user.id).await?;
+    Ok(tx.commit().await?)
 }
 
 pub async fn update_me(
@@ -99,6 +115,7 @@ pub async fn change_password(
     }
     repo::delete_other_sessions(&mut tx, user).await?;
     repo::delete_password_resets(&mut tx, user.id).await?;
+    repo::delete_trusted_devices(&mut tx, user.id).await?;
     tx.commit().await?;
     Ok(())
 }
@@ -126,7 +143,8 @@ pub async fn delete_account(
     Ok(())
 }
 
-/// Runs after the request was answered: an unknown or malformed e-mail does nothing.
+/// Runs after the request was answered: an unknown or malformed e-mail does nothing, and a
+/// link issued in the last 15 minutes stays the only one, so an account gets at most 4 mails an hour.
 pub async fn request_password_reset(
     pool: &PgPool,
     mailer: &Mailer,
@@ -140,8 +158,11 @@ pub async fn request_password_reset(
     let Some(found) = repo::find_user_by_email(&mut tx, &email).await? else {
         return Ok(());
     };
-    let token = domain::new_reset_token();
     repo::lock_password_resets(&mut tx, found.user.id).await?;
+    if repo::has_recent_password_reset(&mut tx, found.user.id).await? {
+        return Ok(());
+    }
+    let token = domain::new_reset_token();
     repo::delete_password_resets(&mut tx, found.user.id).await?;
     repo::insert_password_reset(&mut tx, found.user.id, &domain::hash_token(&token)).await?;
     tx.commit().await?;
@@ -176,6 +197,7 @@ pub async fn confirm_password_reset(
     repo::delete_all_sessions(&mut tx, user_id).await?;
     repo::delete_password_resets(&mut tx, user_id).await?;
     repo::delete_email_verifications(&mut tx, user_id).await?;
+    repo::delete_trusted_devices(&mut tx, user_id).await?;
     tx.commit().await?;
     Ok(())
 }
