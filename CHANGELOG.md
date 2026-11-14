@@ -7,6 +7,23 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.60.0
+
+> Headline: production errors reach the owner
+
+### Server
+
+- Server errors (5xx) and panics go to Sentry when `SENTRY_DSN` is set, named after their route template, with no request, user, cookies or money (D38). A busy server and failed reset or verification mails are now logged as errors.
+
+### Web
+
+- Render errors, unhandled rejections and API failures that are network errors or 5xx go to Sentry when `NEXT_PUBLIC_SENTRY_DSN` is set at build; never 4xx, UI breadcrumbs or tokens in the URL fragment. The SDK loads after first paint, only with a DSN.
+- A crash shows Soldi's own error page (`Não foi possível carregar a página.` · `Tentar de novo`) instead of Next's default.
+
+### CI
+
+- `smoke.yml` signs in to production after each release and on demand: switches the month both ways, launches a Diário and deletes it.
+
 ## 0.59.0
 
 > Headline: see what weighs on a card's fatura
