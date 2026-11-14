@@ -194,7 +194,7 @@ const Row = ({
       {onOpenFatura ? (
         <button
           type="button"
-          aria-label={`Ver fatura ${bill.name}`}
+          aria-label={`Ver ${label}`}
           onClick={onOpenFatura}
           className="flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-lg text-left focus-visible:outline-2 focus-visible:outline-ring sm:gap-3"
         >

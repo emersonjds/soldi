@@ -57,7 +57,7 @@ test("a card's fatura opens from Contas a pagar, shows what weighs on it, and Pa
   }
 
   await page.goto(`/mes?m=${monthFrom(2)}`);
-  await page.getByRole("region", { name: "Contas a pagar" }).getByRole("button", { name: "Ver fatura Nubank" }).click();
+  await page.getByRole("region", { name: "Contas a pagar" }).getByRole("button", { name: "Ver Fatura Nubank" }).click();
 
   const panel = page.getByRole("dialog", { name: "Fatura Nubank" });
   await expect(panel).toContainText("R$ 219,90");

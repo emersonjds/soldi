@@ -579,7 +579,7 @@ describe("Contas a pagar", () => {
       await loaded();
 
       expect(within(rowOf("Luz (Enel)")).queryByRole("button", { name: /^Ver fatura/ })).not.toBeInTheDocument();
-      const open = within(rowOf("Fatura Porto")).getByRole("button", { name: "Ver fatura Porto" });
+      const open = within(rowOf("Fatura Porto")).getByRole("button", { name: "Ver Fatura Porto" });
       expect(open).toHaveClass("min-h-11");
       await userEvent.click(open);
 
@@ -591,7 +591,7 @@ describe("Contas a pagar", () => {
       show([FATURA], FATURA_REPLIES);
       await loaded();
 
-      await userEvent.click(within(rowOf("Fatura Porto")).getByRole("button", { name: "Ver fatura Porto" }));
+      await userEvent.click(within(rowOf("Fatura Porto")).getByRole("button", { name: "Ver Fatura Porto" }));
       const panel = await screen.findByRole("dialog", { name: "Fatura Porto" });
       await userEvent.click(await within(panel).findByRole("button", { name: /Spotify/ }));
 
@@ -606,7 +606,7 @@ describe("Contas a pagar", () => {
         "DELETE /api/bills/card-porto/pay": { status: 204 },
       });
       await loaded();
-      await userEvent.click(within(rowOf("Fatura Porto")).getByRole("button", { name: "Ver fatura Porto" }));
+      await userEvent.click(within(rowOf("Fatura Porto")).getByRole("button", { name: "Ver Fatura Porto" }));
       const panel = await screen.findByRole("dialog", { name: "Fatura Porto" });
       await within(panel).findByRole("region", { name: "Assinaturas" });
       await userEvent.click(within(panel).getByRole("button", { name: "Fechar" }));
@@ -635,6 +635,16 @@ describe("Contas a pagar", () => {
         await userEvent.click(screen.getByRole("button", { name: "Fechar" }));
         await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
       }
+    });
+
+    it("names each panel button after its own row when October's fatura is carried (D17)", async () => {
+      show([{ ...FATURA, due_date: "2026-10-10", overdue: true }, FATURA], FATURA_REPLIES);
+      await loaded();
+
+      expect(
+        within(rowOf("Fatura Porto de outubro")).getByRole("button", { name: "Ver Fatura Porto de outubro" }),
+      ).toBeInTheDocument();
+      expect(within(rowOf("Fatura Porto")).getByRole("button", { name: "Ver Fatura Porto" })).toBeInTheDocument();
     });
 
     it("shows an overdue fatura carried from October and a paid one", async () => {
