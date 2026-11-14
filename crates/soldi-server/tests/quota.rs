@@ -164,3 +164,51 @@ async fn sign_out_password_change_and_deletion_skip_the_spent_write_budget(pool:
     let request = json_request(Method::DELETE, "/api/me", ana.cookie.as_deref(), Some(body));
     assert_eq!(ana.send(request).await.status(), StatusCode::NO_CONTENT);
 }
+
+#[sqlx::test]
+async fn a_bill_payment_a_resgate_and_a_series_growth_stop_at_the_ceiling(pool: PgPool) {
+    let ana = opened(pool.clone(), "ana@example.com").await;
+    let economia = ana.category_id("Economia").await;
+    let (_, reserva) = ana
+        .post(
+            "/api/categories",
+            json!({ "name": "Reserva", "kind": "bill", "parent_id": economia }),
+        )
+        .await;
+    let (status, bill) = ana
+        .post(
+            "/api/bills",
+            json!({ "name": "Aluguel", "amount": "100", "due_day": 5,
+                    "category_id": ana.category_id("Escola").await }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{bill}");
+    let (status, series) = spend(&ana, json!({ "repeat_months": 2 })).await;
+    assert_eq!(status, StatusCode::CREATED, "{series}");
+    let (status, deposit) = spend(
+        &ana,
+        json!({ "kind": "bill", "category_id": reserva["id"] }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{deposit}");
+    fill_to(&pool, &ana, &deposit, CEILING).await;
+
+    let pay = format!("/api/bills/{}/pay", bill["id"].as_str().unwrap());
+    let (status, problem) = ana.post(&pay, json!({ "date": today().to_string() })).await;
+    assert_quota(status, &problem);
+    let resgate = format!(
+        "/api/cofrinhos/{}/withdraw",
+        reserva["id"].as_str().unwrap()
+    );
+    let (status, problem) = ana
+        .post(
+            &resgate,
+            json!({ "date": today().to_string(), "amount": "10" }),
+        )
+        .await;
+    assert_quota(status, &problem);
+    let member = format!("/api/transactions/{}", series["id"].as_str().unwrap());
+    let (status, problem) = ana.patch(&member, json!({ "repeat_months": 4 })).await;
+    assert_quota(status, &problem);
+    assert_eq!(count(&ana).await, CEILING);
+}
