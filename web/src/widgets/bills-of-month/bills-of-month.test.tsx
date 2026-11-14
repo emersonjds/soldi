@@ -599,6 +599,29 @@ describe("Contas a pagar", () => {
       expect(within(entry).getByRole("button", { name: "Parar recorrência" })).toBeInTheDocument();
     });
 
+    it("still pays and undoes the fatura after its panel was opened and closed", async () => {
+      const { requests, serverHas } = show([FATURA], {
+        ...FATURA_REPLIES,
+        "POST /api/bills/card-porto/pay": { status: 201, body: PAYMENT },
+        "DELETE /api/bills/card-porto/pay": { status: 204 },
+      });
+      await loaded();
+      await userEvent.click(within(rowOf("Fatura Porto")).getByRole("button", { name: "Ver fatura Porto" }));
+      const panel = await screen.findByRole("dialog", { name: "Fatura Porto" });
+      await within(panel).findByRole("region", { name: "Assinaturas" });
+      await userEvent.click(within(panel).getByRole("button", { name: "Fechar" }));
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+
+      await userEvent.click(within(rowOf("Fatura Porto")).getByRole("button", { name: "Pagar Fatura Porto" }));
+      const sheet = await screen.findByRole("dialog", { name: "Pagar Fatura Porto" });
+      serverHas([{ ...FATURA, paid: true, transaction_id: "t-paid" }]);
+      await userEvent.click(within(sheet).getByRole("button", { name: "Confirmar" }));
+      await waitFor(() => expect(requests.some((request) => request.method === "POST")).toBe(true));
+
+      await userEvent.click(await within(card()).findByRole("button", { name: "Desmarcar Fatura Porto" }));
+      await waitFor(() => expect(requests.some((request) => request.method === "DELETE")).toBe(true));
+    });
+
     it("keeps Pagar on the check, the amount and the status, never the panel", async () => {
       show([FATURA], FATURA_REPLIES);
       await loaded();
