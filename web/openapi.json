@@ -256,7 +256,7 @@
         "operationId": "sign_out_everywhere",
         "responses": {
           "204": {
-            "description": "Every session of the caller revoked, this one included; cookie cleared"
+            "description": "Every session and trusted device of the caller revoked, this one included; cookie cleared"
           },
           "401": {
             "content": {

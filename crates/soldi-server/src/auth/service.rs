@@ -74,8 +74,10 @@ pub async fn sign_out(pool: &PgPool, user: &CurrentUser) -> Result<(), AppError>
 
 /// Revokes every session of the user, this one included.
 pub async fn sign_out_everywhere(pool: &PgPool, user: &CurrentUser) -> Result<(), AppError> {
-    let mut conn = pool.acquire().await?;
-    Ok(repo::delete_all_sessions(&mut conn, user.id).await?)
+    let mut tx = pool.begin().await?;
+    repo::delete_all_sessions(&mut tx, user.id).await?;
+    repo::delete_trusted_devices(&mut tx, user.id).await?;
+    Ok(tx.commit().await?)
 }
 
 pub async fn update_me(

@@ -391,10 +391,12 @@ async fn changing_the_password_ends_only_the_other_sessions(pool: PgPool) {
 }
 
 #[sqlx::test]
-async fn sign_out_everywhere_ends_every_session_of_the_caller(pool: PgPool) {
-    let ana = TestApp::signed_in(pool, "ana@example.com").await;
+async fn sign_out_everywhere_ends_every_session_and_trusted_device_of_the_caller(pool: PgPool) {
+    let ana = TestApp::signed_in(pool.clone(), "ana@example.com").await;
     let bia = ana.another_user("bia@example.com").await;
     let (_, ana_phone) = sign_in(&ana, "ana@example.com", PASSWORD).await;
+    sign_in(&bia, "bia@example.com", PASSWORD).await;
+    assert!(devices_of(&pool, "ana@example.com").await > 0);
 
     let response = ana
         .send(json_request(
@@ -415,6 +417,8 @@ async fn sign_out_everywhere_ends_every_session_of_the_caller(pool: PgPool) {
         StatusCode::UNAUTHORIZED
     );
     assert_eq!(bia.get("/api/auth/me").await.0, StatusCode::OK);
+    assert_eq!(devices_of(&pool, "ana@example.com").await, 0);
+    assert!(devices_of(&pool, "bia@example.com").await > 0);
 }
 
 #[sqlx::test]

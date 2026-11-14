@@ -121,7 +121,7 @@ pub async fn sign_out(
 
 #[utoipa::path(post, path = "/api/auth/sign-out-everywhere", tag = "auth",
     responses(
-        (status = 204, description = "Every session of the caller revoked, this one included; cookie cleared"),
+        (status = 204, description = "Every session and trusted device of the caller revoked, this one included; cookie cleared"),
         (status = 401, body = Problem, content_type = "application/problem+json")))]
 pub async fn sign_out_everywhere(
     State(state): State<AppState>,
