@@ -283,6 +283,7 @@ pub async fn pay(
         return Err(domain::bill_ended());
     }
     transactions::service::check_opening(&mut conn, user, entry.date).await?;
+    transactions::service::check_room(&mut conn, user, 1).await?;
     let transaction_id =
         transactions::repo::insert(&mut conn, user.id, &entry, Some(bill.id), None, None, None)
             .await

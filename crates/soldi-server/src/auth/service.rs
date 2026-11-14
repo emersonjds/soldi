@@ -170,7 +170,7 @@ pub async fn request_password_reset(
     mailer
         .send_password_reset(&found.user.email, &found.user.name, &link)
         .await
-        .map_err(|error| AppError::Internal(error.to_string()))
+        .map_err(|error| AppError::internal("mail", error))
 }
 
 /// Sets the password, verifies the e-mail and ends every session and every pending link of the user.
@@ -229,7 +229,7 @@ pub async fn request_email_verification(
     mailer
         .send_email_verification(&found.email, &link)
         .await
-        .map_err(|error| AppError::Internal(error.to_string()))
+        .map_err(|error| AppError::internal("mail", error))
 }
 
 /// Verifies the owner of the link; signs nobody in and ends no session.
@@ -269,11 +269,11 @@ async fn start_session(conn: &mut PgConnection, user_id: Uuid) -> Result<String,
 async fn hash_in_background(password: String) -> Result<String, AppError> {
     tokio::task::spawn_blocking(move || domain::hash_password(&password))
         .await
-        .map_err(|error| AppError::Internal(error.to_string()))?
+        .map_err(|error| AppError::internal("other", error))?
 }
 
 async fn verify_in_background(password: String, stored_hash: String) -> Result<bool, AppError> {
     tokio::task::spawn_blocking(move || domain::verify_password(&password, &stored_hash))
         .await
-        .map_err(|error| AppError::Internal(error.to_string()))
+        .map_err(|error| AppError::internal("other", error))
 }

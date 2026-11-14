@@ -82,12 +82,45 @@ fn api() -> OpenApiRouter<AppState> {
 
 /// The API contract, built without a database; `web/openapi.json` is its committed snapshot.
 pub fn openapi() -> utoipa::openapi::OpenApi {
-    api().split_for_parts().1
+    let (_, mut api) = api().split_for_parts();
+    document_write_budget(&mut api);
+    api
+}
+
+/// SOL-137: every signed-in write (it answers 401) spends the per-account write budget.
+fn document_write_budget(api: &mut utoipa::openapi::OpenApi) {
+    use utoipa::openapi::{ContentBuilder, Ref, ResponseBuilder};
+    let limited = ResponseBuilder::new()
+        .description("Rate limited with the account's write budget; wait `Retry-After` seconds")
+        .content(
+            "application/problem+json",
+            ContentBuilder::new()
+                .schema(Some(Ref::from_schema_name("Problem")))
+                .build(),
+        )
+        .build();
+    for item in api.paths.paths.values_mut() {
+        let writes = [
+            &mut item.post,
+            &mut item.put,
+            &mut item.patch,
+            &mut item.delete,
+        ];
+        for operation in writes.into_iter().flatten() {
+            let responses = &mut operation.responses.responses;
+            if responses.contains_key("401") {
+                responses
+                    .entry("429".into())
+                    .or_insert_with(|| limited.clone().into());
+            }
+        }
+    }
 }
 
 /// `web_dir` holds the Next.js export; without an `index.html` there only the API answers.
 pub fn app(state: AppState, web_dir: Option<&Path>) -> Router {
-    let (router, api) = api().split_for_parts();
+    let (router, mut api) = api().split_for_parts();
+    document_write_budget(&mut api);
     let router = router
         .layer(TimeoutLayer::with_status_code(
             StatusCode::SERVICE_UNAVAILABLE,

@@ -49,7 +49,11 @@ impl FromRequestParts<AppState> for CurrentUser {
         let token = domain::session_token(&parts.headers).ok_or(AppError::Unauthorized)?;
         let mut conn = state.pool.acquire().await?;
         let user = repo::find_by_token(&mut conn, &domain::hash_token(token)).await?;
-        user.ok_or(AppError::Unauthorized)
+        let user = user.ok_or(AppError::Unauthorized)?;
+        if !parts.method.is_safe() {
+            (state.limiter).check(&crate::limits::write_keys(user.id.to_string()))?;
+        }
+        Ok(user)
     }
 }
 

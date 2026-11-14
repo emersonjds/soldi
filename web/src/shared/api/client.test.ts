@@ -69,6 +69,12 @@ describe("api results", () => {
     expect(problemMessage(new ApiError(422, "Paid.", [], "urn:soldi:error:fatura-paid"))).toBe(
       "Essa fatura já foi paga.",
     );
+    expect(problemMessage(new ApiError(422, "Full.", [], "urn:soldi:error:quota"))).toBe(
+      "Sua conta chegou ao limite de 50.000 lançamentos.",
+    );
+    expect(problemMessage(new ApiError(429, "Wait.", [], "urn:soldi:error:rate-limited"))).toBe(
+      "Muitas alterações seguidas. Espere um pouco e tente de novo.",
+    );
     expect(problemMessage(new ApiError(422, "No.", [], "urn:soldi:error:before-opening-date"))).toBeUndefined();
     expect(problemMessage(new Error("offline"))).toBeUndefined();
   });

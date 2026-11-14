@@ -125,7 +125,7 @@ pub fn hash_password(password: &str) -> Result<String, AppError> {
     Argon2::default()
         .hash_password(password.as_bytes())
         .map(|hash| hash.to_string())
-        .map_err(|error| AppError::Internal(error.to_string()))
+        .map_err(|error| AppError::internal("other", error))
 }
 
 pub fn verify_password(password: &str, stored_hash: &str) -> bool {
