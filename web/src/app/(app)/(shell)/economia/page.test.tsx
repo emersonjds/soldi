@@ -216,7 +216,9 @@ describe("Cofrinhos", () => {
       await userEvent.click(within(picker).getByRole("button", { name: /^Reserva\s?R\$/ }));
 
       await lancar();
-      expect(await screen.findByRole("radio", { name: "Economia › Reserva" })).toHaveAttribute("aria-checked", "true");
+      await waitFor(() =>
+        expect(screen.getByRole("button", { name: /^Categoria/ })).toHaveTextContent(/^Economia › Reserva$/),
+      );
     });
 
     it("Resgatar picks among cofrinhos with money, then opens the resgate", async () => {
@@ -417,7 +419,9 @@ describe("Cofrinhos", () => {
       await userEvent.click(within(await region("Reserva")).getByRole("button", { name: "Guardar em Reserva" }));
 
       await lancar();
-      expect(await screen.findByRole("radio", { name: "Economia › Reserva" })).toHaveAttribute("aria-checked", "true");
+      await waitFor(() =>
+        expect(screen.getByRole("button", { name: /^Categoria/ })).toHaveTextContent(/^Economia › Reserva$/),
+      );
       expect(screen.getByRole("radio", { name: "Conta" })).toBeChecked();
     });
 
@@ -448,7 +452,9 @@ describe("Cofrinhos", () => {
       await userEvent.click(within(viagem).getByRole("button", { name: "Guardar primeiro valor em Viagem" }));
 
       await lancar();
-      expect(await screen.findByRole("radio", { name: "Economia › Viagem" })).toHaveAttribute("aria-checked", "true");
+      await waitFor(() =>
+        expect(screen.getByRole("button", { name: /^Categoria/ })).toHaveTextContent(/^Economia › Viagem$/),
+      );
     });
 
     it("keeps Guardar and Resgatar on a negative balance, with the bar at zero", async () => {
@@ -497,7 +503,7 @@ describe("Cofrinhos", () => {
       await userEvent.click(within(livre).getByRole("button", { name: "Adicionar saldo livre" }));
 
       await lancar();
-      expect(await screen.findByRole("radio", { name: "Economia" })).toHaveAttribute("aria-checked", "true");
+      await waitFor(() => expect(screen.getByRole("button", { name: /^Categoria/ })).toHaveTextContent(/^Economia$/));
     });
 
     it("puts the create tile last, opening Novo cofrinho", async () => {
