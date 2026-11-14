@@ -119,6 +119,27 @@ async fn pages_run_only_the_inline_scripts_the_export_ships() {
 }
 
 #[tokio::test]
+async fn api_answers_carry_a_policy_without_the_page_hashes() {
+    let dir = export("api-policy", true);
+    std::fs::write(
+        dir.join("index.html"),
+        "<script>self.__next_f.push([0])</script>",
+    )
+    .unwrap();
+    let app = app(Some(&dir));
+
+    for uri in ["/api/missing", "/api"] {
+        let response = send(&app, Method::GET, uri).await;
+
+        assert_eq!(
+            response.headers()[header::CONTENT_SECURITY_POLICY],
+            "default-src 'none'; frame-ancestors 'none'",
+            "{uri}"
+        );
+    }
+}
+
+#[tokio::test]
 async fn client_routes_get_index_html() {
     let app = app(Some(&export("routes", true)));
 
