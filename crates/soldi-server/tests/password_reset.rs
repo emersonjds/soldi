@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use axum::body::Body;
 use axum::http::{Method, Request, StatusCode, header};
-use common::{PASSWORD, TestApp, body_json, json_request, session_cookie};
+use common::{Log, PASSWORD, TestApp, body_json, failing_mailer, json_request, session_cookie};
 use serde_json::{Value, json};
 use soldi_server::auth::domain::hash_token;
 use soldi_server::mail::{Mailer, Message, Recording};
@@ -455,4 +455,25 @@ async fn changing_the_password_in_the_account_voids_pending_links(pool: PgPool) 
 
     let (status, problem) = confirm(&app, &token, "another long one").await;
     assert_invalid_link(status, &problem);
+}
+
+#[sqlx::test]
+async fn a_failed_delivery_is_logged_as_an_error_without_the_address(pool: PgPool) {
+    let log = Log::capture();
+    let state = soldi_server::AppState {
+        mailer: failing_mailer(),
+        ..soldi_server::AppState::new(pool)
+    };
+    let app = TestApp {
+        router: soldi_server::app(state, None),
+        cookie: None,
+    };
+    app.another_user("ana@example.com").await;
+
+    let (status, _) = request_reset(&app, "ana@example.com").await;
+
+    assert_eq!(status, StatusCode::ACCEPTED);
+    let line = log.line("password reset request failed").await;
+    assert!(line.contains("ERROR"), "{line}");
+    assert!(!line.contains('@'), "{line}");
 }

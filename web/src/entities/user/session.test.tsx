@@ -2,12 +2,12 @@ import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { api, okOrThrow } from "@/shared/api/client";
+import { ApiError, api, okOrThrow } from "@/shared/api/client";
 import { router, setPathname } from "@/test/next-navigation";
 import { renderHookWithQuery, renderWithQuery } from "@/test/render";
 import { ANA, anonymous, problem, signedIn, stubApi } from "@/test/stub-api";
 
-import { redirectFor, SessionGate, useLeave } from "./session";
+import { redirectFor, SessionGate, useLeave, useMe } from "./session";
 
 vi.mock("next/navigation", () => import("@/test/next-navigation"));
 
@@ -33,6 +33,17 @@ describe("redirectFor", () => {
     [ANA, "/ajustes", undefined],
   ])("sends %o at %s to %s", (user, path, target) => {
     expect(redirectFor(user, path)).toBe(target);
+  });
+});
+
+describe("useMe", () => {
+  it("fails with the answer's status, so a 4xx is not reported as a bug", async () => {
+    stubApi({ "GET /api/auth/me": { status: 403, body: problem(403, "Proibido.") } });
+    const { result } = renderHookWithQuery(() => useMe());
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(result.current.error).toBeInstanceOf(ApiError);
+    expect(result.current.error).toMatchObject({ status: 403 });
   });
 });
 

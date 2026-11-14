@@ -156,6 +156,9 @@ impl IntoResponse for AppError {
         if let AppError::Internal(message) = &self {
             tracing::error!(%message, "internal error");
         }
+        if let AppError::Busy = self {
+            tracing::error!("server busy");
+        }
         let problem = self.to_problem();
         let status =
             StatusCode::from_u16(problem.status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
@@ -330,6 +333,44 @@ mod tests {
         let response = AppError::Internal("boom".into()).into_response();
 
         assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    }
+
+    fn logged(error: AppError) -> String {
+        let buffer = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let writer = buffer.clone();
+        let subscriber = tracing_subscriber::fmt()
+            .with_writer(move || Log(writer.clone()))
+            .with_ansi(false)
+            .finish();
+        tracing::subscriber::with_default(subscriber, || error.into_response());
+        String::from_utf8(buffer.lock().unwrap().clone()).unwrap()
+    }
+
+    struct Log(std::sync::Arc<std::sync::Mutex<Vec<u8>>>);
+
+    impl std::io::Write for Log {
+        fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+            self.0.lock().unwrap().extend_from_slice(bytes);
+            Ok(bytes.len())
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn every_5xx_is_logged_at_error_with_its_cause() {
+        let internal = logged(AppError::from(sqlx::Error::PoolClosed));
+        let busy = logged(AppError::Busy);
+
+        assert!(internal.contains("ERROR"), "{internal}");
+        assert!(
+            internal.contains(&sqlx::Error::PoolClosed.to_string()),
+            "{internal}"
+        );
+        assert!(busy.contains("ERROR"), "{busy}");
+        assert!(logged(AppError::NotFound).is_empty());
     }
 
     #[test]

@@ -188,3 +188,51 @@ pub async fn release_once_waiting(pool: &PgPool, lock: sqlx::Transaction<'static
         .expect("no request waited on the lock");
     lock.commit().await.unwrap();
 }
+
+/// The process-wide log; a scoped subscriber misses events when parallel tests race on
+/// tracing's callsite cache. Tests look for their own line.
+#[derive(Clone, Default)]
+pub struct Log(std::sync::Arc<std::sync::Mutex<Vec<u8>>>);
+
+impl std::io::Write for Log {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        self.0.lock().unwrap().extend_from_slice(bytes);
+        Ok(bytes.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+impl Log {
+    pub fn capture() -> &'static Log {
+        static LOG: std::sync::OnceLock<Log> = std::sync::OnceLock::new();
+        LOG.get_or_init(|| {
+            let log = Log::default();
+            let writer = log.clone();
+            tracing_subscriber::fmt()
+                .with_ansi(false)
+                .with_writer(move || writer.clone())
+                .init();
+            log
+        })
+    }
+
+    /// The first line holding `needle`, waiting up to 10 s for a detached task to log it.
+    pub async fn line(&self, needle: &str) -> String {
+        for _ in 0..1000 {
+            let text = String::from_utf8(self.0.lock().unwrap().clone()).unwrap();
+            if let Some(line) = text.lines().find(|line| line.contains(needle)) {
+                return line.to_string();
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+        panic!("nothing logged {needle:?}");
+    }
+}
+
+/// A Resend mailer whose request cannot be built: every delivery fails without the network.
+pub fn failing_mailer() -> soldi_server::mail::Mailer {
+    soldi_server::mail::Mailer::resend("bad\nkey".into(), "Soldi <a@b.c>".into()).unwrap()
+}
