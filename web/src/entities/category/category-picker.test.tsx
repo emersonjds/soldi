@@ -41,10 +41,12 @@ const Harness = ({
   kind = "daily",
   onChosen = vi.fn(),
   onNewCard,
+  kindLocked,
 }: {
   kind?: Kind;
   onChosen?: (category: Category) => void;
   onNewCard?: () => void;
+  kindLocked?: boolean;
 }) => {
   const [chosen, setChosen] = useState<Category>();
   return (
@@ -58,6 +60,7 @@ const Harness = ({
         }}
         entries={[]}
         onNewCard={onNewCard}
+        kindLocked={kindLocked}
       />
       <Toaster />
     </>
@@ -275,5 +278,60 @@ describe("CategoryPicker", () => {
 
     expect(field()).toHaveAccessibleDescription("Escolha uma categoria");
     expect(field()).toHaveAttribute("aria-invalid", "true");
+  });
+
+  it("keeps every flow on the kind when kindLocked: no Quando acontece, no Usar esta categoria", async () => {
+    setup({ kindLocked: true });
+
+    await userEvent.click(within(await openPicker()).getByRole("button", { name: "Novo grupo" }));
+    const form = await screen.findByRole("dialog", { name: "Nova Categoria" });
+    await userEvent.type(within(form).getByLabelText("Nome do agrupador"), "Luz");
+
+    expect(within(form).queryByText("Quando acontece")).not.toBeInTheDocument();
+    expect(within(form).queryByRole("button", { name: "Usar esta categoria" })).not.toBeInTheDocument();
+  });
+
+  it("clears the search when the sheet closes", async () => {
+    setup();
+
+    const sheet = await openPicker();
+    await userEvent.type(within(sheet).getByRole("searchbox", { name: "Buscar categoria" }), "MERC");
+    await userEvent.click(within(sheet).getByRole("button", { name: "Mercado" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+
+    const reopened = await openPicker();
+    expect(within(reopened).getByRole("searchbox", { name: "Buscar categoria" })).toHaveValue("");
+    expect(groups(reopened)).toContain("Família");
+  });
+
+  it("returns focus to the Categoria field when a choice or Esc closes the sheet", async () => {
+    setup();
+
+    await userEvent.click(within(await openPicker()).getByRole("button", { name: "Mercado" }));
+    await waitFor(() => expect(field()).toHaveFocus());
+
+    await openPicker();
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => expect(field()).toHaveFocus());
+  });
+
+  it("returns focus to the group's + when the subcategory form closes on Esc, and to the field once it saves", async () => {
+    const padaria = sub("08", "Padaria", "daily", ALIMENTACAO);
+    setup({}, { "POST /api/categories": { status: 201, body: padaria } });
+
+    const sheet = await openPicker();
+    const plus = within(sheet).getByRole("button", { name: "Adicionar subcategoria em Alimentação" });
+    await userEvent.click(plus);
+    await screen.findByRole("dialog", { name: "Nova Categoria" });
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Nova Categoria" })).not.toBeInTheDocument());
+    await waitFor(() => expect(plus).toHaveFocus());
+
+    await userEvent.click(plus);
+    const form = await screen.findByRole("dialog", { name: "Nova Categoria" });
+    await userEvent.type(await within(form).findByLabelText("Nome do agrupador"), "Padaria");
+    await userEvent.click(within(form).getByRole("button", { name: "Criar Categoria" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await waitFor(() => expect(field()).toHaveFocus());
   });
 });

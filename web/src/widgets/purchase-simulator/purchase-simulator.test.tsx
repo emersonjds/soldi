@@ -182,6 +182,19 @@ describe("Posso comprar isso?", () => {
     expect(within(sheet).getByLabelText("Meta")).toHaveValue("120,00");
   });
 
+  it("creates only Diário categories from its picker: no Quando acontece, no Usar esta categoria", async () => {
+    setup();
+
+    await userEvent.click(categoryField());
+    const picker = await screen.findByRole("dialog", { name: "Categoria" });
+    await userEvent.click(await within(picker).findByRole("button", { name: "Novo grupo" }));
+    const form = await screen.findByRole("dialog", { name: "Nova Categoria" });
+    await userEvent.type(within(form).getByLabelText("Nome do agrupador"), "Luz");
+
+    expect(within(form).queryByText("Quando acontece")).not.toBeInTheDocument();
+    expect(within(form).queryByRole("button", { name: "Usar esta categoria" })).not.toBeInTheDocument();
+  });
+
   it("fits à vista: the green verdict and no actions; no Comprometimento at income 0", async () => {
     setup({
       "GET /api/forecast": { status: 200, body: forecast("1500.00") },

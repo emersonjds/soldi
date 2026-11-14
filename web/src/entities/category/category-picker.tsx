@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
 
 import { Check, ChevronRight, Plus, Search } from "lucide-react";
 
@@ -28,7 +28,8 @@ const card = "flex min-w-0 flex-col gap-2 rounded-2xl bg-card p-4 shadow-sm";
 
 /**
  * The `Categoria` field and its one sheet: search, `Mais usadas`, every group of `kind` with its subcategories (D26),
- * a `+` per group that creates inside it and `Novo grupo`. `onChoose` may get another kind's category; the caller follows it.
+ * a `+` per group that creates inside it and `Novo grupo`. `onChoose` may get another kind's category, unless `kindLocked`;
+ * the caller follows it.
  */
 export const CategoryPicker = ({
   kind,
@@ -37,6 +38,7 @@ export const CategoryPicker = ({
   entries,
   error,
   onNewCard,
+  kindLocked = false,
   label = "Categoria",
 }: {
   kind: Kind;
@@ -47,6 +49,8 @@ export const CategoryPicker = ({
   error?: string;
   /** Given, the card group's `+` calls it instead of the subcategory form. */
   onNewCard?: () => void;
+  /** Every flow stays on `kind`: no `Quando acontece`, no `Usar esta categoria`. */
+  kindLocked?: boolean;
   label?: string;
 }) => {
   const categories = useCategoryChips(kind);
@@ -56,18 +60,31 @@ export const CategoryPicker = ({
   const labelId = useId();
   const valueId = useId();
   const errorId = useId();
+  const fieldRef = useRef<HTMLButtonElement>(null);
+  /** The `+` or `Novo grupo` that opened the category form, focused again when it closes. */
+  const opener = useRef<HTMLElement | null>(null);
   const visible = categories.data ?? [];
+
+  const show = (next: boolean) => {
+    setOpen(next);
+    if (!next) setSearch("");
+  };
 
   const pick = (category: Category) => {
     onChoose(category);
     setCreating(null);
-    setOpen(false);
+    show(false);
+  };
+
+  const create = (parentId?: string) => (event: { currentTarget: HTMLElement }) => {
+    opener.current = event.currentTarget;
+    setCreating({ parentId });
   };
 
   const newGroup = (
     <button
       type="button"
-      onClick={() => setCreating({})}
+      onClick={create()}
       className="flex min-h-11 items-center gap-3 rounded-xl px-3 font-semibold text-base text-primary outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50"
     >
       <span className="flex size-8 items-center justify-center rounded-full border-2 border-primary/40 border-dashed">
@@ -136,7 +153,7 @@ export const CategoryPicker = ({
                 variant="ghost"
                 size="icon"
                 aria-label={`Adicionar subcategoria em ${parent.name}`}
-                onClick={() => setCreating({ parentId: parent.id })}
+                onClick={create(parent.id)}
                 className="size-11 shrink-0 rounded-full text-primary"
               >
                 <Plus className="size-5" />
@@ -190,13 +207,14 @@ export const CategoryPicker = ({
         {label}
       </span>
       <button
+        ref={fieldRef}
         type="button"
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-labelledby={`${labelId} ${valueId}`}
         aria-describedby={error ? errorId : undefined}
         aria-invalid={error ? true : undefined}
-        onClick={() => setOpen(true)}
+        onClick={() => show(true)}
         className="flex min-h-12 w-full items-center gap-3 rounded-xl border border-input px-3 text-left text-base outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive"
       >
         {chosen && <CategoryIcon icon={chosen.icon} color={chosen.color} className="size-8 [&_svg]:size-4" />}
@@ -212,7 +230,11 @@ export const CategoryPicker = ({
       )}
       <ResponsiveSheet
         open={open}
-        onOpenChange={setOpen}
+        onOpenChange={show}
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          fieldRef.current?.focus();
+        }}
         title="Categoria"
         description="Busque, toque ou crie a categoria do lançamento."
       >
@@ -233,9 +255,14 @@ export const CategoryPicker = ({
           parentId={creating?.parentId}
           open={creating !== null}
           onOpenChange={(next) => !next && setCreating(null)}
-          onKindChange={() => undefined}
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            // Gone once a save closed the picker too, which focuses the field instead.
+            if (opener.current?.isConnected) opener.current.focus();
+          }}
+          onKindChange={kindLocked ? undefined : () => undefined}
           onSaved={pick}
-          onUseExisting={pick}
+          onUseExisting={kindLocked ? undefined : pick}
         />
       </ResponsiveSheet>
     </div>

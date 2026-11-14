@@ -294,6 +294,7 @@ export const PurchaseSimulator = () => {
             chosen={category}
             onChoose={(chosen) => set({ category: chosen })}
             entries={thisMonth.isError ? [] : thisMonth.data}
+            kindLocked
             label="Categoria do bem ou serviço"
           />
 
