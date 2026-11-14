@@ -16,6 +16,7 @@ pub struct Budget {
     pub window: Duration,
 }
 
+const ONE_MINUTE: Duration = Duration::from_secs(60);
 const FIFTEEN_MINUTES: Duration = Duration::from_secs(15 * 60);
 const ONE_HOUR: Duration = Duration::from_secs(60 * 60);
 const ONE_DAY: Duration = Duration::from_secs(24 * 60 * 60);
@@ -93,6 +94,25 @@ pub const EMAIL_VERIFY_CONFIRM_IP: Budget = Budget {
     limit: 20,
     window: ONE_HOUR,
 };
+
+pub const WRITES_USER: Budget = Budget {
+    name: "writes-user",
+    limit: 120,
+    window: ONE_MINUTE,
+};
+pub const WRITES_USER_HOUR: Budget = Budget {
+    name: "writes-user-hour",
+    limit: 2_000,
+    window: ONE_HOUR,
+};
+
+/// Every signed-in write spends these, whatever the route.
+pub fn write_keys(user_id: String) -> [(Budget, Option<String>); 2] {
+    [
+        (WRITES_USER, Some(user_id.clone())),
+        (WRITES_USER_HOUR, Some(user_id)),
+    ]
+}
 
 /// A new account and a taken e-mail spend the same keys.
 pub fn sign_up_keys(ip: Option<String>) -> [(Budget, Option<String>); 2] {
@@ -439,6 +459,36 @@ mod tests {
         let elsewhere = Some("203.0.113.2".to_string());
         let other_ip = limiter.check_at(&email_verify_keys(elsewhere, fresh()), third_hour);
         assert!(other_ip.is_ok());
+    }
+
+    #[test]
+    fn one_account_gets_120_writes_a_minute_and_2000_an_hour() {
+        let limiter = Limiter::default();
+        let ana = || "ana".to_string();
+        let start = Instant::now();
+        for write in 0..120 {
+            assert!(
+                limiter.check_at(&write_keys(ana()), start).is_ok(),
+                "{write}"
+            );
+        }
+        assert_eq!(refused_for(limiter.check_at(&write_keys(ana()), start)), 60);
+        assert!(limiter.check_at(&write_keys("bia".into()), start).is_ok());
+
+        let minute = Duration::from_secs(60);
+        for step in 1..16 {
+            for write in 0..120 {
+                let spent = limiter.check_at(&write_keys(ana()), start + minute * step);
+                assert!(spent.is_ok(), "{step}:{write}");
+            }
+        }
+        let late = start + minute * 16;
+        let spent = (0..80).filter(|_| limiter.check_at(&write_keys(ana()), late).is_ok());
+        assert_eq!(spent.count(), 80);
+        assert_eq!(
+            refused_for(limiter.check_at(&write_keys(ana()), late)),
+            44 * 60
+        );
     }
 
     fn forwarded(lines: &[&str]) -> HeaderMap {

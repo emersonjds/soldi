@@ -78,6 +78,7 @@ pub async fn withdraw(
     transactions::service::check_opening(&mut tx, user, entry.date).await?;
     let balance = repo::balance(&mut tx, user.id, cofrinho.id, opening).await?;
     domain::check_withdraw(balance, entry.amount)?;
+    transactions::service::check_room(&mut tx, user, 1).await?;
     let transaction_id = transactions::repo::insert(
         &mut tx,
         user.id,

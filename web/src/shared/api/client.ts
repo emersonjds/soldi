@@ -58,6 +58,8 @@ const PROBLEMS: [slug: string, message: string][] = [
   ["duplicate-name", "Já existe uma categoria com esse nome no outro tipo."],
   ["category-has-bills", "Uma conta fixa usa essa categoria. Arquive a conta antes de mudar para Diário."],
   ["fatura-paid", "Essa fatura já foi paga."],
+  ["quota", "Sua conta chegou ao limite de 50.000 lançamentos."],
+  ["rate-limited", "Muitas alterações seguidas. Espere um pouco e tente de novo."],
 ];
 
 /** The pt-BR copy of a refused rule more than one screen can meet; otherwise the screen's own. */
