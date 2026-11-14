@@ -273,10 +273,9 @@ pub async fn request_email_verification(
     user: CurrentUser,
 ) -> Result<StatusCode, AppError> {
     let ip = client_ip(&headers, peer);
-    state.limiter.check(&[
-        (limits::EMAIL_VERIFY_IP, ip),
-        (limits::EMAIL_VERIFY_USER, Some(user.id.to_string())),
-    ])?;
+    state
+        .limiter
+        .check(&limits::email_verify_keys(ip, user.id.to_string()))?;
     service::check_unverified(&state.pool, &user).await?;
     let mailer = state.mailer.clone();
     let task = tokio::spawn(async move {
