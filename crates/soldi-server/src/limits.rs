@@ -18,6 +18,7 @@ pub struct Budget {
 
 const FIFTEEN_MINUTES: Duration = Duration::from_secs(15 * 60);
 const ONE_HOUR: Duration = Duration::from_secs(60 * 60);
+const ONE_DAY: Duration = Duration::from_secs(24 * 60 * 60);
 const SWEEP_EVERY: Duration = Duration::from_secs(10 * 60);
 const MAX_KEYS: usize = 100_000;
 const EVICT_BATCH: usize = MAX_KEYS / 10;
@@ -41,6 +42,11 @@ pub const SIGN_UP_IP: Budget = Budget {
     name: "sign-up-ip",
     limit: 10,
     window: ONE_HOUR,
+};
+pub const SIGN_UP_IP_DAY: Budget = Budget {
+    name: "sign-up-ip-day",
+    limit: 20,
+    window: ONE_DAY,
 };
 pub const PASSWORD_CHANGE_USER: Budget = Budget {
     name: "password-change-user",
@@ -77,11 +83,29 @@ pub const EMAIL_VERIFY_IP: Budget = Budget {
     limit: 10,
     window: ONE_HOUR,
 };
+pub const EMAIL_VERIFY_IP_DAY: Budget = Budget {
+    name: "email-verify-ip-day",
+    limit: 20,
+    window: ONE_DAY,
+};
 pub const EMAIL_VERIFY_CONFIRM_IP: Budget = Budget {
     name: "email-verify-confirm-ip",
     limit: 20,
     window: ONE_HOUR,
 };
+
+/// A new account and a taken e-mail spend the same keys.
+pub fn sign_up_keys(ip: Option<String>) -> [(Budget, Option<String>); 2] {
+    [(SIGN_UP_IP, ip.clone()), (SIGN_UP_IP_DAY, ip)]
+}
+
+pub fn email_verify_keys(ip: Option<String>, user_id: String) -> [(Budget, Option<String>); 3] {
+    [
+        (EMAIL_VERIFY_IP, ip.clone()),
+        (EMAIL_VERIFY_IP_DAY, ip),
+        (EMAIL_VERIFY_USER, Some(user_id)),
+    ]
+}
 
 struct Window {
     ends: Instant,
@@ -151,7 +175,10 @@ impl Limiter {
     /// Spends one unit of each known key in order; the first key over its budget refuses and
     /// later keys are left untouched.
     pub fn check(&self, keys: &[(Budget, Option<String>)]) -> Result<(), AppError> {
-        let now = Instant::now();
+        self.check_at(keys, Instant::now())
+    }
+
+    fn check_at(&self, keys: &[(Budget, Option<String>)], now: Instant) -> Result<(), AppError> {
         for (budget, value) in keys {
             let Some(value) = value else { continue };
             self.hit(&format!("{}:{value}", budget.name), *budget, now)
@@ -354,6 +381,64 @@ mod tests {
             Err(AppError::TooManyRequests { retry_after: 900 })
         ));
         assert_eq!(limiter.state.lock().unwrap().windows.len(), 1);
+    }
+
+    const HOUR: Duration = Duration::from_secs(3600);
+
+    fn refused_for(result: Result<(), AppError>) -> u64 {
+        match result {
+            Err(AppError::TooManyRequests { retry_after }) => retry_after,
+            other => panic!("expected a refusal, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn one_ip_gets_twenty_sign_ups_a_day_across_hourly_windows() {
+        let limiter = Limiter::default();
+        let ip = || Some("192.0.2.1".to_string());
+        let start = Instant::now();
+        for hour in 0..2 {
+            let at = start + HOUR * hour;
+            for attempt in 0..10 {
+                let spent = limiter.check_at(&sign_up_keys(ip()), at);
+                assert!(spent.is_ok(), "{hour}:{attempt}");
+            }
+        }
+
+        let third_hour = start + HOUR * 2;
+        let refused = limiter.check_at(&sign_up_keys(ip()), third_hour);
+        assert_eq!(refused_for(refused), 22 * 3600);
+        let elsewhere = Some("192.0.2.2".to_string());
+        assert!(
+            limiter
+                .check_at(&sign_up_keys(elsewhere), third_hour)
+                .is_ok()
+        );
+        let next_day = start + HOUR * 24;
+        assert!(limiter.check_at(&sign_up_keys(ip()), next_day).is_ok());
+    }
+
+    #[test]
+    fn one_ip_gets_twenty_verification_mails_a_day_across_accounts() {
+        let limiter = Limiter::default();
+        let ip = || Some("203.0.113.1".to_string());
+        let start = Instant::now();
+        for hour in 0..2 {
+            let at = start + HOUR * hour;
+            for account in 0..10 {
+                let user = format!("user-{hour}-{account}");
+                let spent = limiter.check_at(&email_verify_keys(ip(), user), at);
+                assert!(spent.is_ok(), "{hour}:{account}");
+            }
+        }
+
+        let third_hour = start + HOUR * 2;
+        let fresh = || "fresh-account".to_string();
+        let refused = limiter.check_at(&email_verify_keys(ip(), fresh()), third_hour);
+        assert_eq!(refused_for(refused), 22 * 3600);
+        let elsewhere = Some("203.0.113.2".to_string());
+        let other_ip = limiter.check_at(&email_verify_keys(elsewhere, fresh()), third_hour);
+        assert!(other_ip.is_ok());
     }
 
     fn forwarded(lines: &[&str]) -> HeaderMap {
