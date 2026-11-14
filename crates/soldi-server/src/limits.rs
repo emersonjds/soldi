@@ -162,7 +162,7 @@ impl Limiter {
 }
 
 /// The last `X-Forwarded-For` address, else the socket peer; IPv4-mapped addresses become IPv4
-/// and IPv6 is cut to its /48, one site allocation. Railway's edge appends the address it saw, so
+/// and IPv6 is cut to its /56, one residential allocation. Railway's edge appends the address it saw, so
 /// earlier entries come from the client and can be forged. A loopback client (local runs and e2e,
 /// never behind Railway) gets no IP key.
 pub fn client_ip(headers: &HeaderMap, peer: Option<SocketAddr>) -> Option<IpAddr> {
@@ -179,7 +179,7 @@ pub fn client_ip(headers: &HeaderMap, peer: Option<SocketAddr>) -> Option<IpAddr
         return None;
     }
     Some(match ip {
-        IpAddr::V6(v6) => IpAddr::V6(Ipv6Addr::from(u128::from(v6) & (u128::MAX << 80))),
+        IpAddr::V6(v6) => IpAddr::V6(Ipv6Addr::from(u128::from(v6) & (u128::MAX << 72))),
         v4 => v4,
     })
 }
@@ -388,16 +388,17 @@ mod tests {
     }
 
     #[test]
-    fn ipv6_clients_are_keyed_by_their_slash_48() {
+    fn ipv6_clients_are_keyed_by_their_slash_56() {
         let key = |value: &str| client_ip(&forwarded(&[value]), None);
         assert_eq!(
             key("2001:db8:1:2::1"),
-            key("2001:db8:1:ffff:ffff:ffff:ffff:ffff")
+            key("2001:db8:1:ff:ffff:ffff:ffff:ffff")
         );
         assert_eq!(
-            key("2001:db8:1:2::1"),
-            Some("2001:db8:1::".parse().unwrap())
+            key("2001:db8:1:2ff::1"),
+            Some("2001:db8:1:200::".parse().unwrap())
         );
+        assert_ne!(key("2001:db8:1:2::1"), key("2001:db8:1:100::1"));
         assert_ne!(key("2001:db8:1:2::1"), key("2001:db8:2::1"));
     }
 }
