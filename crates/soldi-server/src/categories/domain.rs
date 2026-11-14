@@ -225,6 +225,17 @@ pub fn check_not_savings(category: &Category) -> Result<(), AppError> {
     }
 }
 
+/// D43: the card group stays a top-level group, so a card never lands under `Economia`.
+pub fn check_not_card_group(category: &Category) -> Result<(), AppError> {
+    match category.is_card_group {
+        true => Err(AppError::invalid(
+            "parent_id",
+            "Cartão stays a top-level group",
+        )),
+        false => Ok(()),
+    }
+}
+
 /// A cofrinho is a subcategory of `Economia`.
 pub fn is_cofrinho_parent(parent: Option<&Category>) -> bool {
     parent.is_some_and(|parent| parent.is_savings && parent.kind == CategoryKind::Bill)

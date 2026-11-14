@@ -127,7 +127,11 @@ pub async fn create(
             }
             id
         }
-        None => categories::service::card_group(&mut tx, user).await?,
+        None => {
+            let id = categories::service::card_group(&mut tx, user).await?;
+            check_card_category(&mut tx, user, id).await?;
+            id
+        }
     };
     let input = CreateBill {
         category_id: Some(category_id),
@@ -349,7 +353,13 @@ pub async fn insert_all(
         ));
     }
     // Cards are refused above and `check` requires a conta fixa's category.
-    let ids: Vec<Uuid> = bills.iter().filter_map(|bill| bill.category_id).collect();
+    let ids: Vec<Uuid> = bills
+        .iter()
+        .map(|bill| {
+            bill.category_id
+                .expect("a conta fixa always has a category")
+        })
+        .collect();
     let allowed = repo::bill_category_ids(conn, user.id, &ids).await?;
     if let Some(index) = ids.iter().position(|id| !allowed.contains(id)) {
         return Err(AppError::invalid(

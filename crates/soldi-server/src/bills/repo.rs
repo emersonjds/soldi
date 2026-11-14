@@ -223,7 +223,13 @@ pub async fn insert_all(
     let amounts: Vec<Option<rust_decimal::Decimal>> =
         bills.iter().map(|bill| bill.amount).collect();
     let due_days: Vec<i16> = bills.iter().map(|bill| bill.due_day).collect();
-    let category_ids: Vec<Uuid> = bills.iter().filter_map(|bill| bill.category_id).collect();
+    let category_ids: Vec<Uuid> = bills
+        .iter()
+        .map(|bill| {
+            bill.category_id
+                .expect("a conta fixa always has a category")
+        })
+        .collect();
     let closing_days: Vec<Option<i16>> = bills.iter().map(|bill| bill.closing_day).collect();
     sqlx::query!(
         "INSERT INTO recurring_bills (user_id, name, amount, due_day, category_id, closing_day)

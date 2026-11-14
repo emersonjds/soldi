@@ -1491,3 +1491,106 @@ async fn sol140_a_conta_fixa_still_needs_a_category(pool: PgPool) {
     assert_eq!(problem["errors"][0]["field"], "category_id");
     assert_eq!(ana.get("/api/bills").await.1, json!([]));
 }
+
+/// Archives the seeded card group, so the next uncategorized card looks for a new one.
+async fn archive_card_group(app: &TestApp) {
+    let old = category_id(app, "Cartão").await;
+    let (status, _) = app.delete(&format!("/api/categories/{old}")).await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+}
+
+#[sqlx::test]
+async fn sol140_the_card_group_is_never_a_subcategory_or_cofrinho_named_cartao(pool: PgPool) {
+    let ana = TestApp::signed_in(pool.clone(), "ana@example.com").await;
+    archive_card_group(&ana).await;
+    for parent in ["Casa", "Economia"] {
+        let parent_id = category_id(&ana, parent).await;
+        let (status, sub) = ana
+            .post(
+                "/api/categories",
+                json!({ "name": "Cartão", "kind": "bill", "parent_id": parent_id }),
+            )
+            .await;
+        assert_eq!(status, StatusCode::CREATED, "{sub}");
+
+        let (status, problem) = ana.post("/api/bills", uncategorized_card()).await;
+
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+        assert_eq!(problem["errors"][0]["field"], "category_id");
+        assert!(card_groups(&ana).await.is_empty());
+        assert_eq!(ana.get("/api/bills").await.1, json!([]));
+        let sub = sub["id"].as_str().unwrap();
+        ana.delete(&format!("/api/categories/{sub}")).await;
+    }
+}
+
+#[sqlx::test]
+async fn sol140_a_card_never_lands_in_a_card_group_under_economia(pool: PgPool) {
+    let ana = TestApp::signed_in(pool.clone(), "ana@example.com").await;
+    let group = category_id(&ana, "Cartão").await;
+    let economia = category_id(&ana, "Economia").await;
+    sqlx::query("UPDATE categories SET parent_id = $1 WHERE id = $2")
+        .bind(economia)
+        .bind(group)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let (status, problem) = ana.post("/api/bills", uncategorized_card()).await;
+
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+    assert_eq!(problem["errors"][0]["field"], "category_id");
+    assert_eq!(ana.get("/api/bills").await.1, json!([]));
+}
+
+#[sqlx::test]
+async fn sol140_a_full_fixa_palette_still_takes_over_an_active_cartao(pool: PgPool) {
+    let ana = TestApp::signed_in(pool.clone(), "ana@example.com").await;
+    archive_card_group(&ana).await;
+    let (status, mine) = ana
+        .post(
+            "/api/categories",
+            json!({ "name": "Cartão", "kind": "bill" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{mine}");
+    for n in 0..24 {
+        ana.post(
+            "/api/categories",
+            json!({ "name": format!("Fixa {n}"), "kind": "bill" }),
+        )
+        .await;
+    }
+    let (_, problem) = ana
+        .post("/api/categories", json!({ "name": "Mais", "kind": "bill" }))
+        .await;
+    assert_eq!(problem["type"], "urn:soldi:error:palette-full");
+
+    let (status, card) = ana.post("/api/bills", uncategorized_card()).await;
+
+    assert_eq!(status, StatusCode::CREATED, "{card}");
+    assert_eq!(card["category_id"], mine["id"]);
+}
+
+#[sqlx::test]
+#[should_panic(expected = "a conta fixa always has a category")]
+async fn sol140_inserting_onboarding_bills_without_a_category_is_a_bug(pool: PgPool) {
+    let ana = TestApp::signed_in(pool.clone(), "ana@example.com").await;
+    let light = category_id(&ana, "Luz").await;
+    let bill = |category_id| CreateBill {
+        name: "Luz".into(),
+        amount: None,
+        due_day: 10,
+        category_id,
+        closing_day: None,
+        installments: None,
+        last_month: None,
+    };
+    let mut conn = pool.acquire().await.unwrap();
+    let _ = soldi_server::bills::repo::insert_all(
+        &mut conn,
+        user_id(&ana).await,
+        &[bill(None), bill(Some(light))],
+    )
+    .await;
+}

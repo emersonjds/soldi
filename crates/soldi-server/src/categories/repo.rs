@@ -475,24 +475,42 @@ pub async fn find_card_group(
     .await
 }
 
-/// D43: a new top-level `Cartão` flagged as the card group, or the active `bill` of that name
-/// flagged in its place.
+/// D43: flags the active top-level `bill` named `Cartão` as the card group.
+pub async fn adopt_card_group(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+) -> Result<Option<Uuid>, sqlx::Error> {
+    sqlx::query_scalar!(
+        "UPDATE categories SET is_card_group = true, updated_at = now()
+         WHERE user_id = $1 AND kind = 'bill' AND lower(name) = lower($2)
+           AND parent_id IS NULL AND archived_at IS NULL
+         RETURNING id",
+        user_id,
+        super::domain::CARD_GROUP
+    )
+    .fetch_optional(&mut *conn)
+    .await
+}
+
+/// D43: a new top-level `Cartão` flagged as the card group, or a top-level `bill` of that name
+/// created since [`adopt_card_group`] flagged in its place; none when a subcategory holds the name.
 pub async fn insert_card_group(
     conn: &mut PgConnection,
     user_id: Uuid,
     color: &str,
-) -> Result<Uuid, sqlx::Error> {
+) -> Result<Option<Uuid>, sqlx::Error> {
     sqlx::query_scalar!(
         "INSERT INTO categories (user_id, name, kind, icon, color, is_card_group)
          VALUES ($1, $2, 'bill', 'credit-card', $3, true)
          ON CONFLICT (user_id, kind, (lower(name))) WHERE archived_at IS NULL
          DO UPDATE SET is_card_group = true, updated_at = now()
+         WHERE categories.parent_id IS NULL
          RETURNING id",
         user_id,
         super::domain::CARD_GROUP,
         color
     )
-    .fetch_one(&mut *conn)
+    .fetch_optional(&mut *conn)
     .await
 }
 
