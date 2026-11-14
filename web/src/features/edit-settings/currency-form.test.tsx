@@ -45,4 +45,13 @@ describe("CurrencyForm", () => {
     expect(await screen.findByText("Não foi possível salvar.")).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: "Real (BRL - R$)" })).toBeChecked();
   });
+
+  it("says the account is writing too fast when the write budget is spent", async () => {
+    const limited = { ...problem(429, "Too many"), type: "urn:soldi:error:rate-limited" };
+    open({ "PATCH /api/settings": { status: 429, body: limited } });
+
+    await userEvent.click(screen.getByRole("radio", { name: "Libra (GBP - £)" }));
+
+    expect(await screen.findByText("Muitas alterações seguidas. Espere um pouco e tente de novo.")).toBeInTheDocument();
+  });
 });

@@ -8,7 +8,7 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { Schemas } from "@/shared/api/client";
+import { problemMessage, type Schemas } from "@/shared/api/client";
 import { CategoryIcon } from "@/shared/ui/category-icon";
 import { PageError } from "@/shared/ui/page-state";
 import { ResponsiveSheet, ResponsiveSheetFooter } from "@/shared/ui/responsive-sheet";
@@ -73,7 +73,7 @@ const Lists = ({
         onClose();
         toast.success("Categorias personalizadas");
       },
-      onError: () => toast.error("Não foi possível salvar a ordem."),
+      onError: (error) => toast.error(problemMessage(error) ?? "Não foi possível salvar a ordem."),
     });
   const label = (category: Category) => (
     <span className="flex min-w-0 flex-1 items-center gap-3">

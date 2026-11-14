@@ -25,7 +25,7 @@ import { ALL_BILLS_PAID } from "@/entities/month/schedule";
 import { BillFormPanel, EditBillSheet } from "@/features/edit-bill/edit-bill-sheet";
 import { useIsXl } from "@/hooks/use-xl";
 import { cn } from "@/lib/utils";
-import type { Schemas } from "@/shared/api/client";
+import { problemMessage, type Schemas } from "@/shared/api/client";
 import { monthAbbrev, monthName, todayISO } from "@/shared/lib/date";
 import { wholeShare } from "@/shared/lib/percent";
 import { cents, fromCents } from "@/shared/lib/tier";
@@ -315,9 +315,9 @@ export const BillList = ({ month }: { month: string }) => {
     const commit = () => {
       if (undone) return;
       archive.mutate(bill.id, {
-        onError: () => {
+        onError: (error) => {
           restore(bill.id);
-          toast.error("Não foi possível arquivar a conta.");
+          toast.error(problemMessage(error) ?? "Não foi possível arquivar a conta.");
         },
       });
     };
@@ -341,7 +341,7 @@ export const BillList = ({ month }: { month: string }) => {
   const send = (bill: Bill, active: boolean, onSaved?: () => void) =>
     update
       .mutateAsync({ id: bill.id, active })
-      .then(onSaved, () => toast.error("Não foi possível salvar."))
+      .then(onSaved, (error) => toast.error(problemMessage(error) ?? "Não foi possível salvar."))
       .finally(() => settle(bill.id));
 
   // D17: resuming sets active_since to today and drops the bill's overdue occurrences, so the pause waits for the toast like archiveLater and Desfazer sends nothing.

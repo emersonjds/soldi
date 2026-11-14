@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { meQuery, type User } from "@/entities/user/session";
-import { api, dataOrThrow } from "@/shared/api/client";
+import { api, dataOrThrow, problemMessage } from "@/shared/api/client";
 import { BrandButton } from "@/shared/ui/brand-button";
 
 /** The user's name, editable, and the e-mail, read-only. */
@@ -32,7 +32,7 @@ export const ProfileForm = ({ user }: { user: User }) => {
         setName(saved.name);
         toast.success("Nome salvo");
       },
-      onError: () => toast.error("Não foi possível salvar."),
+      onError: (error) => toast.error(problemMessage(error) ?? "Não foi possível salvar."),
     });
   };
 

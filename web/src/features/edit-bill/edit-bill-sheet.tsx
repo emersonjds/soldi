@@ -15,7 +15,7 @@ import { type Bill, useCreateBill, useUpdateBill } from "@/entities/bill/bill-qu
 import { categoryLabel } from "@/entities/category/categories-query";
 import { useCategoryChips } from "@/entities/category/category-chips";
 import { cn } from "@/lib/utils";
-import type { Schemas } from "@/shared/api/client";
+import { problemMessage, type Schemas } from "@/shared/api/client";
 import { monthAbbrev, todayISO } from "@/shared/lib/date";
 import { positiveAmount } from "@/shared/lib/money";
 import { AmountInput } from "@/shared/ui/amount-input";
@@ -426,7 +426,7 @@ export const useSaveBill = (bill?: Bill, onCreate?: (fields: Schemas["CreateBill
   return ({ active, ...fields }: Fields) => {
     const feedback = {
       onSuccess: () => toast.success("Conta salva"),
-      onError: () => toast.error("Não foi possível salvar a conta."),
+      onError: (error: Error) => toast.error(problemMessage(error) ?? "Não foi possível salvar a conta."),
     };
     if (bill) return update.mutate({ id: bill.id, ...fields, ...(active !== bill.active && { active }) }, feedback);
     if (onCreate) return onCreate(fields);

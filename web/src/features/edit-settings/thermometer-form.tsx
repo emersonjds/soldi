@@ -10,7 +10,7 @@ import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { useMonth } from "@/entities/month/month-query";
 import { useUpdateSettings } from "@/entities/settings/settings-query";
 import { cn } from "@/lib/utils";
-import type { Schemas } from "@/shared/api/client";
+import { problemMessage, type Schemas } from "@/shared/api/client";
 import { useCurrency } from "@/shared/lib/currency";
 import { todayISO } from "@/shared/lib/date";
 import { currencySymbol, formatMoney, formatWhole, parseBRL } from "@/shared/lib/money";
@@ -117,7 +117,7 @@ export const ThermometerForm = ({ settings }: { settings: Schemas["Settings"] })
     if (!bounds || !rising) return;
     save.mutate(bounds, {
       onSuccess: () => toast.success("Termômetro salvo"),
-      onError: () => toast.error("Não foi possível salvar."),
+      onError: (error) => toast.error(problemMessage(error) ?? "Não foi possível salvar."),
     });
   };
 

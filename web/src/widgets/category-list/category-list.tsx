@@ -36,7 +36,7 @@ import { useCategoryReport } from "@/entities/report/report-query";
 import { useTransactions } from "@/entities/transaction/transaction-queries";
 import { useIsXl } from "@/hooks/use-xl";
 import { cn } from "@/lib/utils";
-import { hasProblem, type Schemas } from "@/shared/api/client";
+import { hasProblem, problemMessage, type Schemas } from "@/shared/api/client";
 import { monthShort } from "@/shared/lib/date";
 import { formatPct } from "@/shared/lib/percent";
 import { plain } from "@/shared/lib/text";
@@ -226,7 +226,7 @@ export const CategoryList = ({ kind, month, onKindChange }: ListProps) => {
           toast.error(
             hasProblem(error, "cofrinho-not-empty")
               ? "Resgate tudo antes de excluir."
-              : "Não foi possível excluir a categoria.",
+              : (problemMessage(error) ?? "Não foi possível excluir a categoria."),
           );
         },
       });
