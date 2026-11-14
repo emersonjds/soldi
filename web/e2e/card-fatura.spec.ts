@@ -3,12 +3,13 @@ import { expect, type Page, test } from "@playwright/test";
 import { expectNoClipped } from "./clipped";
 import { requireServer } from "./server";
 
-/** `YYYY-MM` of the month `offset` months from now. */
+/** `YYYY-MM` `offset` months from today's, in São Paulo. */
 const monthFrom = (offset: number) => {
-  const date = new Date();
-  date.setDate(1);
-  date.setMonth(date.getMonth() + offset);
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+  const [year, month] = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" })
+    .format(new Date())
+    .split("-")
+    .map(Number);
+  return new Date(Date.UTC(year, month - 1 + offset, 1)).toISOString().slice(0, 7);
 };
 
 const MONTHS = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
@@ -82,4 +83,9 @@ test("a card's fatura opens from Contas a pagar, shows what weighs on it, and Pa
   await expect(page.getByText("Recorrência parada. Sai dos próximos meses.")).toBeVisible();
   await expect(ahead.first()).toContainText("R$ 100,00");
   await expect(panel).toContainText("R$ 219,90");
+  // ponytail: a stopped series has no memory of having been open; its last member reads as a parcela.
+  await expect(panel.getByRole("region", { name: "Parcelas" }).getByRole("button", { name: /^Spotify/ })).toContainText(
+    "1/1 · última",
+  );
+  await expect(panel.getByRole("region", { name: "Assinaturas" })).toHaveCount(0);
 });
