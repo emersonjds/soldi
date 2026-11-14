@@ -1,4 +1,3 @@
-use chrono::Datelike;
 use soldi_types::months::{Forecast, MonthView, UpdateMonthNote};
 use sqlx::PgPool;
 
@@ -16,12 +15,7 @@ pub async fn get(pool: &PgPool, user: &CurrentUser, month: &str) -> Result<Month
     let mut conn = pool.acquire().await?;
     let settings = settings::repo::find(&mut conn, user.id).await?;
     let opening = settings.opening_date;
-    if (month.year(), month.month()) < (opening.year(), opening.month()) {
-        return Err(AppError::rule(
-            "month-before-opening",
-            "The month is before the opening date.",
-        ));
-    }
+    domain::check_opening(month, opening)?;
     let end = domain::month_end(month);
     let sums = repo::day_sums(
         &mut conn,
