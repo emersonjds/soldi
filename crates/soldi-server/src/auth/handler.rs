@@ -192,7 +192,7 @@ pub async fn delete_me(
         (status = 204, description = "Password changed; every other session of the caller is revoked, this one stays"),
         (status = 401, body = Problem, content_type = "application/problem+json"),
         (status = 422, body = Problem, content_type = "application/problem+json", description = "`wrong-password` for a wrong current password; field `password` when the new one has not 8 to 128 characters"),
-        (status = 429, body = Problem, content_type = "application/problem+json", description = "Rate limited; wait `Retry-After` seconds")))]
+        (status = 429, body = Problem, content_type = "application/problem+json", description = "Rate limited with the password-change budget; wait `Retry-After` seconds")))]
 pub async fn change_password(
     State(state): State<AppState>,
     user: CurrentUser,

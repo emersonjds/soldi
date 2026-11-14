@@ -244,16 +244,6 @@
                 }
               }
             }
-          },
-          "429": {
-            "description": "Rate limited with the account's write budget; wait `Retry-After` seconds",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
           }
         }
       }
@@ -269,16 +259,6 @@
             "description": "Every session and trusted device of the caller revoked, this one included; cookie cleared"
           },
           "401": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Rate limited with the account's write budget; wait `Retry-After` seconds",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -1631,7 +1611,7 @@
             }
           },
           "429": {
-            "description": "Rate limited; wait `Retry-After` seconds",
+            "description": "Rate limited with the password-change budget; wait `Retry-After` seconds",
             "content": {
               "application/problem+json": {
                 "schema": {

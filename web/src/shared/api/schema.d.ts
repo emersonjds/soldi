@@ -1586,15 +1586,6 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Rate limited with the account's write budget; wait `Retry-After` seconds */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["Problem"];
-                };
-            };
         };
     };
     sign_out_everywhere: {
@@ -1614,15 +1605,6 @@ export interface operations {
                 content?: never;
             };
             401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["Problem"];
-                };
-            };
-            /** @description Rate limited with the account's write budget; wait `Retry-After` seconds */
-            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2753,7 +2735,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Rate limited; wait `Retry-After` seconds */
+            /** @description Rate limited with the password-change budget; wait `Retry-After` seconds */
             429: {
                 headers: {
                     [name: string]: unknown;

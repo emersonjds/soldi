@@ -123,3 +123,44 @@ async fn an_open_series_stops_growing_at_the_ceiling_and_reads_still_answer(pool
     assert_eq!(status, StatusCode::OK);
     assert_eq!(count(&ana).await, CEILING);
 }
+
+async fn signed_in_again(app: &TestApp, email: &str, password: &str) -> TestApp {
+    let body = json!({ "email": email, "password": password });
+    let response = app
+        .send(json_request(
+            Method::POST,
+            "/api/auth/sign-in",
+            None,
+            Some(body),
+        ))
+        .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    TestApp {
+        router: app.router.clone(),
+        cookie: Some(common::session_cookie(&response)),
+    }
+}
+
+#[sqlx::test]
+async fn sign_out_password_change_and_deletion_skip_the_spent_write_budget(pool: PgPool) {
+    let ana = TestApp::signed_in(pool, "ana@example.com").await;
+    let other = signed_in_again(&ana, "ana@example.com", common::PASSWORD).await;
+    for _ in 0..120 {
+        ana.post("/api/me/tour-seen", json!({})).await;
+    }
+    let (status, _) = ana.post("/api/me/tour-seen", json!({})).await;
+    assert_eq!(status, StatusCode::TOO_MANY_REQUESTS);
+
+    let (status, body) = other.post("/api/auth/sign-out", json!({})).await;
+    assert_eq!(status, StatusCode::NO_CONTENT, "{body}");
+    let changed =
+        json!({ "current_password": common::PASSWORD, "new_password": "new horse battery" });
+    let (status, body) = ana.post("/api/me/password", changed).await;
+    assert_eq!(status, StatusCode::NO_CONTENT, "{body}");
+    let (status, body) = ana.post("/api/auth/sign-out-everywhere", json!({})).await;
+    assert_eq!(status, StatusCode::NO_CONTENT, "{body}");
+    let ana = signed_in_again(&ana, "ana@example.com", "new horse battery").await;
+    let body = json!({ "password": "new horse battery" });
+    let request = json_request(Method::DELETE, "/api/me", ana.cookie.as_deref(), Some(body));
+    assert_eq!(ana.send(request).await.status(), StatusCode::NO_CONTENT);
+}

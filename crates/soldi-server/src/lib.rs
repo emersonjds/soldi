@@ -87,8 +87,10 @@ pub fn openapi() -> utoipa::openapi::OpenApi {
     api
 }
 
-/// SOL-137: every signed-in write (it answers 401) spends the per-account write budget.
+/// SOL-137: every signed-in write (it answers 401) spends the per-account write budget, but the
+/// recovery writes of [`extract::WRITE_BUDGET_EXEMPT`].
 fn document_write_budget(api: &mut utoipa::openapi::OpenApi) {
+    use axum::http::Method;
     use utoipa::openapi::{ContentBuilder, Ref, ResponseBuilder};
     let limited = ResponseBuilder::new()
         .description("Rate limited with the account's write budget; wait `Retry-After` seconds")
@@ -99,16 +101,17 @@ fn document_write_budget(api: &mut utoipa::openapi::OpenApi) {
                 .build(),
         )
         .build();
-    for item in api.paths.paths.values_mut() {
+    for (path, item) in api.paths.paths.iter_mut() {
         let writes = [
-            &mut item.post,
-            &mut item.put,
-            &mut item.patch,
-            &mut item.delete,
+            (Method::POST, &mut item.post),
+            (Method::PUT, &mut item.put),
+            (Method::PATCH, &mut item.patch),
+            (Method::DELETE, &mut item.delete),
         ];
-        for operation in writes.into_iter().flatten() {
+        for (method, operation) in writes {
+            let Some(operation) = operation else { continue };
             let responses = &mut operation.responses.responses;
-            if responses.contains_key("401") {
+            if responses.contains_key("401") && extract::spends_write_budget(&method, path) {
                 responses
                     .entry("429".into())
                     .or_insert_with(|| limited.clone().into());
