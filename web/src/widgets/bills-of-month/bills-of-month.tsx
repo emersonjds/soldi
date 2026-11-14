@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-import { Check, Clock } from "lucide-react";
+import { Check, ChevronRight, Clock } from "lucide-react";
 import { toast } from "sonner";
 
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -11,6 +11,8 @@ import { BillStatus } from "@/entities/bill/bill-status";
 import { billKey } from "@/entities/month/forecast-alert";
 import { ALL_BILLS_PAID, dueDays, nextDue } from "@/entities/month/schedule";
 import { useTransactions } from "@/entities/transaction/transaction-queries";
+import { TransactionSheet } from "@/features/add-transaction/transaction-sheet";
+import { FaturaSheet } from "@/features/card-fatura/fatura-sheet";
 import { PayBillSheet } from "@/features/pay-bill/pay-bill-sheet";
 import { cn } from "@/lib/utils";
 import type { Schemas } from "@/shared/api/client";
@@ -123,6 +125,7 @@ const Row = ({
   onPay,
   onUnpay,
   onAdjust,
+  onOpenFatura,
   busy,
 }: {
   bill: BillOfMonth;
@@ -131,6 +134,8 @@ const Row = ({
   onPay: () => void;
   onUnpay: () => void;
   onAdjust: () => void;
+  /** SOL-119: a card's name area opens its fatura. */
+  onOpenFatura?: () => void;
   busy: boolean;
 }) => {
   const currency = useCurrency();
@@ -150,15 +155,8 @@ const Row = ({
       )}
     />
   );
-  return (
-    <li
-      aria-label={label}
-      className={cn(
-        "-mx-2 flex min-h-16 items-center gap-2 rounded-xl px-2 py-2 sm:gap-3",
-        bill.overdue && "bg-expense/10",
-      )}
-    >
-      <RoundCheck bill={bill} label={label} onToggle={bill.paid ? onUnpay : onPay} busy={busy} />
+  const name = (
+    <>
       <CategoryIcon icon={bill.icon} color={bill.color} tintedOnDesktop />
       <span className="flex min-w-0 flex-1 flex-col items-start gap-1">
         <span className="flex max-w-full flex-wrap items-baseline gap-x-1">
@@ -182,6 +180,30 @@ const Row = ({
         </span>
         <Caption bill={bill} paidOn={paidOn} />
       </span>
+    </>
+  );
+  return (
+    <li
+      aria-label={label}
+      className={cn(
+        "-mx-2 flex min-h-16 items-center gap-2 rounded-xl px-2 py-2 sm:gap-3",
+        bill.overdue && "bg-expense/10",
+      )}
+    >
+      <RoundCheck bill={bill} label={label} onToggle={bill.paid ? onUnpay : onPay} busy={busy} />
+      {onOpenFatura ? (
+        <button
+          type="button"
+          aria-label={`Ver ${label}`}
+          onClick={onOpenFatura}
+          className="flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-lg text-left focus-visible:outline-2 focus-visible:outline-ring sm:gap-3"
+        >
+          {name}
+          <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+        </button>
+      ) : (
+        name
+      )}
       {bill.paid ? (
         amount
       ) : (
@@ -207,6 +229,8 @@ export const BillsOfMonth = ({ view, className }: { view: Schemas["MonthView"]; 
   const [chosen, setChosen] = useState<{ month: string; date: string } | null>(null);
   const [adjusting, setAdjusting] = useState<BillOfMonth>();
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [fatura, setFatura] = useState<BillOfMonth>();
+  const [faturaOpen, setFaturaOpen] = useState(false);
   const pay = usePayBill();
   const unpay = useUnpayBill();
   const currency = useCurrency();
@@ -309,6 +333,14 @@ export const BillsOfMonth = ({ view, className }: { view: Schemas["MonthView"]; 
               onPay={() => payNow(bill)}
               onUnpay={() => undo(bill)}
               onAdjust={() => adjust(bill)}
+              onOpenFatura={
+                bill.is_card
+                  ? () => {
+                      setFatura(bill);
+                      setFaturaOpen(true);
+                    }
+                  : undefined
+              }
               busy={pay.isPending || unpay.isPending}
             />
           ))}
@@ -320,6 +352,12 @@ export const BillsOfMonth = ({ view, className }: { view: Schemas["MonthView"]; 
         bill={adjusting}
         open={sheetOpen}
         onOpenChange={setSheetOpen}
+      />
+      <FaturaSheet
+        bill={fatura}
+        open={faturaOpen}
+        onOpenChange={setFaturaOpen}
+        entrySheet={(props) => <TransactionSheet {...props} />}
       />
     </DashCard>
   );

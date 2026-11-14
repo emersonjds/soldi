@@ -83,7 +83,11 @@ const patchRow = async (
   { billId, month }: Payment,
   patch: (row: BillOfMonth) => Partial<BillOfMonth>,
 ) => {
-  const filters: QueryFilters = { queryKey: ["month"], predicate: ({ queryKey }) => queryKey[1] !== "forecast" };
+  // Only `["month", month]` holds a MonthView; the forecast and a card's fatura share the prefix.
+  const filters: QueryFilters = {
+    queryKey: ["month"],
+    predicate: ({ queryKey }) => queryKey.length === 2 && queryKey[1] !== "forecast",
+  };
   await client.cancelQueries(filters);
   const previous = client.getQueriesData<Schemas["MonthView"]>(filters);
   client.setQueriesData<Schemas["MonthView"]>(

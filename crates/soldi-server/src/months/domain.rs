@@ -5,9 +5,11 @@ use chrono::{Datelike, Months, NaiveDate};
 use rust_decimal::Decimal;
 use soldi_types::categories::CategoryKind;
 use soldi_types::months::{
-    BillOfMonth, Day, Forecast, ForecastDay, MonthSavings, MonthView, Tier, Totals,
+    BillOfMonth, CardFatura, Day, FaturaAhead, Forecast, ForecastDay, MonthSavings, MonthView,
+    Tier, Totals,
 };
 use soldi_types::settings::Settings;
+use soldi_types::transactions::Transaction;
 use uuid::Uuid;
 
 use crate::bills::domain::{due_date, fatura_due, installment_of};
@@ -152,6 +154,65 @@ pub fn faturas(bills: &[MonthBill], sums: &[DaySum], payments: &[Payment]) -> Fa
             .map(|(key, _)| *key);
     }
     found.into_iter().collect()
+}
+
+/// How many faturas after the viewed one the card panel lists (SOL-119).
+pub const FATURAS_AHEAD: u32 = 6;
+
+pub fn check_opening(month: NaiveDate, opening: NaiveDate) -> Result<(), AppError> {
+    if month < first_of(opening) {
+        return Err(AppError::rule(
+            "month-before-opening",
+            "The month is before the opening date.",
+        ));
+    }
+    Ok(())
+}
+
+/// SOL-119: `card`'s fatura due in `month` (its first day), from the shared `faturas` map.
+pub fn card_fatura(
+    card: &MonthBill,
+    month: NaiveDate,
+    faturas: &Faturas,
+    payments: &[Payment],
+    entries: Vec<Transaction>,
+) -> CardFatura {
+    let total_in = |month: NaiveDate| faturas.get(&(card.id, month)).copied().unwrap_or_default();
+    let paid_in = |month: NaiveDate| -> Decimal {
+        payments
+            .iter()
+            .filter(|payment| payment.bill_id == card.id && first_of(payment.date) == month)
+            .map(|payment| payment.amount)
+            .sum()
+    };
+    // D30a, as `faturas` does: only a partial payment carries; an unpaid month is its own D17 row.
+    let carried = month
+        .checked_sub_months(Months::new(1))
+        .map_or(Decimal::ZERO, |last| match paid_in(last) {
+            paid if paid > Decimal::ZERO => (total_in(last) - paid).max(Decimal::ZERO),
+            _ => Decimal::ZERO,
+        });
+    CardFatura {
+        month: month.format("%Y-%m").to_string(),
+        total: total_in(month),
+        carried,
+        paid: paid_in(month),
+        entries: entries
+            .into_iter()
+            .filter(|entry| {
+                card.closing_day.is_some_and(|closing| {
+                    first_of(fatura_due(entry.date, closing, card.due_day)) == month
+                })
+            })
+            .collect(),
+        ahead: (1..=FATURAS_AHEAD)
+            .filter_map(|n| month.checked_add_months(Months::new(n)))
+            .map(|ahead| FaturaAhead {
+                month: ahead.format("%Y-%m").to_string(),
+                total: total_in(ahead),
+            })
+            .collect(),
+    }
 }
 
 /// What `bill` owes in `month`: its amount, or a card's fatura.
@@ -1976,5 +2037,51 @@ mod tests {
         assert_eq!(later.days[0].date, date("2027-01-15"));
         assert_eq!(later.days[0].projected_balance, money("500"));
         assert!(beyond.days.is_empty());
+    }
+
+    #[test]
+    fn sol119_a_card_fatura_carries_a_partial_payment_and_lists_six_months_ahead() {
+        let bills = vec![card(1, "Porto", 3, 10)];
+        let sums = vec![
+            spend("2026-11-02", 1, "50"),
+            spend("2026-11-04", 1, "30"),
+            spend("2027-01-10", 1, "20"),
+        ];
+        let payments = vec![payment(1, 9, "20", "2026-11-10")];
+        let all = faturas(&bills, &sums, &payments);
+
+        let november = card_fatura(&bills[0], date("2026-11-01"), &all, &payments, vec![]);
+        let december = card_fatura(&bills[0], date("2026-12-01"), &all, &payments, vec![]);
+
+        assert_eq!(
+            (november.total, november.carried, november.paid),
+            (money("50"), money("0"), money("20"))
+        );
+        assert_eq!(
+            (december.total, december.carried, december.paid),
+            (money("60"), money("30"), money("0"))
+        );
+        assert_eq!(december.month, "2026-12");
+        assert_eq!(
+            december
+                .ahead
+                .iter()
+                .map(|a| (a.month.as_str(), a.total))
+                .collect::<Vec<_>>(),
+            [
+                ("2027-01", money("0")),
+                ("2027-02", money("20")),
+                ("2027-03", money("0")),
+                ("2027-04", money("0")),
+                ("2027-05", money("0")),
+                ("2027-06", money("0")),
+            ]
+        );
+    }
+
+    #[test]
+    fn sol119_a_month_before_the_opening_is_refused() {
+        assert!(check_opening(date("2026-10-01"), date("2026-11-15")).is_err());
+        assert!(check_opening(date("2026-11-01"), date("2026-11-15")).is_ok());
     }
 }

@@ -1,6 +1,7 @@
-use chrono::Datelike;
-use soldi_types::months::{Forecast, MonthView, UpdateMonthNote};
+use chrono::Months;
+use soldi_types::months::{CardFatura, Forecast, MonthView, UpdateMonthNote};
 use sqlx::PgPool;
+use uuid::Uuid;
 
 use super::domain::{self, MonthInput};
 use super::repo;
@@ -16,12 +17,7 @@ pub async fn get(pool: &PgPool, user: &CurrentUser, month: &str) -> Result<Month
     let mut conn = pool.acquire().await?;
     let settings = settings::repo::find(&mut conn, user.id).await?;
     let opening = settings.opening_date;
-    if (month.year(), month.month()) < (opening.year(), opening.month()) {
-        return Err(AppError::rule(
-            "month-before-opening",
-            "The month is before the opening date.",
-        ));
-    }
+    domain::check_opening(month, opening)?;
     let end = domain::month_end(month);
     let sums = repo::day_sums(
         &mut conn,
@@ -43,6 +39,52 @@ pub async fn get(pool: &PgPool, user: &CurrentUser, month: &str) -> Result<Month
         saved,
         today,
     }))
+}
+
+/// SOL-119: a card's fatura and the next six; 5 queries after D36 growth.
+pub async fn fatura(
+    pool: &PgPool,
+    user: &CurrentUser,
+    month: &str,
+    card_id: Uuid,
+) -> Result<CardFatura, AppError> {
+    let month = domain::parse_month(month)?;
+    let last = month
+        .checked_add_months(Months::new(domain::FATURAS_AHEAD))
+        .map_or(month, domain::month_end);
+    let until = transactions::domain::open_until(crate::today_sao_paulo(), last);
+    transactions::service::extend_open_series(pool, user, until).await?;
+    let mut conn = pool.acquire().await?;
+    let opening = settings::repo::find(&mut conn, user.id).await?.opening_date;
+    domain::check_opening(month, opening)?;
+    let bills = repo::bills(&mut conn, user.id).await?;
+    let card = bills
+        .iter()
+        .find(|bill| bill.id == card_id && bill.closing_day.is_some())
+        .ok_or(AppError::NotFound)?;
+    let sums = repo::day_sums(
+        &mut conn,
+        user.id,
+        opening,
+        last,
+        domain::cards_from(opening),
+    )
+    .await?;
+    let payments = repo::payments(&mut conn, user.id, domain::first_of(opening), last).await?;
+    let from = month.checked_sub_months(Months::new(2)).unwrap_or(month);
+    let entries = transactions::repo::list(
+        &mut conn,
+        user.id,
+        from,
+        domain::month_end(month),
+        None,
+        Some(card_id),
+    )
+    .await?;
+    let faturas = domain::faturas(&bills, &sums, &payments);
+    Ok(domain::card_fatura(
+        card, month, &faturas, &payments, entries,
+    ))
 }
 
 /// D16: 4 queries whatever the horizon, after D36 growth (1 more, writes only when behind).

@@ -1336,3 +1336,198 @@ async fn d36_tornar_sem_fim_on_a_card_refuses_a_paid_fatura_ahead(pool: PgPool) 
     assert_eq!(problem["type"], "urn:soldi:error:fatura-paid");
     assert_eq!(card_spends(&ana, 5).await, 0);
 }
+
+fn fatura_path(card_id: &str, ahead: u32) -> String {
+    format!("/api/months/{}/faturas/{card_id}", month_ahead(ahead))
+}
+
+fn totals(fatura: &Value) -> Vec<&str> {
+    fatura["ahead"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|a| a["total"].as_str().unwrap())
+        .collect()
+}
+
+#[sqlx::test]
+async fn sol119_a_fatura_lists_its_spends_and_the_next_six_months(pool: PgPool) {
+    let (ana, bia, porto, nubank) = two_cards(pool.clone()).await;
+    // Closing 3, due 10: day 5 of month 1 and day 2 of month 2 both join the fatura due in month 2.
+    spend(&ana, &format!("{}-05", month_ahead(1)), "80", &porto).await;
+    spend(&ana, &format!("{}-02", month_ahead(2)), "30", &porto).await;
+    let mercado = ana.category_id("Mercado").await;
+    let (status, created) = ana
+        .post(
+            "/api/transactions",
+            json!({ "date": format!("{}-05", month_ahead(1)), "amount": "300",
+                    "kind": "daily", "installments": 3, "category_id": mercado, "card_id": porto }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{created}");
+    spend(&bia, &format!("{}-05", month_ahead(1)), "70", &nubank).await;
+
+    let (status, fatura) = ana.get(&fatura_path(&porto, 2)).await;
+
+    assert_eq!(status, StatusCode::OK, "{fatura}");
+    assert_eq!(
+        (
+            &fatura["month"],
+            &fatura["total"],
+            &fatura["carried"],
+            &fatura["paid"]
+        ),
+        (
+            &json!(month_ahead(2)),
+            &json!("210.00"),
+            &json!("0.00"),
+            &json!("0.00")
+        )
+    );
+    let entries = fatura["entries"].as_array().unwrap();
+    assert_eq!(entries.len(), 3);
+    assert!(entries.iter().all(|entry| entry["card_id"] == json!(porto)));
+    assert_eq!(
+        totals(&fatura),
+        ["100.00", "100.00", "0.00", "0.00", "0.00", "0.00"]
+    );
+    assert_eq!(fatura["ahead"][0]["month"], json!(month_ahead(3)));
+    let (_, theirs) = bia.get(&fatura_path(&nubank, 2)).await;
+    assert_eq!(theirs["total"], "70.00");
+    assert_eq!(rows_and_months(&pool, "bia@example.com").await, (1, 1));
+}
+
+#[sqlx::test]
+async fn sol119_a_partial_payment_carries_into_the_next_panel(pool: PgPool) {
+    let (ana, bia, porto, nubank) = two_cards(pool.clone()).await;
+    spend(&ana, &format!("{}-05", month_ahead(1)), "50", &porto).await;
+    spend(&ana, &format!("{}-05", month_ahead(3)), "30", &porto).await;
+    spend(&bia, &format!("{}-05", month_ahead(1)), "50", &nubank).await;
+    pay_fatura(&ana, &porto, 2).await; // pays 30 of 50
+    pay_fatura(&ana, &porto, 4).await; // pays 30 of 30
+
+    let (_, paid) = ana.get(&fatura_path(&porto, 2)).await;
+    let (_, next) = ana.get(&fatura_path(&porto, 3)).await;
+    let (_, settled) = ana.get(&fatura_path(&porto, 4)).await;
+    let (_, after) = ana.get(&fatura_path(&porto, 5)).await;
+
+    assert_eq!(
+        (&paid["total"], &paid["paid"]),
+        (&json!("50.00"), &json!("30.00"))
+    );
+    assert_eq!(
+        (
+            &next["total"],
+            &next["carried"],
+            next["entries"].as_array().unwrap().len()
+        ),
+        (&json!("20.00"), &json!("20.00"), 0)
+    );
+    let (_, month) = ana.get(&format!("/api/months/{}", month_ahead(3))).await;
+    let row = month["bills_of_month"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| row["bill_id"] == porto.as_str())
+        .unwrap();
+    assert_eq!(row["amount"], next["total"]);
+    assert_eq!(
+        (&settled["total"], &settled["carried"], &settled["paid"]),
+        (&json!("30.00"), &json!("0.00"), &json!("30.00"))
+    );
+    assert_eq!(
+        (&after["total"], &after["carried"]),
+        (&json!("0.00"), &json!("0.00"))
+    );
+    let (_, theirs) = bia.get(&fatura_path(&nubank, 2)).await;
+    assert_eq!(
+        (&theirs["total"], &theirs["paid"]),
+        (&json!("50.00"), &json!("0.00"))
+    );
+}
+
+#[sqlx::test]
+async fn sol119_a_subscription_is_committed_in_every_month_ahead_even_far_off(pool: PgPool) {
+    let (ana, bia, porto, nubank) = two_cards(pool.clone()).await;
+    subscription(&ana, &porto).await;
+    subscription(&bia, &nubank).await;
+
+    let (_, near) = ana.get(&fatura_path(&porto, 1)).await;
+    let (_, far) = ana.get(&fatura_path(&porto, 20)).await;
+
+    assert_eq!(near["total"], "30.00");
+    assert_eq!(near["entries"][0]["series"]["open_ended"], true);
+    assert_eq!(totals(&near), ["30.00"; 6]);
+    assert_eq!(totals(&far), ["30.00"; 6]);
+    assert_eq!(rows_and_months(&pool, "bia@example.com").await, (12, 12));
+}
+
+#[sqlx::test]
+async fn sol119_only_the_callers_card_answers_and_bad_input_is_refused(pool: PgPool) {
+    let (ana, bia, porto, nubank) = two_cards(pool.clone()).await;
+    let rent = add_bill(&ana, "Aluguel", "1000", 10, "Aluguel").await;
+    spend(&ana, &format!("{}-05", month_ahead(1)), "50", &porto).await;
+    spend(&bia, &format!("{}-05", month_ahead(1)), "70", &nubank).await;
+
+    assert_eq!(
+        bia.get(&fatura_path(&porto, 2)).await.0,
+        StatusCode::NOT_FOUND
+    );
+    assert_eq!(
+        ana.get(&fatura_path(rent["id"].as_str().unwrap(), 2))
+            .await
+            .0,
+        StatusCode::NOT_FOUND
+    );
+    assert_eq!(
+        ana.get(&fatura_path(&uuid::Uuid::new_v4().to_string(), 2))
+            .await
+            .0,
+        StatusCode::NOT_FOUND
+    );
+    assert_eq!(
+        ana.get(&fatura_path("not-a-uuid", 2)).await.0,
+        StatusCode::BAD_REQUEST
+    );
+    assert_eq!(
+        ana.get(&format!("/api/months/2026-13/faturas/{porto}"))
+            .await
+            .0,
+        StatusCode::UNPROCESSABLE_ENTITY
+    );
+    assert_eq!(
+        ana.get(&format!("/api/months/2101-01/faturas/{porto}"))
+            .await
+            .0,
+        StatusCode::UNPROCESSABLE_ENTITY
+    );
+    let (status, problem) = ana
+        .get(&format!("/api/months/2000-01/faturas/{porto}"))
+        .await;
+    assert_eq!(
+        (status, &problem["type"]),
+        (
+            StatusCode::UNPROCESSABLE_ENTITY,
+            &json!("urn:soldi:error:month-before-opening")
+        )
+    );
+    assert_eq!(
+        TestApp::anonymous(pool.clone())
+            .get(&fatura_path(&porto, 2))
+            .await
+            .0,
+        StatusCode::UNAUTHORIZED
+    );
+
+    assert_eq!(
+        ana.delete(&format!("/api/bills/{porto}")).await.0,
+        StatusCode::NO_CONTENT
+    );
+    let (status, archived) = ana.get(&fatura_path(&porto, 2)).await;
+    assert_eq!(
+        (status, &archived["total"]),
+        (StatusCode::OK, &json!("50.00"))
+    );
+    let (_, theirs) = bia.get(&fatura_path(&nubank, 2)).await;
+    assert_eq!(theirs["total"], "70.00");
+}

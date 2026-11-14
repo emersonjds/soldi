@@ -7,7 +7,7 @@
       "name": "AGPL-3.0-only",
       "identifier": "AGPL-3.0-only"
     },
-    "version": "0.58.0"
+    "version": "0.59.0"
   },
   "paths": {
     "/api/auth/email-verification/confirm": {
@@ -1586,6 +1586,87 @@
         }
       }
     },
+    "/api/months/{month}/faturas/{card_id}": {
+      "get": {
+        "tags": [
+          "months"
+        ],
+        "operationId": "get_fatura",
+        "parameters": [
+          {
+            "name": "month",
+            "in": "path",
+            "description": "The fatura's due month, `YYYY-MM`",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "2026-11"
+          },
+          {
+            "name": "card_id",
+            "in": "path",
+            "description": "One of the caller's cards (archived included)",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The card's fatura due that month: its spends, the D30a carry, its payments, and the next six months' committed totals",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CardFatura"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`card_id` is not a UUID",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No card of the caller with that id",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`month` is not `YYYY-MM` from 2000 to 2100 (`validation`), or is before the opening date's month (`month-before-opening`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/months/{month}/note": {
       "put": {
         "tags": [
@@ -2495,6 +2576,50 @@
           }
         }
       },
+      "CardFatura": {
+        "type": "object",
+        "description": "SOL-119: a card's fatura due in `month`, what fills it, and the next six months' committed totals.",
+        "required": [
+          "month",
+          "total",
+          "carried",
+          "paid",
+          "entries",
+          "ahead"
+        ],
+        "properties": {
+          "ahead": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FaturaAhead"
+            },
+            "description": "The next six months' faturas from rows already written (D16), zero included."
+          },
+          "carried": {
+            "type": "string",
+            "description": "Left over from last month's partial payment (D30a); 0 otherwise."
+          },
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Transaction"
+            },
+            "description": "The fatura's spends, newest date first."
+          },
+          "month": {
+            "type": "string",
+            "description": "`YYYY-MM`, the fatura's due month."
+          },
+          "paid": {
+            "type": "string",
+            "description": "The card's payments dated in `month`; 0 when unpaid."
+          },
+          "total": {
+            "type": "string",
+            "description": "Spends plus the D30a carry: what Contas a pagar shows unpaid."
+          }
+        }
+      },
       "Category": {
         "type": "object",
         "description": "`icon` is a lucide icon name; `color` a palette token, `cat-1` to `cat-24`, unique among the\nactive top-level categories showing in a kind (their own or a subcategory's) and the parent's on\na subcategory; `parent_id` the\ncategory this one is a subcategory of, null for a top-level one. `is_savings` marks the\nuser's `Economia` (bill) and `Resgate` (income); `target` and `deadline` belong only to\ncofrinhos, the subcategories of `Economia`.",
@@ -3173,6 +3298,22 @@
           "deleted": {
             "type": "integer",
             "format": "int64"
+          }
+        }
+      },
+      "FaturaAhead": {
+        "type": "object",
+        "required": [
+          "month",
+          "total"
+        ],
+        "properties": {
+          "month": {
+            "type": "string",
+            "description": "`YYYY-MM`."
+          },
+          "total": {
+            "type": "string"
           }
         }
       },
