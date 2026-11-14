@@ -37,8 +37,10 @@ pub struct CreateBill {
     /// 1 to 31.
     #[schema(minimum = 1, maximum = 31)]
     pub due_day: i16,
-    /// One of the caller's active `bill` categories.
-    pub category_id: Uuid,
+    /// One of the caller's active `bill` categories; required on a conta fixa. Absent on a card: the
+    /// account's card group, created as `Cartão` when none is active (D43).
+    #[serde(default)]
+    pub category_id: Option<Uuid>,
     /// 1 to 31; makes the bill a card, which then has no `amount`.
     #[serde(default)]
     #[schema(minimum = 1, maximum = 31)]

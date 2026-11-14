@@ -32,7 +32,8 @@ impl CategoryKind {
 /// a subcategory; `parent_id` the
 /// category this one is a subcategory of, null for a top-level one. `is_savings` marks the
 /// user's `Economia` (bill) and `Resgate` (income); `target` and `deadline` belong only to
-/// cofrinhos, the subcategories of `Economia`.
+/// cofrinhos, the subcategories of `Economia`. `is_card_group` marks the account's card group: a
+/// card created without `category_id` lands in it (D43).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct Category {
     pub id: Uuid,
@@ -42,6 +43,7 @@ pub struct Category {
     pub color: String,
     pub parent_id: Option<Uuid>,
     pub is_savings: bool,
+    pub is_card_group: bool,
     #[serde(serialize_with = "crate::optional_money")]
     #[schema(value_type = Option<String>)]
     pub target: Option<Decimal>,

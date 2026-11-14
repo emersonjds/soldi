@@ -30,7 +30,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { categoriesQuery, ofKind, useArchiveCategory } from "@/entities/category/categories-query";
+import { categoriesQuery, ofKind, topsOf, useArchiveCategory } from "@/entities/category/categories-query";
 import { CategoryPanel, CategorySheet } from "@/entities/category/category-sheet";
 import { useCategoryReport } from "@/entities/report/report-query";
 import { useTransactions } from "@/entities/transaction/transaction-queries";
@@ -58,9 +58,6 @@ const KIND_NAMES: Record<Kind, string> = { daily: "Diário", bill: "Fixa", incom
 
 /** `?k=`'s kind; Diário when absent or unknown. */
 export const kindParam = (value: string | null): Kind => TABS.find(([kind]) => kind === value)?.[0] ?? "daily";
-
-const topsOf = (list: Category[]) =>
-  list.filter((category) => !list.some((parent) => parent.id === category.parent_id));
 
 const subcategories = (count: number) => `${count} ${count === 1 ? "subcategoria" : "subcategorias"}`;
 

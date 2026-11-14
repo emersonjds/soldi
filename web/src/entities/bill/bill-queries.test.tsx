@@ -105,6 +105,25 @@ describe("bill edits", () => {
     expect(isStale(view, ["cofrinhos"])).toBe(true);
   });
 
+  it("refreshes the categories after a card with no category, which the server may file in a new Cartão (D43)", async () => {
+    stubApi({ "POST /api/bills": { status: 201, body: BILL_ALUGUEL } });
+    const view = seeded();
+    view.client.setQueryData(["categories"], []);
+
+    await act(() =>
+      view.result.current.create.mutateAsync({
+        name: "Aluguel",
+        amount: "2259.56",
+        due_day: 7,
+        category_id: BILL_ALUGUEL.category_id,
+      }),
+    );
+    expect(isStale(view, ["categories"])).toBe(false);
+
+    await act(() => view.result.current.create.mutateAsync({ name: "Porto", due_day: 10, closing_day: 3 }));
+    expect(isStale(view, ["categories"])).toBe(true);
+  });
+
   it("surfaces the server's refusal", async () => {
     stubApi({ "POST /api/bills": { status: 422, body: problem(422, "category_id") } });
     const view = seeded();

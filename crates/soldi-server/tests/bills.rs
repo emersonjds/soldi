@@ -39,7 +39,7 @@ async fn bills_list_only_the_callers_bills(pool: PgPool) {
         name: "Luz".into(),
         amount: Some("120.5".parse().unwrap()),
         due_day: 10,
-        category_id: light,
+        category_id: Some(light),
         closing_day: None,
         installments: None,
         last_month: None,
@@ -1342,4 +1342,255 @@ async fn d30b_a_move_checks_every_moved_member_and_all_takes_a_new_card(pool: Pg
             .iter()
             .any(|row| row["id"] == plain["id"] && row["date"] == "2026-11-05")
     );
+}
+
+/// The caller's active card groups as `(id, name, icon, color)`.
+async fn card_groups(app: &TestApp) -> Vec<(String, String, String, String)> {
+    let (_, list) = app.get("/api/categories").await;
+    list.as_array()
+        .unwrap()
+        .iter()
+        .filter(|category| category["is_card_group"] == true)
+        .map(|category| {
+            let text = |key: &str| category[key].as_str().unwrap().to_string();
+            (text("id"), text("name"), text("icon"), text("color"))
+        })
+        .collect()
+}
+
+fn uncategorized_card() -> serde_json::Value {
+    json!({ "name": "Porto", "due_day": 10, "closing_day": 3 })
+}
+
+#[sqlx::test]
+async fn sol140_a_card_without_a_category_lands_in_the_card_group(pool: PgPool) {
+    let ana = TestApp::signed_in(pool.clone(), "ana@example.com").await;
+    let bia = ana.another_user("bia@example.com").await;
+    let theirs = card_groups(&bia).await;
+    let group = category_id(&ana, "Cartão").await;
+    let assinaturas = category_id(&ana, "Assinaturas").await;
+    let (_, old) = ana
+        .post(
+            "/api/bills",
+            json!({ "name": "Nubank", "due_day": 5, "closing_day": 1, "category_id": assinaturas }),
+        )
+        .await;
+    let before = ana.get("/api/categories").await.1.as_array().unwrap().len();
+
+    let (status, card) = ana.post("/api/bills", uncategorized_card()).await;
+
+    assert_eq!(status, StatusCode::CREATED, "{card}");
+    assert_eq!(card["category_id"], json!(group));
+    assert_eq!(card["closing_day"], 3);
+    let after = ana.get("/api/categories").await.1.as_array().unwrap().len();
+    assert_eq!(after, before);
+    let (_, bills) = ana.get("/api/bills").await;
+    let nubank = bills
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|bill| bill["id"] == old["id"]);
+    assert_eq!(nubank.unwrap()["category_id"], json!(assinaturas));
+    assert_eq!(card_groups(&bia).await, theirs);
+}
+
+#[sqlx::test]
+async fn sol140_with_the_card_group_archived_a_new_cartao_takes_the_lowest_free_fixa_color(
+    pool: PgPool,
+) {
+    let ana = TestApp::signed_in(pool.clone(), "ana@example.com").await;
+    let bia = ana.another_user("bia@example.com").await;
+    let theirs = card_groups(&bia).await;
+    let old = category_id(&ana, "Cartão").await;
+    let (status, _) = ana.delete(&format!("/api/categories/{old}")).await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+
+    let (status, card) = ana.post("/api/bills", uncategorized_card()).await;
+
+    assert_eq!(status, StatusCode::CREATED, "{card}");
+    let groups = card_groups(&ana).await;
+    assert_eq!(groups.len(), 1);
+    let (id, name, icon, color) = &groups[0];
+    assert_eq!(card["category_id"], json!(id));
+    assert_ne!(id, &old.to_string());
+    assert_eq!(
+        (name.as_str(), icon.as_str(), color.as_str()),
+        ("Cartão", "credit-card", "cat-1")
+    );
+    assert_eq!(card_groups(&bia).await, theirs);
+}
+
+#[sqlx::test]
+async fn sol140_an_active_fixa_cartao_not_flagged_is_taken_over(pool: PgPool) {
+    let ana = TestApp::signed_in(pool.clone(), "ana@example.com").await;
+    let bia = ana.another_user("bia@example.com").await;
+    let theirs = card_groups(&bia).await;
+    let old = category_id(&ana, "Cartão").await;
+    ana.delete(&format!("/api/categories/{old}")).await;
+    let (status, mine) = ana
+        .post(
+            "/api/categories",
+            json!({ "name": "cartão", "kind": "bill" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{mine}");
+    assert_eq!(mine["is_card_group"], false);
+    let before = ana.get("/api/categories").await.1.as_array().unwrap().len();
+
+    let (status, card) = ana.post("/api/bills", uncategorized_card()).await;
+
+    assert_eq!(status, StatusCode::CREATED, "{card}");
+    assert_eq!(card["category_id"], mine["id"]);
+    let groups = card_groups(&ana).await;
+    assert_eq!(
+        (groups.len(), json!(groups[0].0), groups[0].1.as_str()),
+        (1, mine["id"].clone(), "cartão")
+    );
+    let after = ana.get("/api/categories").await.1.as_array().unwrap().len();
+    assert_eq!(after, before);
+    assert_eq!(card_groups(&bia).await, theirs);
+}
+
+#[sqlx::test]
+async fn sol140_concurrent_first_cards_share_one_card_group(pool: PgPool) {
+    let ana = TestApp::signed_in(pool.clone(), "ana@example.com").await;
+    let bia = ana.another_user("bia@example.com").await;
+    let theirs = card_groups(&bia).await;
+    let old = category_id(&ana, "Cartão").await;
+    ana.delete(&format!("/api/categories/{old}")).await;
+
+    let (first, second) = tokio::join!(
+        ana.post("/api/bills", uncategorized_card()),
+        ana.post(
+            "/api/bills",
+            json!({ "name": "Nubank", "due_day": 5, "closing_day": 1 })
+        )
+    );
+
+    assert_eq!(first.0, StatusCode::CREATED, "{}", first.1);
+    assert_eq!(second.0, StatusCode::CREATED, "{}", second.1);
+    assert_eq!(first.1["category_id"], second.1["category_id"]);
+    let groups = card_groups(&ana).await;
+    assert_eq!(groups.len(), 1);
+    assert_eq!(first.1["category_id"], json!(groups[0].0));
+    assert_eq!(card_groups(&bia).await, theirs);
+}
+
+#[sqlx::test]
+async fn sol140_a_conta_fixa_still_needs_a_category(pool: PgPool) {
+    let ana = TestApp::signed_in(pool, "ana@example.com").await;
+
+    let (status, problem) = ana
+        .post(
+            "/api/bills",
+            json!({ "name": "Luz", "due_day": 10, "amount": "100.00" }),
+        )
+        .await;
+
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+    assert_eq!(problem["errors"][0]["field"], "category_id");
+    assert_eq!(ana.get("/api/bills").await.1, json!([]));
+}
+
+/// Archives the seeded card group, so the next uncategorized card looks for a new one.
+async fn archive_card_group(app: &TestApp) {
+    let old = category_id(app, "Cartão").await;
+    let (status, _) = app.delete(&format!("/api/categories/{old}")).await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+}
+
+#[sqlx::test]
+async fn sol140_the_card_group_is_never_a_subcategory_or_cofrinho_named_cartao(pool: PgPool) {
+    let ana = TestApp::signed_in(pool.clone(), "ana@example.com").await;
+    archive_card_group(&ana).await;
+    for parent in ["Casa", "Economia"] {
+        let parent_id = category_id(&ana, parent).await;
+        let (status, sub) = ana
+            .post(
+                "/api/categories",
+                json!({ "name": "Cartão", "kind": "bill", "parent_id": parent_id }),
+            )
+            .await;
+        assert_eq!(status, StatusCode::CREATED, "{sub}");
+
+        let (status, problem) = ana.post("/api/bills", uncategorized_card()).await;
+
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+        assert_eq!(problem["errors"][0]["field"], "category_id");
+        assert!(card_groups(&ana).await.is_empty());
+        assert_eq!(ana.get("/api/bills").await.1, json!([]));
+        let sub = sub["id"].as_str().unwrap();
+        ana.delete(&format!("/api/categories/{sub}")).await;
+    }
+}
+
+#[sqlx::test]
+async fn sol140_a_card_never_lands_in_a_card_group_under_economia(pool: PgPool) {
+    let ana = TestApp::signed_in(pool.clone(), "ana@example.com").await;
+    let group = category_id(&ana, "Cartão").await;
+    let economia = category_id(&ana, "Economia").await;
+    sqlx::query("UPDATE categories SET parent_id = $1 WHERE id = $2")
+        .bind(economia)
+        .bind(group)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let (status, problem) = ana.post("/api/bills", uncategorized_card()).await;
+
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+    assert_eq!(problem["errors"][0]["field"], "category_id");
+    assert_eq!(ana.get("/api/bills").await.1, json!([]));
+}
+
+#[sqlx::test]
+async fn sol140_a_full_fixa_palette_still_takes_over_an_active_cartao(pool: PgPool) {
+    let ana = TestApp::signed_in(pool.clone(), "ana@example.com").await;
+    archive_card_group(&ana).await;
+    let (status, mine) = ana
+        .post(
+            "/api/categories",
+            json!({ "name": "Cartão", "kind": "bill" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{mine}");
+    for n in 0..24 {
+        ana.post(
+            "/api/categories",
+            json!({ "name": format!("Fixa {n}"), "kind": "bill" }),
+        )
+        .await;
+    }
+    let (_, problem) = ana
+        .post("/api/categories", json!({ "name": "Mais", "kind": "bill" }))
+        .await;
+    assert_eq!(problem["type"], "urn:soldi:error:palette-full");
+
+    let (status, card) = ana.post("/api/bills", uncategorized_card()).await;
+
+    assert_eq!(status, StatusCode::CREATED, "{card}");
+    assert_eq!(card["category_id"], mine["id"]);
+}
+
+#[sqlx::test]
+#[should_panic(expected = "a conta fixa always has a category")]
+async fn sol140_inserting_onboarding_bills_without_a_category_is_a_bug(pool: PgPool) {
+    let ana = TestApp::signed_in(pool.clone(), "ana@example.com").await;
+    let light = category_id(&ana, "Luz").await;
+    let bill = |category_id| CreateBill {
+        name: "Luz".into(),
+        amount: None,
+        due_day: 10,
+        category_id,
+        closing_day: None,
+        installments: None,
+        last_month: None,
+    };
+    let mut conn = pool.acquire().await.unwrap();
+    let _ = soldi_server::bills::repo::insert_all(
+        &mut conn,
+        user_id(&ana).await,
+        &[bill(None), bill(Some(light))],
+    )
+    .await;
 }

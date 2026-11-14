@@ -26,7 +26,7 @@ test("a new user logs a Diário in three taps and sees it with the day balance",
   await expect(page.getByRole("region", { name: "Saldo hoje" })).toContainText("R$ 1.000,00");
 
   await page.getByRole("navigation", { name: "Navegação principal" }).getByRole("button", { name: "Lançar" }).click();
-  await expect(page.getByRole("radio", { name: "Gasto" })).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByRole("button", { name: "Categoria Gasto" })).toBeVisible();
   await page.keyboard.type("12,50");
   await page.getByRole("button", { name: "Salvar" }).click();
 
@@ -119,7 +119,7 @@ test("Lançar fills the cents from the right and a category created from the pic
 
   const tabs = page.getByRole("navigation", { name: "Navegação principal" });
   await tabs.getByRole("button", { name: "Lançar" }).click();
-  await expect(page.getByRole("radio", { name: "Gasto" })).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByRole("button", { name: "Categoria Gasto" })).toBeVisible();
   await page.keyboard.type("12345");
   await expect(page.getByLabel("Valor")).toHaveValue("123,45");
   await page.getByRole("button", { name: "Salvar" }).click();
@@ -128,17 +128,22 @@ test("Lançar fills the cents from the right and a category created from the pic
   await expect(ledger.getByRole("button", { name: /Gasto/ })).toContainText("R$ 123,45");
 
   await tabs.getByRole("button", { name: "Lançar" }).click();
-  await page.getByRole("button", { name: "Ver todas" }).click();
-  await page.getByRole("dialog", { name: "Categoria" }).getByRole("button", { name: "Nova categoria" }).click();
+  await page.getByRole("button", { name: "Categoria Gasto" }).click();
+  await page
+    .getByRole("dialog", { name: "Categoria", exact: true })
+    .getByRole("button", { name: "Novo grupo" })
+    .click();
   const create = page.getByRole("dialog", { name: "Nova Categoria" });
-  await expect(create.getByRole("radio", { name: "Categoria Pai" })).toBeChecked();
+  await expect(create.getByRole("radio", { name: "Grupo novo" })).toBeChecked();
   await create.getByLabel("Nome do agrupador").fill("Feira");
-  await create.getByRole("radio", { name: "Ícone shopping-cart" }).check({ force: true });
+  const cart = page.getByRole("radio", { name: "Ícone shopping-cart" });
+  await create.locator("label").filter({ has: cart }).click();
+  await expect(cart).toBeChecked();
   await create.getByRole("button", { name: "Criar Categoria" }).click();
 
   await expect(page.getByText("Categoria criada")).toBeVisible();
   await expect(create).toBeHidden();
-  await expect(page.getByRole("radio", { name: "Feira" })).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByRole("button", { name: "Categoria Feira" })).toBeVisible();
 });
 
 test("the hero shows the balance and the summary, and the spending glance opens its screen", async ({
@@ -172,7 +177,7 @@ test("the hero shows the balance and the summary, and the spending glance opens 
   await page.getByRole("button", { name: "Salvar" }).click();
 
   await page.getByRole("navigation", { name: "Navegação principal" }).getByRole("button", { name: "Lançar" }).click();
-  await expect(page.getByRole("radio", { name: "Gasto" })).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByRole("button", { name: "Categoria Gasto" })).toBeVisible();
   await page.keyboard.type("1250");
   await page.getByRole("button", { name: "Salvar" }).click();
 
@@ -216,7 +221,9 @@ test("Lançamentos shows only bills under Contas, and Lançar picks from a row o
   const tabs = page.getByRole("navigation", { name: "Navegação principal" });
   await tabs.getByRole("button", { name: "Lançar" }).click();
   const launch = page.getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ });
-  const row = launch.getByRole("radiogroup", { name: "Categoria" });
+  const picker = page.getByRole("dialog", { name: "Categoria", exact: true });
+  const row = picker.getByRole("radiogroup", { name: "Mais usadas" });
+  await launch.getByRole("button", { name: /^Categoria/ }).click();
   await expect(row.getByRole("radio")).toHaveText([
     "Gasto",
     "Educação",
@@ -227,15 +234,18 @@ test("Lançamentos shows only bills under Contas, and Lançar picks from a row o
     "Transporte",
   ]);
   await row.getByRole("radio", { name: "Lazer" }).click();
+  await expect(launch.getByRole("button", { name: "Categoria Lazer" })).toBeVisible();
   await launch.getByLabel("Valor").fill("12.345,67");
   await expectNoClipped(page);
   await expect(launch.getByRole("button", { name: "Salvar" })).toBeInViewport();
   await launch.getByRole("button", { name: "Salvar" }).click();
 
   await tabs.getByRole("button", { name: "Lançar" }).click();
+  await launch.getByRole("button", { name: /^Categoria/ }).click();
   await expect(row.getByRole("radio").first()).toHaveText("Lazer");
+  await picker.getByRole("button", { name: "Fechar" }).click();
   await launch.getByRole("radio", { name: "Conta" }).click();
-  await expect(row.getByRole("radio", { name: "Casa", exact: true })).toHaveAttribute("aria-checked", "true");
+  await expect(launch.getByRole("button", { name: "Categoria Casa" })).toBeVisible();
   await launch.getByLabel("Valor").fill("23.456,78");
   await launch.getByRole("button", { name: "Salvar" }).click();
 
@@ -253,7 +263,8 @@ test("Lançamentos shows only bills under Contas, and Lançar picks from a row o
   await expect(ledger.getByRole("button", { name: /Casa/ })).toBeHidden();
 
   await page.getByRole("button", { name: "Lançar", exact: true }).first().click();
-  await expect(launch.getByRole("radiogroup", { name: "Categoria" })).toBeVisible();
+  await launch.getByRole("button", { name: /^Categoria/ }).click();
+  await expect(row).toBeVisible();
   for (const width of [1440, 1280, 1024]) {
     await page.setViewportSize({ width, height: 900 });
     await expectNoClipped(page);

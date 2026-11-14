@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "INSERT INTO categories (user_id, name, kind, icon, color, parent_id, target, deadline, note)\n           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)\n           RETURNING id, name, kind AS \"kind: CategoryKind\", icon, color, parent_id, is_savings,\n                     target, deadline",
+  "query": "SELECT id, name, kind AS \"kind: CategoryKind\", icon, color, parent_id, is_savings, is_card_group,\n                  target, deadline\n           FROM categories WHERE user_id = $1 AND id = $2 AND archived_at IS NULL\n           FOR NO KEY UPDATE",
   "describe": {
     "columns": [
       {
@@ -82,6 +82,17 @@
       },
       {
         "ordinal": 7,
+        "name": "is_card_group",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "categories",
+            "name": "is_card_group"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
         "name": "target",
         "type_info": "Numeric",
         "origin": {
@@ -92,7 +103,7 @@
         }
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "deadline",
         "type_info": "Date",
         "origin": {
@@ -106,14 +117,7 @@
     "parameters": {
       "Left": [
         "Uuid",
-        "Text",
-        "Text",
-        "Text",
-        "Text",
-        "Uuid",
-        "Numeric",
-        "Date",
-        "Text"
+        "Uuid"
       ]
     },
     "nullable": [
@@ -124,9 +128,10 @@
       false,
       true,
       false,
+      false,
       true,
       true
     ]
   },
-  "hash": "17356c7f4f899fe54fd987a7d4ac83c368a6954b53352b0dc827a97ccdc98e79"
+  "hash": "fddd622acd35576bf516e0d2da717a40a8f75d49ab046d5a04cb04cebc746c29"
 }

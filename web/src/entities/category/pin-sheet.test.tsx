@@ -26,6 +26,7 @@ const daily = (name: string, index: number): Schemas["Category"] => ({
   icon: "tag",
   color: "cat-3",
   is_savings: false,
+  is_card_group: false,
 });
 const MORE = ["Pets", "Carro", "Lazer", "Saúde", "Roupas", "Gasto", "Casa"].map(daily);
 const NINE = [...CATEGORIES, ...MORE];
@@ -52,7 +53,7 @@ const setup = (pins: string[] | null, categories = CATEGORIES, put = { status: 2
 };
 
 const open = async () => {
-  await screen.findByRole("radiogroup", { name: "Categoria" });
+  await screen.findByRole("radiogroup", { name: "Mais usadas" });
   await userEvent.click(screen.getByRole("button", { name: "Personalizar" }));
   return screen.findByRole("dialog", { name: "Personalizar categorias" });
 };

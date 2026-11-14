@@ -159,6 +159,26 @@ async fn the_savings_categories_are_never_archived_nor_nested(pool: PgPool) {
 }
 
 #[sqlx::test]
+async fn sol140_only_cartao_is_the_card_group_and_it_keeps_its_kind(pool: PgPool) {
+    let user = TestApp::signed_in(pool, "ana@example.com").await;
+    let (_, list) = user.get("/api/categories?include_system=true").await;
+    let groups: Vec<_> = list
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|category| category["is_card_group"] == true)
+        .map(|category| category["name"].clone())
+        .collect();
+    assert_eq!(groups, vec![json!("Cartão")]);
+    let id = user.category_id("Cartão").await;
+    let (status, problem) = user
+        .patch(&format!("/api/categories/{id}"), json!({ "kind": "daily" }))
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+    assert_eq!(problem["type"], "urn:soldi:error:kind-locked");
+}
+
+#[sqlx::test]
 async fn a_cofrinho_is_a_child_of_economia_with_a_target_and_a_deadline(pool: PgPool) {
     let user = TestApp::signed_in(pool, "ana@example.com").await;
     let economia = user.category_id("Economia").await;
@@ -217,9 +237,10 @@ async fn a_target_or_a_deadline_outside_economia_is_not_a_cofrinho(pool: PgPool)
         assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
         assert_eq!(problem["type"], "urn:soldi:error:not-a-cofrinho");
     }
+    let assinaturas = user.category_id("Assinaturas").await;
     let (status, moved) = user
         .patch(
-            &format!("/api/categories/{cartao}"),
+            &format!("/api/categories/{assinaturas}"),
             json!({ "parent_id": economia, "target": "100" }),
         )
         .await;
@@ -227,7 +248,7 @@ async fn a_target_or_a_deadline_outside_economia_is_not_a_cofrinho(pool: PgPool)
     assert_eq!(moved["target"], "100.00");
     let (_, out) = user
         .patch(
-            &format!("/api/categories/{cartao}"),
+            &format!("/api/categories/{assinaturas}"),
             json!({ "parent_id": null }),
         )
         .await;
@@ -1556,4 +1577,25 @@ async fn p9_pins_need_a_session(pool: PgPool) {
             .0,
         StatusCode::UNAUTHORIZED
     );
+}
+
+#[sqlx::test]
+async fn sol140_the_card_group_stays_top_level(pool: PgPool) {
+    let user = TestApp::signed_in(pool, "ana@example.com").await;
+    let card_group = user.category_id("Cartão").await;
+    for parent in ["Casa", "Economia"] {
+        let parent_id = user.category_id(parent).await;
+
+        let (status, problem) = user
+            .patch(
+                &format!("/api/categories/{card_group}"),
+                json!({ "parent_id": parent_id }),
+            )
+            .await;
+
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+        assert_eq!(problem["errors"][0]["field"], "parent_id");
+    }
+    let (_, list) = user.get("/api/categories").await;
+    assert_eq!(find(&list, "Cartão")["parent_id"], Value::Null);
 }

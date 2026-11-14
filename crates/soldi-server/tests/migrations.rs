@@ -552,3 +552,34 @@ async fn d36_series_start_closed_and_their_flags_need_a_series(pool: PgPool) {
         assert!(refused.is_err(), "{open} {offset}");
     }
 }
+
+#[sqlx::test(migrations = false)]
+async fn sol140_card_group_flags_the_active_top_level_fixa_cartao_once_per_user(pool: PgPool) {
+    migrate_before(&pool, 29).await;
+    let ana = user(&pool, "ana@example.com").await;
+    let bia = user(&pool, "bia@example.com").await;
+    let cleo = user(&pool, "cleo@example.com").await;
+    let flagged = category(&pool, ana, "cartão", "bill", "cat-9", None, false).await;
+    category(&pool, ana, "Porto", "bill", "cat-9", Some(flagged), false).await;
+    category(&pool, ana, "Cartão", "bill", "cat-1", None, true).await;
+    category(&pool, ana, "Cartão", "daily", "cat-2", None, false).await;
+    category(&pool, bia, "Cartões", "bill", "cat-9", None, false).await;
+    let casa = category(&pool, cleo, "Casa", "bill", "cat-6", None, false).await;
+    category(&pool, cleo, "Cartão", "bill", "cat-6", Some(casa), false).await;
+
+    migrate_from(&pool, 29).await;
+
+    let flags: Vec<Uuid> = sqlx::query_scalar("SELECT id FROM categories WHERE is_card_group")
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+    assert_eq!(flags, vec![flagged]);
+    let second = sqlx::query(
+        "INSERT INTO categories (user_id, name, kind, icon, color, is_card_group)
+         VALUES ($1, 'Outro', 'bill', 'x', 'cat-3', true)",
+    )
+    .bind(ana)
+    .execute(&pool)
+    .await;
+    assert!(second.is_err());
+}
