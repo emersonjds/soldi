@@ -500,46 +500,49 @@ async fn assert_rate_limited(response: axum::response::Response, window_seconds:
 }
 
 #[sqlx::test]
-async fn one_email_gets_ten_sign_ins_per_ip_and_fifty_overall_without_touching_the_database(
+async fn one_email_gets_ten_sign_ins_per_ip_and_a_hundred_overall_without_touching_the_database(
     pool: PgPool,
 ) {
     let app = TestApp::anonymous(pool.clone());
     app.another_user("ana@example.com").await;
-    let attempt = |from: String| {
-        app.send(forwarded(
-            sign_in_request("ana@example.com", "wrong horse"),
-            &from,
-        ))
+    app.another_user("bia@example.com").await;
+    let attempt = |email: &'static str, password: &'static str, from: String| {
+        app.send(forwarded(sign_in_request(email, password), &from))
     };
+    let guess = |from: String| attempt("ana@example.com", "wrong horse", from);
     for _ in 0..10 {
         assert_eq!(
-            attempt("203.0.113.1".into()).await.status(),
+            guess("203.0.113.1".into()).await.status(),
             StatusCode::UNAUTHORIZED
         );
     }
-    assert_rate_limited(attempt("203.0.113.1".into()).await, 900).await;
-    let other_email = app
-        .send(forwarded(
-            sign_in_request("bia@example.com", "wrong horse"),
-            "203.0.113.1",
-        ))
-        .await;
-    assert_eq!(other_email.status(), StatusCode::UNAUTHORIZED);
-    for ip in 2..=5 {
+    assert_rate_limited(guess("203.0.113.1".into()).await, 900).await;
+    let other_email = attempt("bia@example.com", PASSWORD, "203.0.113.1".into()).await;
+    assert_eq!(other_email.status(), StatusCode::OK);
+    for ip in 2..=9 {
         for _ in 0..10 {
-            let response = attempt(format!("203.0.113.{ip}")).await;
+            let response = guess(format!("203.0.113.{ip}")).await;
             assert_eq!(response.status(), StatusCode::UNAUTHORIZED, "{ip}");
         }
     }
+
+    let owner = attempt("ana@example.com", PASSWORD, "198.51.100.7".into()).await;
+    assert_eq!(owner.status(), StatusCode::OK);
+    for _ in 0..9 {
+        let response = guess("203.0.113.10".into()).await;
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    let bia = attempt("bia@example.com", PASSWORD, "203.0.113.11".into()).await;
+    assert_eq!(bia.status(), StatusCode::OK);
 
     pool.close().await;
     let response = app
         .send(forwarded(
             sign_in_request(" ANA@Example.com ", PASSWORD),
-            "203.0.113.6",
+            "203.0.113.11",
         ))
         .await;
-
     assert_rate_limited(response, 900).await;
 }
 

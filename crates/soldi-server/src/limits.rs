@@ -34,7 +34,7 @@ pub const SIGN_IN_EMAIL_IP: Budget = Budget {
 };
 pub const SIGN_IN_EMAIL: Budget = Budget {
     name: "sign-in-email",
-    limit: 50,
+    limit: 10 * SIGN_IN_EMAIL_IP.limit,
     window: FIFTEEN_MINUTES,
 };
 pub const SIGN_UP_IP: Budget = Budget {
