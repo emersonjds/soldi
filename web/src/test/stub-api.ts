@@ -63,7 +63,7 @@ const category = (
   icon: string,
   color: string,
   rest: Partial<Schemas["Category"]> = {},
-): Schemas["Category"] => ({ id, name, kind, icon, color, is_savings: false, ...rest });
+): Schemas["Category"] => ({ id, name, kind, icon, color, is_savings: false, is_card_group: false, ...rest });
 
 export const SALARIO = category("c1000000-0000-4000-8000-000000000001", "Salário", "income", "briefcase", "cat-11");
 export const EXTRA = category("c1000000-0000-4000-8000-000000000002", "Extra", "income", "sparkles", "cat-12");

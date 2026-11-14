@@ -448,7 +448,7 @@
             }
           },
           "422": {
-            "description": "Name not 1 to 100 characters, amount not above zero or with more than two places, missing on a conta fixa or present on a card (`amount`), `closing_day` not 1 to 31, due day not 1 to 31, `category_id` not one of the caller's active bill categories or, on a card, `Economia` or a cofrinho, `installments` not 2 to 60, missing with `last_month` or on a card, `last_month` missing with `installments`, not a month's first day or not from this month to `installments` months ahead, or `cannot-become-bill` when the entry is not a `bill` entry, already a bill's payment, a resgate or a series member",
+            "description": "Name not 1 to 100 characters, amount not above zero or with more than two places, missing on a conta fixa or present on a card (`amount`), `closing_day` not 1 to 31, due day not 1 to 31, `category_id` missing on a conta fixa, not one of the caller's active bill categories or, on a card, `Economia` or a cofrinho, `installments` not 2 to 60, missing with `last_month` or on a card, `last_month` missing with `installments`, not a month's first day or not from this month to `installments` months ahead, or `cannot-become-bill` when the entry is not a `bill` entry, already a bill's payment, a resgate or a series member; `palette-full` when a card needs a new card group and all 24 bill colors are taken",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -2812,14 +2812,15 @@
       },
       "Category": {
         "type": "object",
-        "description": "`icon` is a lucide icon name; `color` a palette token, `cat-1` to `cat-24`, unique among the\nactive top-level categories showing in a kind (their own or a subcategory's) and the parent's on\na subcategory; `parent_id` the\ncategory this one is a subcategory of, null for a top-level one. `is_savings` marks the\nuser's `Economia` (bill) and `Resgate` (income); `target` and `deadline` belong only to\ncofrinhos, the subcategories of `Economia`.",
+        "description": "`icon` is a lucide icon name; `color` a palette token, `cat-1` to `cat-24`, unique among the\nactive top-level categories showing in a kind (their own or a subcategory's) and the parent's on\na subcategory; `parent_id` the\ncategory this one is a subcategory of, null for a top-level one. `is_savings` marks the\nuser's `Economia` (bill) and `Resgate` (income); `target` and `deadline` belong only to\ncofrinhos, the subcategories of `Economia`. `is_card_group` marks the account's card group: a\ncard created without `category_id` lands in it (D43).",
         "required": [
           "id",
           "name",
           "kind",
           "icon",
           "color",
-          "is_savings"
+          "is_savings",
+          "is_card_group"
         ],
         "properties": {
           "color": {
@@ -2838,6 +2839,9 @@
           "id": {
             "type": "string",
             "format": "uuid"
+          },
+          "is_card_group": {
+            "type": "boolean"
           },
           "is_savings": {
             "type": "boolean"
@@ -3196,8 +3200,7 @@
         "type": "object",
         "required": [
           "name",
-          "due_day",
-          "category_id"
+          "due_day"
         ],
         "properties": {
           "amount": {
@@ -3208,9 +3211,12 @@
             "description": "A conta fixa's: greater than zero, up to two decimal places. Absent on a card."
           },
           "category_id": {
-            "type": "string",
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "uuid",
-            "description": "One of the caller's active `bill` categories."
+            "description": "One of the caller's active `bill` categories; required on a conta fixa. Absent on a card: the\naccount's card group, created as `Cartão` when none is active (D43)."
           },
           "closing_day": {
             "type": [

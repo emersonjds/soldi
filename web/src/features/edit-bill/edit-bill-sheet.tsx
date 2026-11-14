@@ -118,7 +118,7 @@ const draftOf = (bill?: Bill, prefill?: Schemas["CreateBill"]): Draft => {
     dueDay: String(from.due_day),
     closingDay: from.closing_day ? String(from.closing_day) : "",
     card: from.closing_day != null,
-    categoryId: from.category_id,
+    categoryId: from.category_id ?? undefined,
     active: bill?.active ?? true,
     parcelado: bill?.installments != null,
     installments: bill?.installments ? String(bill.installments) : "",

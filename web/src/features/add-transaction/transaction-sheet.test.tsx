@@ -39,6 +39,7 @@ const PETS: Schemas["Category"] = {
   icon: "paw-print",
   color: "cat-5",
   is_savings: false,
+  is_card_group: false,
 };
 const RACAO: Schemas["Category"] = {
   ...PETS,

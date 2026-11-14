@@ -647,7 +647,8 @@ export interface components {
          *     a subcategory; `parent_id` the
          *     category this one is a subcategory of, null for a top-level one. `is_savings` marks the
          *     user's `Economia` (bill) and `Resgate` (income); `target` and `deadline` belong only to
-         *     cofrinhos, the subcategories of `Economia`.
+         *     cofrinhos, the subcategories of `Economia`. `is_card_group` marks the account's card group: a
+         *     card created without `category_id` lands in it (D43).
          */
         Category: {
             color: string;
@@ -656,6 +657,7 @@ export interface components {
             icon: string;
             /** Format: uuid */
             id: string;
+            is_card_group: boolean;
             is_savings: boolean;
             kind: components["schemas"]["CategoryKind"];
             name: string;
@@ -782,9 +784,10 @@ export interface components {
             amount?: string | null;
             /**
              * Format: uuid
-             * @description One of the caller's active `bill` categories.
+             * @description One of the caller's active `bill` categories; required on a conta fixa. Absent on a card: the
+             *     account's card group, created as `Cartão` when none is active (D43).
              */
-            category_id: string;
+            category_id?: string | null;
             /**
              * Format: int32
              * @description 1 to 31; makes the bill a card, which then has no `amount`.
@@ -1754,7 +1757,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Name not 1 to 100 characters, amount not above zero or with more than two places, missing on a conta fixa or present on a card (`amount`), `closing_day` not 1 to 31, due day not 1 to 31, `category_id` not one of the caller's active bill categories or, on a card, `Economia` or a cofrinho, `installments` not 2 to 60, missing with `last_month` or on a card, `last_month` missing with `installments`, not a month's first day or not from this month to `installments` months ahead, or `cannot-become-bill` when the entry is not a `bill` entry, already a bill's payment, a resgate or a series member */
+            /** @description Name not 1 to 100 characters, amount not above zero or with more than two places, missing on a conta fixa or present on a card (`amount`), `closing_day` not 1 to 31, due day not 1 to 31, `category_id` missing on a conta fixa, not one of the caller's active bill categories or, on a card, `Economia` or a cofrinho, `installments` not 2 to 60, missing with `last_month` or on a card, `last_month` missing with `installments`, not a month's first day or not from this month to `installments` months ahead, or `cannot-become-bill` when the entry is not a `bill` entry, already a bill's payment, a resgate or a series member; `palette-full` when a card needs a new card group and all 24 bill colors are taken */
             422: {
                 headers: {
                     [name: string]: unknown;

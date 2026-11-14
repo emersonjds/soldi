@@ -26,6 +26,7 @@ const daily = (name: string, index: number): Schemas["Category"] => ({
   icon: "tag",
   color: "cat-3",
   is_savings: false,
+  is_card_group: false,
 });
 const MORE = ["Pets", "Carro", "Lazer", "Saúde", "Roupas", "Gasto", "Casa"].map(daily);
 const NINE = [...CATEGORIES, ...MORE];
