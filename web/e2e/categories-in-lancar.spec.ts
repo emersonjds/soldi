@@ -112,7 +112,7 @@ test("creates a card from Lançar, spends on it and finds it in the card's fatur
 
   await page.goto("/mes");
   await page.setViewportSize({ width: 1440, height: 900 });
-  await (await openLancar(page)).getByRole("combobox", { name: "Cartão" }).selectOption("new");
+  await (await openLancar(page)).getByRole("button", { name: "Novo cartão" }).click();
   await expect(cardSheet.getByRole("button", { name: "Criar cartão" })).toBeVisible();
   await expectNoClipped(page);
 });
