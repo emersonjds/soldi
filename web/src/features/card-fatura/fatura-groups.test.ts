@@ -83,5 +83,11 @@ describe("faturaGroups", () => {
 
   it("lists nothing for no entries and no share for a zero total", () => {
     expect(faturaGroups([], "0.00", money)).toEqual([]);
+    expect(faturaGroups([SMALL], "0.00", money)[0].share).toBe(0);
+  });
+
+  it("breaks a tie by title and names an entry without a note by its category", () => {
+    const [group] = faturaGroups([entry("t7", "30.00", ""), SMALL], "60.00", money);
+    expect(group.rows.map((row) => row.title)).toEqual(["Mercado", "Padaria"]);
   });
 });
