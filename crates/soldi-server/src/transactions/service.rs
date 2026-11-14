@@ -25,7 +25,7 @@ pub async fn list(
     let until = domain::open_until(crate::today_sao_paulo(), to);
     extend_open_series(pool, user, until).await?;
     let mut conn = pool.acquire().await?;
-    Ok(repo::list(&mut conn, user.id, first, to, category_id).await?)
+    Ok(repo::list(&mut conn, user.id, first, to, category_id, None).await?)
 }
 
 /// D36: grows the user's open series through `until`, copying each one's last member under its lock.

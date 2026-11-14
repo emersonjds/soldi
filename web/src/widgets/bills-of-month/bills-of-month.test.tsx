@@ -12,6 +12,8 @@ import {
   BILL_LUZ,
   BILLS_OF_MONTH,
   CARRIED_ALUGUEL,
+  CATEGORIES,
+  MERCADO,
   MONTH,
   problem,
   signedIn,
@@ -30,6 +32,30 @@ const FATURA: Schemas["BillOfMonth"] = {
   name: "Porto",
   amount: "450.00",
   is_card: true,
+};
+
+const SPOTIFY: Schemas["Transaction"] = {
+  id: "t1",
+  date: "2026-10-12",
+  amount: "39.90",
+  kind: "daily",
+  category: MERCADO,
+  note: "Spotify",
+  card_id: "card-porto",
+  series: { id: "s-spotify", position: 1, total: 1, last_date: "2026-10-12", every: "month", open_ended: true },
+};
+const PORTO_FATURA: Schemas["CardFatura"] = {
+  month: "2026-11",
+  total: "450.00",
+  carried: "0.00",
+  paid: "0.00",
+  entries: [SPOTIFY],
+  ahead: [],
+};
+const FATURA_REPLIES: Record<string, Reply> = {
+  "GET /api/months/2026-11/faturas/card-porto": { status: 200, body: PORTO_FATURA },
+  "GET /api/categories": { status: 200, body: CATEGORIES },
+  "GET /api/bills": { status: 200, body: [] },
 };
 
 /** A month on the server that a test can move forward, as a payment would. */
@@ -546,6 +572,79 @@ describe("Contas a pagar", () => {
 
       expect(await screen.findByRole("dialog", { name: "Pagar Fatura Porto" })).toBeInTheDocument();
       expect(requests.some((request) => request.method === "POST")).toBe(false);
+    });
+
+    it("opens Fatura Porto from the card's name area; a plain bill has none", async () => {
+      show([FATURA, BILLS_OF_MONTH[0]], FATURA_REPLIES);
+      await loaded();
+
+      expect(within(rowOf("Luz (Enel)")).queryByRole("button", { name: /^Ver fatura/ })).not.toBeInTheDocument();
+      const open = within(rowOf("Fatura Porto")).getByRole("button", { name: "Ver Fatura Porto" });
+      expect(open).toHaveClass("min-h-11");
+      await userEvent.click(open);
+
+      const panel = await screen.findByRole("dialog", { name: "Fatura Porto" });
+      expect(await within(panel).findByRole("region", { name: "Assinaturas" })).toBeInTheDocument();
+    });
+
+    it("opens a panel row's entry over the panel, with Parar recorrência", async () => {
+      show([FATURA], FATURA_REPLIES);
+      await loaded();
+
+      await userEvent.click(within(rowOf("Fatura Porto")).getByRole("button", { name: "Ver Fatura Porto" }));
+      const panel = await screen.findByRole("dialog", { name: "Fatura Porto" });
+      await userEvent.click(await within(panel).findByRole("button", { name: /Spotify/ }));
+
+      const entry = await screen.findByRole("dialog", { name: "Editar Lançamento Recorrente" });
+      expect(within(entry).getByRole("button", { name: "Parar recorrência" })).toBeInTheDocument();
+    });
+
+    it("still pays and undoes the fatura after its panel was opened and closed", async () => {
+      const { requests, serverHas } = show([FATURA], {
+        ...FATURA_REPLIES,
+        "POST /api/bills/card-porto/pay": { status: 201, body: PAYMENT },
+        "DELETE /api/bills/card-porto/pay": { status: 204 },
+      });
+      await loaded();
+      await userEvent.click(within(rowOf("Fatura Porto")).getByRole("button", { name: "Ver Fatura Porto" }));
+      const panel = await screen.findByRole("dialog", { name: "Fatura Porto" });
+      await within(panel).findByRole("region", { name: "Assinaturas" });
+      await userEvent.click(within(panel).getByRole("button", { name: "Fechar" }));
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+
+      await userEvent.click(within(rowOf("Fatura Porto")).getByRole("button", { name: "Pagar Fatura Porto" }));
+      const sheet = await screen.findByRole("dialog", { name: "Pagar Fatura Porto" });
+      serverHas([{ ...FATURA, paid: true, transaction_id: "t-paid" }]);
+      await userEvent.click(within(sheet).getByRole("button", { name: "Confirmar" }));
+      await waitFor(() => expect(requests.some((request) => request.method === "POST")).toBe(true));
+
+      await userEvent.click(await within(card()).findByRole("button", { name: "Desmarcar Fatura Porto" }));
+      await waitFor(() => expect(requests.some((request) => request.method === "DELETE")).toBe(true));
+    });
+
+    it("keeps Pagar on the check, the amount and the status, never the panel", async () => {
+      show([FATURA], FATURA_REPLIES);
+      await loaded();
+      const row = () => rowOf("Fatura Porto");
+      const pays = [/^Marcar Fatura Porto/, /: ajustar pagamento de Fatura Porto$/, "Pagar Fatura Porto"];
+
+      for (const name of pays) {
+        await userEvent.click(within(row()).getByRole("button", { name }));
+        expect(await screen.findByRole("dialog", { name: "Pagar Fatura Porto" })).toBeInTheDocument();
+        expect(screen.queryByRole("dialog", { name: "Fatura Porto" })).not.toBeInTheDocument();
+        await userEvent.click(screen.getByRole("button", { name: "Fechar" }));
+        await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+      }
+    });
+
+    it("names each panel button after its own row when October's fatura is carried (D17)", async () => {
+      show([{ ...FATURA, due_date: "2026-10-10", overdue: true }, FATURA], FATURA_REPLIES);
+      await loaded();
+
+      expect(
+        within(rowOf("Fatura Porto de outubro")).getByRole("button", { name: "Ver Fatura Porto de outubro" }),
+      ).toBeInTheDocument();
+      expect(within(rowOf("Fatura Porto")).getByRole("button", { name: "Ver Fatura Porto" })).toBeInTheDocument();
     });
 
     it("shows an overdue fatura carried from October and a paid one", async () => {

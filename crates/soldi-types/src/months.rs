@@ -4,6 +4,8 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+use crate::transactions::Transaction;
+
 /// The thermometer color of a balance; each lower bound is inclusive.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
@@ -90,6 +92,34 @@ pub struct BillOfMonth {
     pub installment: Option<i16>,
     /// The parcelado bill's number of parcelas.
     pub installments: Option<i16>,
+}
+
+/// SOL-119: a card's fatura due in `month`, what fills it, and the next six months' committed totals.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+pub struct CardFatura {
+    /// `YYYY-MM`, the fatura's due month.
+    pub month: String,
+    /// Spends plus the D30a carry: what Contas a pagar shows unpaid.
+    #[serde(serialize_with = "crate::money")]
+    pub total: Decimal,
+    /// Left over from last month's partial payment (D30a); 0 otherwise.
+    #[serde(serialize_with = "crate::money")]
+    pub carried: Decimal,
+    /// The card's payments dated in `month`; 0 when unpaid.
+    #[serde(serialize_with = "crate::money")]
+    pub paid: Decimal,
+    /// The fatura's spends, newest date first.
+    pub entries: Vec<Transaction>,
+    /// The next six months' faturas from rows already written (D16), zero included.
+    pub ahead: Vec<FaturaAhead>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+pub struct FaturaAhead {
+    /// `YYYY-MM`.
+    pub month: String,
+    #[serde(serialize_with = "crate::money")]
+    pub total: Decimal,
 }
 
 /// The month's savings (SOL-20): `saved` is `totals.saved`; `rate_pct` is `saved / income` as a
