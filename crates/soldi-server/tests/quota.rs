@@ -212,3 +212,39 @@ async fn a_bill_payment_a_resgate_and_a_series_growth_stop_at_the_ceiling(pool: 
     assert_quota(status, &problem);
     assert_eq!(count(&ana).await, CEILING);
 }
+
+#[sqlx::test]
+async fn concurrent_creates_at_the_ceiling_never_pass_it(pool: PgPool) {
+    let ana = opened(pool.clone(), "ana@example.com").await;
+    let (_, first) = spend(&ana, json!({})).await;
+    fill_to(&pool, &ana, &first, CEILING - 1).await;
+    let (_, me) = ana.get("/api/auth/me").await;
+    let mut lock = pool.begin().await.unwrap();
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended('entries:' || $1, 0))")
+        .bind(me["id"].as_str().unwrap())
+        .execute(&mut *lock)
+        .await
+        .unwrap();
+
+    let creates: Vec<_> = (0..3)
+        .map(|_| {
+            let ana = ana.clone();
+            tokio::spawn(async move { spend(&ana, json!({})).await.0 })
+        })
+        .collect();
+    tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        common::waiting(&pool, 3),
+    )
+    .await
+    .expect("the creates did not wait on the account's entry lock");
+    lock.commit().await.unwrap();
+    let mut created = 0;
+    for create in creates {
+        let status = create.await.unwrap();
+        created += usize::from(status == StatusCode::CREATED);
+    }
+
+    assert_eq!(created, 1);
+    assert_eq!(count(&ana).await, CEILING);
+}

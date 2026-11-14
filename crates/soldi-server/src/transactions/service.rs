@@ -53,6 +53,7 @@ pub async fn extend_open_series(
             continue;
         };
         let mut dates = domain::open_dates(series.every, &end, until)?;
+        repo::lock_entries(&mut tx, user.id).await?;
         let held = repo::count_period(&mut tx, user.id, None).await?;
         dates.truncate(usize::try_from(domain::MAX_ENTRIES - held).unwrap_or(0));
         // ponytail: D30, growth stops before the first paid fatura, one query per dropped date;
@@ -79,13 +80,14 @@ pub async fn extend_open_series(
 }
 
 /// SOL-137: refuses `adding` entries that would take the user past [`domain::MAX_ENTRIES`].
-// ponytail: count then insert, so concurrent creates may overshoot by one request each; the
-// write budget bounds that.
+/// Holds the user's entry lock until `conn`'s transaction ends, so concurrent creates count in
+/// turn; `conn` must be inside one.
 pub async fn check_room(
     conn: &mut PgConnection,
     user: &CurrentUser,
     adding: usize,
 ) -> Result<(), AppError> {
+    repo::lock_entries(conn, user.id).await?;
     let held = repo::count_period(conn, user.id, None).await?;
     let adding = i64::try_from(adding).unwrap_or(i64::MAX);
     if held.saturating_add(adding) > domain::MAX_ENTRIES {
