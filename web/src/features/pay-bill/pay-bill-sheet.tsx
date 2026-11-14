@@ -6,6 +6,7 @@ import { toast } from "sonner";
 
 import { type BillOfMonth, billTitle, payDateFor, usePayBill } from "@/entities/bill/bill-queries";
 import { billKey } from "@/entities/month/forecast-alert";
+import { problemMessage } from "@/shared/api/client";
 import { monthName, todayISO } from "@/shared/lib/date";
 import { positiveAmount } from "@/shared/lib/money";
 import { BrandButton } from "@/shared/ui/brand-button";
@@ -63,7 +64,10 @@ export const PayBillSheet = ({ month, bill, open, onOpenChange }: PayBillSheetPr
 
   const confirm = (billId: string, payment: Payment) => {
     onOpenChange(false);
-    pay.mutate({ billId, month, ...payment }, { onError: () => toast.error("Não foi possível marcar como paga.") });
+    pay.mutate(
+      { billId, month, ...payment },
+      { onError: (error) => toast.error(problemMessage(error) ?? "Não foi possível marcar como paga.") },
+    );
   };
 
   return (

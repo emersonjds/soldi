@@ -19,7 +19,7 @@ import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { Progress } from "@/components/ui/progress";
 import { useUpdateSettings } from "@/entities/settings/settings-query";
-import type { Schemas } from "@/shared/api/client";
+import { problemMessage, type Schemas } from "@/shared/api/client";
 import { formatPct } from "@/shared/lib/percent";
 import { cents } from "@/shared/lib/tier";
 import { Money } from "@/shared/ui/money";
@@ -53,7 +53,7 @@ const TargetForm = ({ pct, onDone }: { pct?: string; onDone: () => void }) => {
           toast.success(done);
           onDone();
         },
-        onError: () => toast.error("Não foi possível salvar a meta."),
+        onError: (error) => toast.error(problemMessage(error) ?? "Não foi possível salvar a meta."),
       },
     );
 

@@ -419,6 +419,20 @@ describe("SavingsYear", () => {
 
       expect(await screen.findByText("Não foi possível salvar a observação.")).toBeInTheDocument();
     });
+
+    it("says the account is writing too fast when the note hits the write budget", async () => {
+      const limited = { ...problem(429, "Too many"), type: "urn:soldi:error:rate-limited" };
+      show({ [PUT]: { status: 429, body: limited } });
+
+      await userEvent.click(within(await tableRow("Outubro")).getByRole("button", { name: "Ações de Outubro" }));
+      await userEvent.click(await screen.findByRole("menuitem", { name: "Adicionar observação" }));
+      await userEvent.type(within(await noteDialog()).getByRole("textbox", { name: "Observação" }), "x");
+      await userEvent.click(within(await noteDialog()).getByRole("button", { name: "Salvar" }));
+
+      expect(
+        await screen.findByText("Muitas alterações seguidas. Espere um pouco e tente de novo."),
+      ).toBeInTheDocument();
+    });
   });
 
   it("exports the table as a pt-BR CSV", async () => {

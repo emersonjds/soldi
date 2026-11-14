@@ -5,7 +5,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { useUpdateSettings } from "@/entities/settings/settings-query";
-import type { Schemas } from "@/shared/api/client";
+import { problemMessage, type Schemas } from "@/shared/api/client";
 import type { Currency } from "@/shared/lib/currency";
 
 const CURRENCIES: { code: Currency; name: string; caption: string }[] = [
@@ -27,9 +27,9 @@ export const CurrencyForm = ({ settings }: { settings: Schemas["Settings"] }) =>
       { currency: next },
       {
         onSuccess: () => toast.success("Moeda salva"),
-        onError: () => {
+        onError: (error) => {
           setCurrency(previous);
-          toast.error("Não foi possível salvar.");
+          toast.error(problemMessage(error) ?? "Não foi possível salvar.");
         },
       },
     );

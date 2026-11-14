@@ -1,4 +1,5 @@
 use axum::extract::{FromRequest, FromRequestParts, Request};
+use axum::http::Method;
 use axum::http::request::Parts;
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
@@ -35,6 +36,23 @@ pub struct PathParams<T>(pub T);
 #[from_request(via(axum::extract::Query), rejection(AppError))]
 pub struct QueryParams<T>(pub T);
 
+/// D42: recovery writes skip the write budget, so a stolen session spending it cannot lock the
+/// owner out; they keep their own budgets.
+pub const WRITE_BUDGET_EXEMPT: [(Method, &str); 4] = [
+    (Method::POST, "/api/auth/sign-out"),
+    (Method::POST, "/api/auth/sign-out-everywhere"),
+    (Method::POST, "/api/me/password"),
+    (Method::DELETE, "/api/me"),
+];
+
+/// Every signed-in write spends the per-account write budget, but [`WRITE_BUDGET_EXEMPT`].
+pub fn spends_write_budget(method: &Method, path: &str) -> bool {
+    !method.is_safe()
+        && !WRITE_BUDGET_EXEMPT
+            .iter()
+            .any(|(exempt, exempt_path)| exempt == method && *exempt_path == path)
+}
+
 /// The signed-in caller, from the session cookie.
 #[derive(Debug, Clone)]
 pub struct CurrentUser {
@@ -50,7 +68,7 @@ impl FromRequestParts<AppState> for CurrentUser {
         let mut conn = state.pool.acquire().await?;
         let user = repo::find_by_token(&mut conn, &domain::hash_token(token)).await?;
         let user = user.ok_or(AppError::Unauthorized)?;
-        if !parts.method.is_safe() {
+        if spends_write_budget(&parts.method, parts.uri.path()) {
             (state.limiter).check(&crate::limits::write_keys(user.id.to_string()))?;
         }
         Ok(user)

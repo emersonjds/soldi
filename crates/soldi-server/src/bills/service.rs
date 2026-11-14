@@ -253,7 +253,7 @@ pub async fn pay(
     input: PayBill,
 ) -> Result<Transaction, AppError> {
     let month = month.map(parse_month).transpose()?;
-    let mut conn = pool.acquire().await?;
+    let mut conn = pool.begin().await?;
     let bill = repo::find_payable(&mut conn, user.id, id)
         .await?
         .ok_or(AppError::NotFound)?;
@@ -288,9 +288,11 @@ pub async fn pay(
         transactions::repo::insert(&mut conn, user.id, &entry, Some(bill.id), None, None, None)
             .await
             .map_err(transactions::service::paid_once)?;
-    transactions::repo::find(&mut conn, user.id, transaction_id)
+    let paid = transactions::repo::find(&mut conn, user.id, transaction_id)
         .await?
-        .ok_or(AppError::NotFound)
+        .ok_or(AppError::NotFound)?;
+    conn.commit().await?;
+    Ok(paid)
 }
 
 /// Rule 5: deletes the bill's entry of `month`.

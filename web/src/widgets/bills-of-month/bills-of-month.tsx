@@ -15,7 +15,7 @@ import { TransactionSheet } from "@/features/add-transaction/transaction-sheet";
 import { FaturaSheet } from "@/features/card-fatura/fatura-sheet";
 import { PayBillSheet } from "@/features/pay-bill/pay-bill-sheet";
 import { cn } from "@/lib/utils";
-import type { Schemas } from "@/shared/api/client";
+import { problemMessage, type Schemas } from "@/shared/api/client";
 import { useCurrency } from "@/shared/lib/currency";
 import { dayMonth, monthName, shortDay, todayISO } from "@/shared/lib/date";
 import { formatMoney } from "@/shared/lib/money";
@@ -255,7 +255,7 @@ export const BillsOfMonth = ({ view, className }: { view: Schemas["MonthView"]; 
     const month = bill.due_date.slice(0, 7);
     pay.mutate(
       { billId: bill.bill_id, month, date: payDateFor(month, bill.due_date) },
-      { onError: () => toast.error("Não foi possível marcar como paga.") },
+      { onError: (error) => toast.error(problemMessage(error) ?? "Não foi possível marcar como paga.") },
     );
   };
 
@@ -264,7 +264,7 @@ export const BillsOfMonth = ({ view, className }: { view: Schemas["MonthView"]; 
       { billId: bill.bill_id, month: bill.due_date.slice(0, 7) },
       {
         onSuccess: () => toast("Pagamento desfeito"),
-        onError: () => toast.error("Não foi possível desfazer o pagamento."),
+        onError: (error) => toast.error(problemMessage(error) ?? "Não foi possível desfazer o pagamento."),
       },
     );
 

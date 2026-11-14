@@ -9,6 +9,7 @@ import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogT
 import { Textarea } from "@/components/ui/textarea";
 import { useSetMonthNote } from "@/entities/month/month-note-query";
 import { cn } from "@/lib/utils";
+import { problemMessage } from "@/shared/api/client";
 
 const action = "min-h-11 text-base";
 
@@ -27,7 +28,7 @@ const NoteForm = ({ month, note, onDone }: { month: string; note: string; onDone
           toast.success(done);
           onDone();
         },
-        onError: () => toast.error("Não foi possível salvar a observação."),
+        onError: (error) => toast.error(problemMessage(error) ?? "Não foi possível salvar a observação."),
       },
     );
 

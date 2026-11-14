@@ -123,3 +123,154 @@ async fn an_open_series_stops_growing_at_the_ceiling_and_reads_still_answer(pool
     assert_eq!(status, StatusCode::OK);
     assert_eq!(count(&ana).await, CEILING);
 }
+
+async fn signed_in_again(app: &TestApp, email: &str, password: &str) -> TestApp {
+    let body = json!({ "email": email, "password": password });
+    let response = app
+        .send(json_request(
+            Method::POST,
+            "/api/auth/sign-in",
+            None,
+            Some(body),
+        ))
+        .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    TestApp {
+        router: app.router.clone(),
+        cookie: Some(common::session_cookie(&response)),
+    }
+}
+
+#[sqlx::test]
+async fn sign_out_password_change_and_deletion_skip_the_spent_write_budget(pool: PgPool) {
+    let ana = TestApp::signed_in(pool, "ana@example.com").await;
+    let other = signed_in_again(&ana, "ana@example.com", common::PASSWORD).await;
+    for _ in 0..120 {
+        ana.post("/api/me/tour-seen", json!({})).await;
+    }
+    let (status, _) = ana.post("/api/me/tour-seen", json!({})).await;
+    assert_eq!(status, StatusCode::TOO_MANY_REQUESTS);
+
+    let (status, body) = other.post("/api/auth/sign-out", json!({})).await;
+    assert_eq!(status, StatusCode::NO_CONTENT, "{body}");
+    let changed =
+        json!({ "current_password": common::PASSWORD, "new_password": "new horse battery" });
+    let (status, body) = ana.post("/api/me/password", changed).await;
+    assert_eq!(status, StatusCode::NO_CONTENT, "{body}");
+    let (status, body) = ana.post("/api/auth/sign-out-everywhere", json!({})).await;
+    assert_eq!(status, StatusCode::NO_CONTENT, "{body}");
+    let ana = signed_in_again(&ana, "ana@example.com", "new horse battery").await;
+    let body = json!({ "password": "new horse battery" });
+    let request = json_request(Method::DELETE, "/api/me", ana.cookie.as_deref(), Some(body));
+    assert_eq!(ana.send(request).await.status(), StatusCode::NO_CONTENT);
+}
+
+#[sqlx::test]
+async fn a_bill_payment_a_resgate_and_a_series_growth_stop_at_the_ceiling(pool: PgPool) {
+    let ana = opened(pool.clone(), "ana@example.com").await;
+    let economia = ana.category_id("Economia").await;
+    let (_, reserva) = ana
+        .post(
+            "/api/categories",
+            json!({ "name": "Reserva", "kind": "bill", "parent_id": economia }),
+        )
+        .await;
+    let (status, bill) = ana
+        .post(
+            "/api/bills",
+            json!({ "name": "Aluguel", "amount": "100", "due_day": 5,
+                    "category_id": ana.category_id("Escola").await }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{bill}");
+    let (status, series) = spend(&ana, json!({ "repeat_months": 2 })).await;
+    assert_eq!(status, StatusCode::CREATED, "{series}");
+    let (status, deposit) = spend(
+        &ana,
+        json!({ "kind": "bill", "category_id": reserva["id"] }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{deposit}");
+    fill_to(&pool, &ana, &deposit, CEILING).await;
+
+    let pay = format!("/api/bills/{}/pay", bill["id"].as_str().unwrap());
+    let (status, problem) = ana.post(&pay, json!({ "date": today().to_string() })).await;
+    assert_quota(status, &problem);
+    let resgate = format!(
+        "/api/cofrinhos/{}/withdraw",
+        reserva["id"].as_str().unwrap()
+    );
+    let (status, problem) = ana
+        .post(
+            &resgate,
+            json!({ "date": today().to_string(), "amount": "10" }),
+        )
+        .await;
+    assert_quota(status, &problem);
+    let member = format!("/api/transactions/{}", series["id"].as_str().unwrap());
+    let (status, problem) = ana.patch(&member, json!({ "repeat_months": 4 })).await;
+    assert_quota(status, &problem);
+    assert_eq!(count(&ana).await, CEILING);
+}
+
+#[sqlx::test]
+async fn concurrent_creates_at_the_ceiling_never_pass_it(pool: PgPool) {
+    let ana = opened(pool.clone(), "ana@example.com").await;
+    let (_, first) = spend(&ana, json!({})).await;
+    fill_to(&pool, &ana, &first, CEILING - 1).await;
+    let (_, me) = ana.get("/api/auth/me").await;
+    let mut lock = pool.begin().await.unwrap();
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended('entries:' || $1, 0))")
+        .bind(me["id"].as_str().unwrap())
+        .execute(&mut *lock)
+        .await
+        .unwrap();
+
+    let creates: Vec<_> = (0..3)
+        .map(|_| {
+            let ana = ana.clone();
+            tokio::spawn(async move { spend(&ana, json!({})).await.0 })
+        })
+        .collect();
+    tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        common::waiting(&pool, 3),
+    )
+    .await
+    .expect("the creates did not wait on the account's entry lock");
+    lock.commit().await.unwrap();
+    let mut created = 0;
+    for create in creates {
+        let status = create.await.unwrap();
+        created += usize::from(status == StatusCode::CREATED);
+    }
+
+    assert_eq!(created, 1);
+    assert_eq!(count(&ana).await, CEILING);
+}
+
+#[sqlx::test]
+async fn a_read_at_the_ceiling_takes_no_series_lock(pool: PgPool) {
+    let ana = opened(pool.clone(), "ana@example.com").await;
+    let (status, fixo) = spend(&ana, json!({ "open_ended": true, "repeat_every": "week" })).await;
+    assert_eq!(status, StatusCode::CREATED, "{fixo}");
+    fill_to(&pool, &ana, &fixo, CEILING).await;
+    let mut lock = pool.begin().await.unwrap();
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))")
+        .bind(fixo["series"]["id"].as_str().unwrap())
+        .execute(&mut *lock)
+        .await
+        .unwrap();
+
+    let far = today() + chrono::Months::new(36);
+    let read = tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        ana.get(&format!("/api/transactions?month={}", far.format("%Y-%m"))),
+    )
+    .await
+    .expect("a read at the ceiling waited on the series lock");
+
+    assert_eq!(read.0, StatusCode::OK);
+    lock.commit().await.unwrap();
+    assert_eq!(count(&ana).await, CEILING);
+}

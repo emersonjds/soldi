@@ -7,7 +7,7 @@ import { toast } from "sonner";
 
 import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field";
 import { useUpdateSettings } from "@/entities/settings/settings-query";
-import type { Schemas } from "@/shared/api/client";
+import { problemMessage, type Schemas } from "@/shared/api/client";
 import { todayISO } from "@/shared/lib/date";
 import { parseBRL } from "@/shared/lib/money";
 import { cents } from "@/shared/lib/tier";
@@ -16,7 +16,7 @@ import { DateField } from "@/shared/ui/date-field";
 
 type Opening = { opening_balance: string; opening_date: string };
 
-const failed = () => toast.error("Não foi possível salvar.");
+const failed = (error: unknown) => toast.error(problemMessage(error) ?? "Não foi possível salvar.");
 
 /** The balance everything starts from, and the day it was true; each saves on its own, with undo. */
 export const OpeningForm = ({ settings }: { settings: Schemas["Settings"] }) => {

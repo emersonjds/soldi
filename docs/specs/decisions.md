@@ -369,13 +369,13 @@ Accepted: an attacker spending the per-e-mail reset budget (10 an hour from 4 ad
 
 ## D40 — Pages run only the scripts the export ships (2026-11-14, orchestrator, SOL-134 from the Lagune scan)
 
-Every response carries one Content-Security-Policy, built at boot:
+Pages, static files and the API docs (`/api/docs`) carry one Content-Security-Policy, built at boot:
 
 `default-src 'self'; script-src 'self' <hashes>; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.ingest.sentry.io https://*.ingest.us.sentry.io; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'`
 
-and `Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), browsing-topics=()`.
+Every other `/api` answer is JSON and carries `default-src 'none'; frame-ancestors 'none'` instead, so the hashes never ride on API traffic. Every response carries `Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), browsing-topics=()`.
 
-- **Scripts by hash, never `'unsafe-inline'`.** The static export inlines a Turbopack bootstrap and the `self.__next_f` flight data in each page. The server hashes (SHA-256) every inline `<script>` of every `.html` in `SOLDI_WEB_DIR` once at boot and lists them all in `script-src`; nonces need a per-request render the export does not have. The union (24 hashes, ~1.3 KB) goes on every page instead of a per-page map: one header to build, HTTP/2 compresses the repeat, and a page may only run another Soldi page's bootstrap. A new build changes the hashes, which a restart (every deploy) picks up.
+- **Scripts by hash, never `'unsafe-inline'`.** The static export inlines a Turbopack bootstrap and the `self.__next_f` flight data in each page. The server hashes (SHA-256) every inline `<script>` of every `.html` in `SOLDI_WEB_DIR` once at boot and lists them all in `script-src`; nonces need a per-request render the export does not have. The union goes on every page instead of a per-page map: one header to build, HTTP/2 compresses the repeat, and a page may only run another Soldi page's bootstrap. Measured on the 2026-11-14 export: 23 pages, 24 distinct inline scripts, 1,296 bytes of hashes, a 1,563-byte header; a page map pays off only if the export grows several times over. A new build changes the hashes, which a restart (every deploy) picks up.
 - **Styles keep `'unsafe-inline'`.** Tailwind ships as files, but React `style` attributes, the chart `<style>` and Swagger UI set inline styles; style injection cannot read or send data under this `connect-src`.
 - **Fonts are self-hosted** by `next/font`; images are self or `data:`.
 - **`connect-src`** is the API on the same origin plus Sentry ingest in either region (D38); any other host is refused.
@@ -392,6 +392,8 @@ What an enumerator pays instead:
 - **Budget.** A taken e-mail spends the same per-address budgets as a new account, checked before the body reaches the database: 10 an hour and 20 a day per address (IPv6 by /56, D39). One address learns at most 20 e-mails a day, and each probe that misses creates a real account with a session.
 - **Work.** Input is validated, then the password is hashed with argon2id, then the insert runs; `email-taken` is the insert's unique violation, so a taken e-mail and a new account do the same hashing before they answer. A taken e-mail with a bad password gets the 422 like anyone else.
 - **Mail.** Sign-up sends no mail. Verification mails cost 3 per account and 10 per address an hour, plus 20 per address a day across all accounts, so throwaway accounts from one address can aim at most 20 Soldi mails a day at inboxes they do not own; a refused request is the usual 429.
+
+Accepted limits of the daily ceilings (sign-up and verification mail): they live in the D39 in-process limiter, so a deploy or restart resets them; the window is a fixed 24 hours from the key's first request, not a sliding one, so one address can spend up to 2 × 20 around a window boundary; and an IPv4 address behind carrier-grade NAT is shared by many people, who then share its 20 a day.
 
 Revisit when Soldi adds verify-before-account (then sign-up answers the same 202 for both cases and the 409 goes), when sign-up gets an invite or captcha step, or if the logs show distributed probing (many addresses each under the ceiling).
 
