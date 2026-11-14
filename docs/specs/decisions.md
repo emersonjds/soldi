@@ -393,6 +393,8 @@ What an enumerator pays instead:
 - **Work.** Input is validated, then the password is hashed with argon2id, then the insert runs; `email-taken` is the insert's unique violation, so a taken e-mail and a new account do the same hashing before they answer. A taken e-mail with a bad password gets the 422 like anyone else.
 - **Mail.** Sign-up sends no mail. Verification mails cost 3 per account and 10 per address an hour, plus 20 per address a day across all accounts, so throwaway accounts from one address can aim at most 20 Soldi mails a day at inboxes they do not own; a refused request is the usual 429.
 
+Accepted limits of the daily ceilings (sign-up and verification mail): they live in the D39 in-process limiter, so a deploy or restart resets them; the window is a fixed 24 hours from the key's first request, not a sliding one, so one address can spend up to 2 × 20 around a window boundary; and an IPv4 address behind carrier-grade NAT is shared by many people, who then share its 20 a day.
+
 Revisit when Soldi adds verify-before-account (then sign-up answers the same 202 for both cases and the 409 goes), when sign-up gets an invite or captcha step, or if the logs show distributed probing (many addresses each under the ceiling).
 
 ## D42 — Per-account write budget, an entry ceiling, and fixed error text for Sentry (2026-11-14, orchestrator, SOL-137 and SOL-139 from the Lagune scan)
