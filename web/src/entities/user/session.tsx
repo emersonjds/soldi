@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 
 import { queryOptions, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { api, okOrThrow, type Schemas } from "@/shared/api/client";
+import { api, dataOrThrow, okOrThrow, type Schemas } from "@/shared/api/client";
 import { clearAllHistories } from "@/shared/lib/simulation-history";
 import { PageError, PageLoading } from "@/shared/ui/page-state";
 
@@ -16,10 +16,9 @@ export type User = Schemas["User"];
 export const meQuery = queryOptions({
   queryKey: ["me"],
   queryFn: async () => {
-    const { data, response } = await api.GET("/api/auth/me");
-    if (response.status === 401) return null;
-    if (!data) throw new Error(`GET /api/auth/me answered ${response.status}`);
-    return data;
+    const result = await api.GET("/api/auth/me");
+    if (result.response.status === 401) return null;
+    return dataOrThrow(result);
   },
   staleTime: Number.POSITIVE_INFINITY,
 });
