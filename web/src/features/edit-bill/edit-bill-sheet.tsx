@@ -130,7 +130,9 @@ export const BillForm = ({
     setSubmitted(true);
     if (!name || !day || (!draft.card && !categoryId)) return;
     const active = draft.parcelado ? (bill?.active ?? true) : draft.active;
-    const fields = { name, due_day: day, ...(categoryId && { category_id: categoryId }), active };
+    // A new card goes to the card group (D43), whatever was picked before the switch.
+    const sentCategory = draft.card && !bill ? undefined : categoryId;
+    const fields = { name, due_day: day, ...(sentCategory && { category_id: sentCategory }), active };
     if (draft.card) {
       if (closingDay) onSave({ ...fields, closing_day: closingDay });
       return;

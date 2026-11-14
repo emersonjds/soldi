@@ -649,6 +649,25 @@ describe("Contas fixas", () => {
       expect(await sent(requests, "POST")[0].json()).toEqual({ name: "Porto", due_day: 10, closing_day: 3 });
     });
 
+    it("sends no category for a new card even after one was picked as a conta fixa", async () => {
+      const { requests } = open({ replies: { "POST /api/bills": { status: 201, body: PORTO } } });
+
+      await userEvent.click(await screen.findByRole("button", { name: "Nova Conta Fixa" }));
+      const sheet = await screen.findByRole("dialog", { name: "Nova conta" });
+      const category = within(sheet).getByLabelText("Categoria");
+      const luz = await within(category).findByRole("option", { name: /Luz/ });
+      await userEvent.selectOptions(category, luz);
+      expect(category).toHaveValue(luz.getAttribute("value"));
+      await userEvent.click(within(sheet).getByRole("switch", { name: "Cartão de crédito" }));
+      await userEvent.type(within(sheet).getByLabelText("Nome da conta fixa"), "Porto");
+      await userEvent.type(within(sheet).getByLabelText("Fecha dia"), "3");
+      await userEvent.type(within(sheet).getByLabelText("Dia do vencimento recorrente"), "10");
+      await userEvent.click(within(sheet).getByRole("button", { name: "Salvar Conta Fixa" }));
+
+      await waitFor(() => expect(sent(requests, "POST")).toHaveLength(1));
+      expect(await sent(requests, "POST")[0].json()).toEqual({ name: "Porto", due_day: 10, closing_day: 3 });
+    });
+
     it("still asks a conta fixa for its category", async () => {
       const { requests } = open({ replies: { "GET /api/categories": { status: 200, body: [] } } });
 
