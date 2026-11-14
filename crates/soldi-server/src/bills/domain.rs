@@ -34,6 +34,9 @@ pub fn check(bill: CreateBill, prefix: &str) -> Result<CreateBill, AppError> {
         }
         (None, Some(amount)) => Some(check_money(&field("amount"), amount)?),
     };
+    if bill.closing_day.is_none() && bill.category_id.is_none() {
+        return Err(AppError::invalid(&field("category_id"), "is required"));
+    }
     if !(1..=31).contains(&bill.due_day) {
         return Err(AppError::invalid(&field("due_day"), "must be 1 to 31"));
     }
@@ -149,7 +152,7 @@ mod tests {
             name: name.into(),
             amount: Some(amount.parse().unwrap()),
             due_day,
-            category_id: Uuid::nil(),
+            category_id: Some(Uuid::nil()),
             closing_day: None,
             installments: None,
             last_month: None,
@@ -224,6 +227,20 @@ mod tests {
         ] {
             assert_eq!(field(check(input, "")), expected);
         }
+    }
+
+    #[test]
+    fn only_a_card_comes_without_a_category() {
+        let uncategorized = |bill: CreateBill| CreateBill {
+            category_id: None,
+            ..bill
+        };
+        assert_eq!(
+            field(check(uncategorized(bill("Luz", "1", 5)), "bills[0].")),
+            "bills[0].category_id"
+        );
+        let card = uncategorized(card(None, 3));
+        assert_eq!(check(card.clone(), "").unwrap(), card);
     }
 
     #[test]

@@ -7,6 +7,21 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.62.0
+
+> Headline: pick and create categories right inside Lançar
+
+### Server
+
+- A card is created without a category: it lands in the account's `Cartão` group (flag `is_card_group`, migration 0029), created or adopted inside the same transaction; the group stays top-level, outside Economia, and keeps its kind (D43).
+
+### Web
+
+- Lançar's `Categoria` opens one sheet: search, `Mais usadas`, every group with its subcategories and a `+` to add one right there, `Novo grupo` at the end; a new subcategory is ready in 4 taps after the amount.
+- A name already taken is caught under the field; one taken in the other kind offers `Usar esta categoria`.
+- `+ Novo cartão` under the Diário card field and on the `Cartão` group creates a card (name, fecha dia, vencimento) — no category step; Contas fixas' card form asks no category either.
+- Plain words everywhere: `Quando acontece`, `Grupo novo`, `Dentro de um grupo`.
+
 ## 0.61.0
 
 > Headline: security hardening from the Lagune review

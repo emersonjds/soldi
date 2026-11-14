@@ -63,7 +63,7 @@ const category = (
   icon: string,
   color: string,
   rest: Partial<Schemas["Category"]> = {},
-): Schemas["Category"] => ({ id, name, kind, icon, color, is_savings: false, ...rest });
+): Schemas["Category"] => ({ id, name, kind, icon, color, is_savings: false, is_card_group: false, ...rest });
 
 export const SALARIO = category("c1000000-0000-4000-8000-000000000001", "Salário", "income", "briefcase", "cat-11");
 export const EXTRA = category("c1000000-0000-4000-8000-000000000002", "Extra", "income", "sparkles", "cat-12");
@@ -85,6 +85,11 @@ export const VIAGEM = category("c1000000-0000-4000-8000-000000000009", "Viagem",
 });
 export const RESGATE = category("c1000000-0000-4000-8000-000000000010", "Resgate", "income", "piggy-bank", "cat-11", {
   is_savings: true,
+});
+
+/** The card group (D43): a card made without a category lands here. */
+export const CARTAO = category("c1000000-0000-4000-8000-000000000025", "Cartão", "bill", "credit-card", "cat-9", {
+  is_card_group: true,
 });
 
 /** In the API's order: kind, then name. */

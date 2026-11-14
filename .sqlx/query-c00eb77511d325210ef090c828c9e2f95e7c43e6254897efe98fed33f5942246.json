@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE categories SET is_card_group = true, updated_at = now()\n         WHERE user_id = $1 AND kind = 'bill' AND lower(name) = lower($2)\n           AND parent_id IS NULL AND archived_at IS NULL\n         RETURNING id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "categories",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "c00eb77511d325210ef090c828c9e2f95e7c43e6254897efe98fed33f5942246"
+}

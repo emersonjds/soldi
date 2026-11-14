@@ -518,6 +518,7 @@ mod tests {
             color: "cat-1".into(),
             parent_id: None,
             is_savings: false,
+            is_card_group: false,
             target: None,
             deadline: None,
         }

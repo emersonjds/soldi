@@ -10,6 +10,28 @@ use crate::error::AppError;
 use crate::extract::CurrentUser;
 use crate::{cofrinhos, settings};
 
+/// D43: the account's active card group; with none, an active top-level `bill` named `Cartão` is
+/// taken over, or `Cartão` is created.
+pub async fn card_group(conn: &mut PgConnection, user: &CurrentUser) -> Result<Uuid, AppError> {
+    repo::lock_card_group(conn, user.id).await?;
+    if let Some(id) = repo::find_card_group(conn, user.id).await? {
+        return Ok(id);
+    }
+    if let Some(id) = repo::adopt_card_group(conn, user.id).await? {
+        return Ok(id);
+    }
+    let taken = repo::top_colors(conn, user.id, &[CategoryKind::Bill], None).await?;
+    let color = domain::pick_color(None, &taken)?;
+    repo::insert_card_group(conn, user.id, &color)
+        .await?
+        .ok_or_else(|| {
+            AppError::invalid(
+                "category_id",
+                "a subcategory or cofrinho named Cartão blocks the card group; pick a category",
+            )
+        })
+}
+
 pub async fn list(
     pool: &PgPool,
     user: &CurrentUser,
@@ -124,6 +146,7 @@ pub async fn update(
     // as a deadlock (500). Lock both ids in id order if it ever shows up.
     if let Some(Some(parent_id)) = input.parent_id {
         domain::check_not_savings(&category)?;
+        domain::check_not_card_group(&category)?;
         let parent = active(conn, user, parent_id).await?;
         let has_children = repo::has_children(conn, user.id, id).await?;
         domain::check_parent(Some(id), category.kind, has_children, &parent)?;

@@ -9,7 +9,7 @@ use super::{domain, repo};
 use crate::error::AppError;
 use crate::extract::CurrentUser;
 use crate::months::domain::{first_of, month_end, parse_month};
-use crate::transactions;
+use crate::{categories, transactions};
 
 pub async fn list(
     pool: &PgPool,
@@ -119,10 +119,24 @@ pub async fn create(
             .ok_or(AppError::NotFound)?;
         transactions::domain::check_convertible(&entry)?;
     }
-    check_category(&mut tx, user, input.category_id, "category_id").await?;
-    if input.closing_day.is_some() {
-        check_card_category(&mut tx, user, input.category_id).await?;
-    }
+    let category_id = match input.category_id {
+        Some(id) => {
+            check_category(&mut tx, user, id, "category_id").await?;
+            if input.closing_day.is_some() {
+                check_card_category(&mut tx, user, id).await?;
+            }
+            id
+        }
+        None => {
+            let id = categories::service::card_group(&mut tx, user).await?;
+            check_card_category(&mut tx, user, id).await?;
+            id
+        }
+    };
+    let input = CreateBill {
+        category_id: Some(category_id),
+        ..input
+    };
     let bill = repo::insert(&mut tx, user.id, &input).await?;
     if let Some(id) = transaction_id
         && !transactions::repo::link_bill(&mut tx, user.id, id, bill.id, bill.category_id).await?
@@ -156,12 +170,13 @@ pub async fn update(
             "a card has no pause; delete it instead",
         ));
     }
+    let category_id = patch.category_id.unwrap_or(current.category_id);
     let next = domain::check(
         CreateBill {
             name: patch.name.unwrap_or(current.name),
             amount: patch.amount.or(current.amount),
             due_day: patch.due_day.unwrap_or(current.due_day),
-            category_id: patch.category_id.unwrap_or(current.category_id),
+            category_id: Some(category_id),
             closing_day: patch.closing_day.or(current.closing_day),
             installments: patch.installments.or(current.installments),
             last_month: patch
@@ -220,11 +235,11 @@ pub async fn update(
             )
         }
         Some(true) if !current.active => {
-            check_bill_kind(&mut conn, user, next.category_id).await?;
+            check_bill_kind(&mut conn, user, category_id).await?;
             (None, ended)
         }
         None if plan.is_some() && !current.active => {
-            check_bill_kind(&mut conn, user, next.category_id).await?;
+            check_bill_kind(&mut conn, user, category_id).await?;
             (plan, ended)
         }
         _ => (plan.or(current.last_month), false),
@@ -337,7 +352,14 @@ pub async fn insert_all(
             "a parcelado conta fixa is added from Contas fixas",
         ));
     }
-    let ids: Vec<_> = bills.iter().map(|bill| bill.category_id).collect();
+    // Cards are refused above and `check` requires a conta fixa's category.
+    let ids: Vec<Uuid> = bills
+        .iter()
+        .map(|bill| {
+            bill.category_id
+                .expect("a conta fixa always has a category")
+        })
+        .collect();
     let allowed = repo::bill_category_ids(conn, user.id, &ids).await?;
     if let Some(index) = ids.iter().position(|id| !allowed.contains(id)) {
         return Err(AppError::invalid(

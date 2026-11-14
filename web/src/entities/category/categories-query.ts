@@ -23,6 +23,10 @@ export const ofKind = (categories: Category[], kind: Kind) =>
       category.kind === kind || categories.some((child) => child.parent_id === category.id && child.kind === kind),
   );
 
+/** The groups of `list`: categories whose parent is not in it. */
+export const topsOf = (list: Category[]) =>
+  list.filter((category) => !list.some((parent) => parent.id === category.parent_id));
+
 /** The kinds a top-level shows in: its own and its subcategories'. */
 export const kindsOf = (category: Category, categories: Category[]) => [
   ...new Set([

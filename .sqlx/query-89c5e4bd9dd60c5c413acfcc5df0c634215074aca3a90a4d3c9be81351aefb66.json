@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO categories (user_id, name, kind, icon, color, is_savings, is_card_group)\n         SELECT $1, * FROM UNNEST($2::text[], $3::text[], $4::text[], $5::text[], $6::bool[],\n                                  $7::bool[])",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray",
+        "TextArray",
+        "TextArray",
+        "TextArray",
+        "BoolArray",
+        "BoolArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "89c5e4bd9dd60c5c413acfcc5df0c634215074aca3a90a4d3c9be81351aefb66"
+}

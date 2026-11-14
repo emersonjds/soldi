@@ -33,9 +33,8 @@ test("a subcategory is created from Gasto's card, renamed, and deleted with its 
 
   await page.getByRole("listitem", { name: "Gasto" }).getByRole("button", { name: "Adicionar subcategoria" }).click();
   const create = page.getByRole("dialog", { name: "Nova Categoria" });
-  await expect(
-    create.getByRole("radiogroup", { name: "Vincular à Categoria Pai" }).getByRole("radio", { name: "Gasto" }),
-  ).toBeChecked();
+  await expect(create.getByRole("radio", { name: "Dentro de um grupo" })).toHaveCount(0);
+  await expect(create.getByText("Escolher grupo")).toHaveCount(0);
   await create.getByLabel("Nome do agrupador").fill("Pet shop");
   await create.getByRole("button", { name: "Criar Categoria" }).click();
   const children = page.getByRole("list", { name: "Subcategorias de Gasto" });
@@ -67,10 +66,7 @@ test("a subcategory is created from Gasto's card, renamed, and deleted with its 
   if (SHOTS) {
     await page.screenshot({ path: `${SHOTS}/categorias-1440.png`, fullPage: true });
     await page.getByRole("listitem", { name: "Gasto" }).getByRole("button", { name: "Adicionar subcategoria" }).click();
-    await page
-      .getByRole("complementary", { name: "Nova Categoria" })
-      .getByRole("radio", { name: "Subcategoria" })
-      .waitFor();
+    await page.getByRole("complementary", { name: "Nova Categoria" }).getByLabel("Nome do agrupador").waitFor();
     await page.screenshot({ path: `${SHOTS}/categorias-sub-1440.png`, fullPage: true });
     await page.setViewportSize({ width: 375, height: 812 });
     await page.getByRole("button", { name: "Editar Pet shop e banho" }).click();
@@ -95,10 +91,12 @@ test("Personalizar pins two categories at the head of Lançar's row, kept after 
   await page.getByRole("button", { name: "Ver meu mês" }).click();
   await page.getByRole("button", { name: "Pular" }).click();
   const launch = page.getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ });
-  const chips = launch.getByRole("radiogroup", { name: "Categoria" }).getByRole("radio");
+  const picker = page.getByRole("dialog", { name: "Categoria", exact: true });
+  const chips = picker.getByRole("radiogroup", { name: "Mais usadas" }).getByRole("radio");
 
   await launch.getByRole("radio", { name: "Diário" }).click();
-  await launch.getByRole("button", { name: "Personalizar" }).click();
+  await launch.getByRole("button", { name: /^Categoria/ }).click();
+  await picker.getByRole("button", { name: "Personalizar" }).click();
   const sheet = page.getByRole("dialog", { name: "Personalizar categorias" });
   await expect(sheet).toContainText("Nenhuma fixada. A lista segue o uso deste mês.");
   await sheet.getByRole("button", { name: "Fixar Família" }).click();
@@ -113,6 +111,7 @@ test("Personalizar pins two categories at the head of Lançar's row, kept after 
   await page.reload();
   await page.getByRole("navigation", { name: "Navegação principal" }).getByRole("button", { name: "Lançar" }).click();
   await launch.getByRole("radio", { name: "Diário" }).click();
+  await launch.getByRole("button", { name: /^Categoria/ }).click();
   await expect(chips.nth(0)).toHaveAccessibleName("Saúde");
   await expect(chips.nth(1)).toHaveAccessibleName("Família");
 });

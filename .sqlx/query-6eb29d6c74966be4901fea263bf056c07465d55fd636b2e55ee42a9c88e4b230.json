@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT c.id, c.name, c.kind AS \"kind: CategoryKind\", c.icon, c.color, c.parent_id,\n                  c.is_savings, c.target, c.deadline\n           FROM categories c LEFT JOIN categories p ON p.user_id = c.user_id AND p.id = c.parent_id\n           WHERE c.user_id = $1 AND c.archived_at IS NULL AND p.archived_at IS NULL\n             AND ($2 OR NOT (c.is_savings AND c.kind = 'income'))\n           ORDER BY array_position(ARRAY['income', 'bill', 'daily'], c.kind),\n                    lower(COALESCE(p.name, c.name)), COALESCE(p.id, c.id),\n                    c.parent_id IS NOT NULL, lower(c.name), c.id",
+  "query": "SELECT id, name, kind AS \"kind: CategoryKind\", icon, color, parent_id, is_savings, is_card_group,\n                  target, deadline\n           FROM categories WHERE user_id = $1 AND kind = $2 AND is_savings",
   "describe": {
     "columns": [
       {
@@ -82,6 +82,17 @@
       },
       {
         "ordinal": 7,
+        "name": "is_card_group",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "categories",
+            "name": "is_card_group"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
         "name": "target",
         "type_info": "Numeric",
         "origin": {
@@ -92,7 +103,7 @@
         }
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "deadline",
         "type_info": "Date",
         "origin": {
@@ -106,7 +117,7 @@
     "parameters": {
       "Left": [
         "Uuid",
-        "Bool"
+        "Text"
       ]
     },
     "nullable": [
@@ -117,9 +128,10 @@
       false,
       true,
       false,
+      false,
       true,
       true
     ]
   },
-  "hash": "de43b19d9ae5786ffc291fa5d17cd9ba465df164e17bef7055882e789c78706c"
+  "hash": "6eb29d6c74966be4901fea263bf056c07465d55fd636b2e55ee42a9c88e4b230"
 }

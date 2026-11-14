@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, name, kind AS \"kind: CategoryKind\", icon, color, parent_id, is_savings,\n                  target, deadline\n           FROM categories WHERE user_id = $1 AND id = $2 AND archived_at IS NULL\n           FOR NO KEY UPDATE",
+  "query": "SELECT id, name, kind AS \"kind: CategoryKind\", icon, color, parent_id, is_savings, is_card_group,\n                  target, deadline\n           FROM categories WHERE user_id = $1 AND id = $2 AND archived_at IS NULL",
   "describe": {
     "columns": [
       {
@@ -82,6 +82,17 @@
       },
       {
         "ordinal": 7,
+        "name": "is_card_group",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "categories",
+            "name": "is_card_group"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
         "name": "target",
         "type_info": "Numeric",
         "origin": {
@@ -92,7 +103,7 @@
         }
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "deadline",
         "type_info": "Date",
         "origin": {
@@ -117,9 +128,10 @@
       false,
       true,
       false,
+      false,
       true,
       true
     ]
   },
-  "hash": "0b08e47690173a2121f65f38f1e389dedaae308b815aa87d9576384766ff5a14"
+  "hash": "f7c20e2c2cc57bbd8a85c31463fd87aee088523f27c31317da6e4d0f09cfe3a3"
 }
