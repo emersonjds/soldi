@@ -645,6 +645,10 @@ describe("CategorySheet", () => {
       expect(name).toHaveAttribute("aria-invalid", "true");
       await waitFor(() => expect(name).toHaveFocus());
       expect(within(sheet).getAllByText("Já existe uma categoria com esse nome")).toHaveLength(1);
+
+      await userEvent.type(name, "s");
+      expect(within(sheet).queryByText("Já existe uma categoria com esse nome")).not.toBeInTheDocument();
+      expect(name).not.toHaveAttribute("aria-invalid", "true");
     });
 
     it("never shows the old words, editing included", async () => {

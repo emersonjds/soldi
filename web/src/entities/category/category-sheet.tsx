@@ -328,7 +328,10 @@ const CategoryForm = ({
           ref={nameInput}
           id="category-name"
           value={name}
-          onChange={(event) => setName(event.target.value)}
+          onChange={(event) => {
+            setName(event.target.value);
+            if (taken) mutation.reset();
+          }}
           placeholder={cofrinho ? "Ex.: Viagem" : "Ex: Educação & Cursos"}
           maxLength={40}
           autoComplete="off"
