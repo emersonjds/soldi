@@ -128,7 +128,7 @@ const openCreate = async (parent?: string) => {
   );
   const sheet = await screen.findByRole("dialog", { name: "Nova Categoria" });
   if (parent) {
-    await userEvent.click(within(sheet).getByRole("radio", { name: "Subcategoria" }));
+    await userEvent.click(within(sheet).getByRole("radio", { name: "Dentro de um grupo" }));
     await userEvent.click(await within(sheet).findByRole("radio", { name: parent }));
   }
   return sheet;
