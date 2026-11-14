@@ -7,6 +7,23 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.61.0
+
+> Headline: security hardening from the Lagune review
+
+### Server
+
+- Sign-in and password-reset limits can no longer be turned against a user: per-(e-mail, address) budgets under a per-e-mail ceiling, a trusted-device cookie that lets an owner past the ceiling, at most 4 reset mails an hour, and a limiter that evicts throwaway keys instead of refusing everyone (D39, migration 0028).
+- Every response carries a Content-Security-Policy (inline scripts by hash, no `unsafe-inline`; API JSON loads nothing) and a Permissions-Policy (D40).
+- Sign-up attempts and verification mails are capped per address per day; the `email-taken` answer stays, now slow to enumerate (D41).
+- Signed-in writes have a per-account budget (120 a minute, 2,000 an hour; sign-out, password change and account deletion exempt) and an account holds at most 50,000 entries (D42).
+- Server error causes stay in the local log; Sentry receives a fixed category only (D42).
+
+### Web
+
+- Production dependencies have no known advisories (next 16.4, zod 4.6); CI fails on high advisories and Dependabot is on.
+- Rate-limit and entry-ceiling problems show fixed pt-BR copy on every form.
+
 ## 0.60.0
 
 > Headline: production errors reach the owner
