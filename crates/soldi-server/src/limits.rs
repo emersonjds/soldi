@@ -113,15 +113,17 @@ impl Limiter {
             state.windows.retain(|_, window| window.ends > now);
             state.last_sweep = Some(now);
         }
-        // ponytail: when no window has expired, the EVICT_BATCH windows nearest their end make room,
-        // so the O(n) work runs once per EVICT_BATCH fresh keys; a shared store with TTLs (Redis)
-        // removes the cap.
+        // ponytail: when no window has expired, the EVICT_BATCH lowest counts (nearest their end
+        // among equals) make room, so throwaway keys go before refusing counters and the O(n) work
+        // runs once per EVICT_BATCH fresh keys; a shared store with TTLs (Redis) removes the cap.
         if full && state.windows.len() >= MAX_KEYS {
-            let mut by_end: Vec<_> = state.windows.iter().map(|(key, w)| (w.ends, key)).collect();
-            by_end.select_nth_unstable(EVICT_BATCH);
-            let evicted: Vec<String> = by_end[..EVICT_BATCH]
+            let mut by_count: Vec<_> = (state.windows.iter())
+                .map(|(key, w)| (w.count, w.ends, key))
+                .collect();
+            by_count.select_nth_unstable(EVICT_BATCH);
+            let evicted: Vec<String> = by_count[..EVICT_BATCH]
                 .iter()
-                .map(|(_, key)| (*key).clone())
+                .map(|(_, _, key)| (*key).clone())
                 .collect();
             for key in evicted {
                 state.windows.remove(&key);
@@ -276,15 +278,14 @@ mod tests {
     fn a_flooder_stays_limited_while_fresh_keys_are_admitted() {
         let limiter = Limiter::default();
         let start = Instant::now();
-        fill(&limiter, 1..MAX_KEYS, start);
-        let flooding = start + Duration::from_secs(1);
         for _ in 0..3 {
-            limiter.hit("flooder", BUDGET, flooding).unwrap();
+            limiter.hit("flooder", BUDGET, start).unwrap();
         }
+        fill(&limiter, 1..MAX_KEYS, start + Duration::from_secs(1));
 
         let now = start + Duration::from_secs(2);
         assert_eq!(limiter.hit("new", BUDGET, now), Ok(()));
-        assert_eq!(limiter.hit("flooder", BUDGET, now), Err(899));
+        assert_eq!(limiter.hit("flooder", BUDGET, now), Err(898));
     }
 
     #[test]
