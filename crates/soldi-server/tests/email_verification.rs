@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use axum::body::Body;
 use axum::http::{Method, Request, StatusCode, header};
-use common::{TestApp, body_json, json_request};
+use common::{Log, TestApp, body_json, failing_mailer, json_request};
 use serde_json::{Value, json};
 use soldi_server::auth::domain::hash_token;
 use soldi_server::mail::{Mailer, Message, Recording};
@@ -300,4 +300,25 @@ async fn a_request_needs_a_session(pool: PgPool) {
 
     assert_eq!(status, StatusCode::UNAUTHORIZED);
     assert!(mail.sent().await.is_empty());
+}
+
+#[sqlx::test]
+async fn a_failed_delivery_is_logged_as_an_error_without_the_address(pool: PgPool) {
+    let log = Log::capture();
+    let state = soldi_server::AppState {
+        mailer: failing_mailer(),
+        ..soldi_server::AppState::new(pool)
+    };
+    let app = TestApp {
+        router: soldi_server::app(state, None),
+        cookie: None,
+    };
+    let ana = app.another_user("ana@example.com").await;
+
+    let (status, _) = request(&ana).await;
+
+    assert_eq!(status, StatusCode::ACCEPTED);
+    let line = log.line("email verification request failed").await;
+    assert!(line.contains("ERROR"), "{line}");
+    assert!(!line.contains('@'), "{line}");
 }
