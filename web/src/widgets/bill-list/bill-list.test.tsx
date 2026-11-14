@@ -617,7 +617,7 @@ describe("Contas fixas", () => {
   });
 
   describe("credit card", () => {
-    it("creates a card with the switch: no Valor, a Fecha dia from 1 to 31 and no category until one is picked", async () => {
+    it("creates a card with the switch: no Valor, no Categoria and a Fecha dia from 1 to 31", async () => {
       const { requests } = open({ replies: { "POST /api/bills": { status: 201, body: PORTO } } });
 
       await userEvent.click(await screen.findByRole("button", { name: "Nova Conta Fixa" }));
@@ -625,19 +625,18 @@ describe("Contas fixas", () => {
       await userEvent.click(within(sheet).getByRole("switch", { name: "Cartão de crédito" }));
 
       expect(within(sheet).queryByLabelText("Valor mensal fixo estimado")).not.toBeInTheDocument();
-      expect(within(sheet).getByText("Ex.: Cartão › Porto")).toBeInTheDocument();
-      expect(within(sheet).getByLabelText("Categoria")).toHaveValue("");
+      expect(within(sheet).queryByLabelText("Categoria")).not.toBeInTheDocument();
+      expect(within(sheet).queryByText("Ex.: Cartão › Porto")).not.toBeInTheDocument();
       await userEvent.type(within(sheet).getByLabelText("Nome da conta fixa"), "Porto");
       await userEvent.type(within(sheet).getByLabelText("Fecha dia"), "0");
       await userEvent.type(within(sheet).getByLabelText("Dia do vencimento recorrente"), "10");
       await userEvent.click(within(sheet).getByRole("button", { name: "Salvar Conta Fixa" }));
       expect(within(sheet).getByLabelText("Fecha dia")).toHaveAttribute("aria-invalid", "true");
       expect(within(sheet).getByLabelText("Dia do vencimento recorrente")).toHaveAttribute("aria-invalid", "false");
-      expect(within(sheet).getByText("Escolha uma categoria.")).toBeInTheDocument();
+      expect(within(sheet).queryByText("Escolha uma categoria.")).not.toBeInTheDocument();
 
       await userEvent.clear(within(sheet).getByLabelText("Fecha dia"));
       await userEvent.type(within(sheet).getByLabelText("Fecha dia"), "32");
-      await userEvent.selectOptions(within(sheet).getByLabelText("Categoria"), "Aluguel");
       await userEvent.click(within(sheet).getByRole("button", { name: "Salvar Conta Fixa" }));
       expect(within(sheet).getByText("Escolha um dia de 1 a 31.")).toBeInTheDocument();
       expect(sent(requests, "POST")).toHaveLength(0);
@@ -647,12 +646,21 @@ describe("Contas fixas", () => {
       await userEvent.click(within(sheet).getByRole("button", { name: "Salvar Conta Fixa" }));
 
       await waitFor(() => expect(sent(requests, "POST")).toHaveLength(1));
-      expect(await sent(requests, "POST")[0].json()).toEqual({
-        name: "Porto",
-        due_day: 10,
-        closing_day: 3,
-        category_id: ALUGUEL.id,
-      });
+      expect(await sent(requests, "POST")[0].json()).toEqual({ name: "Porto", due_day: 10, closing_day: 3 });
+    });
+
+    it("still asks a conta fixa for its category", async () => {
+      const { requests } = open({ replies: { "GET /api/categories": { status: 200, body: [] } } });
+
+      await userEvent.click(await screen.findByRole("button", { name: "Nova Conta Fixa" }));
+      const sheet = await screen.findByRole("dialog", { name: "Nova conta" });
+      await userEvent.type(within(sheet).getByLabelText("Nome da conta fixa"), "Luz");
+      await userEvent.type(within(sheet).getByLabelText("Valor mensal fixo estimado"), "100");
+      await userEvent.click(within(sheet).getByRole("button", { name: "Dia 10" }));
+      await userEvent.click(within(sheet).getByRole("button", { name: "Salvar Conta Fixa" }));
+
+      expect(within(sheet).getByText("Escolha uma categoria.")).toBeInTheDocument();
+      expect(sent(requests, "POST")).toHaveLength(0);
     });
 
     it("lists a card by its days and edits its Fecha dia, with no card or Ativa switch", async () => {
@@ -670,6 +678,7 @@ describe("Contas fixas", () => {
       const sheet = await screen.findByRole("dialog", { name: "Editar conta" });
       expect(within(sheet).queryByRole("switch")).not.toBeInTheDocument();
       expect(within(sheet).queryByLabelText("Valor mensal fixo estimado")).not.toBeInTheDocument();
+      expect(within(sheet).queryByLabelText("Categoria")).not.toBeInTheDocument();
       expect(within(sheet).getByLabelText("Fecha dia")).toHaveValue("3");
       await userEvent.clear(within(sheet).getByLabelText("Fecha dia"));
       await userEvent.type(within(sheet).getByLabelText("Fecha dia"), "5");

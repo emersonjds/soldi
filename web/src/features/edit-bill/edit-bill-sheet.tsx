@@ -12,9 +12,9 @@ import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { Switch } from "@/components/ui/switch";
 import { firstMonth, installmentOf, lastMonthOf } from "@/entities/bill/bill-plan";
 import { type Bill, useCreateBill, useUpdateBill } from "@/entities/bill/bill-queries";
+import { asDay, ClosingDay, DayField, DueDay } from "@/entities/bill/day-fields";
 import { categoryLabel } from "@/entities/category/categories-query";
 import { useCategoryChips } from "@/entities/category/category-chips";
-import { cn } from "@/lib/utils";
 import { problemMessage, type Schemas } from "@/shared/api/client";
 import { monthAbbrev, todayISO } from "@/shared/lib/date";
 import { positiveAmount } from "@/shared/lib/money";
@@ -36,58 +36,6 @@ type Draft = {
 };
 
 const input = "h-12 text-base md:text-base";
-
-const asDay = (text: string) => (/^\d{1,2}$/.test(text) && Number(text) >= 1 && Number(text) <= 31 ? Number(text) : 0);
-
-const DAY_CHIPS = ["05", "10", "15", "20"];
-
-const DayField = ({
-  id,
-  label,
-  value,
-  error,
-  onChange,
-  autoFocus,
-  placeholder = "10",
-}: {
-  id: string;
-  label: string;
-  value: string;
-  error?: string;
-  onChange: (value: string) => void;
-  autoFocus?: boolean;
-  placeholder?: string;
-}) => (
-  <Input
-    id={id}
-    inputMode="numeric"
-    placeholder={placeholder}
-    value={value}
-    autoFocus={autoFocus}
-    onChange={(event) => onChange(event.target.value.replace(/\D/g, "").slice(0, 2))}
-    className={`${input} min-w-0 tabular-nums`}
-    aria-label={label}
-    aria-invalid={Boolean(error)}
-  />
-);
-
-const ClosingDay = ({
-  value,
-  error,
-  onChange,
-}: {
-  value: string;
-  error?: string;
-  onChange: (value: string) => void;
-}) => (
-  <Field className="gap-1.5" data-invalid={Boolean(error)}>
-    <FieldLabel htmlFor="bill-closing-day">Fecha dia</FieldLabel>
-    <DayField id="bill-closing-day" label="Fecha dia" value={value} error={error} onChange={onChange} />
-    {error && <FieldError>{error}</FieldError>}
-  </Field>
-);
-
-const chip = "min-h-11 rounded-xl px-1 font-medium text-sm leading-4 transition-colors";
 
 type Fields = Schemas["CreateBill"] & { active: boolean };
 
@@ -165,7 +113,7 @@ export const BillForm = ({
     amount: submitted && !draft.card && !amount ? "Informe um valor maior que zero." : undefined,
     day: submitted && !day ? dayError : undefined,
     closingDay: submitted && draft.card && !closingDay ? dayError : undefined,
-    category: submitted && !categoryId ? "Escolha uma categoria." : undefined,
+    category: submitted && !draft.card && !categoryId ? "Escolha uma categoria." : undefined,
     installments: submitted && draft.parcelado && !count ? "Escolha de 2 a 60 parcelas." : undefined,
     current: submitted && draft.parcelado && !current ? `Escolha uma parcela de 1 a ${maxCurrent}.` : undefined,
   };
@@ -180,9 +128,9 @@ export const BillForm = ({
   const submit = (event: FormEvent) => {
     event.preventDefault();
     setSubmitted(true);
-    if (!name || !day || !categoryId) return;
+    if (!name || !day || (!draft.card && !categoryId)) return;
     const active = draft.parcelado ? (bill?.active ?? true) : draft.active;
-    const fields = { name, due_day: day, category_id: categoryId, active };
+    const fields = { name, due_day: day, ...(categoryId && { category_id: categoryId }), active };
     if (draft.card) {
       if (closingDay) onSave({ ...fields, closing_day: closingDay });
       return;
@@ -278,36 +226,12 @@ export const BillForm = ({
           {errors.amount && <FieldError>{errors.amount}</FieldError>}
         </Field>
       )}
-      <Field className="gap-1.5" data-invalid={Boolean(errors.day)}>
-        <FieldLabel htmlFor="bill-day">Dia do vencimento recorrente</FieldLabel>
-        <div className="grid grid-cols-5 gap-2">
-          {DAY_CHIPS.map((chosen) => {
-            const pressed = day === Number(chosen);
-            return (
-              <button
-                key={chosen}
-                type="button"
-                aria-pressed={pressed}
-                onClick={() => set({ dueDay: String(Number(chosen)) })}
-                className={cn(
-                  chip,
-                  pressed ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-secondary",
-                )}
-              >
-                Dia {chosen}
-              </button>
-            );
-          })}
-          <DayField
-            id="bill-day"
-            label="Dia do vencimento recorrente"
-            value={draft.dueDay}
-            error={errors.day}
-            onChange={(dueDay) => set({ dueDay })}
-          />
-        </div>
-        {errors.day && <FieldError>{errors.day}</FieldError>}
-      </Field>
+      <DueDay
+        label="Dia do vencimento recorrente"
+        value={draft.dueDay}
+        error={errors.day}
+        onChange={(dueDay) => set({ dueDay })}
+      />
       {draft.parcelado && (
         <>
           <Field className="gap-1.5" data-invalid={Boolean(errors.installments)}>
@@ -341,29 +265,30 @@ export const BillForm = ({
           )}
         </>
       )}
-      <Field className="gap-1.5" data-invalid={Boolean(errors.category)}>
-        <FieldLabel htmlFor="bill-category">Categoria</FieldLabel>
-        <NativeSelect
-          id="bill-category"
-          value={categoryId ?? ""}
-          onChange={(event) => set({ categoryId: event.target.value })}
-          aria-invalid={Boolean(errors.category)}
-          className="w-full [&_select]:h-12 [&_select]:text-base"
-        >
-          <NativeSelectOption value="" disabled>
-            Escolha uma categoria
-          </NativeSelectOption>
-          {archived && <NativeSelectOption value={draft.categoryId}>Categoria arquivada</NativeSelectOption>}
-          {categories.data?.map((category) => (
-            <NativeSelectOption key={category.id} value={category.id}>
-              {categoryLabel(category, categories.data)}
+      {!draft.card && (
+        <Field className="gap-1.5" data-invalid={Boolean(errors.category)}>
+          <FieldLabel htmlFor="bill-category">Categoria</FieldLabel>
+          <NativeSelect
+            id="bill-category"
+            value={categoryId ?? ""}
+            onChange={(event) => set({ categoryId: event.target.value })}
+            aria-invalid={Boolean(errors.category)}
+            className="w-full [&_select]:h-12 [&_select]:text-base"
+          >
+            <NativeSelectOption value="" disabled>
+              Escolha uma categoria
             </NativeSelectOption>
-          ))}
-        </NativeSelect>
-        {errors.category && <FieldError>{errors.category}</FieldError>}
-      </Field>
-      {draft.card && <p className="-mt-3 text-muted-foreground text-sm">Ex.: Cartão › Porto</p>}
-      {archived && (
+            {archived && <NativeSelectOption value={draft.categoryId}>Categoria arquivada</NativeSelectOption>}
+            {categories.data?.map((category) => (
+              <NativeSelectOption key={category.id} value={category.id}>
+                {categoryLabel(category, categories.data)}
+              </NativeSelectOption>
+            ))}
+          </NativeSelect>
+          {errors.category && <FieldError>{errors.category}</FieldError>}
+        </Field>
+      )}
+      {archived && !draft.card && (
         <p className="-mt-3 text-muted-foreground text-sm">
           Categoria arquivada. Fica a mesma se você não escolher outra.
         </p>
