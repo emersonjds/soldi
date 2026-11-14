@@ -37,6 +37,7 @@ export const CategoryPicker = ({
   entries,
   error,
   onNewCard,
+  label = "Categoria",
 }: {
   kind: Kind;
   chosen: Category | undefined;
@@ -46,6 +47,7 @@ export const CategoryPicker = ({
   error?: string;
   /** Given, the card group's `+` calls it instead of the subcategory form. */
   onNewCard?: () => void;
+  label?: string;
 }) => {
   const categories = useCategoryChips(kind);
   const [open, setOpen] = useState(false);
@@ -185,7 +187,7 @@ export const CategoryPicker = ({
     <div className="flex flex-col gap-2">
       <span id={labelId} className="flex items-center gap-2 font-semibold text-sm">
         <span aria-hidden className="size-1.5 rounded-full bg-primary" />
-        Categoria
+        {label}
       </span>
       <button
         type="button"

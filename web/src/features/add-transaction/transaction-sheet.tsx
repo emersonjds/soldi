@@ -29,8 +29,10 @@ import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { type BillPrefill, useCards, useCreateBill } from "@/entities/bill/bill-queries";
-import { CategoryChips, useCategoryChips } from "@/entities/category/category-chips";
+import { type Bill, type BillPrefill, useCards, useCreateBill } from "@/entities/bill/bill-queries";
+import { CardSheet } from "@/entities/bill/card-sheet";
+import { useCategoryChips } from "@/entities/category/category-chips";
+import { CategoryPicker } from "@/entities/category/category-picker";
 import { useSettings } from "@/entities/settings/settings-query";
 import { ScopeRadio } from "@/entities/transaction/scope-radio";
 import { SeriesAllDialog } from "@/entities/transaction/series-all-dialog";
@@ -144,6 +146,8 @@ const TransactionForm = ({
   const [draft, setDraft] = useState(initial);
   const [submitted, setSubmitted] = useState(false);
   const [asking, setAsking] = useState(false);
+  /** Where `Novo cartão` was opened from: Diário's Cartão field or the Conta list's card group. */
+  const [newCard, setNewCard] = useState<"field" | "group" | null>(null);
   const currency = useCurrency();
   const categories = useCategoryChips(draft.kind);
   const keypad = useKeypad();
@@ -212,6 +216,12 @@ const TransactionForm = ({
       : undefined;
 
   const set = (patch: Partial<Draft>) => setDraft((current) => ({ ...current, ...patch }));
+  /** A category of another kind (`Usar esta categoria`) takes the draft to its kind. */
+  const choose = (chosen: Schemas["Category"]) =>
+    set(chosen.kind === draft.kind ? { category: chosen } : { kind: chosen.kind, category: chosen, cardId: "" });
+  /** From the card group, Lançar goes to Diário on the new card: spending on it is why it was made. */
+  const cardMade = (card: Bill) =>
+    set(newCard === "group" ? { kind: "daily", category: undefined, cardId: card.id } : { cardId: card.id });
 
   /** `repeat` false: the plain entry, for Criar como Conta Fixa. */
   const fields = (repeat = draft.repeat): NewTransaction | undefined => {
@@ -283,16 +293,16 @@ const TransactionForm = ({
     </div>
   );
   const categoryField = (
-    <CategoryChips
+    <CategoryPicker
       kind={draft.kind}
       chosen={category}
-      onChoose={(chosen) => set({ category: chosen })}
+      onChoose={choose}
       entries={thisMonth.isError ? [] : thisMonth.data}
       error={submitted && !category ? "Escolha uma categoria" : undefined}
+      onNewCard={() => setNewCard("group")}
     />
   );
-  // D25: no card, no field.
-  const cardField = draft.kind === "daily" && cards.length > 0 && (
+  const cardField = draft.kind === "daily" && (
     <Field className="gap-1.5">
       <FieldLabel htmlFor="transaction-card" className="flex items-center gap-2">
         <CreditCard aria-hidden className="size-4 text-muted-foreground" />
@@ -301,7 +311,7 @@ const TransactionForm = ({
       <NativeSelect
         id="transaction-card"
         value={draft.cardId}
-        onChange={(event) => set({ cardId: event.target.value })}
+        onChange={(event) => (event.target.value === "new" ? setNewCard("field") : set({ cardId: event.target.value }))}
         className="w-full [&>select]:h-12 [&>select]:rounded-xl [&>select]:pl-3 [&>select]:text-base"
       >
         <NativeSelectOption value="">Nenhum</NativeSelectOption>
@@ -310,6 +320,7 @@ const TransactionForm = ({
             {name}
           </NativeSelectOption>
         ))}
+        <NativeSelectOption value="new">+ Novo cartão</NativeSelectOption>
       </NativeSelect>
     </Field>
   );
@@ -530,6 +541,7 @@ const TransactionForm = ({
 
   return (
     <form noValidate onSubmit={submit} className="flex flex-col gap-6">
+      <CardSheet open={newCard !== null} onOpenChange={(open) => !open && setNewCard(null)} onSaved={cardMade} />
       {series && transaction ? (
         <>
           <p className="text-muted-foreground text-sm">
