@@ -234,7 +234,7 @@ pub async fn request_password_reset(
         let sent =
             service::request_password_reset(&state.pool, &state.mailer, &state.public_url, &email);
         if let Err(error) = sent.await {
-            tracing::error!(?error, "password reset request failed");
+            tracing::error!(error = %error.log_cause(), "password reset request failed");
         }
     });
     mailer.track(task);
@@ -286,7 +286,7 @@ pub async fn request_email_verification(
             &user,
         );
         if let Err(error) = sent.await {
-            tracing::error!(?error, "email verification request failed");
+            tracing::error!(error = %error.log_cause(), "email verification request failed");
         }
     });
     mailer.track(task);

@@ -31,7 +31,11 @@ pub enum AppError {
     },
     /// The pool or a statement ran out of time; answered with `Retry-After: 1`.
     Busy,
-    Internal(String),
+    /// D42: `category` (`database`, `mail`, `other`) may reach Sentry, `detail` never does.
+    Internal {
+        category: &'static str,
+        detail: String,
+    },
 }
 
 impl AppError {
@@ -40,6 +44,23 @@ impl AppError {
             field: field.into(),
             message: message.into(),
         }])
+    }
+
+    pub fn internal(category: &'static str, cause: impl std::fmt::Display) -> Self {
+        AppError::Internal {
+            category,
+            detail: cause.to_string(),
+        }
+    }
+
+    /// D42: logs an internal cause at WARN, which Sentry never receives, and answers the fixed
+    /// text an ERROR line may carry: `internal error: <category>`, else the problem type.
+    pub fn log_cause(&self) -> String {
+        let AppError::Internal { category, detail } = self else {
+            return self.to_problem().problem_type;
+        };
+        tracing::warn!(category, %detail, "internal error cause");
+        format!("internal error: {category}")
     }
 
     pub fn conflict(slug: &'static str, detail: &str) -> Self {
@@ -108,7 +129,7 @@ impl AppError {
                 "Server busy",
                 "The server is busy; try again.".into(),
             ),
-            AppError::Internal(_) => (
+            AppError::Internal { .. } => (
                 500,
                 "internal",
                 "Internal error",
@@ -153,8 +174,8 @@ pub fn check_note(note: &str) -> Result<Option<String>, AppError> {
 
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
-        if let AppError::Internal(message) = &self {
-            tracing::error!(%message, "internal error");
+        if let AppError::Internal { .. } = &self {
+            tracing::error!("{}", self.log_cause());
         }
         if let AppError::Busy = self {
             tracing::error!("server busy");
@@ -189,7 +210,7 @@ impl From<sqlx::Error> for AppError {
             return AppError::Busy;
         }
         let Some(database_error) = error.as_database_error() else {
-            return AppError::Internal(error.to_string());
+            return AppError::internal("database", error);
         };
         if database_error.constraint() == Some("categories_top_color_idx") {
             return crate::categories::domain::color_taken();
@@ -212,7 +233,7 @@ impl From<sqlx::Error> for AppError {
         if database_error.code().as_deref() == Some(UNTRANSLATABLE_CHARACTER) {
             return AppError::invalid("input", "must not contain NUL characters");
         }
-        AppError::Internal(error.to_string())
+        AppError::internal("database", error)
     }
 }
 
@@ -302,7 +323,7 @@ mod tests {
 
     #[test]
     fn internal_error_hides_its_message() {
-        let problem = AppError::Internal("password=hunter2".into()).to_problem();
+        let problem = AppError::internal("other", "password=hunter2").to_problem();
 
         assert_eq!(problem.status, 500);
         assert!(!problem.detail.contains("hunter2"));
@@ -330,7 +351,7 @@ mod tests {
 
     #[test]
     fn internal_error_response_is_500() {
-        let response = AppError::Internal("boom".into()).into_response();
+        let response = AppError::internal("other", "boom").into_response();
 
         assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
     }
@@ -360,16 +381,20 @@ mod tests {
     }
 
     #[test]
-    fn every_5xx_is_logged_at_error_with_its_cause() {
-        let internal = logged(AppError::from(sqlx::Error::PoolClosed));
-        let busy = logged(AppError::Busy);
+    fn an_internal_error_logs_its_category_at_error_and_its_cause_only_at_warn() {
+        let cause = sqlx::Error::PoolClosed.to_string();
+        let text = logged(AppError::from(sqlx::Error::PoolClosed));
+        let line = |level: &str| {
+            let found = text.lines().find(|line| line.contains(level));
+            found
+                .unwrap_or_else(|| panic!("no {level}: {text}"))
+                .to_string()
+        };
 
-        assert!(internal.contains("ERROR"), "{internal}");
-        assert!(
-            internal.contains(&sqlx::Error::PoolClosed.to_string()),
-            "{internal}"
-        );
-        assert!(busy.contains("ERROR"), "{busy}");
+        assert!(line("ERROR").contains("internal error: database"), "{text}");
+        assert!(!line("ERROR").contains(&cause), "{text}");
+        assert!(line("WARN").contains(&cause), "{text}");
+        assert!(logged(AppError::Busy).contains("ERROR"));
         assert!(logged(AppError::NotFound).is_empty());
     }
 
