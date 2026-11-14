@@ -68,14 +68,15 @@ impl From<Row> for Transaction {
     }
 }
 
-/// Entries dated `from` to `to`, of one category when given, newest date first, then newest
-/// entry first.
+/// Entries dated `from` to `to`, of one category and on one card when given, newest date first,
+/// then newest entry first.
 pub async fn list(
     conn: &mut PgConnection,
     user_id: Uuid,
     from: NaiveDate,
     to: NaiveDate,
     category_id: Option<Uuid>,
+    card_id: Option<Uuid>,
 ) -> Result<Vec<Transaction>, sqlx::Error> {
     let rows = sqlx::query_as!(
         Row,
@@ -97,11 +98,13 @@ pub async fn list(
            ) s ON true
            WHERE t.user_id = $1 AND t.date BETWEEN $2 AND $3
              AND ($4::uuid IS NULL OR t.category_id = $4)
+             AND ($5::uuid IS NULL OR t.card_id = $5)
            ORDER BY t.date DESC, t.created_at DESC, t.id DESC"#,
         user_id,
         from,
         to,
-        category_id
+        category_id,
+        card_id
     )
     .fetch_all(&mut *conn)
     .await?;

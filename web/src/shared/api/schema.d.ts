@@ -388,6 +388,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/months/{month}/faturas/{card_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_fatura"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/months/{month}/note": {
         parameters: {
             query?: never;
@@ -609,6 +625,21 @@ export interface components {
             paid: boolean;
             /** Format: uuid */
             transaction_id?: string | null;
+        };
+        /** @description SOL-119: a card's fatura due in `month`, what fills it, and the next six months' committed totals. */
+        CardFatura: {
+            /** @description The next six months' faturas from rows already written (D16), zero included. */
+            ahead: components["schemas"]["FaturaAhead"][];
+            /** @description Left over from last month's partial payment (D30a); 0 otherwise. */
+            carried: string;
+            /** @description The fatura's spends, newest date first. */
+            entries: components["schemas"]["Transaction"][];
+            /** @description `YYYY-MM`, the fatura's due month. */
+            month: string;
+            /** @description The card's payments dated in `month`; 0 when unpaid. */
+            paid: string;
+            /** @description Spends plus the D30a carry: what Contas a pagar shows unpaid. */
+            total: string;
         };
         /**
          * @description `icon` is a lucide icon name; `color` a palette token, `cat-1` to `cat-24`, unique among the
@@ -881,6 +912,11 @@ export interface components {
         DeletedTransactions: {
             /** Format: int64 */
             deleted: number;
+        };
+        FaturaAhead: {
+            /** @description `YYYY-MM`. */
+            month: string;
+            total: string;
         };
         FieldError: {
             field: string;
@@ -2662,6 +2698,69 @@ export interface operations {
                 };
             };
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description `month` is not `YYYY-MM` from 2000 to 2100 (`validation`), or is before the opening date's month (`month-before-opening`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    get_fatura: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description The fatura's due month, `YYYY-MM`
+                 * @example 2026-11
+                 */
+                month: string;
+                /** @description One of the caller's cards (archived included) */
+                card_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The card's fatura due that month: its spends, the D30a carry, its payments, and the next six months' committed totals */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CardFatura"];
+                };
+            };
+            /** @description `card_id` is not a UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description No card of the caller with that id */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
