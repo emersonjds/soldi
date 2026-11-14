@@ -150,7 +150,9 @@ export const CategoryChips = ({
                 <Check className="size-3!" />
               </span>
             </span>
-            <span className={name}>{category.name}</span>
+            <span className={name} title={category.name}>
+              {category.name}
+            </span>
           </ToggleGroupItem>
         ))}
       </ToggleGroup>

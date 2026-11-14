@@ -129,6 +129,7 @@ describe("CategoryChips", () => {
     expect(row).toHaveClass("overflow-x-auto", "snap-x");
     expect(within(row).queryByRole("radio", { checked: true })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Ver todas" })).not.toBeInTheDocument();
+    expect(within(row).getByText("Comida fora")).toHaveAttribute("title", "Comida fora");
   });
 
   it("ranks the month's Diário by count, a tie by the latest date, then fills from the preset and API order", async () => {

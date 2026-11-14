@@ -102,6 +102,8 @@ describe("CategoryPicker", () => {
     const search = within(sheet).getByRole("searchbox", { name: "Buscar categoria" });
     expect(search).toHaveAttribute("placeholder", "Buscar categoria");
     expect(search).toHaveClass("text-base");
+    // The sheet body is a scrolling flex column: without shrink-0 the 48 px row collapses to its text.
+    expect(search.parentElement).toHaveClass("h-12", "shrink-0");
     expect(await within(sheet).findByText("Mais usadas")).toBeInTheDocument();
     expect(within(sheet).getByRole("button", { name: "Personalizar" })).toBeInTheDocument();
     expect(groups(sheet)).toEqual(["Alimentação", "Família"]);

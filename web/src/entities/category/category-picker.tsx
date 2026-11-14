@@ -238,7 +238,7 @@ export const CategoryPicker = ({
         title="Categoria"
         description="Busque, toque ou crie a categoria do lançamento."
       >
-        <div className="flex h-12 items-center gap-2 rounded-xl border border-input px-3 focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50">
+        <div className="flex h-12 shrink-0 items-center gap-2 rounded-xl border border-input px-3 focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50">
           <Search aria-hidden className="size-5 shrink-0 text-muted-foreground" />
           <input
             type="search"
