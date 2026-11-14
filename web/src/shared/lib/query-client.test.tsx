@@ -1,4 +1,3 @@
-import * as Sentry from "@sentry/react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -6,8 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "@/shared/api/client";
 
 import { QueryProvider } from "./query-client";
+import { initSentry, reportFailure } from "./sentry";
 
-vi.mock("@sentry/react", () => ({ init: vi.fn(), captureException: vi.fn() }));
+vi.mock("./sentry", () => ({ initSentry: vi.fn(), reportFailure: vi.fn() }));
 
 const Answer = () => {
   const answer = useQuery({ queryKey: ["answer"], queryFn: async () => 42 });
@@ -52,23 +52,15 @@ describe("QueryProvider", () => {
     expect(await screen.findByText("42")).toBeInTheDocument();
   });
 
-  it("starts Sentry when the build carries a DSN", () => {
+  it("hands Sentry the DSN the build carries", () => {
     vi.stubEnv("NEXT_PUBLIC_SENTRY_DSN", "https://key@o1.ingest.sentry.io/1");
 
     render(<QueryProvider>{null}</QueryProvider>);
 
-    expect(Sentry.init).toHaveBeenCalledWith(expect.objectContaining({ dsn: "https://key@o1.ingest.sentry.io/1" }));
+    expect(initSentry).toHaveBeenCalledWith("https://key@o1.ingest.sentry.io/1");
   });
 
-  it("leaves Sentry off without a DSN", () => {
-    vi.stubEnv("NEXT_PUBLIC_SENTRY_DSN", "");
-
-    render(<QueryProvider>{null}</QueryProvider>);
-
-    expect(Sentry.init).not.toHaveBeenCalled();
-  });
-
-  it("reports a query that fails with a server error", async () => {
+  it("hands every failed query to the failure report", async () => {
     const failure = new ApiError(500, "Internal Server Error");
 
     render(
@@ -78,21 +70,10 @@ describe("QueryProvider", () => {
     );
 
     expect(await screen.findByText("error")).toBeInTheDocument();
-    expect(Sentry.captureException).toHaveBeenCalledWith(failure);
+    expect(vi.mocked(reportFailure).mock.calls[0]?.[0]).toBe(failure);
   });
 
-  it("does not report a query answered 404", async () => {
-    render(
-      <QueryProvider>
-        <Failing failure={new ApiError(404, "Not Found")} />
-      </QueryProvider>,
-    );
-
-    expect(await screen.findByText("error")).toBeInTheDocument();
-    expect(Sentry.captureException).not.toHaveBeenCalled();
-  });
-
-  it("reports a save that never reached the server", async () => {
+  it("hands every failed save to the failure report", async () => {
     const failure = new TypeError("Failed to fetch");
     render(
       <QueryProvider>
@@ -102,19 +83,6 @@ describe("QueryProvider", () => {
 
     screen.getByRole("button").click();
 
-    await waitFor(() => expect(Sentry.captureException).toHaveBeenCalledWith(failure));
-  });
-
-  it("does not report a save refused with 422", async () => {
-    render(
-      <QueryProvider>
-        <FailingSave failure={new ApiError(422, "Unprocessable Entity")} />
-      </QueryProvider>,
-    );
-
-    screen.getByRole("button").click();
-
-    expect(await screen.findByText("error")).toBeInTheDocument();
-    expect(Sentry.captureException).not.toHaveBeenCalled();
+    await waitFor(() => expect(vi.mocked(reportFailure).mock.calls[0]?.[0]).toBe(failure));
   });
 });

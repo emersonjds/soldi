@@ -2,16 +2,15 @@
 
 import { useEffect } from "react";
 
-import { captureException } from "@sentry/react";
-
 import { fontVars } from "@/lib/fonts/registry";
+import { captureError } from "@/shared/lib/sentry";
 import { PageError } from "@/shared/ui/page-state";
 
 import "./globals.css";
 
 const GlobalError = ({ error, unstable_retry }: { error: Error & { digest?: string }; unstable_retry: () => void }) => {
   useEffect(() => {
-    captureException(error);
+    captureError(error);
   }, [error]);
 
   return (

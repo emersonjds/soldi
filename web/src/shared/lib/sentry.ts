@@ -1,13 +1,23 @@
-import * as Sentry from "@sentry/react";
-
 import { APP_CONFIG } from "@/config/app-config";
 import { ApiError } from "@/shared/api/client";
 
-/** D38: errors, stack, route, release; never money, e-mail, bodies, cookies or the user. */
-export const initSentry = (dsn: string | undefined) => {
-  // The static export prerenders in Node; only the browser reports.
-  if (!dsn || typeof window === "undefined") return;
-  Sentry.init({
+type Sdk = typeof import("./sentry-sdk");
+
+// The SDK (~38 KB gzip) stays out of the first load: fetched after first paint, only with a DSN.
+let sdk: Sdk | undefined;
+let started = false;
+// Errors captured while the SDK loads.
+const pending: unknown[] = [];
+
+const whenIdle = (run: () => void) => {
+  if (window.requestIdleCallback) window.requestIdleCallback(run);
+  else setTimeout(run, 1);
+};
+
+const start = async (dsn: string) => {
+  const loaded = await import("./sentry-sdk");
+  /** D38: errors, stack, route, release; never money, e-mail, bodies, cookies or the user. */
+  loaded.init({
     dsn,
     release: APP_CONFIG.version,
     environment: "production",
@@ -23,10 +33,24 @@ export const initSentry = (dsn: string | undefined) => {
       return event;
     },
   });
+  sdk = loaded;
+  for (const error of pending.splice(0)) loaded.captureException(error);
+};
+
+export const initSentry = (dsn: string | undefined) => {
+  // The static export prerenders in Node; only the browser reports.
+  if (!dsn || typeof window === "undefined" || started) return;
+  started = true;
+  whenIdle(() => void start(dsn));
+};
+
+export const captureError = (error: unknown) => {
+  if (sdk) sdk.captureException(error);
+  else if (started) pending.push(error);
 };
 
 /** A query or save that failed: a 4xx is the user's path, anything else is a bug. */
 export const reportFailure = (error: Error) => {
   if (error instanceof ApiError && error.status < 500) return;
-  Sentry.captureException(error);
+  captureError(error);
 };

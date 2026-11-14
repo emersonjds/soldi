@@ -1,11 +1,12 @@
-import * as Sentry from "@sentry/react";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
+import { captureError } from "@/shared/lib/sentry";
+
 import GlobalError from "./global-error";
 
-vi.mock("@sentry/react", () => ({ captureException: vi.fn() }));
+vi.mock("@/shared/lib/sentry", () => ({ captureError: vi.fn() }));
 vi.mock("next/font/google", () => ({ Inter: () => ({ variable: "font-inter" }) }));
 
 describe("GlobalError", () => {
@@ -19,7 +20,7 @@ describe("GlobalError", () => {
     await userEvent.click(screen.getByRole("button", { name: "Tentar de novo" }));
 
     expect(screen.getByRole("alert")).toHaveTextContent("Não foi possível carregar a página.");
-    expect(Sentry.captureException).toHaveBeenCalledWith(failure);
+    expect(captureError).toHaveBeenCalledWith(failure);
     expect(retry).toHaveBeenCalled();
   });
 });
