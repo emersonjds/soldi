@@ -23,4 +23,12 @@ describe("GlobalError", () => {
     expect(captureError).toHaveBeenCalledWith(failure);
     expect(retry).toHaveBeenCalled();
   });
+
+  it("names the tab after the app, since it replaces the root layout", () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    render(<GlobalError error={new Error("render broke")} unstable_retry={vi.fn()} />);
+
+    expect(document.title).toBe("Soldi");
+  });
 });
