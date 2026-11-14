@@ -1423,6 +1423,14 @@ async fn sol119_a_partial_payment_carries_into_the_next_panel(pool: PgPool) {
         ),
         (&json!("20.00"), &json!("20.00"), 0)
     );
+    let (_, month) = ana.get(&format!("/api/months/{}", month_ahead(3))).await;
+    let row = month["bills_of_month"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| row["bill_id"] == porto.as_str())
+        .unwrap();
+    assert_eq!(row["amount"], next["total"]);
     assert_eq!(
         (&settled["total"], &settled["carried"], &settled["paid"]),
         (&json!("30.00"), &json!("0.00"), &json!("30.00"))
