@@ -112,21 +112,22 @@ impl Limiter {
         if full || now.duration_since(last_sweep) >= SWEEP_EVERY {
             state.windows.retain(|_, window| window.ends > now);
             state.last_sweep = Some(now);
-        }
-        // ponytail: when no window has expired, the EVICT_BATCH lowest counts (nearest their end
-        // among equals) make room, so throwaway keys go before refusing counters and the O(n) work
-        // runs once per EVICT_BATCH fresh keys; a shared store with TTLs (Redis) removes the cap.
-        if full && state.windows.len() >= MAX_KEYS {
-            let mut by_count: Vec<_> = (state.windows.iter())
-                .map(|(key, w)| (w.count, w.ends, key))
-                .collect();
-            by_count.select_nth_unstable(EVICT_BATCH);
-            let evicted: Vec<String> = by_count[..EVICT_BATCH]
-                .iter()
-                .map(|(_, _, key)| (*key).clone())
-                .collect();
-            for key in evicted {
-                state.windows.remove(&key);
+            // ponytail: the lowest counts (nearest their end among equals) go until EVICT_BATCH
+            // slots are free, so throwaway keys go before refusing counters and the O(n) work runs
+            // at most once per EVICT_BATCH fresh keys; a shared store with TTLs (Redis) removes the cap.
+            let excess = state.windows.len().saturating_sub(MAX_KEYS - EVICT_BATCH);
+            if excess > 0 {
+                let mut by_count: Vec<_> = (state.windows.iter())
+                    .map(|(key, w)| (w.count, w.ends, key))
+                    .collect();
+                by_count.select_nth_unstable(excess);
+                let evicted: Vec<String> = by_count[..excess]
+                    .iter()
+                    .map(|(_, _, key)| (*key).clone())
+                    .collect();
+                for key in evicted {
+                    state.windows.remove(&key);
+                }
             }
         }
         let window = state.windows.entry(key.to_string()).or_insert(Window {
@@ -305,6 +306,25 @@ mod tests {
         assert_eq!(size(), MAX_KEYS);
         limiter.hit("one-more", BUDGET, start).unwrap();
         assert_eq!(size(), MAX_KEYS - EVICT_BATCH + 1);
+    }
+
+    #[test]
+    fn a_sweep_that_frees_one_window_still_leaves_a_free_batch() {
+        let limiter = Limiter::default();
+        let start = Instant::now();
+        for index in 0..MAX_KEYS {
+            let at = start + Duration::from_millis(index as u64);
+            limiter.hit(&index.to_string(), BUDGET, at).unwrap();
+        }
+        let size = || limiter.state.lock().unwrap().windows.len();
+
+        for step in 0..3 {
+            let one_more_expired = start + Duration::from_millis(900_000 + step as u64);
+            limiter
+                .hit(&format!("fresh-{step}"), BUDGET, one_more_expired)
+                .unwrap();
+            assert_eq!(size(), MAX_KEYS - EVICT_BATCH + step + 1, "{step}");
+        }
     }
 
     #[test]
