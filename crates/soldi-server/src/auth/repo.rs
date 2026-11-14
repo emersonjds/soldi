@@ -311,6 +311,58 @@ pub async fn take_email_verification(
     .await
 }
 
+/// Keeps the user's 20 newest devices.
+pub async fn insert_trusted_device(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    token_hash: &[u8],
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        "INSERT INTO trusted_devices (user_id, token_hash) VALUES ($1, $2)",
+        user_id,
+        token_hash
+    )
+    .execute(&mut *conn)
+    .await?;
+    sqlx::query!(
+        "DELETE FROM trusted_devices WHERE user_id = $1 AND id NOT IN (
+             SELECT id FROM trusted_devices WHERE user_id = $1 ORDER BY created_at DESC LIMIT 20)",
+        user_id
+    )
+    .execute(&mut *conn)
+    .await?;
+    Ok(())
+}
+
+/// The device belongs to the account with this e-mail and is younger than `DEVICE_DAYS`.
+pub async fn device_is_trusted(
+    conn: &mut PgConnection,
+    email: &str,
+    token_hash: &[u8],
+) -> Result<bool, sqlx::Error> {
+    sqlx::query_scalar!(
+        r#"SELECT EXISTS (
+             SELECT 1 FROM trusted_devices d JOIN users u ON u.id = d.user_id
+             WHERE d.token_hash = $1 AND u.email = $2::text::citext
+               AND d.created_at > now() - make_interval(days => $3)) AS "trusted!""#,
+        token_hash,
+        email,
+        super::domain::DEVICE_DAYS
+    )
+    .fetch_one(&mut *conn)
+    .await
+}
+
+pub async fn delete_trusted_devices(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!("DELETE FROM trusted_devices WHERE user_id = $1", user_id)
+        .execute(&mut *conn)
+        .await?;
+    Ok(())
+}
+
 pub async fn insert_session(
     conn: &mut PgConnection,
     user_id: Uuid,
@@ -425,6 +477,48 @@ mod tests {
                 .unwrap()
                 .is_none()
         );
+    }
+
+    #[sqlx::test]
+    async fn a_device_is_trusted_only_for_its_owners_email_and_twenty_per_user(pool: PgPool) {
+        let mut conn = pool.acquire().await.unwrap();
+        let ana = insert_user(&mut conn, "ana@example.com", "Ana", "hash")
+            .await
+            .unwrap();
+        let bia = insert_user(&mut conn, "bia@example.com", "Bia", "hash")
+            .await
+            .unwrap();
+        insert_trusted_device(&mut conn, bia.id, b"bia")
+            .await
+            .unwrap();
+        for device in 0..=20u8 {
+            insert_trusted_device(&mut conn, ana.id, &[device])
+                .await
+                .unwrap();
+        }
+        let trusted = async |conn: &mut PgConnection, email: &str, token: &[u8]| {
+            device_is_trusted(conn, email, token).await.unwrap()
+        };
+
+        assert!(trusted(&mut conn, "ANA@example.com", &[20]).await);
+        assert!(trusted(&mut conn, "ana@example.com", &[1]).await);
+        assert!(!trusted(&mut conn, "ana@example.com", &[0]).await);
+        assert!(!trusted(&mut conn, "ana@example.com", b"bia").await);
+        assert!(!trusted(&mut conn, "bia@example.com", &[20]).await);
+        assert!(!trusted(&mut conn, "nobody@example.com", b"bia").await);
+        assert!(trusted(&mut conn, "bia@example.com", b"bia").await);
+        sqlx::query!(
+            "UPDATE trusted_devices SET created_at = now() - interval '180 days' WHERE token_hash = $1",
+            &[1u8][..]
+        )
+        .execute(&mut *conn)
+        .await
+        .unwrap();
+        assert!(!trusted(&mut conn, "ana@example.com", &[1]).await);
+
+        delete_trusted_devices(&mut conn, ana.id).await.unwrap();
+        assert!(!trusted(&mut conn, "ana@example.com", &[20]).await);
+        assert!(trusted(&mut conn, "bia@example.com", b"bia").await);
     }
 
     #[sqlx::test]

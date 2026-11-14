@@ -141,8 +141,8 @@ async fn an_unknown_and_a_real_email_get_the_same_202_and_only_the_real_one_gets
 }
 
 #[sqlx::test]
-async fn confirming_sets_the_password_and_ends_every_session(pool: PgPool) {
-    let (app, mail) = app(pool);
+async fn confirming_sets_the_password_and_ends_every_session_and_trusted_device(pool: PgPool) {
+    let (app, mail) = app(pool.clone());
     let ana = app.another_user("ana@example.com").await;
     let (_, ana_phone) = sign_in(&app, "ana@example.com", PASSWORD).await;
     request_reset(&app, "ana@example.com").await;
@@ -157,6 +157,11 @@ async fn confirming_sets_the_password_and_ends_every_session(pool: PgPool) {
         ana_phone.get("/api/auth/me").await.0,
         StatusCode::UNAUTHORIZED
     );
+    let devices: i64 = sqlx::query_scalar("SELECT count(*) FROM trusted_devices")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(devices, 0);
     assert_eq!(
         sign_in(&app, "ana@example.com", PASSWORD).await.0,
         StatusCode::UNAUTHORIZED

@@ -658,3 +658,119 @@ async fn the_eleventh_password_change_is_limited_for_that_user_only(pool: PgPool
     let (status, _) = bia.post("/api/me/password", body).await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
 }
+
+fn device_of(response: &axum::response::Response) -> String {
+    let set_cookie = response.headers().get_all(header::SET_COOKIE).iter();
+    let device = set_cookie
+        .map(|value| value.to_str().unwrap())
+        .find(|value| value.starts_with("soldi_device="))
+        .expect("no device cookie");
+    device.split(';').next().unwrap().to_string()
+}
+
+fn with_cookie(
+    mut request: axum::http::Request<axum::body::Body>,
+    cookie: &str,
+) -> axum::http::Request<axum::body::Body> {
+    request
+        .headers_mut()
+        .insert(header::COOKIE, cookie.parse().unwrap());
+    request
+}
+
+async fn devices_of(pool: &PgPool, email: &str) -> i64 {
+    sqlx::query_scalar(
+        "SELECT count(*) FROM trusted_devices d JOIN users u ON u.id = d.user_id WHERE u.email = $1",
+    )
+    .bind(email)
+    .fetch_one(pool)
+    .await
+    .unwrap()
+}
+
+#[sqlx::test]
+async fn a_trusted_device_signs_its_owner_in_past_the_email_ceiling_until_the_password_changes(
+    pool: PgPool,
+) {
+    let app = TestApp::anonymous(pool.clone());
+    app.another_user("ana@example.com").await;
+    app.another_user("bia@example.com").await;
+    let signed_in = app
+        .send(forwarded(
+            sign_in_request("ana@example.com", PASSWORD),
+            "198.51.100.7",
+        ))
+        .await;
+    assert_eq!(signed_in.status(), StatusCode::OK);
+    let ana_device = device_of(&signed_in);
+    let ana = TestApp {
+        router: app.router.clone(),
+        cookie: Some(session_cookie(&signed_in)),
+    };
+    let bia_signed_in = app
+        .send(forwarded(
+            sign_in_request("bia@example.com", PASSWORD),
+            "198.51.100.8",
+        ))
+        .await;
+    let bia_device = device_of(&bia_signed_in);
+    for ip in 1..=10 {
+        for _ in 0..10 {
+            let guess = sign_in_request("ana@example.com", "wrong horse");
+            app.send(forwarded(guess, &format!("203.0.113.{ip}"))).await;
+        }
+    }
+    let owner = |device: Option<&str>, password: &str| {
+        let request = forwarded(sign_in_request("ana@example.com", password), "198.51.100.9");
+        app.send(match device {
+            Some(device) => with_cookie(request, device),
+            None => request,
+        })
+    };
+
+    assert_rate_limited(owner(None, PASSWORD).await, 900).await;
+    assert_rate_limited(owner(Some(&bia_device), PASSWORD).await, 900).await;
+    let trusted = owner(Some(&ana_device), PASSWORD).await;
+    assert_eq!(trusted.status(), StatusCode::OK);
+    assert_eq!(
+        trusted.headers().get_all(header::SET_COOKIE).iter().count(),
+        1
+    );
+
+    let new_password = json!({ "current_password": PASSWORD, "new_password": "battery staple" });
+    assert_eq!(
+        ana.post("/api/me/password", new_password).await.0,
+        StatusCode::NO_CONTENT
+    );
+    assert_rate_limited(owner(Some(&ana_device), "battery staple").await, 900).await;
+    assert_eq!(devices_of(&pool, "ana@example.com").await, 0);
+    assert_eq!(devices_of(&pool, "bia@example.com").await, 1);
+}
+
+#[sqlx::test]
+async fn a_device_cookie_changes_nothing_for_an_unknown_email(pool: PgPool) {
+    let app = TestApp::anonymous(pool.clone());
+    app.another_user("ana@example.com").await;
+    let signed_in = app.send(sign_in_request("ana@example.com", PASSWORD)).await;
+    let device = device_of(&signed_in);
+
+    let with_device = app
+        .send(with_cookie(
+            sign_in_request("nobody@example.com", PASSWORD),
+            &device,
+        ))
+        .await;
+    let without = app
+        .send(sign_in_request("nobody@example.com", PASSWORD))
+        .await;
+
+    assert_eq!(with_device.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(with_device.headers(), without.headers());
+    assert_eq!(body_json(with_device).await, body_json(without).await);
+    let token = device.split_once('=').unwrap().1;
+    let stored: Vec<Vec<u8>> = sqlx::query_scalar("SELECT token_hash FROM trusted_devices")
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+    assert_eq!(stored, vec![soldi_server::auth::domain::hash_token(token)]);
+}

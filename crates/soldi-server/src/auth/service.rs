@@ -51,6 +51,20 @@ pub async fn sign_in(pool: &PgPool, input: SignIn) -> Result<(User, String), App
     Ok((found.user, session))
 }
 
+/// The device cookie `token` belongs to the account with this (normalized) e-mail.
+pub async fn device_is_trusted(pool: &PgPool, email: &str, token: &str) -> Result<bool, AppError> {
+    let mut conn = pool.acquire().await?;
+    Ok(repo::device_is_trusted(&mut conn, email, &domain::hash_token(token)).await?)
+}
+
+/// A new device token for the user; only its hash is stored.
+pub async fn trust_device(pool: &PgPool, user_id: Uuid) -> Result<String, AppError> {
+    let token = domain::new_secret();
+    let mut conn = pool.acquire().await?;
+    repo::insert_trusted_device(&mut conn, user_id, &domain::hash_token(&token)).await?;
+    Ok(token)
+}
+
 /// Revokes the session that made the request; other devices stay signed in.
 pub async fn sign_out(pool: &PgPool, user: &CurrentUser) -> Result<(), AppError> {
     let mut conn = pool.acquire().await?;
@@ -99,6 +113,7 @@ pub async fn change_password(
     }
     repo::delete_other_sessions(&mut tx, user).await?;
     repo::delete_password_resets(&mut tx, user.id).await?;
+    repo::delete_trusted_devices(&mut tx, user.id).await?;
     tx.commit().await?;
     Ok(())
 }
@@ -180,6 +195,7 @@ pub async fn confirm_password_reset(
     repo::delete_all_sessions(&mut tx, user_id).await?;
     repo::delete_password_resets(&mut tx, user_id).await?;
     repo::delete_email_verifications(&mut tx, user_id).await?;
+    repo::delete_trusted_devices(&mut tx, user_id).await?;
     tx.commit().await?;
     Ok(())
 }

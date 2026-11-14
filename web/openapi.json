@@ -185,7 +185,7 @@
         },
         "responses": {
           "200": {
-            "description": "Signed in; sets the session cookie",
+            "description": "Signed in; sets the session cookie and, unless the request carried one of this account, a trusted-device cookie that later skips the per-e-mail attempt ceiling",
             "content": {
               "application/json": {
                 "schema": {

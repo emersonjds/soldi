@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE trusted_devices SET created_at = now() - interval '180 days' WHERE token_hash = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Bytea"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ac89f58d4ced9daccfe95f8768fb4b40a983f782a0bd1387065372a21f59b9eb"
+}

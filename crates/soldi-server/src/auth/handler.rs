@@ -5,7 +5,7 @@ use axum::Extension;
 use axum::extract::{ConnectInfo, State};
 use axum::http::header::SET_COOKIE;
 use axum::http::{HeaderMap, StatusCode};
-use axum::response::IntoResponse;
+use axum::response::{AppendHeaders, IntoResponse};
 use soldi_types::Problem;
 use soldi_types::auth::{
     ChangePassword, ConfirmEmailVerification, ConfirmPasswordReset, DeleteAccount,
@@ -64,7 +64,7 @@ pub async fn sign_up(
 
 #[utoipa::path(post, path = "/api/auth/sign-in", tag = "auth", request_body = SignIn,
     responses(
-        (status = 200, body = User, description = "Signed in; sets the session cookie"),
+        (status = 200, body = User, description = "Signed in; sets the session cookie and, unless the request carried one of this account, a trusted-device cookie that later skips the per-e-mail attempt ceiling"),
         (status = 401, body = Problem, content_type = "application/problem+json", description = "`invalid-credentials`, the same for an unknown email and a wrong password"),
         (status = 422, body = Problem, content_type = "application/problem+json"),
         (status = 429, body = Problem, content_type = "application/problem+json", description = "Rate limited; wait `Retry-After` seconds")))]
@@ -84,11 +84,25 @@ pub async fn sign_in(
     state.limiter.check(&[
         (limits::SIGN_IN_IP, ip),
         (limits::SIGN_IN_EMAIL_IP, email_ip),
-        (limits::SIGN_IN_EMAIL, Some(email)),
     ])?;
+    let device = domain::device_token(&headers);
+    let trusted = match device {
+        Some(token) => service::device_is_trusted(&state.pool, &email, token).await?,
+        None => false,
+    };
+    if !trusted {
+        state
+            .limiter
+            .check(&[(limits::SIGN_IN_EMAIL, Some(email))])?;
+    }
     let (user, session) = service::sign_in(&state.pool, input).await?;
-    let cookie = domain::session_cookie(&session, domain::is_https(&headers));
-    Ok(([(SET_COOKIE, cookie)], Json(user)))
+    let https = domain::is_https(&headers);
+    let mut cookies = vec![(SET_COOKIE, domain::session_cookie(&session, https))];
+    if !trusted {
+        let token = service::trust_device(&state.pool, user.id).await?;
+        cookies.push((SET_COOKIE, domain::device_cookie(&token, https)));
+    }
+    Ok((AppendHeaders(cookies), Json(user)))
 }
 
 #[utoipa::path(post, path = "/api/auth/sign-out", tag = "auth",
