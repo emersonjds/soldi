@@ -87,6 +87,11 @@ export const RESGATE = category("c1000000-0000-4000-8000-000000000010", "Resgate
   is_savings: true,
 });
 
+/** The card group (D43): a card made without a category lands here. */
+export const CARTAO = category("c1000000-0000-4000-8000-000000000025", "Cartão", "bill", "credit-card", "cat-9", {
+  is_card_group: true,
+});
+
 /** In the API's order: kind, then name. */
 export const CATEGORIES = [EXTRA, SALARIO, ALUGUEL, LUZ, COMIDA, MERCADO];
 

@@ -97,7 +97,7 @@ const Picker = ({ entries = [] }: { entries?: Schemas["Transaction"][] }) => {
 };
 
 const chips = () =>
-  within(screen.getByRole("radiogroup", { name: "Categoria" }))
+  within(screen.getByRole("radiogroup", { name: "Mais usadas" }))
     .getAllByRole("radio")
     .map((radio) => radio.textContent);
 
@@ -113,25 +113,7 @@ const setup = (replies = {}, categories = CATEGORIES, entries?: Schemas["Transac
       <Toaster />
     </>,
   );
-  const posted = async () => {
-    await waitFor(() => expect(requests.some((request) => request.method === "POST")).toBe(true));
-    return requests.find((request) => request.method === "POST")?.json();
-  };
-  return { requests, posted };
-};
-
-/** Through the segment: a top-level category, or a subcategory of `parent`. */
-const openCreate = async (parent?: string) => {
-  await userEvent.click(await screen.findByRole("button", { name: "Ver todas" }));
-  await userEvent.click(
-    within(await screen.findByRole("dialog", { name: "Categoria" })).getByRole("button", { name: "Nova categoria" }),
-  );
-  const sheet = await screen.findByRole("dialog", { name: "Nova Categoria" });
-  if (parent) {
-    await userEvent.click(within(sheet).getByRole("radio", { name: "Dentro de um grupo" }));
-    await userEvent.click(await within(sheet).findByRole("radio", { name: parent }));
-  }
-  return sheet;
+  return requests;
 };
 
 describe("CategoryChips", () => {
@@ -142,19 +124,17 @@ describe("CategoryChips", () => {
   it("without entries shows the kind's first eight parents, the preset one leading, as a scrolling radio row", async () => {
     setup({}, NINE_DAILY);
 
-    const row = await screen.findByRole("radiogroup", { name: "Categoria" });
+    const row = await screen.findByRole("radiogroup", { name: "Mais usadas" });
     expect(chips()).toEqual(["Gasto", "Comida fora", "Mercado", "Pets", "Carro", "Lazer", "Saúde", "Casa"]);
     expect(row).toHaveClass("overflow-x-auto", "snap-x");
     expect(within(row).queryByRole("radio", { checked: true })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Ver todas" })).toHaveAttribute("aria-expanded", "false");
-    expect(screen.queryByRole("button", { name: "Nova categoria" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("radiogroup", { name: "Subcategoria" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Ver todas" })).not.toBeInTheDocument();
   });
 
   it("ranks the month's Diário by count, a tie by the latest date, then fills from the preset and API order", async () => {
     setup({}, SIX_DAILY, ENTRIES);
 
-    await screen.findByRole("radiogroup", { name: "Categoria" });
+    await screen.findByRole("radiogroup", { name: "Mais usadas" });
     expect(chips()).toEqual(["Comida fora", "Carro", "Pets", "Mercado", "Lazer"]);
   });
 
@@ -165,7 +145,7 @@ describe("CategoryChips", () => {
       entry(RACAO, "2026-11-03", "e3"),
     ]);
 
-    await screen.findByRole("radiogroup", { name: "Categoria" });
+    await screen.findByRole("radiogroup", { name: "Mais usadas" });
     expect(chips()).toEqual(["Pets", "Comida fora", "Mercado", "Carro", "Lazer"]);
     expect(screen.queryByRole("radio", { name: "Pets › Ração" })).not.toBeInTheDocument();
   });
@@ -177,14 +157,14 @@ describe("CategoryChips", () => {
       ENTRIES,
     );
 
-    await screen.findByRole("radiogroup", { name: "Categoria" });
+    await screen.findByRole("radiogroup", { name: "Mais usadas" });
     expect(chips()).toEqual(["Lazer", "Mercado", "Comida fora", "Carro", "Pets", "Gasto", "Saúde", "Casa"]);
   });
 
   it("keeps the month's ranking when the pins fail to load", async () => {
     setup({ "GET /api/categories/pins": { status: 500, body: problem(500, "Erro") } }, SIX_DAILY, ENTRIES);
 
-    await screen.findByRole("radiogroup", { name: "Categoria" });
+    await screen.findByRole("radiogroup", { name: "Mais usadas" });
     expect(chips()).toEqual(["Comida fora", "Carro", "Pets", "Mercado", "Lazer"]);
     expect(screen.getByRole("button", { name: "Personalizar" })).toBeEnabled();
   });
@@ -196,7 +176,7 @@ describe("CategoryChips", () => {
       const { client } = renderWithQuery(<Picker entries={ENTRIES} />);
       client.setQueryData(["categories"], SIX_DAILY);
 
-      await screen.findByRole("radiogroup", { name: "Categoria" });
+      await screen.findByRole("radiogroup", { name: "Mais usadas" });
       expect(chips()).toEqual(["Comida fora", "Carro", "Pets", "Mercado", "Lazer"]);
     } finally {
       onlineManager.setOnline(true);
@@ -215,7 +195,7 @@ describe("CategoryChips", () => {
   it("shows fewer chips when the kind has fewer categories", async () => {
     setup();
 
-    await screen.findByRole("radiogroup", { name: "Categoria" });
+    await screen.findByRole("radiogroup", { name: "Mais usadas" });
     expect(chips()).toEqual(["Comida fora", "Mercado"]);
   });
 
@@ -236,90 +216,35 @@ describe("CategoryChips", () => {
     expect(comida).toHaveAttribute("aria-checked", "true");
   });
 
-  it("searches every category from Ver todas and keeps a choice outside the eight in the last slot", async () => {
-    setup({}, NINE_DAILY, ENTRIES);
+  it("keeps a chosen category outside the eight in the last slot", async () => {
+    stubApi({ "GET /api/categories": { status: 200, body: NINE_DAILY } });
+    const roupasCategory = NINE_DAILY.find((each) => each.name === "Roupas");
+    renderWithQuery(
+      <CategoryChips kind="daily" chosen={roupasCategory} onChoose={() => undefined} entries={ENTRIES} />,
+    );
 
-    const more = await screen.findByRole("button", { name: "Ver todas" });
-    await userEvent.click(more);
-    const sheet = await screen.findByRole("dialog", { name: "Categoria" });
-    expect(more).toHaveAttribute("aria-expanded", "true");
-    expect(
-      within(sheet)
-        .getAllByRole("option")
-        .map((option) => option.getAttribute("aria-label")),
-    ).toEqual(["Gasto", "Comida fora", "Mercado", "Pets", "Pets › Ração", "Carro", "Lazer", "Saúde", "Casa", "Roupas"]);
-    await userEvent.type(within(sheet).getByRole("combobox"), "roup");
-    await userEvent.click(within(sheet).getByRole("option", { name: "Roupas" }));
-
-    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    const roupas = await screen.findByRole("radio", { name: "Roupas" });
     expect(chips()).toEqual(["Comida fora", "Carro", "Pets", "Gasto", "Mercado", "Lazer", "Saúde", "Roupas"]);
-    const roupas = screen.getByRole("radio", { name: "Roupas" });
     expect(roupas).toHaveAttribute("aria-checked", "true");
-    await waitFor(() => expect(roupas).toHaveFocus());
   });
 
-  it("returns focus to Ver todas when its sheet or the create sheet closes with Esc", async () => {
-    setup({}, SIX_DAILY);
+  it("shows a chosen child as its parent's circle, with no Sub: pills", async () => {
+    stubApi({ "GET /api/categories": { status: 200, body: WITH_CHILDREN } });
+    renderWithQuery(<CategoryChips kind="daily" chosen={RACAO} onChoose={() => undefined} entries={[]} />);
 
-    const more = await screen.findByRole("button", { name: "Ver todas" });
-    await userEvent.click(more);
-    await screen.findByRole("dialog", { name: "Categoria" });
-    await userEvent.keyboard("{Escape}");
-    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-    await waitFor(() => expect(more).toHaveFocus());
-
-    await userEvent.click(more);
-    await userEvent.click(
-      within(await screen.findByRole("dialog", { name: "Categoria" })).getByRole("button", { name: "Nova categoria" }),
-    );
-    await screen.findByRole("dialog", { name: "Nova Categoria" });
-    await userEvent.keyboard("{Escape}");
-    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-    await waitFor(() => expect(more).toHaveFocus());
+    expect(await screen.findByRole("radio", { name: "Pets" })).toHaveAttribute("aria-checked", "true");
+    expect(screen.queryByText("Sub:")).not.toBeInTheDocument();
+    expect(screen.queryByRole("radio", { name: "Pets › Ração" })).not.toBeInTheDocument();
   });
 
-  it("shows the picked parent's children as Sub: pills; a pill picks the child, a second tap the parent", async () => {
-    setup({}, WITH_CHILDREN);
-
-    await userEvent.click(await screen.findByRole("radio", { name: "Mercado" }));
-    expect(screen.queryByRole("radiogroup", { name: "Subcategoria" })).not.toBeInTheDocument();
-    const pets = screen.getByRole("radio", { name: "Pets" });
-    await userEvent.click(pets);
-    const sub = screen.getByRole("radiogroup", { name: "Subcategoria" });
-    expect(sub.parentElement).toHaveTextContent(/^Sub:/);
-    const racao = within(sub).getByRole("radio", { name: "Pets › Ração" });
-    expect(racao).toHaveTextContent("Ração");
-    expect(racao).toHaveAttribute("aria-checked", "false");
-
-    await userEvent.click(racao);
-    expect(racao).toHaveAttribute("aria-checked", "true");
-    expect(pets).toHaveAttribute("aria-checked", "true");
-    expect(screen.getByRole("status", { name: "Escolhida" })).toHaveTextContent("Ração");
-
-    await userEvent.click(racao);
-    expect(racao).toHaveAttribute("aria-checked", "false");
-    expect(screen.getByRole("status", { name: "Escolhida" })).toHaveTextContent("Pets");
-
-    await userEvent.click(racao);
-    await userEvent.click(pets);
-    expect(screen.getByRole("status", { name: "Escolhida" })).toHaveTextContent("Pets");
-  });
-
-  it("shows a child picked in Ver todas as its parent circle and its Sub: pill", async () => {
-    setup({}, WITH_CHILDREN);
-
-    const more = await screen.findByRole("button", { name: "Ver todas" });
-    await userEvent.click(more);
-    await userEvent.click(
-      within(await screen.findByRole("dialog", { name: "Categoria" })).getByRole("option", { name: "Pets › Ração" }),
+  it("filters the row by the search, ignoring case and accents", async () => {
+    stubApi({ "GET /api/categories": { status: 200, body: NINE_DAILY } });
+    renderWithQuery(
+      <CategoryChips kind="daily" chosen={undefined} onChoose={() => undefined} entries={[]} search=" SAUDE " />,
     );
 
-    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-    expect(screen.getByRole("radio", { name: "Pets" })).toHaveAttribute("aria-checked", "true");
-    const racao = screen.getByRole("radio", { name: "Pets › Ração" });
-    expect(racao).toHaveAttribute("aria-checked", "true");
-    expect(screen.getByRole("status", { name: "Escolhida" })).toHaveTextContent("Ração");
-    await waitFor(() => expect(racao).toHaveFocus());
+    await screen.findByRole("radiogroup", { name: "Mais usadas" });
+    expect(chips()).toEqual(["Saúde"]);
   });
 
   describe("with a parent of another kind (D26)", () => {
@@ -330,31 +255,7 @@ describe("CategoryChips", () => {
       expect(chips()).not.toContain("Parcela");
       await userEvent.click(veiculo);
       expect(screen.getByRole("status", { name: "Escolhida" })).toHaveTextContent("Combustível");
-      const sub = screen.getByRole("radiogroup", { name: "Subcategoria" });
-      expect(
-        within(sub)
-          .getAllByRole("radio")
-          .map((radio) => radio.textContent),
-      ).toEqual(["Combustível"]);
-      const combustivel = within(sub).getByRole("radio", { name: "Veículo › Combustível" });
-      expect(combustivel).toHaveAttribute("aria-checked", "true");
-
-      await userEvent.click(combustivel);
-      expect(screen.getByRole("status", { name: "Escolhida" })).toHaveTextContent("Combustível");
-      expect(combustivel).toHaveAttribute("aria-checked", "true");
-    });
-
-    it("lists it in Ver todas as a heading over its children of the kind", async () => {
-      setup({}, WITH_MIXED_GROUP);
-
-      await userEvent.click(await screen.findByRole("button", { name: "Ver todas" }));
-      const sheet = await screen.findByRole("dialog", { name: "Categoria" });
-      expect(within(sheet).queryByRole("option", { name: "Veículo" })).not.toBeInTheDocument();
-      expect(within(sheet).getByText("Veículo")).toBeInTheDocument();
-      expect(within(sheet).queryByRole("option", { name: "Veículo › Parcela" })).not.toBeInTheDocument();
-      await userEvent.click(within(sheet).getByRole("option", { name: "Veículo › Combustível" }));
-
-      expect(screen.getByRole("status", { name: "Escolhida" })).toHaveTextContent("Combustível");
+      expect(veiculo).toHaveAttribute("aria-checked", "true");
     });
 
     it("lets its own kind choose it", async () => {
@@ -372,12 +273,6 @@ describe("CategoryChips", () => {
 
       await userEvent.click(await screen.findByRole("radio", { name: "Veículo" }));
       expect(screen.getByRole("status", { name: "Escolhida" })).toHaveTextContent("Veículo");
-      const sub = screen.getByRole("radiogroup", { name: "Subcategoria" });
-      expect(
-        within(sub)
-          .getAllByRole("radio")
-          .map((radio) => radio.textContent),
-      ).toEqual(["Parcela"]);
     });
   });
 
@@ -395,109 +290,8 @@ describe("CategoryChips", () => {
     );
 
     await waitFor(() => expect(client.getQueryData(["categories"])).toBeDefined());
-    expect(screen.queryByRole("radiogroup", { name: "Categoria" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("radiogroup", { name: "Mais usadas" })).not.toBeInTheDocument();
     expect(container.querySelectorAll('[data-slot="skeleton"].rounded-full')).toHaveLength(8);
-  });
-
-  it("creates a category with the next free color, selects it and says so", async () => {
-    setup();
-
-    const sheet = await openCreate();
-    expect(within(sheet).getByLabelText("Nome do agrupador")).toHaveAttribute("maxlength", "40");
-    expect(within(sheet).getByRole("radio", { name: "Ícone circle-dashed" })).toBeChecked();
-    expect(within(sheet).getAllByRole("radio", { name: /^Ícone / })).toHaveLength(24);
-    expect(within(sheet).getByRole("radio", { name: "Cor Azul" })).toBeChecked();
-    await userEvent.type(within(sheet).getByLabelText("Nome do agrupador"), "  Carro ");
-    await userEvent.click(within(sheet).getByRole("radio", { name: "Ícone car" }));
-    const requests = stubApi({
-      "GET /api/categories": { status: 200, body: [...CATEGORIES, CARRO] },
-      "POST /api/categories": { status: 201, body: CARRO },
-    });
-    await userEvent.click(within(sheet).getByRole("button", { name: "Criar Categoria" }));
-
-    await waitFor(() => expect(requests.some((request) => request.method === "POST")).toBe(true));
-    expect(await requests.find((request) => request.method === "POST")?.json()).toEqual({
-      name: "Carro",
-      kind: "daily",
-      icon: "car",
-      color: "cat-3",
-    });
-    expect(await screen.findByText("Categoria criada")).toBeInTheDocument();
-    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-    const carro = await screen.findByRole("radio", { name: "Carro" });
-    expect(carro).toHaveAttribute("aria-checked", "true");
-    await waitFor(() => expect(carro).toHaveFocus());
-  });
-
-  it("asks for a name and, with all 24 colors taken, still creates a subcategory in the parent's icon and color", async () => {
-    const full = Array.from({ length: 24 }, (_, index) => ({
-      ...MERCADO,
-      id: `c2000000-0000-4000-8000-0000000000${String(index).padStart(2, "0")}`,
-      name: `Gasto ${index + 1}`,
-      color: `cat-${index + 1}`,
-    }));
-    const { requests, posted } = setup({}, full);
-
-    const sheet = await openCreate("Gasto 1");
-    expect(
-      within(sheet).queryByText("Todas as 24 cores estão em uso. Crie como subcategoria ou arquive uma categoria."),
-    ).not.toBeInTheDocument();
-    await userEvent.click(within(sheet).getByRole("button", { name: "Criar Categoria" }));
-    expect(within(sheet).getByText("Informe o nome.")).toBeInTheDocument();
-    expect(requests.some((request) => request.method === "POST")).toBe(false);
-
-    await userEvent.type(within(sheet).getByLabelText("Nome do agrupador"), "Feira{Enter}");
-    expect(await posted()).toEqual({ name: "Feira", kind: "daily", icon: MERCADO.icon, parent_id: full[0].id });
-  });
-
-  it("creates a subcategory with a searched icon in the parent's color", async () => {
-    setup({}, WITH_CHILDREN);
-    const sheet = await openCreate("Pets");
-
-    await userEvent.type(within(sheet).getByLabelText("Nome do agrupador"), "Pet shop");
-    await userEvent.type(within(sheet).getByLabelText("Buscar ícone"), "dog");
-    await userEvent.click(await within(sheet).findByRole("radio", { name: "Ícone dog" }));
-    expect(within(sheet).getByText("Usa a cor de Pets")).toBeInTheDocument();
-    expect(within(sheet).queryByRole("radio", { name: /^Cor / })).not.toBeInTheDocument();
-    const created = {
-      ...RACAO,
-      id: "c1000000-0000-4000-8000-000000000012",
-      name: "Pet shop",
-      icon: "dog",
-      color: "cat-5",
-    };
-    const requests = stubApi({
-      "GET /api/categories": { status: 200, body: [...WITH_CHILDREN, created] },
-      "POST /api/categories": { status: 201, body: created },
-    });
-    await userEvent.click(within(sheet).getByRole("button", { name: "Criar Categoria" }));
-
-    await waitFor(() => expect(requests.some((request) => request.method === "POST")).toBe(true));
-    expect(await requests.find((request) => request.method === "POST")?.json()).toEqual({
-      name: "Pet shop",
-      kind: "daily",
-      icon: "dog",
-      parent_id: PETS.id,
-    });
-    expect(await screen.findByRole("radio", { name: "Pets › Pet shop" })).toHaveAttribute("aria-checked", "true");
-  });
-
-  it("says when the name is taken", async () => {
-    setup({ "POST /api/categories": { status: 409, body: problem(409, "already-exists") } });
-
-    const sheet = await openCreate();
-    await userEvent.type(within(sheet).getByLabelText("Nome do agrupador"), "Mercado{Enter}");
-
-    expect(await within(sheet).findByText("Já existe uma categoria com esse nome")).toBeInTheDocument();
-  });
-
-  it("says when the server refuses for another reason", async () => {
-    setup({ "POST /api/categories": { status: 422, body: problem(422, "name") } });
-
-    const sheet = await openCreate();
-    await userEvent.type(within(sheet).getByLabelText("Nome do agrupador"), "Feira{Enter}");
-
-    expect(await within(sheet).findByText("Não foi possível criar a categoria.")).toBeInTheDocument();
   });
 });
 
