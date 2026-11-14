@@ -13,6 +13,10 @@ use crate::error::{AppError, reject_nul};
 pub const SESSION_COOKIE: &str = "__Host-soldi_session";
 pub const PLAIN_SESSION_COOKIE: &str = "soldi_session";
 pub const SESSION_DAYS: i64 = 30;
+/// D39. A browser that signed in before skips the per-e-mail sign-in ceiling.
+pub const DEVICE_COOKIE: &str = "__Host-soldi_device";
+pub const PLAIN_DEVICE_COOKIE: &str = "soldi_device";
+pub const DEVICE_DAYS: i32 = 180;
 
 /// Argon2 default parameters with a password nobody knows. Sign-in verifies against it when the
 /// e-mail is unknown, so both failures cost the same time.
@@ -121,7 +125,7 @@ pub fn hash_password(password: &str) -> Result<String, AppError> {
     Argon2::default()
         .hash_password(password.as_bytes())
         .map(|hash| hash.to_string())
-        .map_err(|error| AppError::Internal(error.to_string()))
+        .map_err(|error| AppError::internal("other", error))
 }
 
 pub fn verify_password(password: &str, stored_hash: &str) -> bool {
@@ -146,6 +150,12 @@ pub fn session_token(headers: &HeaderMap) -> Option<&str> {
         .or_else(|| cookie(headers, PLAIN_SESSION_COOKIE).filter(|_| !is_https(headers)))
 }
 
+/// `__Host-soldi_device` first; `soldi_device` only when the request is not HTTPS.
+pub fn device_token(headers: &HeaderMap) -> Option<&str> {
+    cookie(headers, DEVICE_COOKIE)
+        .or_else(|| cookie(headers, PLAIN_DEVICE_COOKIE).filter(|_| !is_https(headers)))
+}
+
 fn cookie<'a>(headers: &'a HeaderMap, name: &str) -> Option<&'a str> {
     headers
         .get_all(COOKIE)
@@ -157,17 +167,22 @@ fn cookie<'a>(headers: &'a HeaderMap, name: &str) -> Option<&'a str> {
 
 pub fn session_cookie(token: &str, https: bool) -> String {
     let max_age = SESSION_DAYS * 24 * 60 * 60;
-    cookie_line(token, https, max_age)
+    cookie_line(SESSION_COOKIE, PLAIN_SESSION_COOKIE, token, https, max_age)
 }
 
 pub fn expired_session_cookie(https: bool) -> String {
-    cookie_line("", https, 0)
+    cookie_line(SESSION_COOKIE, PLAIN_SESSION_COOKIE, "", https, 0)
 }
 
-fn cookie_line(value: &str, https: bool, max_age: i64) -> String {
+pub fn device_cookie(token: &str, https: bool) -> String {
+    let max_age = i64::from(DEVICE_DAYS) * 24 * 60 * 60;
+    cookie_line(DEVICE_COOKIE, PLAIN_DEVICE_COOKIE, token, https, max_age)
+}
+
+fn cookie_line(host: &str, plain: &str, value: &str, https: bool, max_age: i64) -> String {
     let (name, secure) = match https {
-        true => (SESSION_COOKIE, "; Secure"),
-        false => (PLAIN_SESSION_COOKIE, ""),
+        true => (host, "; Secure"),
+        false => (plain, ""),
     };
     format!("{name}={value}; HttpOnly{secure}; SameSite=Lax; Path=/; Max-Age={max_age}")
 }
@@ -321,6 +336,30 @@ mod tests {
         assert!(!plain.contains("Secure"));
         assert!(expired_session_cookie(true).starts_with("__Host-soldi_session=;"));
         assert!(expired_session_cookie(false).contains("Max-Age=0"));
+    }
+
+    #[test]
+    fn the_device_cookie_lasts_180_days_and_reads_like_the_session() {
+        let secure = device_cookie("abc", true);
+        assert_eq!(
+            secure,
+            "__Host-soldi_device=abc; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=15552000"
+        );
+        assert!(device_cookie("abc", false).starts_with("soldi_device=abc; HttpOnly; SameSite"));
+        let both = headers(&[(
+            "cookie",
+            "__Host-soldi_session=s; soldi_device=plain; __Host-soldi_device=host",
+        )]);
+        assert_eq!(device_token(&both), Some("host"));
+        let plain = headers(&[("cookie", "soldi_device=plain")]);
+        assert_eq!(device_token(&plain), Some("plain"));
+        let plain_over_https = headers(&[
+            ("cookie", "soldi_device=plain"),
+            ("x-forwarded-proto", "https"),
+        ]);
+        assert_eq!(device_token(&plain_over_https), None);
+        let session_only = headers(&[("cookie", "__Host-soldi_session=s")]);
+        assert_eq!(device_token(&session_only), None);
     }
 
     #[test]

@@ -21,7 +21,7 @@ import { TransactionSheet } from "@/features/add-transaction/transaction-sheet";
 import { EditBillSheet } from "@/features/edit-bill/edit-bill-sheet";
 import { WithdrawForm } from "@/features/withdraw-cofrinho/withdraw-form";
 import { cn } from "@/lib/utils";
-import { hasProblem, type Schemas } from "@/shared/api/client";
+import { hasProblem, problemMessage, type Schemas } from "@/shared/api/client";
 import { shortDay, todayISO } from "@/shared/lib/date";
 import { positiveAmount } from "@/shared/lib/money";
 import { cents } from "@/shared/lib/tier";
@@ -323,7 +323,7 @@ export const CofrinhosView = ({ month }: { month?: string }) => {
           toast.error(
             hasProblem(error, "cofrinho-not-empty")
               ? "Resgate tudo antes de excluir"
-              : "Não foi possível excluir o cofrinho.",
+              : (problemMessage(error) ?? "Não foi possível excluir o cofrinho."),
           );
         },
       });

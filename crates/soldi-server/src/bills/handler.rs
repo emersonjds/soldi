@@ -116,7 +116,7 @@ pub async fn archive_bill(
         (status = 401, body = Problem, content_type = "application/problem+json"),
         (status = 404, body = Problem, content_type = "application/problem+json", description = "Missing, archived (a card stays payable) or another user's"),
         (status = 409, body = Problem, content_type = "application/problem+json", description = "Already paid in the date's month (`bill-already-paid`)"),
-        (status = 422, body = Problem, content_type = "application/problem+json", description = "`date` outside `month`, `month` not `YYYY-MM`, `amount` missing on a card, amount not above zero or with more than two places, or a date before the opening date (`before-opening-date`); `bill-ended` for a month after the bill's `last_month`")))]
+        (status = 422, body = Problem, content_type = "application/problem+json", description = "`date` outside `month`, `month` not `YYYY-MM`, `amount` missing on a card, amount not above zero or with more than two places, or a date before the opening date (`before-opening-date`); `bill-ended` for a month after the bill's `last_month`; `quota` past the account's 50,000 entries (SOL-137)")))]
 pub async fn pay_bill(
     State(state): State<AppState>,
     user: CurrentUser,

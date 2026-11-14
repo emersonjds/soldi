@@ -5,7 +5,7 @@ use axum::Extension;
 use axum::extract::{ConnectInfo, State};
 use axum::http::header::SET_COOKIE;
 use axum::http::{HeaderMap, StatusCode};
-use axum::response::IntoResponse;
+use axum::response::{AppendHeaders, IntoResponse};
 use soldi_types::Problem;
 use soldi_types::auth::{
     ChangePassword, ConfirmEmailVerification, ConfirmPasswordReset, DeleteAccount,
@@ -56,7 +56,7 @@ pub async fn sign_up(
     JsonBody(input): JsonBody<SignUp>,
 ) -> Result<impl IntoResponse, AppError> {
     let ip = client_ip(&headers, peer);
-    state.limiter.check(&[(limits::SIGN_UP_IP, ip)])?;
+    state.limiter.check(&limits::sign_up_keys(ip))?;
     let (user, session) = service::sign_up(&state.pool, input).await?;
     let cookie = domain::session_cookie(&session, domain::is_https(&headers));
     Ok((StatusCode::CREATED, [(SET_COOKIE, cookie)], Json(user)))
@@ -64,7 +64,7 @@ pub async fn sign_up(
 
 #[utoipa::path(post, path = "/api/auth/sign-in", tag = "auth", request_body = SignIn,
     responses(
-        (status = 200, body = User, description = "Signed in; sets the session cookie"),
+        (status = 200, body = User, description = "Signed in; sets the session cookie and, unless the request carried one of this account, a trusted-device cookie that later skips the per-e-mail attempt ceiling"),
         (status = 401, body = Problem, content_type = "application/problem+json", description = "`invalid-credentials`, the same for an unknown email and a wrong password"),
         (status = 422, body = Problem, content_type = "application/problem+json"),
         (status = 429, body = Problem, content_type = "application/problem+json", description = "Rate limited; wait `Retry-After` seconds")))]
@@ -84,11 +84,25 @@ pub async fn sign_in(
     state.limiter.check(&[
         (limits::SIGN_IN_IP, ip),
         (limits::SIGN_IN_EMAIL_IP, email_ip),
-        (limits::SIGN_IN_EMAIL, Some(email)),
     ])?;
+    let device = domain::device_token(&headers);
+    let trusted = match device {
+        Some(token) => service::device_is_trusted(&state.pool, &email, token).await?,
+        None => false,
+    };
+    if !trusted {
+        state
+            .limiter
+            .check(&[(limits::SIGN_IN_EMAIL, Some(email))])?;
+    }
     let (user, session) = service::sign_in(&state.pool, input).await?;
-    let cookie = domain::session_cookie(&session, domain::is_https(&headers));
-    Ok(([(SET_COOKIE, cookie)], Json(user)))
+    let https = domain::is_https(&headers);
+    let mut cookies = vec![(SET_COOKIE, domain::session_cookie(&session, https))];
+    if !trusted {
+        let token = service::trust_device(&state.pool, user.id).await?;
+        cookies.push((SET_COOKIE, domain::device_cookie(&token, https)));
+    }
+    Ok((AppendHeaders(cookies), Json(user)))
 }
 
 #[utoipa::path(post, path = "/api/auth/sign-out", tag = "auth",
@@ -107,7 +121,7 @@ pub async fn sign_out(
 
 #[utoipa::path(post, path = "/api/auth/sign-out-everywhere", tag = "auth",
     responses(
-        (status = 204, description = "Every session of the caller revoked, this one included; cookie cleared"),
+        (status = 204, description = "Every session and trusted device of the caller revoked, this one included; cookie cleared"),
         (status = 401, body = Problem, content_type = "application/problem+json")))]
 pub async fn sign_out_everywhere(
     State(state): State<AppState>,
@@ -178,7 +192,7 @@ pub async fn delete_me(
         (status = 204, description = "Password changed; every other session of the caller is revoked, this one stays"),
         (status = 401, body = Problem, content_type = "application/problem+json"),
         (status = 422, body = Problem, content_type = "application/problem+json", description = "`wrong-password` for a wrong current password; field `password` when the new one has not 8 to 128 characters"),
-        (status = 429, body = Problem, content_type = "application/problem+json", description = "Rate limited; wait `Retry-After` seconds")))]
+        (status = 429, body = Problem, content_type = "application/problem+json", description = "Rate limited with the password-change budget; wait `Retry-After` seconds")))]
 pub async fn change_password(
     State(state): State<AppState>,
     user: CurrentUser,
@@ -194,7 +208,7 @@ pub async fn change_password(
 
 #[utoipa::path(post, path = "/api/auth/password-reset", tag = "auth", request_body = RequestPasswordReset,
     responses(
-        (status = 202, description = "Accepted whether or not an account has this e-mail; when one has, a reset link valid for 1 hour is e-mailed to it and older links stop working"),
+        (status = 202, description = "Accepted whether or not an account has this e-mail; when one has, a reset link valid for 1 hour is e-mailed to it and older links stop working, unless a link went out in the last 15 minutes: then nothing is sent and that link stays valid"),
         (status = 422, body = Problem, content_type = "application/problem+json", description = "Field `email` over 254 bytes"),
         (status = 429, body = Problem, content_type = "application/problem+json", description = "Rate limited; wait `Retry-After` seconds")))]
 pub async fn request_password_reset(
@@ -209,8 +223,10 @@ pub async fn request_password_reset(
     }
     let email = email.to_lowercase();
     let ip = client_ip(&headers, peer);
+    let email_ip = ip.as_ref().map(|ip| format!("{ip} {email}"));
     state.limiter.check(&[
         (limits::PASSWORD_RESET_IP, ip),
+        (limits::PASSWORD_RESET_EMAIL_IP, email_ip),
         (limits::PASSWORD_RESET_EMAIL, Some(email.clone())),
     ])?;
     let mailer = state.mailer.clone();
@@ -218,7 +234,7 @@ pub async fn request_password_reset(
         let sent =
             service::request_password_reset(&state.pool, &state.mailer, &state.public_url, &email);
         if let Err(error) = sent.await {
-            tracing::error!(?error, "password reset request failed");
+            tracing::error!(error = %error.log_cause(), "password reset request failed");
         }
     });
     mailer.track(task);
@@ -257,10 +273,9 @@ pub async fn request_email_verification(
     user: CurrentUser,
 ) -> Result<StatusCode, AppError> {
     let ip = client_ip(&headers, peer);
-    state.limiter.check(&[
-        (limits::EMAIL_VERIFY_IP, ip),
-        (limits::EMAIL_VERIFY_USER, Some(user.id.to_string())),
-    ])?;
+    state
+        .limiter
+        .check(&limits::email_verify_keys(ip, user.id.to_string()))?;
     service::check_unverified(&state.pool, &user).await?;
     let mailer = state.mailer.clone();
     let task = tokio::spawn(async move {
@@ -271,7 +286,7 @@ pub async fn request_email_verification(
             &user,
         );
         if let Err(error) = sent.await {
-            tracing::error!(?error, "email verification request failed");
+            tracing::error!(error = %error.log_cause(), "email verification request failed");
         }
     });
     mailer.track(task);

@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS (\n             SELECT 1 FROM trusted_devices d JOIN users u ON u.id = d.user_id\n             WHERE d.token_hash = $1 AND u.email = $2::text::citext\n               AND d.created_at > now() - make_interval(days => $3)) AS \"trusted!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "trusted!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Bytea",
+        "Text",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "d82caa9658e3dda20b9339363338c6e4ce575c0bca16ca3260dfce3a4038919d"
+}

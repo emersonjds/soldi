@@ -1445,7 +1445,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Accepted whether or not an account has this e-mail; when one has, a reset link valid for 1 hour is e-mailed to it and older links stop working */
+            /** @description Accepted whether or not an account has this e-mail; when one has, a reset link valid for 1 hour is e-mailed to it and older links stop working, unless a link went out in the last 15 minutes: then nothing is sent and that link stays valid */
             202: {
                 headers: {
                     [name: string]: unknown;
@@ -1525,7 +1525,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Signed in; sets the session cookie */
+            /** @description Signed in; sets the session cookie and, unless the request carried one of this account, a trusted-device cookie that later skips the per-e-mail attempt ceiling */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1597,7 +1597,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Every session of the caller revoked, this one included; cookie cleared */
+            /** @description Every session and trusted device of the caller revoked, this one included; cookie cleared */
             204: {
                 headers: {
                     [name: string]: unknown;
@@ -1763,6 +1763,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
+            /** @description Rate limited with the account's write budget; wait `Retry-After` seconds */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
         };
     };
     archive_bill: {
@@ -1794,6 +1803,15 @@ export interface operations {
             };
             /** @description Missing, already archived or another user's */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Rate limited with the account's write budget; wait `Retry-After` seconds */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1847,6 +1865,15 @@ export interface operations {
             };
             /** @description Same rules as create, on the bill after the change; `closing_day` on a conta fixa, `active: false` on a card, `active` on a parcelado bill or with `installments`/`last_month`; `installments` or `last_month` on a card, sent apart, or `last_month` before the latest paid month; `fatura-paid` when a card's `closing_day` changes while a fatura from this month on is paid (D30b) */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Rate limited with the account's write budget; wait `Retry-After` seconds */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1913,8 +1940,17 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description `date` outside `month`, `month` not `YYYY-MM`, `amount` missing on a card, amount not above zero or with more than two places, or a date before the opening date (`before-opening-date`); `bill-ended` for a month after the bill's `last_month` */
+            /** @description `date` outside `month`, `month` not `YYYY-MM`, `amount` missing on a card, amount not above zero or with more than two places, or a date before the opening date (`before-opening-date`); `bill-ended` for a month after the bill's `last_month`; `quota` past the account's 50,000 entries (SOL-137) */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Rate limited with the account's write budget; wait `Retry-After` seconds */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1977,6 +2013,15 @@ export interface operations {
             };
             /** @description `month` is not `YYYY-MM` */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Rate limited with the account's write budget; wait `Retry-After` seconds */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2082,6 +2127,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
+            /** @description Rate limited with the account's write budget; wait `Retry-After` seconds */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
         };
     };
     category_pins: {
@@ -2151,6 +2205,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
+            /** @description Rate limited with the account's write budget; wait `Retry-After` seconds */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
         };
     };
     archive_category: {
@@ -2191,6 +2254,15 @@ export interface operations {
             };
             /** @description `savings-category` for `Economia` or `Resgate`, `cofrinho-not-empty` for a cofrinho holding money */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Rate limited with the account's write budget; wait `Retry-After` seconds */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2253,6 +2325,15 @@ export interface operations {
             };
             /** @description A bad field, `kind-locked` for a `kind` on `Economia`, a cofrinho, `Resgate` or an income category or a `kind` of `income`, `category-has-bills` when moving to `daily` a category an unarchived conta fixa (active or paused) uses, `category-has-card-entries` when moving to `bill` a category with entries on a card, a parent on the other side (income vs outflow) or a non-bill under `Economia` or itself, `nested-subcategory` when the parent is a subcategory or this category has subcategories, `savings-category` when moving `Economia` or `Resgate` or under `Resgate`, `not-a-cofrinho` for a target or deadline outside `Economia`, `color-taken` when the color is taken in any kind the group shows in, or `palette-full` when moving to top-level without a color, or changing a top-level's `kind`, and all 24 are taken in the kind */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Rate limited with the account's write budget; wait `Retry-After` seconds */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2408,8 +2489,17 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description A bad field, `insufficient-cofrinho` above the balance, `before-opening-date`, or `not-a-cofrinho` */
+            /** @description A bad field, `insufficient-cofrinho` above the balance, `before-opening-date`, `not-a-cofrinho`, or `quota` past the account's 50,000 entries (SOL-137) */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Rate limited with the account's write budget; wait `Retry-After` seconds */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2553,6 +2643,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
+            /** @description Rate limited with the account's write budget; wait `Retry-After` seconds */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
         };
     };
     request_email_verification: {
@@ -2636,7 +2735,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Rate limited; wait `Retry-After` seconds */
+            /** @description Rate limited with the password-change budget; wait `Retry-After` seconds */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -2664,6 +2763,15 @@ export interface operations {
                 content?: never;
             };
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Rate limited with the account's write budget; wait `Retry-After` seconds */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2822,6 +2930,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
+            /** @description Rate limited with the account's write budget; wait `Retry-After` seconds */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
         };
     };
     complete_onboarding: {
@@ -2865,6 +2982,15 @@ export interface operations {
             };
             /** @description Fields named like `bills[0].amount`; nothing is saved */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Rate limited with the account's write budget; wait `Retry-After` seconds */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3096,6 +3222,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
+            /** @description Rate limited with the account's write budget; wait `Retry-After` seconds */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
         };
     };
     list_transactions: {
@@ -3191,8 +3326,17 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Amount not above zero or with more than two places, note over 500 characters, `card_id` on a non-`daily` entry or not one of the caller's unarchived cards, a kind other than the category's (`category_id`), `repeat_months` not 2 to 60, `installments` not 2 to 60, with `repeat_months`, or leaving a parcela at zero, `first_installment` without `installments` (`needs installments`) or outside 1 to `installments`, `open_ended` with `repeat_months` or `installments` or on a `bill` entry, `repeat_every` without `repeat_months` or `open_ended` (`needs repeat_months`) or other than `month` with `installments` (`installments are monthly`), a date outside 2000 to 2100 or a series passing 2100 (`must keep every entry up to 2100`), a date before the opening date (`before-opening-date`), or `fatura-paid` when a spend on a card lands in an already paid fatura (D30b) */
+            /** @description Amount not above zero or with more than two places, note over 500 characters, `card_id` on a non-`daily` entry or not one of the caller's unarchived cards, a kind other than the category's (`category_id`), `repeat_months` not 2 to 60, `installments` not 2 to 60, with `repeat_months`, or leaving a parcela at zero, `first_installment` without `installments` (`needs installments`) or outside 1 to `installments`, `open_ended` with `repeat_months` or `installments` or on a `bill` entry, `repeat_every` without `repeat_months` or `open_ended` (`needs repeat_months`) or other than `month` with `installments` (`installments are monthly`), a date outside 2000 to 2100 or a series passing 2100 (`must keep every entry up to 2100`), a date before the opening date (`before-opening-date`), `fatura-paid` when a spend on a card lands in an already paid fatura (D30b), or `quota` when the entries would take the account past the account's 50,000 entries (SOL-137) */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Rate limited with the account's write budget; wait `Retry-After` seconds */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3236,6 +3380,15 @@ export interface operations {
                 };
             };
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Rate limited with the account's write budget; wait `Retry-After` seconds */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3345,6 +3498,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
+            /** @description Rate limited with the account's write budget; wait `Retry-After` seconds */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
         };
     };
     update_transaction: {
@@ -3401,8 +3563,17 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Same rules as create, on the entry after the change, `before-opening-date` included (an archived card it already carries stays allowed); with `repeat_months` or `open_ended`, `repeat-not-allowed-on-bill-payment` or `repeat-not-allowed-on-cofrinho-withdrawal` on an entry outside a series, `validation` on `repeat_months` outside 2..60, below this member's position or on a member of an open series (`an open series has no length; stop it instead`), on `date` when the series would pass 2100 (`must keep every entry up to 2100`); `validation` on `repeat_every` when it differs from a member's series step (`a series keeps its step`) or comes without `repeat_months` outside a series (`needs repeat_months`); with `following` or `all` on a series member, `before-opening-date` when the earliest moved member would land before the opening date, `validation` on `date` when the new date leaves this entry's month (`must stay in this entry's month when the series moves`), or on a weekly series its ISO week (`must stay in this entry's week when the series moves`), when two of the moved members share a month (`must not move a series with two entries in one month`) or a week (`must not move a series with two entries in one week`), or when a moved member would pass 2100 (`must keep every entry up to 2100`); `archived-cofrinho` when the entry, or with `following` a later (with `all` any) series member, is a deposit into or a resgate from a deleted cofrinho; `fatura-paid` when the amount, date or card changes on this entry or, with `following` a later (with `all` any) member, and its fatura on its own card is paid, or the change lands it in a paid fatura of the card it ends on, or `open_ended: false` would delete a later member of a paid fatura, or `open_ended: true` on a card would grow into a paid fatura (D30b); `validation` on `card_id` when `open_ended: true` meets an archived card; nothing is written */
+            /** @description Same rules as create, on the entry after the change, `before-opening-date` included (an archived card it already carries stays allowed); with `repeat_months` or `open_ended`, `repeat-not-allowed-on-bill-payment` or `repeat-not-allowed-on-cofrinho-withdrawal` on an entry outside a series, `validation` on `repeat_months` outside 2..60, below this member's position or on a member of an open series (`an open series has no length; stop it instead`), on `date` when the series would pass 2100 (`must keep every entry up to 2100`); `validation` on `repeat_every` when it differs from a member's series step (`a series keeps its step`) or comes without `repeat_months` outside a series (`needs repeat_months`); with `following` or `all` on a series member, `before-opening-date` when the earliest moved member would land before the opening date, `validation` on `date` when the new date leaves this entry's month (`must stay in this entry's month when the series moves`), or on a weekly series its ISO week (`must stay in this entry's week when the series moves`), when two of the moved members share a month (`must not move a series with two entries in one month`) or a week (`must not move a series with two entries in one week`), or when a moved member would pass 2100 (`must keep every entry up to 2100`); `archived-cofrinho` when the entry, or with `following` a later (with `all` any) series member, is a deposit into or a resgate from a deleted cofrinho; `fatura-paid` when the amount, date or card changes on this entry or, with `following` a later (with `all` any) member, and its fatura on its own card is paid, or the change lands it in a paid fatura of the card it ends on, or `open_ended: false` would delete a later member of a paid fatura, or `open_ended: true` on a card would grow into a paid fatura (D30b); `validation` on `card_id` when `open_ended: true` meets an archived card; `quota` when `repeat_months` would take the account past the account's 50,000 entries (SOL-137); nothing is written */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Rate limited with the account's write budget; wait `Retry-After` seconds */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };

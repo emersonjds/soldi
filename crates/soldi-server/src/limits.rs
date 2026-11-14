@@ -16,10 +16,13 @@ pub struct Budget {
     pub window: Duration,
 }
 
+const ONE_MINUTE: Duration = Duration::from_secs(60);
 const FIFTEEN_MINUTES: Duration = Duration::from_secs(15 * 60);
 const ONE_HOUR: Duration = Duration::from_secs(60 * 60);
+const ONE_DAY: Duration = Duration::from_secs(24 * 60 * 60);
 const SWEEP_EVERY: Duration = Duration::from_secs(10 * 60);
 const MAX_KEYS: usize = 100_000;
+const EVICT_BATCH: usize = MAX_KEYS / 10;
 
 pub const SIGN_IN_IP: Budget = Budget {
     name: "sign-in-ip",
@@ -33,13 +36,18 @@ pub const SIGN_IN_EMAIL_IP: Budget = Budget {
 };
 pub const SIGN_IN_EMAIL: Budget = Budget {
     name: "sign-in-email",
-    limit: 50,
+    limit: 10 * SIGN_IN_EMAIL_IP.limit,
     window: FIFTEEN_MINUTES,
 };
 pub const SIGN_UP_IP: Budget = Budget {
     name: "sign-up-ip",
     limit: 10,
     window: ONE_HOUR,
+};
+pub const SIGN_UP_IP_DAY: Budget = Budget {
+    name: "sign-up-ip-day",
+    limit: 20,
+    window: ONE_DAY,
 };
 pub const PASSWORD_CHANGE_USER: Budget = Budget {
     name: "password-change-user",
@@ -51,9 +59,14 @@ pub const PASSWORD_RESET_IP: Budget = Budget {
     limit: 10,
     window: ONE_HOUR,
 };
+pub const PASSWORD_RESET_EMAIL_IP: Budget = Budget {
+    name: "password-reset-email-ip",
+    limit: 3,
+    window: ONE_HOUR,
+};
 pub const PASSWORD_RESET_EMAIL: Budget = Budget {
     name: "password-reset-email",
-    limit: 3,
+    limit: 10,
     window: ONE_HOUR,
 };
 pub const PASSWORD_RESET_CONFIRM_IP: Budget = Budget {
@@ -71,11 +84,48 @@ pub const EMAIL_VERIFY_IP: Budget = Budget {
     limit: 10,
     window: ONE_HOUR,
 };
+pub const EMAIL_VERIFY_IP_DAY: Budget = Budget {
+    name: "email-verify-ip-day",
+    limit: 20,
+    window: ONE_DAY,
+};
 pub const EMAIL_VERIFY_CONFIRM_IP: Budget = Budget {
     name: "email-verify-confirm-ip",
     limit: 20,
     window: ONE_HOUR,
 };
+
+pub const WRITES_USER: Budget = Budget {
+    name: "writes-user",
+    limit: 120,
+    window: ONE_MINUTE,
+};
+pub const WRITES_USER_HOUR: Budget = Budget {
+    name: "writes-user-hour",
+    limit: 2_000,
+    window: ONE_HOUR,
+};
+
+/// Every signed-in write spends these, whatever the route.
+pub fn write_keys(user_id: String) -> [(Budget, Option<String>); 2] {
+    [
+        (WRITES_USER, Some(user_id.clone())),
+        (WRITES_USER_HOUR, Some(user_id)),
+    ]
+}
+
+/// A new account and a taken e-mail spend the same keys.
+pub fn sign_up_keys(ip: Option<String>) -> [(Budget, Option<String>); 2] {
+    [(SIGN_UP_IP, ip.clone()), (SIGN_UP_IP_DAY, ip)]
+}
+
+pub fn email_verify_keys(ip: Option<String>, user_id: String) -> [(Budget, Option<String>); 3] {
+    [
+        (EMAIL_VERIFY_IP, ip.clone()),
+        (EMAIL_VERIFY_IP_DAY, ip),
+        (EMAIL_VERIFY_USER, Some(user_id)),
+    ]
+}
 
 struct Window {
     ends: Instant,
@@ -106,11 +156,23 @@ impl Limiter {
         if full || now.duration_since(last_sweep) >= SWEEP_EVERY {
             state.windows.retain(|_, window| window.ends > now);
             state.last_sweep = Some(now);
-        }
-        // ponytail: fails closed at MAX_KEYS live keys (~10 MB) and sweeps O(n) per new key while
-        // full; a shared store with TTLs (Redis) lifts both.
-        if full && state.windows.len() >= MAX_KEYS {
-            return Err(budget.window.as_secs().max(1));
+            // ponytail: the lowest counts (nearest their end among equals) go until EVICT_BATCH
+            // slots are free, so throwaway keys go before refusing counters and the O(n) work runs
+            // at most once per EVICT_BATCH fresh keys; a shared store with TTLs (Redis) removes the cap.
+            let excess = state.windows.len().saturating_sub(MAX_KEYS - EVICT_BATCH);
+            if excess > 0 {
+                let mut by_count: Vec<_> = (state.windows.iter())
+                    .map(|(key, w)| (w.count, w.ends, key))
+                    .collect();
+                by_count.select_nth_unstable(excess);
+                let evicted: Vec<String> = by_count[..excess]
+                    .iter()
+                    .map(|(_, _, key)| (*key).clone())
+                    .collect();
+                for key in evicted {
+                    state.windows.remove(&key);
+                }
+            }
         }
         let window = state.windows.entry(key.to_string()).or_insert(Window {
             ends: now,
@@ -133,7 +195,10 @@ impl Limiter {
     /// Spends one unit of each known key in order; the first key over its budget refuses and
     /// later keys are left untouched.
     pub fn check(&self, keys: &[(Budget, Option<String>)]) -> Result<(), AppError> {
-        let now = Instant::now();
+        self.check_at(keys, Instant::now())
+    }
+
+    fn check_at(&self, keys: &[(Budget, Option<String>)], now: Instant) -> Result<(), AppError> {
         for (budget, value) in keys {
             let Some(value) = value else { continue };
             self.hit(&format!("{}:{value}", budget.name), *budget, now)
@@ -144,9 +209,9 @@ impl Limiter {
 }
 
 /// The last `X-Forwarded-For` address, else the socket peer; IPv4-mapped addresses become IPv4
-/// and IPv6 is cut to its /64. Railway's edge appends the address it saw, so earlier entries come
-/// from the client and can be forged. A loopback client (local runs and e2e, never behind Railway)
-/// gets no IP key.
+/// and IPv6 is cut to its /56, one residential allocation. Railway's edge appends the address it
+/// saw, so earlier entries come from the client and can be forged. A loopback client (local runs
+/// and e2e, never behind Railway) gets no IP key.
 pub fn client_ip(headers: &HeaderMap, peer: Option<SocketAddr>) -> Option<IpAddr> {
     let ip = headers
         .get_all("x-forwarded-for")
@@ -161,7 +226,7 @@ pub fn client_ip(headers: &HeaderMap, peer: Option<SocketAddr>) -> Option<IpAddr
         return None;
     }
     Some(match ip {
-        IpAddr::V6(v6) => IpAddr::V6(Ipv6Addr::from(u128::from(v6) & !u128::from(u64::MAX))),
+        IpAddr::V6(v6) => IpAddr::V6(Ipv6Addr::from(u128::from(v6) & (u128::MAX << 72))),
         v4 => v4,
     })
 }
@@ -236,19 +301,77 @@ mod tests {
         assert_eq!(limiter.hit("ana", instant, Instant::now()), Err(1));
     }
 
+    fn fill(limiter: &Limiter, keys: std::ops::Range<usize>, now: Instant) {
+        for index in keys {
+            limiter.hit(&index.to_string(), BUDGET, now).unwrap();
+        }
+    }
+
     #[test]
-    fn a_full_map_refuses_new_keys_but_still_counts_known_ones() {
+    fn a_full_map_evicts_its_oldest_windows_to_admit_a_fresh_key() {
+        let limiter = Limiter::default();
+        let start = Instant::now();
+        limiter.hit("old", BUDGET, start).unwrap();
+        fill(&limiter, 1..MAX_KEYS, start + Duration::from_secs(1));
+
+        let now = start + Duration::from_secs(2);
+        assert_eq!(limiter.hit("new", BUDGET, now), Ok(()));
+        let state = limiter.state.lock().unwrap();
+        assert!(!state.windows.contains_key("old"));
+        assert!(state.windows.contains_key("new"));
+        assert_eq!(state.windows.len(), MAX_KEYS - EVICT_BATCH + 1);
+    }
+
+    #[test]
+    fn a_flooder_stays_limited_while_fresh_keys_are_admitted() {
+        let limiter = Limiter::default();
+        let start = Instant::now();
+        for _ in 0..3 {
+            limiter.hit("flooder", BUDGET, start).unwrap();
+        }
+        fill(&limiter, 1..MAX_KEYS, start + Duration::from_secs(1));
+
+        let now = start + Duration::from_secs(2);
+        assert_eq!(limiter.hit("new", BUDGET, now), Ok(()));
+        assert_eq!(limiter.hit("flooder", BUDGET, now), Err(898));
+    }
+
+    #[test]
+    fn eviction_frees_a_batch_so_the_next_fresh_keys_skip_it() {
+        let limiter = Limiter::default();
+        let start = Instant::now();
+        fill(&limiter, 0..MAX_KEYS, start);
+        let size = || limiter.state.lock().unwrap().windows.len();
+
+        limiter.hit("fresh-0", BUDGET, start).unwrap();
+        assert_eq!(size(), MAX_KEYS - EVICT_BATCH + 1);
+        for index in 1..EVICT_BATCH {
+            limiter
+                .hit(&format!("fresh-{index}"), BUDGET, start)
+                .unwrap();
+        }
+        assert_eq!(size(), MAX_KEYS);
+        limiter.hit("one-more", BUDGET, start).unwrap();
+        assert_eq!(size(), MAX_KEYS - EVICT_BATCH + 1);
+    }
+
+    #[test]
+    fn a_sweep_that_frees_one_window_still_leaves_a_free_batch() {
         let limiter = Limiter::default();
         let start = Instant::now();
         for index in 0..MAX_KEYS {
-            limiter.hit(&index.to_string(), BUDGET, start).unwrap();
+            let at = start + Duration::from_millis(index as u64);
+            limiter.hit(&index.to_string(), BUDGET, at).unwrap();
         }
+        let size = || limiter.state.lock().unwrap().windows.len();
 
-        assert_eq!(limiter.hit("new", BUDGET, start), Err(900));
-        assert_eq!(limiter.hit("0", BUDGET, start), Ok(()));
-        assert_eq!(limiter.hit("0", BUDGET, start), Ok(()));
-        assert_eq!(limiter.hit("0", BUDGET, start), Err(900));
-        assert_eq!(limiter.state.lock().unwrap().windows.len(), MAX_KEYS);
+        for step in 0..3 {
+            let one_more_expired = start + Duration::from_millis(900_000 + step as u64);
+            limiter
+                .hit(&format!("fresh-{step}"), BUDGET, one_more_expired)
+                .unwrap();
+            assert_eq!(size(), MAX_KEYS - EVICT_BATCH + step + 1, "{step}");
+        }
     }
 
     #[test]
@@ -278,6 +401,94 @@ mod tests {
             Err(AppError::TooManyRequests { retry_after: 900 })
         ));
         assert_eq!(limiter.state.lock().unwrap().windows.len(), 1);
+    }
+
+    const HOUR: Duration = Duration::from_secs(3600);
+
+    fn refused_for(result: Result<(), AppError>) -> u64 {
+        match result {
+            Err(AppError::TooManyRequests { retry_after }) => retry_after,
+            other => panic!("expected a refusal, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn one_ip_gets_twenty_sign_ups_a_day_across_hourly_windows() {
+        let limiter = Limiter::default();
+        let ip = || Some("192.0.2.1".to_string());
+        let start = Instant::now();
+        for hour in 0..2 {
+            let at = start + HOUR * hour;
+            for attempt in 0..10 {
+                let spent = limiter.check_at(&sign_up_keys(ip()), at);
+                assert!(spent.is_ok(), "{hour}:{attempt}");
+            }
+        }
+
+        let third_hour = start + HOUR * 2;
+        let refused = limiter.check_at(&sign_up_keys(ip()), third_hour);
+        assert_eq!(refused_for(refused), 22 * 3600);
+        let elsewhere = Some("192.0.2.2".to_string());
+        assert!(
+            limiter
+                .check_at(&sign_up_keys(elsewhere), third_hour)
+                .is_ok()
+        );
+        let next_day = start + HOUR * 24;
+        assert!(limiter.check_at(&sign_up_keys(ip()), next_day).is_ok());
+    }
+
+    #[test]
+    fn one_ip_gets_twenty_verification_mails_a_day_across_accounts() {
+        let limiter = Limiter::default();
+        let ip = || Some("203.0.113.1".to_string());
+        let start = Instant::now();
+        for hour in 0..2 {
+            let at = start + HOUR * hour;
+            for account in 0..10 {
+                let user = format!("user-{hour}-{account}");
+                let spent = limiter.check_at(&email_verify_keys(ip(), user), at);
+                assert!(spent.is_ok(), "{hour}:{account}");
+            }
+        }
+
+        let third_hour = start + HOUR * 2;
+        let fresh = || "fresh-account".to_string();
+        let refused = limiter.check_at(&email_verify_keys(ip(), fresh()), third_hour);
+        assert_eq!(refused_for(refused), 22 * 3600);
+        let elsewhere = Some("203.0.113.2".to_string());
+        let other_ip = limiter.check_at(&email_verify_keys(elsewhere, fresh()), third_hour);
+        assert!(other_ip.is_ok());
+    }
+
+    #[test]
+    fn one_account_gets_120_writes_a_minute_and_2000_an_hour() {
+        let limiter = Limiter::default();
+        let ana = || "ana".to_string();
+        let start = Instant::now();
+        for write in 0..120 {
+            assert!(
+                limiter.check_at(&write_keys(ana()), start).is_ok(),
+                "{write}"
+            );
+        }
+        assert_eq!(refused_for(limiter.check_at(&write_keys(ana()), start)), 60);
+        assert!(limiter.check_at(&write_keys("bia".into()), start).is_ok());
+
+        let minute = Duration::from_secs(60);
+        for step in 1..16 {
+            for write in 0..120 {
+                let spent = limiter.check_at(&write_keys(ana()), start + minute * step);
+                assert!(spent.is_ok(), "{step}:{write}");
+            }
+        }
+        let late = start + minute * 16;
+        let spent = (0..80).filter(|_| limiter.check_at(&write_keys(ana()), late).is_ok());
+        assert_eq!(spent.count(), 80);
+        assert_eq!(
+            refused_for(limiter.check_at(&write_keys(ana()), late)),
+            44 * 60
+        );
     }
 
     fn forwarded(lines: &[&str]) -> HeaderMap {
@@ -312,16 +523,17 @@ mod tests {
     }
 
     #[test]
-    fn ipv6_clients_are_keyed_by_their_slash_64() {
+    fn ipv6_clients_are_keyed_by_their_slash_56() {
         let key = |value: &str| client_ip(&forwarded(&[value]), None);
         assert_eq!(
             key("2001:db8:1:2::1"),
-            key("2001:db8:1:2:ffff:ffff:ffff:ffff")
+            key("2001:db8:1:ff:ffff:ffff:ffff:ffff")
         );
         assert_eq!(
-            key("2001:db8:1:2::1"),
-            Some("2001:db8:1:2::".parse().unwrap())
+            key("2001:db8:1:2ff::1"),
+            Some("2001:db8:1:200::".parse().unwrap())
         );
-        assert_ne!(key("2001:db8:1:2::1"), key("2001:db8:1:3::1"));
+        assert_ne!(key("2001:db8:1:2::1"), key("2001:db8:1:100::1"));
+        assert_ne!(key("2001:db8:1:2::1"), key("2001:db8:2::1"));
     }
 }

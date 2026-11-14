@@ -21,7 +21,7 @@ use axum::extract::State;
 use axum::http::header::{
     REFERRER_POLICY, STRICT_TRANSPORT_SECURITY, X_CONTENT_TYPE_OPTIONS, X_FRAME_OPTIONS,
 };
-use axum::http::{HeaderValue, StatusCode};
+use axum::http::{HeaderName, HeaderValue, StatusCode};
 use axum::{Json, Router, middleware};
 use soldi_types::{Health, Problem};
 use sqlx::PgPool;
@@ -81,19 +81,59 @@ fn api() -> OpenApiRouter<AppState> {
 
 /// The API contract, built without a database; `web/openapi.json` is its committed snapshot.
 pub fn openapi() -> utoipa::openapi::OpenApi {
-    api().split_for_parts().1
+    let (_, mut api) = api().split_for_parts();
+    document_write_budget(&mut api);
+    api
+}
+
+/// SOL-137: every signed-in write (it answers 401) spends the per-account write budget, but the
+/// recovery writes of [`extract::WRITE_BUDGET_EXEMPT`].
+fn document_write_budget(api: &mut utoipa::openapi::OpenApi) {
+    use axum::http::Method;
+    use utoipa::openapi::{ContentBuilder, Ref, ResponseBuilder};
+    let limited = ResponseBuilder::new()
+        .description("Rate limited with the account's write budget; wait `Retry-After` seconds")
+        .content(
+            "application/problem+json",
+            ContentBuilder::new()
+                .schema(Some(Ref::from_schema_name("Problem")))
+                .build(),
+        )
+        .build();
+    for (path, item) in api.paths.paths.iter_mut() {
+        let writes = [
+            (Method::POST, &mut item.post),
+            (Method::PUT, &mut item.put),
+            (Method::PATCH, &mut item.patch),
+            (Method::DELETE, &mut item.delete),
+        ];
+        for (method, operation) in writes {
+            let Some(operation) = operation else { continue };
+            let responses = &mut operation.responses.responses;
+            if responses.contains_key("401") && extract::spends_write_budget(&method, path) {
+                responses
+                    .entry("429".into())
+                    .or_insert_with(|| limited.clone().into());
+            }
+        }
+    }
 }
 
 /// `web_dir` holds the Next.js export; without an `index.html` there only the API answers.
 pub fn app(state: AppState, web_dir: Option<&Path>) -> Router {
-    let (router, api) = api().split_for_parts();
+    let (router, mut api) = api().split_for_parts();
+    document_write_budget(&mut api);
     let router = router
         .layer(TimeoutLayer::with_status_code(
             StatusCode::SERVICE_UNAVAILABLE,
             Duration::from_secs(30),
         ))
         .merge(SwaggerUi::new("/api/docs").url("/api/openapi.json", api));
-    let router = match web_dir.filter(|dir| dir.join("index.html").is_file()) {
+    let web_dir = web_dir.filter(|dir| dir.join("index.html").is_file());
+    let scripts = web_dir.map(web::inline_script_hashes).unwrap_or_default();
+    let policy = HeaderValue::try_from(web::content_security_policy(&scripts))
+        .expect("a CSP of ASCII sources and base64 hashes is a valid header");
+    let router = match web_dir {
         Some(dir) => {
             let dir = dir.to_path_buf();
             router.fallback(move |request: axum::extract::Request| {
@@ -123,6 +163,15 @@ pub fn app(state: AppState, web_dir: Option<&Path>) -> Router {
         .layer(SetResponseHeaderLayer::if_not_present(
             X_FRAME_OPTIONS,
             HeaderValue::from_static("DENY"),
+        ))
+        .layer(middleware::from_fn(move |request, next| {
+            web::content_security_policy_layer(policy.clone(), request, next)
+        }))
+        .layer(SetResponseHeaderLayer::if_not_present(
+            HeaderName::from_static("permissions-policy"),
+            HeaderValue::from_static(
+                "camera=(), microphone=(), geolocation=(), payment=(), usb=(), browsing-topics=()",
+            ),
         ))
         .layer(CompressionLayer::new())
         .with_state(state)

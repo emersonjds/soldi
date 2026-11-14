@@ -9,3 +9,7 @@ web/coverage
 web/test-results
 web/playwright-report
 .claude/settings.local.json
+/.lagune/memory/detect.md
+/.lagune/memory/plan.md
+/.lagune/memory/harden.md
+/.lagune/tracking.json

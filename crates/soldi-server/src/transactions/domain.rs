@@ -353,6 +353,16 @@ pub fn check_repeatable(entry: &Transaction) -> Result<(), AppError> {
     Ok(())
 }
 
+/// SOL-137: the entries one account may hold.
+pub const MAX_ENTRIES: i64 = 50_000;
+
+pub fn quota_reached() -> AppError {
+    AppError::rule(
+        "quota",
+        "This account holds the most entries allowed (50,000).",
+    )
+}
+
 pub fn already_repeated() -> AppError {
     AppError::rule("already-repeated", "This entry already repeats.")
 }

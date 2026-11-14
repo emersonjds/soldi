@@ -130,10 +130,14 @@ test("the shell follows Stitch from 375 to 1440: app bar and tab bar on mobile, 
 
   const main = page.getByRole("main");
   await tabs.getByRole("link", { name: "Mês" }).click();
+  const shown = main.getByRole("group", { name: "Mês" }).locator("[aria-live]");
+  const current = await shown.innerText();
   await main.getByRole("group", { name: "Mês" }).getByRole("button", { name: "Próximo mês" }).click();
   await expect(page).toHaveURL(/\/mes\?m=\d{4}-\d{2}$/);
+  // Next 16.4 rewrites the URL a render before useSearchParams follows.
+  await expect(shown).not.toHaveText(current);
   const next = new URL(page.url()).searchParams.get("m");
-  const label = await main.getByRole("group", { name: "Mês" }).locator("[aria-live]").innerText();
+  const label = await shown.innerText();
   await tabs.getByRole("link", { name: "Ajustes" }).click();
   await page.getByRole("link", { name: /^Contas fixas/ }).click();
   await expect(page).toHaveURL(`/ajustes/contas?m=${next}`);

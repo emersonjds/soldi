@@ -1,9 +1,15 @@
+use std::collections::BTreeSet;
 use std::path::Path;
 
 use axum::body::Body;
 use axum::extract::Request;
-use axum::http::{HeaderMap, Method, StatusCode};
+use axum::http::header::CONTENT_SECURITY_POLICY;
+use axum::http::{HeaderMap, HeaderValue, Method, StatusCode};
+use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
+use base64::Engine;
+use base64::engine::general_purpose::STANDARD;
+use sha2::{Digest, Sha256};
 use tower::ServiceExt;
 use tower_http::services::ServeDir;
 
@@ -61,4 +67,70 @@ async fn file(dir: &Path, path: &str, method: &Method, headers: &HeaderMap) -> R
         .oneshot(request)
         .await;
     response.into_response()
+}
+
+/// D40: what a browser may load from Soldi's pages; `scripts` are extra `script-src` sources.
+pub fn content_security_policy(scripts: &str) -> String {
+    format!(
+        "default-src 'self'; script-src 'self'{scripts}; style-src 'self' 'unsafe-inline'; \
+         img-src 'self' data:; font-src 'self'; \
+         connect-src 'self' https://*.ingest.sentry.io https://*.ingest.us.sentry.io; \
+         object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+    )
+}
+
+/// D40: `/api` answers are JSON, so they get a policy that loads nothing; pages, files and the
+/// API docs get `pages`, the hashed one.
+pub async fn content_security_policy_layer(
+    pages: HeaderValue,
+    request: Request,
+    next: Next,
+) -> Response {
+    let path = request.uri().path();
+    let json = (path == "/api" || path.starts_with("/api/")) && !path.starts_with("/api/docs");
+    let mut response = next.run(request).await;
+    let policy = match json {
+        true => HeaderValue::from_static("default-src 'none'; frame-ancestors 'none'"),
+        false => pages,
+    };
+    response
+        .headers_mut()
+        .entry(CONTENT_SECURITY_POLICY)
+        .or_insert(policy);
+    response
+}
+
+/// The export's inline `<script>` bodies as `'sha256-…'` sources, sorted, each led by a space.
+pub fn inline_script_hashes(dir: &Path) -> String {
+    let mut hashes = BTreeSet::new();
+    let mut folders = vec![dir.to_path_buf()];
+    while let Some(folder) = folders.pop() {
+        for path in std::fs::read_dir(folder)
+            .into_iter()
+            .flatten()
+            .flatten()
+            .map(|entry| entry.path())
+        {
+            if path.is_dir() {
+                folders.push(path);
+            } else if path
+                .extension()
+                .is_some_and(|extension| extension == "html")
+                && let Ok(html) = std::fs::read_to_string(&path)
+            {
+                hashes.extend(inline_scripts(&html).map(|script| {
+                    format!(" 'sha256-{}'", STANDARD.encode(Sha256::digest(script)))
+                }));
+            }
+        }
+    }
+    hashes.into_iter().collect()
+}
+
+fn inline_scripts(html: &str) -> impl Iterator<Item = &str> {
+    html.split("<script").skip(1).filter_map(|tag| {
+        let (attributes, rest) = tag.split_once('>')?;
+        let (body, _) = rest.split_once("</script>")?;
+        (!attributes.contains("src=")).then_some(body)
+    })
 }

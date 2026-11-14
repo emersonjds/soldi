@@ -393,6 +393,18 @@ pub async fn moves_archived_cofrinho(
     .await
 }
 
+/// SOL-137: serializes the user's entry-ceiling checks until the transaction ends; taken after
+/// any series lock.
+pub async fn lock_entries(conn: &mut PgConnection, user_id: Uuid) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        "SELECT pg_advisory_xact_lock(hashtextextended('entries:' || $1::text, 0))",
+        user_id.to_string()
+    )
+    .execute(&mut *conn)
+    .await?;
+    Ok(())
+}
+
 /// Serializes every write to one series until the transaction ends; taken before any row lock.
 pub async fn lock_series(conn: &mut PgConnection, series_id: Uuid) -> Result<(), sqlx::Error> {
     sqlx::query!(

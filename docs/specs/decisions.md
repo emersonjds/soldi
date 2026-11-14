@@ -356,3 +356,51 @@ Soldi reads no bank feed, so a card limit "used" built from typed rows is wrong 
 ## D38 — Production errors go to Sentry without personal or money data (2026-11-14, owner, SOL-129)
 
 One Sentry project for server and web (tag `side`), DSN from Railway variables, off without it. Events carry the error, stack, route, release and environment only: no amounts, e-mails, notes, bodies, cookies or user id; UI breadcrumbs dropped; no tracing or replay. Only bugs are reported: server 5xx and panics, web render errors, unhandled rejections and API failures that are network errors or ≥ 500, never 4xx. Uptime by a Sentry monitor on `/api/health`; silent failures by a Playwright smoke run against production after each release (and on demand) on a dedicated account. Detail: `docs/specs/cards/SOL-129.md`.
+
+## D39 — Rate-limit keys and ceilings degrade only the flooder (2026-11-14, orchestrator, SOL-131..133 from the Lagune scan)
+
+The in-process limiter keeps at most 100,000 windows. Every O(n) pass (the 10-minute sweep, or a fresh key arriving at a full map) drops expired windows, then evicts the lowest counts, nearest their end among equals, until 10,000 slots are free; a fresh key is always admitted, since refusing every new key would let one flood lock everybody out. Throwaway count-1 keys go first, so a counter that is refusing someone survives key churn. Measured in release on the dev machine: one pass over a full map takes about 3 ms under the lock, and a flood of fresh keys costs about 0.4 µs per key amortized, the pass included, because a pass runs at most once per 10,000 fresh keys even when windows expire one at a time. IPv6 clients are keyed by /56, a residential allocation, IPv4 by the full address.
+
+Sign-in spends three budgets per 15 minutes: 20 per address, 10 per (e-mail, address) and 100 per e-mail (10 × the pair budget). A successful sign-in sets `__Host-soldi_device` (HttpOnly, Secure, SameSite=Lax, 180 days; `soldi_device` over plain HTTP in development), a random 32-byte token whose SHA-256 is stored in `trusted_devices` with the user, at most 20 per user (oldest dropped). A sign-in carrying a device token of the account with that e-mail, younger than 180 days, skips the per-e-mail ceiling but still spends the address and pair budgets; the lookup runs only after those two pass, and a missing, foreign or stale token is treated exactly like no token, so the answer never depends on whether the e-mail exists. A password change, a password reset and account deletion revoke every device of the user. Ten addresses guessing together still lock the owner out of a new browser until the window ends; the browser the owner already used keeps working (OWASP device-cookie pattern).
+
+Password-reset requests: 10 per address, 3 per (e-mail, address) and 10 per e-mail per hour, the same 202 or 429 whether or not the account exists. A request while the account holds a live link issued in the last 15 minutes mails nothing and keeps that link valid, so an account receives at most 4 reset mails an hour under any request pattern and a flood cannot void the link the owner is using. A loopback client has no address key and spends only the e-mail budgets.
+
+Accepted: an attacker spending the per-e-mail reset budget (10 an hour from 4 addresses) blocks the owner from asking for a new link for the rest of the hour, though a link already mailed keeps working; an attacker with 10 addresses can keep an owner without a trusted device (new browser, cleared cookies, after a password change) out for 15 minutes at a time; a device cookie stolen from the owner's browser bypasses the e-mail ceiling for that account until a password change; eviction resets low counters, which only matters to someone churning 10,000 keys. One process only; a restart clears the counters and a second instance needs a shared store (Redis or Postgres).
+
+## D40 — Pages run only the scripts the export ships (2026-11-14, orchestrator, SOL-134 from the Lagune scan)
+
+Pages, static files and the API docs (`/api/docs`) carry one Content-Security-Policy, built at boot:
+
+`default-src 'self'; script-src 'self' <hashes>; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.ingest.sentry.io https://*.ingest.us.sentry.io; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'`
+
+Every other `/api` answer is JSON and carries `default-src 'none'; frame-ancestors 'none'` instead, so the hashes never ride on API traffic. Every response carries `Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), browsing-topics=()`.
+
+- **Scripts by hash, never `'unsafe-inline'`.** The static export inlines a Turbopack bootstrap and the `self.__next_f` flight data in each page. The server hashes (SHA-256) every inline `<script>` of every `.html` in `SOLDI_WEB_DIR` once at boot and lists them all in `script-src`; nonces need a per-request render the export does not have. The union goes on every page instead of a per-page map: one header to build, HTTP/2 compresses the repeat, and a page may only run another Soldi page's bootstrap. Measured on the 2026-11-14 export: 23 pages, 24 distinct inline scripts, 1,296 bytes of hashes, a 1,563-byte header; a page map pays off only if the export grows several times over. A new build changes the hashes, which a restart (every deploy) picks up.
+- **Styles keep `'unsafe-inline'`.** Tailwind ships as files, but React `style` attributes, the chart `<style>` and Swagger UI set inline styles; style injection cannot read or send data under this `connect-src`.
+- **Fonts are self-hosted** by `next/font`; images are self or `data:`.
+- **`connect-src`** is the API on the same origin plus Sentry ingest in either region (D38); any other host is refused.
+- **Swagger UI** at `/api/docs` loads only its own files and passes under the same policy; no path gets a relaxed one.
+- `interest-cohort` is left out of Permissions-Policy: FLoC is gone and Chrome logs the unknown feature; `browsing-topics` replaces it.
+- A Playwright check (`web/e2e/csp.spec.ts`) loads the pages and the API docs against the production export and fails on any CSP console message; it also proves Sentry ingest is reachable and another host is blocked.
+
+## D41 — Sign-up keeps `email-taken`; probing for accounts is slow instead (2026-11-14, orchestrator, SOL-135..136 from the Lagune scan; waiver of charter III)
+
+Charter III says no answer may reveal whether an e-mail has an account. Sign-up still answers 409 `email-taken`: the owner wants sign-up to land in onboarding at once, and a non-revealing answer needs verify-before-account (mail a link, create the account on confirm), a large UX change for a personal-finance app with no public profile behind an e-mail.
+
+What an enumerator pays instead:
+
+- **Budget.** A taken e-mail spends the same per-address budgets as a new account, checked before the body reaches the database: 10 an hour and 20 a day per address (IPv6 by /56, D39). One address learns at most 20 e-mails a day, and each probe that misses creates a real account with a session.
+- **Work.** Input is validated, then the password is hashed with argon2id, then the insert runs; `email-taken` is the insert's unique violation, so a taken e-mail and a new account do the same hashing before they answer. A taken e-mail with a bad password gets the 422 like anyone else.
+- **Mail.** Sign-up sends no mail. Verification mails cost 3 per account and 10 per address an hour, plus 20 per address a day across all accounts, so throwaway accounts from one address can aim at most 20 Soldi mails a day at inboxes they do not own; a refused request is the usual 429.
+
+Accepted limits of the daily ceilings (sign-up and verification mail): they live in the D39 in-process limiter, so a deploy or restart resets them; the window is a fixed 24 hours from the key's first request, not a sliding one, so one address can spend up to 2 × 20 around a window boundary; and an IPv4 address behind carrier-grade NAT is shared by many people, who then share its 20 a day.
+
+Revisit when Soldi adds verify-before-account (then sign-up answers the same 202 for both cases and the 409 goes), when sign-up gets an invite or captcha step, or if the logs show distributed probing (many addresses each under the ceiling).
+
+## D42 — Per-account write budget, an entry ceiling, and fixed error text for Sentry (2026-11-14, orchestrator, SOL-137 and SOL-139 from the Lagune scan)
+
+**Writes.** Every signed-in write (any method but GET, HEAD, OPTIONS and TRACE, checked in the `CurrentUser` extractor right after the session) spends two per-account budgets: 120 a minute and 2,000 an hour. Past either, the usual 429 `rate-limited` with `Retry-After`; reads never spend them and other accounts are untouched. Generous for a person clicking, bounded for a script. Same in-process limiter and caveats as D39.
+
+**Entries.** An account holds at most 50,000 entries. A create, a `repeat_months` that starts or grows a series, a bill payment or a resgate that would pass it answers 422 `quota` (web copy: "Sua conta chegou ao limite de 50.000 lançamentos."), and nothing is written. Open series stop growing at the ceiling on read, silently, and the read still answers. The count runs before the insert, so concurrent requests can overshoot by one request's entries each; the write budget bounds that. Bills and categories have no ceiling of their own: one row per write, bounded by the write budget.
+
+**Sentry text.** An internal error carries a fixed category (`database`, `mail`, `other`) and its cause. The cause (sqlx or HTTP client text) is logged at WARN, which stays in the Railway log because the Sentry layer forwards ERROR only; the ERROR line says only `internal error: <category>`. The detached mail tasks log the same fixed text. `before_send` is unchanged.

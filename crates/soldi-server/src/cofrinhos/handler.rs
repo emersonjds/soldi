@@ -48,7 +48,7 @@ pub async fn list_cofrinhos(
         (status = 201, body = Transaction, description = "The resgate: an income entry in `Resgate` with `cofrinho_id`"),
         (status = 401, body = Problem, content_type = "application/problem+json"),
         (status = 404, body = Problem, content_type = "application/problem+json", description = "Missing, archived or another user's"),
-        (status = 422, body = Problem, content_type = "application/problem+json", description = "A bad field, `insufficient-cofrinho` above the balance, `before-opening-date`, or `not-a-cofrinho`")))]
+        (status = 422, body = Problem, content_type = "application/problem+json", description = "A bad field, `insufficient-cofrinho` above the balance, `before-opening-date`, `not-a-cofrinho`, or `quota` past the account's 50,000 entries (SOL-137)")))]
 pub async fn withdraw(
     State(state): State<AppState>,
     user: CurrentUser,

@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { type Cofrinho, useWithdraw } from "@/entities/cofrinho/cofrinho-queries";
-import { hasProblem } from "@/shared/api/client";
+import { hasProblem, problemMessage } from "@/shared/api/client";
 import { useCurrency } from "@/shared/lib/currency";
 import { todayISO } from "@/shared/lib/date";
 import { formatMoney, positiveAmount } from "@/shared/lib/money";
@@ -52,7 +52,7 @@ export const WithdrawForm = ({
     withdraw.error &&
     (hasProblem(withdraw.error, "insufficient-cofrinho")
       ? `Você só tem ${formatMoney(cofrinho.balance, currency)} guardado aqui`
-      : "Não foi possível resgatar.");
+      : (problemMessage(withdraw.error) ?? "Não foi possível resgatar."));
 
   return (
     <form noValidate onSubmit={submit} className="flex flex-col gap-6">

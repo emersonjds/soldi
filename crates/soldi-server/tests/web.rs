@@ -84,6 +84,62 @@ async fn pages_resolve_like_a_static_host() {
 }
 
 #[tokio::test]
+async fn pages_run_only_the_inline_scripts_the_export_ships() {
+    let dir = export("inline", true);
+    std::fs::write(
+        dir.join("index.html"),
+        "<script src=\"/_next/a.js\" async=\"\"></script><script>self.__next_f.push([0])</script>",
+    )
+    .unwrap();
+    std::fs::write(
+        dir.join("ajustes/categorias.html"),
+        "<script id=\"_R_\">self.__next_f.push([1])</script>",
+    )
+    .unwrap();
+    let app = app(Some(&dir));
+
+    for uri in [
+        "/",
+        "/ajustes/categorias",
+        "/_next/static/chunks/app-abc123.js",
+    ] {
+        let response = send(&app, Method::GET, uri).await;
+
+        assert_eq!(
+            response.headers()[header::CONTENT_SECURITY_POLICY],
+            "default-src 'self'; script-src 'self' \
+             'sha256-F8A7wEM/CBx+3vieKcubbMfWdgsy54B5PdWeRfp3zYU=' \
+             'sha256-VXfQxoId3eHgS78yBQY2mYYWuOAzZGdxULBMV816UdU='; \
+             style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; \
+             connect-src 'self' https://*.ingest.sentry.io https://*.ingest.us.sentry.io; \
+             object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
+            "{uri}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn api_answers_carry_a_policy_without_the_page_hashes() {
+    let dir = export("api-policy", true);
+    std::fs::write(
+        dir.join("index.html"),
+        "<script>self.__next_f.push([0])</script>",
+    )
+    .unwrap();
+    let app = app(Some(&dir));
+
+    for uri in ["/api/missing", "/api"] {
+        let response = send(&app, Method::GET, uri).await;
+
+        assert_eq!(
+            response.headers()[header::CONTENT_SECURITY_POLICY],
+            "default-src 'none'; frame-ancestors 'none'",
+            "{uri}"
+        );
+    }
+}
+
+#[tokio::test]
 async fn client_routes_get_index_html() {
     let app = app(Some(&export("routes", true)));
 
