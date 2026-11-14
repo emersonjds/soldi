@@ -209,8 +209,10 @@ pub async fn request_password_reset(
     }
     let email = email.to_lowercase();
     let ip = client_ip(&headers, peer);
+    let email_ip = ip.as_ref().map(|ip| format!("{ip} {email}"));
     state.limiter.check(&[
         (limits::PASSWORD_RESET_IP, ip),
+        (limits::PASSWORD_RESET_EMAIL_IP, email_ip),
         (limits::PASSWORD_RESET_EMAIL, Some(email.clone())),
     ])?;
     let mailer = state.mailer.clone();

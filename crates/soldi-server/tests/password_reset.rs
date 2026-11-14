@@ -376,20 +376,78 @@ async fn another_users_link_and_sessions_are_untouched(pool: PgPool) {
     );
 }
 
+async fn requests_from(app: &TestApp, email: &str, from: &str, times: usize) -> Vec<StatusCode> {
+    let mut statuses = Vec::new();
+    for _ in 0..times {
+        let response = app.send(forwarded(reset_request(email), from)).await;
+        statuses.push(response.status());
+    }
+    statuses
+}
+
 #[sqlx::test]
-async fn the_fourth_request_for_one_email_within_an_hour_is_limited(pool: PgPool) {
+async fn others_spend_only_their_own_reset_budget_for_an_email_whether_or_not_it_exists(
+    pool: PgPool,
+) {
     let (app, mail) = app(pool);
     app.another_user("ana@example.com").await;
-    for email in ["ana@example.com", "ANA@example.com", " ana@example.com"] {
-        assert_eq!(request_reset(&app, email).await.0, StatusCode::ACCEPTED);
-    }
+    app.another_user("bia@example.com").await;
+    let accepted = [StatusCode::ACCEPTED; 3];
+    let limited = [StatusCode::TOO_MANY_REQUESTS];
+    let expected = [&accepted[..], &limited[..]].concat();
 
-    assert_rate_limited(app.send(reset_request("ana@example.com")).await).await;
-    assert_eq!(mail.sent().await.len(), 3);
     assert_eq!(
-        request_reset(&app, "bia@example.com").await.0,
-        StatusCode::ACCEPTED
+        requests_from(&app, " ANA@example.com", "203.0.113.1", 4).await,
+        expected
     );
+    assert_eq!(
+        requests_from(&app, "nobody@example.com", "203.0.113.1", 4).await,
+        expected
+    );
+    assert_rate_limited(
+        app.send(forwarded(reset_request("ana@example.com"), "203.0.113.1"))
+            .await,
+    )
+    .await;
+
+    let owner = requests_from(&app, "ana@example.com", "198.51.100.7", 1).await;
+    assert_eq!(owner, [StatusCode::ACCEPTED]);
+    let bia = requests_from(&app, "bia@example.com", "203.0.113.1", 1).await;
+    assert_eq!(bia, [StatusCode::ACCEPTED]);
+    let sent = mail.sent().await;
+    let to = |email: &str| sent.iter().filter(|message| message.to == email).count();
+    assert_eq!((to("ana@example.com"), to("bia@example.com")), (4, 1));
+}
+
+#[sqlx::test]
+async fn one_email_gets_at_most_ten_reset_mails_an_hour_whether_or_not_it_exists(pool: PgPool) {
+    let (app, mail) = app(pool);
+    app.another_user("ana@example.com").await;
+    app.another_user("bia@example.com").await;
+    let spread = async |email: &str| {
+        let mut statuses = Vec::new();
+        for ip in 1..=3 {
+            statuses.extend(requests_from(&app, email, &format!("203.0.113.{ip}"), 3).await);
+        }
+        statuses.extend(requests_from(&app, email, "203.0.113.4", 2).await);
+        statuses
+    };
+    let mut expected = vec![StatusCode::ACCEPTED; 10];
+    expected.push(StatusCode::TOO_MANY_REQUESTS);
+
+    assert_eq!(spread("ana@example.com").await, expected);
+    assert_eq!(spread("nobody@example.com").await, expected);
+    assert_rate_limited(
+        app.send(forwarded(reset_request("ana@example.com"), "198.51.100.7"))
+            .await,
+    )
+    .await;
+
+    let bia = requests_from(&app, "bia@example.com", "198.51.100.7", 1).await;
+    assert_eq!(bia, [StatusCode::ACCEPTED]);
+    let sent = mail.sent().await;
+    let to = |email: &str| sent.iter().filter(|message| message.to == email).count();
+    assert_eq!((to("ana@example.com"), to("bia@example.com")), (10, 1));
 }
 
 #[sqlx::test]

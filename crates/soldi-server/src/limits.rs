@@ -52,9 +52,14 @@ pub const PASSWORD_RESET_IP: Budget = Budget {
     limit: 10,
     window: ONE_HOUR,
 };
+pub const PASSWORD_RESET_EMAIL_IP: Budget = Budget {
+    name: "password-reset-email-ip",
+    limit: 3,
+    window: ONE_HOUR,
+};
 pub const PASSWORD_RESET_EMAIL: Budget = Budget {
     name: "password-reset-email",
-    limit: 3,
+    limit: 10,
     window: ONE_HOUR,
 };
 pub const PASSWORD_RESET_CONFIRM_IP: Budget = Budget {
