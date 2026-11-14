@@ -33,7 +33,7 @@ uuid = { version = "1", features = ["v4", "serde"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
-base64 = "0.22"
+base64 = "0.23"
 sentry = { version = "0.49.5", default-features = false, features = ["reqwest", "rustls", "panic", "backtrace", "contexts", "tracing"] }
 
 [workspace.lints.rust]
