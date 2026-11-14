@@ -141,6 +141,29 @@ describe("initSentry", () => {
     expect(sent).toEqual({ type: undefined, message: "boom", request: { url: "https://getsoldi.app/mes" } });
   });
 
+  it("drops the URL fragment, which carries the reset and verify tokens, from the event", async () => {
+    const { beforeSend } = await options();
+
+    const sent = beforeSend?.(
+      { type: undefined, request: { url: "https://getsoldi.app/redefinir-senha/confirmar#token=secret" } },
+      {},
+    );
+
+    expect(sent).toEqual({ type: undefined, request: { url: "https://getsoldi.app/redefinir-senha/confirmar" } });
+  });
+
+  it("drops the URL fragment from navigation and request breadcrumbs", async () => {
+    const { beforeBreadcrumb } = await options();
+
+    expect(
+      beforeBreadcrumb?.({ category: "navigation", data: { from: "/verificar-email#token=a", to: "/mes#token=b" } }),
+    ).toEqual({ category: "navigation", data: { from: "/verificar-email", to: "/mes" } });
+    expect(beforeBreadcrumb?.({ category: "fetch", data: { url: "/api/x#token=c", status_code: 500 } })).toEqual({
+      category: "fetch",
+      data: { url: "/api/x", status_code: 500 },
+    });
+  });
+
   it("sends an event without a request untouched", async () => {
     const { beforeSend } = await options();
 

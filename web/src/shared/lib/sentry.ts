@@ -14,6 +14,9 @@ const whenIdle = (run: () => void) => {
   else setTimeout(run, 1);
 };
 
+// The reset and verify links carry their token in the fragment.
+const withoutFragment = (url: string) => url.replace(/#.*/, "");
+
 const start = async (dsn: string) => {
   const loaded = await import("./sentry-sdk");
   /** D38: errors, stack, route, release; never money, e-mail, bodies, cookies or the user. */
@@ -25,8 +28,17 @@ const start = async (dsn: string) => {
     dataCollection: { userInfo: false, cookies: false, httpHeaders: false, httpBodies: [] },
     initialScope: { tags: { side: "web" } },
     // Click and input breadcrumbs carry the element's text, which can be an amount.
-    beforeBreadcrumb: (breadcrumb) => (breadcrumb.category?.startsWith("ui.") ? null : breadcrumb),
+    beforeBreadcrumb: (breadcrumb) => {
+      if (breadcrumb.category?.startsWith("ui.")) return null;
+      const data = breadcrumb.data;
+      for (const key of ["from", "to", "url"]) {
+        const url = data?.[key];
+        if (data && typeof url === "string") data[key] = withoutFragment(url);
+      }
+      return breadcrumb;
+    },
     beforeSend: (event) => {
+      if (event.request?.url) event.request.url = withoutFragment(event.request.url);
       delete event.user;
       delete event.request?.data;
       delete event.request?.cookies;
