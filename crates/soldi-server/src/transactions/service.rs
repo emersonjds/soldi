@@ -34,7 +34,14 @@ pub async fn extend_open_series(
     user: &CurrentUser,
     until: NaiveDate,
 ) -> Result<(), AppError> {
-    let behind = repo::open_series_behind(&mut *pool.acquire().await?, user.id, until).await?;
+    let mut conn = pool.acquire().await?;
+    let behind = repo::open_series_behind(&mut conn, user.id, until).await?;
+    if behind.is_empty()
+        || repo::count_period(&mut conn, user.id, None).await? >= domain::MAX_ENTRIES
+    {
+        return Ok(());
+    }
+    drop(conn);
     for id in behind {
         let mut tx = pool.begin().await?;
         let Some(series) = repo::find(&mut tx, user.id, id)

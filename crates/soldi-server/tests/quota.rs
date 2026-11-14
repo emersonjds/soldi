@@ -248,3 +248,29 @@ async fn concurrent_creates_at_the_ceiling_never_pass_it(pool: PgPool) {
     assert_eq!(created, 1);
     assert_eq!(count(&ana).await, CEILING);
 }
+
+#[sqlx::test]
+async fn a_read_at_the_ceiling_takes_no_series_lock(pool: PgPool) {
+    let ana = opened(pool.clone(), "ana@example.com").await;
+    let (status, fixo) = spend(&ana, json!({ "open_ended": true, "repeat_every": "week" })).await;
+    assert_eq!(status, StatusCode::CREATED, "{fixo}");
+    fill_to(&pool, &ana, &fixo, CEILING).await;
+    let mut lock = pool.begin().await.unwrap();
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))")
+        .bind(fixo["series"]["id"].as_str().unwrap())
+        .execute(&mut *lock)
+        .await
+        .unwrap();
+
+    let far = today() + chrono::Months::new(36);
+    let read = tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        ana.get(&format!("/api/transactions?month={}", far.format("%Y-%m"))),
+    )
+    .await
+    .expect("a read at the ceiling waited on the series lock");
+
+    assert_eq!(read.0, StatusCode::OK);
+    lock.commit().await.unwrap();
+    assert_eq!(count(&ana).await, CEILING);
+}
