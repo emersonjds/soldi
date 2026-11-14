@@ -382,3 +382,15 @@ and `Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), u
 - **Swagger UI** at `/api/docs` loads only its own files and passes under the same policy; no path gets a relaxed one.
 - `interest-cohort` is left out of Permissions-Policy: FLoC is gone and Chrome logs the unknown feature; `browsing-topics` replaces it.
 - A Playwright check (`web/e2e/csp.spec.ts`) loads the pages and the API docs against the production export and fails on any CSP console message; it also proves Sentry ingest is reachable and another host is blocked.
+
+## D41 — Sign-up keeps `email-taken`; probing for accounts is slow instead (2026-11-14, orchestrator, SOL-135..136 from the Lagune scan; waiver of charter III)
+
+Charter III says no answer may reveal whether an e-mail has an account. Sign-up still answers 409 `email-taken`: the owner wants sign-up to land in onboarding at once, and a non-revealing answer needs verify-before-account (mail a link, create the account on confirm), a large UX change for a personal-finance app with no public profile behind an e-mail.
+
+What an enumerator pays instead:
+
+- **Budget.** A taken e-mail spends the same per-address budgets as a new account, checked before the body reaches the database: 10 an hour and 20 a day per address (IPv6 by /56, D39). One address learns at most 20 e-mails a day, and each probe that misses creates a real account with a session.
+- **Work.** Input is validated, then the password is hashed with argon2id, then the insert runs; `email-taken` is the insert's unique violation, so a taken e-mail and a new account do the same hashing before they answer. A taken e-mail with a bad password gets the 422 like anyone else.
+- **Mail.** Sign-up sends no mail. Verification mails cost 3 per account and 10 per address an hour, plus 20 per address a day across all accounts, so throwaway accounts from one address can aim at most 20 Soldi mails a day at inboxes they do not own; a refused request is the usual 429.
+
+Revisit when Soldi adds verify-before-account (then sign-up answers the same 202 for both cases and the 409 goes), when sign-up gets an invite or captcha step, or if the logs show distributed probing (many addresses each under the ceiling).
