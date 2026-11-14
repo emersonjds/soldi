@@ -6,7 +6,12 @@ pub fn options(dsn: Option<String>, environment: Option<String>) -> Option<sentr
     let mut options = sentry::ClientOptions::new()
         .release(env!("CARGO_PKG_VERSION"))
         .environment(environment.unwrap_or_else(|| "production".into()));
-    options.dsn = Some(dsn.trim().parse().ok()?);
+    let Ok(dsn) = dsn.trim().parse() else {
+        // Runs before the log is set up; the DSN itself stays out of the output.
+        eprintln!("SENTRY_DSN is malformed; Sentry is off");
+        return None;
+    };
+    options.dsn = Some(dsn);
     options.send_default_pii = false;
     options.before_send = Some(std::sync::Arc::new(|mut event| {
         event.request = None;
