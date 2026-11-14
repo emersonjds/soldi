@@ -7,6 +7,19 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.59.0
+
+> Headline: see what weighs on a card's fatura
+
+### Server
+
+- `GET /api/months/{month}/faturas/{card_id}`: a card's fatura for a month — total, the carry of a partial payment (D30a), what was paid, its entries and the next 6 faturas already committed (D16). Another user's card, a plain bill or an unknown id answers 404.
+
+### Web
+
+- Contas a pagar: `Ver Fatura {nome}` opens the card's fatura sheet — Assinaturas, Parcelas and Compras ranked largest first with their share, the next 6 faturas and `Posso comprar?`; a row opens the entry, where `Parar recorrência` stops a subscription.
+- Paying or undoing a bill keeps working after a fatura sheet was opened.
+
 ## 0.58.0
 
 > Headline: Recorrente, with or without an end
