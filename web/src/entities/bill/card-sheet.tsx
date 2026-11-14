@@ -89,14 +89,17 @@ export const CardSheet = ({
   open,
   onOpenChange,
   onSaved,
+  onCloseAutoFocus,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSaved: (card: Bill) => void;
+  onCloseAutoFocus?: (event: Event) => void;
 }) => (
   <ResponsiveSheet
     open={open}
     onOpenChange={onOpenChange}
+    onCloseAutoFocus={onCloseAutoFocus}
     title="Novo cartão"
     description="O nome do cartão, o dia em que a fatura fecha e o dia em que vence."
   >

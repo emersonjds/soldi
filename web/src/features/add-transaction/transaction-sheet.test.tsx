@@ -103,6 +103,15 @@ const setup = (props: Partial<SheetProps> = {}, replies = {}) => {
   return { requests, onOpenChange, sent };
 };
 
+/** Renders Editar on `transaction` over `categories`, for a loop of cases. */
+const renderSheet = (transaction: SheetProps["transaction"], categories: Schemas["Category"][]) => {
+  stubApi({
+    "GET /api/categories": { status: 200, body: categories },
+    "GET /api/bills": { status: 200, body: [] },
+  });
+  return renderWithQuery(<TransactionSheet open onOpenChange={vi.fn()} transaction={transaction} />);
+};
+
 describe("TransactionSheet", () => {
   beforeEach(() => {
     window.innerWidth = 375;
@@ -339,7 +348,7 @@ describe("TransactionSheet", () => {
         within(field)
           .getAllByRole("option")
           .map((option) => option.textContent),
-      ).toEqual(["Nenhum", "Porto", "+ Novo cartão"]);
+      ).toEqual(["Nenhum", "Porto"]);
       expect(field).toHaveValue("");
       await userEvent.selectOptions(field, "Porto");
       await userEvent.type(screen.getByLabelText(/^Valor d/), "3590");
@@ -365,7 +374,7 @@ describe("TransactionSheet", () => {
       return requests;
     };
 
-    it("with no card offers Nenhum and + Novo cartão, which creates one and selects it, the amount kept", async () => {
+    it("with no card offers Nenhum and a thumb-sized + Novo cartão under it, which creates one, selects it and takes focus back", async () => {
       setup({}, { "GET /api/bills": { status: 200, body: [BILL_ALUGUEL] } });
 
       const field = await cardField();
@@ -374,14 +383,17 @@ describe("TransactionSheet", () => {
           within(field)
             .getAllByRole("option")
             .map((option) => option.textContent),
-        ).toEqual(["Nenhum", "+ Novo cartão"]),
+        ).toEqual(["Nenhum"]),
       );
       await userEvent.type(screen.getByLabelText(/^Valor d/), "12345");
-      await userEvent.selectOptions(field, "+ Novo cartão");
+      const newCard = screen.getByRole("button", { name: "Novo cartão" });
+      expect(newCard).toHaveClass("min-h-11");
+      await userEvent.click(newCard);
       expect(field).toHaveValue("");
       const requests = await createPorto();
 
       await waitFor(() => expect(field).toHaveValue(PORTO.id));
+      await waitFor(() => expect(newCard).toHaveFocus());
       expect(screen.getByLabelText(/^Valor d/)).toHaveValue("123,45");
       await userEvent.click(screen.getByRole("button", { name: "Salvar Lançamento" }));
       await waitFor(() => expect(requests.some((request) => request.url.endsWith("/api/transactions"))).toBe(true));
@@ -419,6 +431,57 @@ describe("TransactionSheet", () => {
         ).toEqual(["Comida fora", "Mercado"]),
       );
       expect(screen.getByRole("textbox", { name: /^Valor d/, hidden: true })).toHaveValue("99,90");
+    });
+
+    it("keeps the chosen category when Novo cartão comes from a header-only card group on Diário", async () => {
+      const anuidade: Schemas["Category"] = {
+        ...MERCADO,
+        id: "c1000000-0000-4000-8000-000000000026",
+        name: "Anuidade",
+        color: CARTAO.color,
+        parent_id: CARTAO.id,
+      };
+      const categories = [...CATEGORIES, CARTAO, anuidade];
+      setup(
+        {},
+        { "GET /api/categories": { status: 200, body: categories }, "GET /api/bills": { status: 200, body: [] } },
+      );
+
+      await userEvent.click(within(await openPicker()).getByRole("button", { name: "Mercado" }));
+      await chosenIs("Mercado");
+      const sheet = await openPicker();
+      await userEvent.click(
+        within(within(sheet).getByRole("region", { name: "Cartão" })).getByRole("button", { name: "Novo cartão" }),
+      );
+      const requests = await createPorto(categories);
+      await userEvent.keyboard("{Escape}");
+      await chosenIs("Mercado");
+      await userEvent.type(screen.getByLabelText(/^Valor d/), "1000");
+      await userEvent.click(screen.getByRole("button", { name: "Salvar Lançamento" }));
+
+      await waitFor(() => expect(requests.some((request) => request.url.endsWith("/api/transactions"))).toBe(true));
+      expect(await requests.find((request) => request.url.endsWith("/api/transactions"))?.json()).toMatchObject({
+        kind: "daily",
+        category_id: MERCADO.id,
+        card_id: PORTO.id,
+      });
+    });
+
+    it("offers no Novo cartão from the card group, nor another kind, where Tipo is hidden", async () => {
+      const categories = [...CATEGORIES, CARTAO];
+      for (const transaction of [{ ...ALUGUEL_ROW, recurring_bill_id: "b1" }, MEMBER]) {
+        const { unmount } = renderSheet(transaction, categories);
+
+        const sheet = await openPicker();
+        const cartao = within(sheet).getByRole("region", { name: "Cartão" });
+        expect(within(cartao).queryByRole("button", { name: "Novo cartão" })).not.toBeInTheDocument();
+        await userEvent.click(within(sheet).getByRole("button", { name: "Novo grupo" }));
+        const form = await screen.findByRole("dialog", { name: "Nova Categoria" });
+        await userEvent.type(within(form).getByLabelText("Nome do agrupador"), "Mercado");
+        expect(within(form).queryByText("Quando acontece")).not.toBeInTheDocument();
+        expect(within(form).queryByRole("button", { name: "Usar esta categoria" })).not.toBeInTheDocument();
+        unmount();
+      }
     });
 
     it("drops the card when the kind leaves Diário", async () => {
