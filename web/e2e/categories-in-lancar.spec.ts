@@ -80,7 +80,7 @@ test("creates a card from Lançar, spends on it and finds it in the card's fatur
   await page.keyboard.type("5000");
 
   const cardField = launch.getByRole("combobox", { name: "Cartão" });
-  await cardField.selectOption("new");
+  await launch.getByRole("button", { name: "Novo cartão" }).click();
   const cardSheet = page.getByRole("dialog", { name: "Novo cartão" });
   await cardSheet.getByLabel("Nome do cartão").fill("Porto");
   await cardSheet.getByRole("textbox", { name: "Fecha dia" }).fill("3");
