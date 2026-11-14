@@ -194,7 +194,7 @@ pub async fn change_password(
 
 #[utoipa::path(post, path = "/api/auth/password-reset", tag = "auth", request_body = RequestPasswordReset,
     responses(
-        (status = 202, description = "Accepted whether or not an account has this e-mail; when one has, a reset link valid for 1 hour is e-mailed to it and older links stop working"),
+        (status = 202, description = "Accepted whether or not an account has this e-mail; when one has, a reset link valid for 1 hour is e-mailed to it and older links stop working, unless a link went out in the last 15 minutes: then nothing is sent and that link stays valid"),
         (status = 422, body = Problem, content_type = "application/problem+json", description = "Field `email` over 254 bytes"),
         (status = 429, body = Problem, content_type = "application/problem+json", description = "Rate limited; wait `Retry-After` seconds")))]
 pub async fn request_password_reset(

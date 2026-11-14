@@ -180,6 +180,20 @@ pub async fn lock_password_resets(
     Ok(())
 }
 
+/// A live link of the user issued in the last 15 minutes.
+pub async fn has_recent_password_reset(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+) -> Result<bool, sqlx::Error> {
+    sqlx::query_scalar!(
+        r#"SELECT EXISTS (SELECT 1 FROM password_resets WHERE user_id = $1 AND expires_at > now()
+           AND created_at > now() - interval '15 minutes') AS "recent!""#,
+        user_id
+    )
+    .fetch_one(&mut *conn)
+    .await
+}
+
 /// Cheap check before the argon2 hash; `take_password_reset` still decides in the transaction.
 pub async fn password_reset_is_live(
     conn: &mut PgConnection,

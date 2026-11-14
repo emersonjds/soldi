@@ -255,11 +255,12 @@ async fn confirming_a_reset_voids_pending_verification_links(pool: PgPool) {
 }
 
 #[sqlx::test]
-async fn a_second_request_deletes_the_first_link(pool: PgPool) {
-    let (app, mail) = app(pool);
+async fn a_request_after_fifteen_minutes_replaces_the_first_link(pool: PgPool) {
+    let (app, mail) = app(pool.clone());
     app.another_user("ana@example.com").await;
     request_reset(&app, "ana@example.com").await;
     let first = token_in(&mail.sent().await[0]);
+    fifteen_minutes_pass(&pool).await;
     request_reset(&app, "ana@example.com").await;
     let sent = mail.sent().await;
     assert_eq!(sent.len(), 2);
@@ -307,7 +308,7 @@ async fn concurrent_requests_leave_one_live_link(pool: PgPool) {
         request_reset(&app, "ana@example.com"),
         request_reset(&app, "ana@example.com"),
     );
-    assert_eq!(mail.sent().await.len(), 3);
+    assert_eq!(mail.sent().await.len(), 1);
 
     let links: i64 = sqlx::query_scalar("SELECT count(*) FROM password_resets")
         .fetch_one(&pool)
@@ -376,6 +377,58 @@ async fn another_users_link_and_sessions_are_untouched(pool: PgPool) {
     );
 }
 
+/// Ages every reset link by 15 minutes, as if that much time went by.
+async fn fifteen_minutes_pass(pool: &PgPool) {
+    sqlx::query(
+        "UPDATE password_resets SET created_at = created_at - interval '15 minutes', \
+         expires_at = expires_at - interval '15 minutes'",
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+#[sqlx::test]
+async fn a_request_within_fifteen_minutes_mails_nothing_and_keeps_the_pending_link(pool: PgPool) {
+    let (app, mail) = app(pool);
+    app.another_user("ana@example.com").await;
+    request_reset(&app, "ana@example.com").await;
+    let token = token_in(&mail.sent().await[0]);
+
+    let again = app.send(reset_request("ana@example.com")).await;
+    let unknown = app.send(reset_request("nobody@example.com")).await;
+
+    assert_eq!(again.status(), StatusCode::ACCEPTED);
+    assert_eq!(unknown.status(), StatusCode::ACCEPTED);
+    assert_eq!(again.headers(), unknown.headers());
+    assert_eq!(body_json(again).await, body_json(unknown).await);
+    assert_eq!(mail.sent().await.len(), 1);
+    assert_eq!(
+        confirm(&app, &token, NEW_PASSWORD).await.0,
+        StatusCode::NO_CONTENT
+    );
+}
+
+#[sqlx::test]
+async fn an_account_gets_at_most_four_reset_mails_an_hour(pool: PgPool) {
+    let (app, mail) = app(pool.clone());
+    app.another_user("ana@example.com").await;
+    let mut accepted = 0;
+    for quarter in 0..4 {
+        for ip in 1..=2 {
+            let from = format!("203.0.113.{}", quarter * 2 + ip);
+            let statuses = requests_from(&app, "ana@example.com", &from, 1).await;
+            accepted += usize::from(statuses == [StatusCode::ACCEPTED]);
+        }
+        assert_eq!(mail.sent().await.len(), quarter + 1, "{quarter}");
+        if quarter < 3 {
+            fifteen_minutes_pass(&pool).await;
+        }
+    }
+
+    assert_eq!(accepted, 8);
+}
+
 async fn requests_from(app: &TestApp, email: &str, from: &str, times: usize) -> Vec<StatusCode> {
     let mut statuses = Vec::new();
     for _ in 0..times {
@@ -416,11 +469,11 @@ async fn others_spend_only_their_own_reset_budget_for_an_email_whether_or_not_it
     assert_eq!(bia, [StatusCode::ACCEPTED]);
     let sent = mail.sent().await;
     let to = |email: &str| sent.iter().filter(|message| message.to == email).count();
-    assert_eq!((to("ana@example.com"), to("bia@example.com")), (4, 1));
+    assert_eq!((to("ana@example.com"), to("bia@example.com")), (1, 1));
 }
 
 #[sqlx::test]
-async fn one_email_gets_at_most_ten_reset_mails_an_hour_whether_or_not_it_exists(pool: PgPool) {
+async fn one_email_gets_at_most_ten_reset_requests_an_hour_whether_or_not_it_exists(pool: PgPool) {
     let (app, mail) = app(pool);
     app.another_user("ana@example.com").await;
     app.another_user("bia@example.com").await;
@@ -447,7 +500,7 @@ async fn one_email_gets_at_most_ten_reset_mails_an_hour_whether_or_not_it_exists
     assert_eq!(bia, [StatusCode::ACCEPTED]);
     let sent = mail.sent().await;
     let to = |email: &str| sent.iter().filter(|message| message.to == email).count();
-    assert_eq!((to("ana@example.com"), to("bia@example.com")), (10, 1));
+    assert_eq!((to("ana@example.com"), to("bia@example.com")), (1, 1));
 }
 
 #[sqlx::test]

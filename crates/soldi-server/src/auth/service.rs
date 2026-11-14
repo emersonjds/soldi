@@ -126,7 +126,8 @@ pub async fn delete_account(
     Ok(())
 }
 
-/// Runs after the request was answered: an unknown or malformed e-mail does nothing.
+/// Runs after the request was answered: an unknown or malformed e-mail does nothing, and a
+/// link issued in the last 15 minutes stays the only one, so an account gets at most 4 mails an hour.
 pub async fn request_password_reset(
     pool: &PgPool,
     mailer: &Mailer,
@@ -140,8 +141,11 @@ pub async fn request_password_reset(
     let Some(found) = repo::find_user_by_email(&mut tx, &email).await? else {
         return Ok(());
     };
-    let token = domain::new_reset_token();
     repo::lock_password_resets(&mut tx, found.user.id).await?;
+    if repo::has_recent_password_reset(&mut tx, found.user.id).await? {
+        return Ok(());
+    }
+    let token = domain::new_reset_token();
     repo::delete_password_resets(&mut tx, found.user.id).await?;
     repo::insert_password_reset(&mut tx, found.user.id, &domain::hash_token(&token)).await?;
     tx.commit().await?;
