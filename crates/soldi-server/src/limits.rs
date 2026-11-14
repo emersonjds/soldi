@@ -162,9 +162,9 @@ impl Limiter {
 }
 
 /// The last `X-Forwarded-For` address, else the socket peer; IPv4-mapped addresses become IPv4
-/// and IPv6 is cut to its /56, one residential allocation. Railway's edge appends the address it saw, so
-/// earlier entries come from the client and can be forged. A loopback client (local runs and e2e,
-/// never behind Railway) gets no IP key.
+/// and IPv6 is cut to its /56, one residential allocation. Railway's edge appends the address it
+/// saw, so earlier entries come from the client and can be forged. A loopback client (local runs
+/// and e2e, never behind Railway) gets no IP key.
 pub fn client_ip(headers: &HeaderMap, peer: Option<SocketAddr>) -> Option<IpAddr> {
     let ip = headers
         .get_all("x-forwarded-for")
