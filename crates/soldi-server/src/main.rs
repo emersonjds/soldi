@@ -1,10 +1,20 @@
+use tracing_subscriber::filter::LevelFilter;
+use tracing_subscriber::layer::{Layer, SubscriberExt};
+use tracing_subscriber::util::SubscriberInitExt;
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let _sentry = soldi_server::observability::options(
+        std::env::var("SENTRY_DSN").ok(),
+        std::env::var("RAILWAY_ENVIRONMENT_NAME").ok(),
+    )
+    .map(sentry::init);
     let filter = tracing_subscriber::EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info"));
-    tracing_subscriber::fmt()
-        .json()
-        .with_env_filter(filter)
+    tracing_subscriber::registry()
+        .with(filter)
+        .with(tracing_subscriber::fmt::layer().json())
+        .with(sentry::integrations::tracing::ErrorLayer::new().with_filter(LevelFilter::ERROR))
         .init();
     let database_url = std::env::var("DATABASE_URL")?;
     let port = std::env::var("PORT").unwrap_or_else(|_| "8080".into());

@@ -7,6 +7,7 @@ pub mod extract;
 pub mod limits;
 pub mod mail;
 pub mod months;
+pub mod observability;
 pub mod onboarding;
 pub mod reports;
 pub mod settings;

@@ -30,6 +30,7 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 reqwest.workspace = true
 base64.workspace = true
+sentry.workspace = true
 
 [dev-dependencies]
 http-body-util.workspace = true
