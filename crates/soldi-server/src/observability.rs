@@ -23,6 +23,24 @@ pub fn options(dsn: Option<String>, environment: Option<String>) -> Option<sentr
     Some(options)
 }
 
+/// Each request reports on its own hub, named after its route template (`GET /api/months/{month}`).
+pub async fn route_scope(
+    route: Option<axum::extract::MatchedPath>,
+    request: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> axum::response::Response {
+    let hub = sentry::Hub::current();
+    if hub.client().is_none() {
+        return next.run(request).await;
+    }
+    let hub = std::sync::Arc::new(sentry::Hub::new_from_top(hub));
+    if let Some(route) = route {
+        let name = format!("{} {}", request.method(), route.as_str());
+        hub.configure_scope(|scope| scope.set_transaction(Some(&name)));
+    }
+    sentry::SentryFutureExt::bind_hub(next.run(request), hub).await
+}
+
 #[cfg(test)]
 mod tests {
     use sentry::protocol::{Breadcrumb, Event, Request, User};
@@ -87,5 +105,47 @@ mod tests {
         assert!(event.user.is_none());
         assert!(event.breadcrumbs.is_empty());
         assert_eq!(event.tags.get("side").map(String::as_str), Some("server"));
+    }
+
+    fn router() -> axum::Router {
+        use axum::routing::get;
+        axum::Router::new()
+            .route(
+                "/api/months/{month}",
+                get(|| async {
+                    sentry::capture_message("boom", sentry::Level::Error);
+                    axum::http::StatusCode::INTERNAL_SERVER_ERROR
+                }),
+            )
+            .layer(axum::middleware::from_fn(super::route_scope))
+    }
+
+    fn get(router: axum::Router, uri: &str) -> axum::http::StatusCode {
+        use tower::ServiceExt;
+        let request = axum::http::Request::get(uri)
+            .body(axum::body::Body::empty())
+            .unwrap();
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .unwrap();
+        runtime.block_on(router.oneshot(request)).unwrap().status()
+    }
+
+    #[test]
+    fn an_event_names_the_route_template_not_the_path() {
+        let events = sentry::test::with_captured_events(|| {
+            assert_eq!(get(router(), "/api/months/2026-11"), 500);
+        });
+
+        assert_eq!(events.len(), 1);
+        assert_eq!(
+            events[0].transaction.as_deref(),
+            Some("GET /api/months/{month}")
+        );
+    }
+
+    #[test]
+    fn without_sentry_the_request_runs_untouched() {
+        assert_eq!(get(router(), "/api/months/2026-11"), 500);
     }
 }

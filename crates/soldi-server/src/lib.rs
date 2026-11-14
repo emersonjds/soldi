@@ -104,6 +104,7 @@ pub fn app(state: AppState, web_dir: Option<&Path>) -> Router {
         None => router.fallback(not_found),
     };
     router
+        .layer(middleware::from_fn(observability::route_scope))
         .layer(middleware::from_fn(extract::reject_cross_site_writes))
         .layer(middleware::from_fn(extract::redirect_www))
         .layer(SetResponseHeaderLayer::if_not_present(
