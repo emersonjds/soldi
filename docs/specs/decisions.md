@@ -366,3 +366,19 @@ Sign-in spends three budgets per 15 minutes: 20 per address, 10 per (e-mail, add
 Password-reset requests: 10 per address, 3 per (e-mail, address) and 10 per e-mail per hour, the same 202 or 429 whether or not the account exists. A request while the account holds a live link issued in the last 15 minutes mails nothing and keeps that link valid, so an account receives at most 4 reset mails an hour under any request pattern and a flood cannot void the link the owner is using. A loopback client has no address key and spends only the e-mail budgets.
 
 Accepted: an attacker spending the per-e-mail reset budget (10 an hour from 4 addresses) blocks the owner from asking for a new link for the rest of the hour, though a link already mailed keeps working; an attacker with 10 addresses can keep an owner without a trusted device (new browser, cleared cookies, after a password change) out for 15 minutes at a time; a device cookie stolen from the owner's browser bypasses the e-mail ceiling for that account until a password change; eviction resets low counters, which only matters to someone churning 10,000 keys. One process only; a restart clears the counters and a second instance needs a shared store (Redis or Postgres).
+
+## D40 — Pages run only the scripts the export ships (2026-11-14, orchestrator, SOL-134 from the Lagune scan)
+
+Every response carries one Content-Security-Policy, built at boot:
+
+`default-src 'self'; script-src 'self' <hashes>; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.ingest.sentry.io https://*.ingest.us.sentry.io; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'`
+
+and `Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), browsing-topics=()`.
+
+- **Scripts by hash, never `'unsafe-inline'`.** The static export inlines a Turbopack bootstrap and the `self.__next_f` flight data in each page. The server hashes (SHA-256) every inline `<script>` of every `.html` in `SOLDI_WEB_DIR` once at boot and lists them all in `script-src`; nonces need a per-request render the export does not have. The union (24 hashes, ~1.3 KB) goes on every page instead of a per-page map: one header to build, HTTP/2 compresses the repeat, and a page may only run another Soldi page's bootstrap. A new build changes the hashes, which a restart (every deploy) picks up.
+- **Styles keep `'unsafe-inline'`.** Tailwind ships as files, but React `style` attributes, the chart `<style>` and Swagger UI set inline styles; style injection cannot read or send data under this `connect-src`.
+- **Fonts are self-hosted** by `next/font`; images are self or `data:`.
+- **`connect-src`** is the API on the same origin plus Sentry ingest in either region (D38); any other host is refused.
+- **Swagger UI** at `/api/docs` loads only its own files and passes under the same policy; no path gets a relaxed one.
+- `interest-cohort` is left out of Permissions-Policy: FLoC is gone and Chrome logs the unknown feature; `browsing-topics` replaces it.
+- A Playwright check (`web/e2e/csp.spec.ts`) loads the pages and the API docs against the production export and fails on any CSP console message; it also proves Sentry ingest is reachable and another host is blocked.

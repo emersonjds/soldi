@@ -19,9 +19,10 @@ use std::time::Duration;
 
 use axum::extract::State;
 use axum::http::header::{
-    REFERRER_POLICY, STRICT_TRANSPORT_SECURITY, X_CONTENT_TYPE_OPTIONS, X_FRAME_OPTIONS,
+    CONTENT_SECURITY_POLICY, REFERRER_POLICY, STRICT_TRANSPORT_SECURITY, X_CONTENT_TYPE_OPTIONS,
+    X_FRAME_OPTIONS,
 };
-use axum::http::{HeaderValue, StatusCode};
+use axum::http::{HeaderName, HeaderValue, StatusCode};
 use axum::{Json, Router, middleware};
 use soldi_types::{Health, Problem};
 use sqlx::PgPool;
@@ -93,7 +94,11 @@ pub fn app(state: AppState, web_dir: Option<&Path>) -> Router {
             Duration::from_secs(30),
         ))
         .merge(SwaggerUi::new("/api/docs").url("/api/openapi.json", api));
-    let router = match web_dir.filter(|dir| dir.join("index.html").is_file()) {
+    let web_dir = web_dir.filter(|dir| dir.join("index.html").is_file());
+    let scripts = web_dir.map(web::inline_script_hashes).unwrap_or_default();
+    let policy = HeaderValue::try_from(web::content_security_policy(&scripts))
+        .expect("a CSP of ASCII sources and base64 hashes is a valid header");
+    let router = match web_dir {
         Some(dir) => {
             let dir = dir.to_path_buf();
             router.fallback(move |request: axum::extract::Request| {
@@ -123,6 +128,16 @@ pub fn app(state: AppState, web_dir: Option<&Path>) -> Router {
         .layer(SetResponseHeaderLayer::if_not_present(
             X_FRAME_OPTIONS,
             HeaderValue::from_static("DENY"),
+        ))
+        .layer(SetResponseHeaderLayer::if_not_present(
+            CONTENT_SECURITY_POLICY,
+            policy,
+        ))
+        .layer(SetResponseHeaderLayer::if_not_present(
+            HeaderName::from_static("permissions-policy"),
+            HeaderValue::from_static(
+                "camera=(), microphone=(), geolocation=(), payment=(), usb=(), browsing-topics=()",
+            ),
         ))
         .layer(CompressionLayer::new())
         .with_state(state)

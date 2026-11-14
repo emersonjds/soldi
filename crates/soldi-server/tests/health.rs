@@ -37,18 +37,32 @@ async fn unknown_routes_are_problem_json_404(pool: PgPool) {
 async fn responses_carry_the_security_headers(pool: PgPool) {
     let app = TestApp::anonymous(pool);
 
-    let response = app
-        .send(json_request(Method::GET, "/api/health", None, None))
-        .await;
+    for uri in ["/api/health", "/api/docs/"] {
+        let response = app.send(json_request(Method::GET, uri, None, None)).await;
 
-    let headers = response.headers();
-    assert_eq!(headers[header::X_CONTENT_TYPE_OPTIONS], "nosniff");
-    assert_eq!(headers[header::X_FRAME_OPTIONS], "DENY");
-    assert_eq!(
-        headers[header::REFERRER_POLICY],
-        "strict-origin-when-cross-origin"
-    );
-    assert!(headers.contains_key(header::STRICT_TRANSPORT_SECURITY));
+        let headers = response.headers();
+        assert_eq!(headers[header::X_CONTENT_TYPE_OPTIONS], "nosniff", "{uri}");
+        assert_eq!(headers[header::X_FRAME_OPTIONS], "DENY", "{uri}");
+        assert_eq!(
+            headers[header::REFERRER_POLICY],
+            "strict-origin-when-cross-origin",
+            "{uri}"
+        );
+        assert!(headers.contains_key(header::STRICT_TRANSPORT_SECURITY));
+        assert_eq!(
+            headers[header::CONTENT_SECURITY_POLICY],
+            "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; \
+             img-src 'self' data:; font-src 'self'; \
+             connect-src 'self' https://*.ingest.sentry.io https://*.ingest.us.sentry.io; \
+             object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
+            "{uri}"
+        );
+        assert_eq!(
+            headers["permissions-policy"],
+            "camera=(), microphone=(), geolocation=(), payment=(), usb=(), browsing-topics=()",
+            "{uri}"
+        );
+    }
 }
 
 #[sqlx::test]
