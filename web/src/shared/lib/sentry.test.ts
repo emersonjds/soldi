@@ -98,23 +98,61 @@ describe("loading", () => {
 
     expect(sdk.captureException.mock.calls).toEqual([[early], [late]]);
   });
+
+  it("holds at most 20 errors while the SDK loads", async () => {
+    const { initSentry, captureError } = await freshModule();
+
+    initSentry(DSN);
+    for (let index = 0; index < 25; index++) captureError(new Error(`early ${index}`));
+    await vi.waitFor(() => expect(sdk.captureException).toHaveBeenCalled());
+
+    expect(sdk.captureException).toHaveBeenCalledTimes(20);
+  });
+
+  it("forgets the held errors quietly when the SDK cannot start", async () => {
+    sdk.init.mockImplementationOnce(() => {
+      throw new Error("blocked by an extension");
+    });
+    const { initSentry, captureError } = await freshModule();
+
+    initSentry(DSN);
+    captureError(new Error("early"));
+    await vi.waitFor(() => expect(sdk.init).toHaveBeenCalled());
+    await settle();
+
+    expect(sdk.captureException).not.toHaveBeenCalled();
+  });
 });
 
 describe("initSentry", () => {
-  it("starts with the release, production, no PII and the web side tag", async () => {
+  it("starts with the release, no PII and the web side tag", async () => {
     expect(await options()).toMatchObject({
       dsn: DSN,
       release: packageJson.version,
-      environment: "production",
       dataCollection: { userInfo: false, cookies: false, httpHeaders: false, httpBodies: [] },
       initialScope: { tags: { side: "web" } },
     });
   });
 
-  it("asks for no tracing and no replay", async () => {
-    const { integrations, tracesSampleRate, replaysSessionSampleRate } = await options();
+  it("names the environment production only on getsoldi.app", async () => {
+    expect((await options()).environment).toBe("preview");
 
-    expect([integrations, tracesSampleRate, replaysSessionSampleRate]).toEqual([undefined, undefined, undefined]);
+    vi.resetModules();
+    vi.clearAllMocks();
+    vi.stubGlobal("location", { hostname: "getsoldi.app" });
+
+    expect((await options()).environment).toBe("production");
+  });
+
+  it("asks for no tracing, no replay and no session tracking", async () => {
+    const { integrations, tracesSampleRate, replaysSessionSampleRate } = await options();
+    const defaults = [{ name: "Breadcrumbs" }, { name: "BrowserSession" }, { name: "Dedupe" }];
+
+    expect([tracesSampleRate, replaysSessionSampleRate]).toEqual([undefined, undefined]);
+    expect(typeof integrations === "function" && integrations(defaults)).toEqual([
+      { name: "Breadcrumbs" },
+      { name: "Dedupe" },
+    ]);
   });
 
   it("drops UI breadcrumbs, whose text can hold amounts, and keeps the rest", async () => {

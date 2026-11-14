@@ -6,8 +6,9 @@ type Sdk = typeof import("./sentry-sdk");
 // The SDK (~38 KB gzip) stays out of the first load: fetched after first paint, only with a DSN.
 let sdk: Sdk | undefined;
 let started = false;
-// Errors captured while the SDK loads.
+// Errors captured while the SDK loads, at most `PENDING_LIMIT`.
 const pending: unknown[] = [];
+const PENDING_LIMIT = 20;
 
 const whenIdle = (run: () => void) => {
   if (window.requestIdleCallback) window.requestIdleCallback(run);
@@ -23,10 +24,12 @@ const start = async (dsn: string) => {
   loaded.init({
     dsn,
     release: APP_CONFIG.version,
-    environment: "production",
+    environment: location.hostname === "getsoldi.app" ? "production" : "preview",
     // Sentry 11 replaced `sendDefaultPii` with these switches.
     dataCollection: { userInfo: false, cookies: false, httpHeaders: false, httpBodies: [] },
     initialScope: { tags: { side: "web" } },
+    // Session tracking pings Sentry on every page load; only errors are wanted.
+    integrations: (all) => all.filter((integration) => integration.name !== "BrowserSession"),
     // Click and input breadcrumbs carry the element's text, which can be an amount.
     beforeBreadcrumb: (breadcrumb) => {
       if (breadcrumb.category?.startsWith("ui.")) return null;
@@ -53,12 +56,18 @@ export const initSentry = (dsn: string | undefined) => {
   // The static export prerenders in Node; only the browser reports.
   if (!dsn || typeof window === "undefined" || started) return;
   started = true;
-  whenIdle(() => void start(dsn));
+  // A blocked SDK (ad blocker, offline) leaves the app as it is.
+  whenIdle(
+    () =>
+      void start(dsn).catch(() => {
+        pending.length = 0;
+      }),
+  );
 };
 
 export const captureError = (error: unknown) => {
   if (sdk) sdk.captureException(error);
-  else if (started) pending.push(error);
+  else if (started && pending.length < PENDING_LIMIT) pending.push(error);
 };
 
 /** A query or save that failed: a 4xx is the user's path, anything else is a bug. */
