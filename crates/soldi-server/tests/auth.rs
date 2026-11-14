@@ -643,6 +643,37 @@ async fn the_eleventh_sign_up_from_one_ip_is_limited(pool: PgPool) {
 }
 
 #[sqlx::test]
+async fn a_taken_email_spends_the_sign_up_budget_like_a_new_one(pool: PgPool) {
+    let app = TestApp::anonymous(pool);
+    for attempt in 0..5 {
+        let request = sign_up_request(&format!("user{attempt}@example.com"));
+        let response = app.send(forwarded(request, "192.0.2.1")).await;
+        assert_eq!(response.status(), StatusCode::CREATED, "{attempt}");
+        let request = sign_up_request(&format!("USER{attempt}@example.com"));
+        let response = app.send(forwarded(request, "192.0.2.1")).await;
+        assert_eq!(response.status(), StatusCode::CONFLICT, "{attempt}");
+    }
+
+    let request = sign_up_request("user0@example.com");
+    assert_rate_limited(app.send(forwarded(request, "192.0.2.1")).await, 3600).await;
+}
+
+#[sqlx::test]
+async fn a_taken_email_with_a_short_password_is_a_422_not_a_409(pool: PgPool) {
+    let app = TestApp::anonymous(pool);
+    TestApp::another_user(&app, "ana@example.com").await;
+
+    let (status, problem) = app
+        .post(
+            "/api/auth/sign-up",
+            json!({ "email": "ana@example.com", "password": "short" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(problem["errors"][0]["field"], "password");
+}
+
+#[sqlx::test]
 async fn the_eleventh_password_change_is_limited_for_that_user_only(pool: PgPool) {
     let ana = TestApp::signed_in(pool, "ana@example.com").await;
     let bia = ana.another_user("bia@example.com").await;

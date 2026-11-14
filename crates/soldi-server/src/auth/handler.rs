@@ -56,7 +56,7 @@ pub async fn sign_up(
     JsonBody(input): JsonBody<SignUp>,
 ) -> Result<impl IntoResponse, AppError> {
     let ip = client_ip(&headers, peer);
-    state.limiter.check(&[(limits::SIGN_UP_IP, ip)])?;
+    state.limiter.check(&limits::sign_up_keys(ip))?;
     let (user, session) = service::sign_up(&state.pool, input).await?;
     let cookie = domain::session_cookie(&session, domain::is_https(&headers));
     Ok((StatusCode::CREATED, [(SET_COOKIE, cookie)], Json(user)))
