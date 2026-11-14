@@ -451,6 +451,51 @@ pub async fn change_kind(
     Ok(())
 }
 
+/// Serializes one user's card-group lookups until the transaction ends: concurrent first cards
+/// share one group.
+pub async fn lock_card_group(conn: &mut PgConnection, user_id: Uuid) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        "SELECT pg_advisory_xact_lock(hashtextextended('card-group:' || $1::text, 0))",
+        user_id.to_string()
+    )
+    .execute(&mut *conn)
+    .await?;
+    Ok(())
+}
+
+pub async fn find_card_group(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+) -> Result<Option<Uuid>, sqlx::Error> {
+    sqlx::query_scalar!(
+        "SELECT id FROM categories WHERE user_id = $1 AND is_card_group AND archived_at IS NULL",
+        user_id
+    )
+    .fetch_optional(&mut *conn)
+    .await
+}
+
+/// D43: a new top-level `Cartão` flagged as the card group, or the active `bill` of that name
+/// flagged in its place.
+pub async fn insert_card_group(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    color: &str,
+) -> Result<Uuid, sqlx::Error> {
+    sqlx::query_scalar!(
+        "INSERT INTO categories (user_id, name, kind, icon, color, is_card_group)
+         VALUES ($1, $2, 'bill', 'credit-card', $3, true)
+         ON CONFLICT (user_id, kind, (lower(name))) WHERE archived_at IS NULL
+         DO UPDATE SET is_card_group = true, updated_at = now()
+         RETURNING id",
+        user_id,
+        super::domain::CARD_GROUP,
+        color
+    )
+    .fetch_one(&mut *conn)
+    .await
+}
+
 /// The caller's active top-level pins by rank; archived or re-parented ones keep a stale rank
 /// until the next `set_pins`.
 pub async fn pins(conn: &mut PgConnection, user_id: Uuid) -> Result<Vec<Uuid>, sqlx::Error> {

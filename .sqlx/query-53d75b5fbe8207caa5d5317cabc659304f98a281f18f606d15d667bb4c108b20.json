@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO categories (user_id, name, kind, icon, color, is_card_group)\n         VALUES ($1, $2, 'bill', 'credit-card', $3, true)\n         ON CONFLICT (user_id, kind, (lower(name))) WHERE archived_at IS NULL\n         DO UPDATE SET is_card_group = true, updated_at = now()\n         RETURNING id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "categories",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "53d75b5fbe8207caa5d5317cabc659304f98a281f18f606d15d667bb4c108b20"
+}

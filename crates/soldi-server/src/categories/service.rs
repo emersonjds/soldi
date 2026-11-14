@@ -10,6 +10,18 @@ use crate::error::AppError;
 use crate::extract::CurrentUser;
 use crate::{cofrinhos, settings};
 
+/// D43: the account's active card group; with none, `Cartão` is created, or an active `bill`
+/// named `Cartão` is taken over.
+pub async fn card_group(conn: &mut PgConnection, user: &CurrentUser) -> Result<Uuid, AppError> {
+    repo::lock_card_group(conn, user.id).await?;
+    if let Some(id) = repo::find_card_group(conn, user.id).await? {
+        return Ok(id);
+    }
+    let taken = repo::top_colors(conn, user.id, &[CategoryKind::Bill], None).await?;
+    let color = domain::pick_color(None, &taken)?;
+    Ok(repo::insert_card_group(conn, user.id, &color).await?)
+}
+
 pub async fn list(
     pool: &PgPool,
     user: &CurrentUser,

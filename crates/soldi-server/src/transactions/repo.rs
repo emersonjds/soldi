@@ -691,7 +691,7 @@ mod tests {
                 name: "Aluguel".into(),
                 amount: Some("10".parse().unwrap()),
                 due_day: 7,
-                category_id: rent,
+                category_id: Some(rent),
                 closing_day: None,
                 installments: None,
                 last_month: None,
