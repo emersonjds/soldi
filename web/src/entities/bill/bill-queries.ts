@@ -49,14 +49,11 @@ export const useCreateBill = () => {
     /** `transactionId`: a standalone Saída entry that becomes this bill's payment. */
     mutationFn: async ({ transactionId, ...body }: Schemas["CreateBill"] & { transactionId?: string }) =>
       dataOrThrow(await api.POST("/api/bills", { params: { query: { transaction_id: transactionId } }, body })),
-    // The linked entry becomes a bill payment; reports and cofrinhos read it. A card with no category may make
-    // `Cartão` (D43).
-    onSettled: (_bill, _error, { transactionId, category_id }) =>
+    // The linked entry becomes a bill payment; reports and cofrinhos read it.
+    onSettled: (_bill, _error, { transactionId }) =>
       Promise.all([
         refresh(client),
-        ...[...(transactionId ? ["report", "cofrinhos"] : []), ...(category_id ? [] : ["categories"])].map((key) =>
-          client.invalidateQueries({ queryKey: [key] }),
-        ),
+        ...(transactionId ? ["report", "cofrinhos"] : []).map((key) => client.invalidateQueries({ queryKey: [key] })),
       ]),
   });
 };

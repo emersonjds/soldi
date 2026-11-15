@@ -10,11 +10,9 @@ import { renderWithQuery } from "@/test/render";
 import {
   ALUGUEL,
   BILL_ALUGUEL,
-  CARTAO,
   CATEGORIES,
   COMIDA,
   EXTRA,
-  LUZ,
   MERCADO,
   problem,
   RESERVA,
@@ -60,17 +58,6 @@ const coarse = () => {
 };
 
 const FOOTER = '[data-slot="responsive-sheet-footer"]';
-
-const categoryField = () => screen.getByRole("button", { name: /^Categoria/ });
-/** Waits for the Categoria field to read `label`. */
-const chosenIs = (label: string) => waitFor(() => expect(categoryField()).toHaveTextContent(label));
-/** Opens the Categoria sheet once its groups arrived. */
-const openPicker = async () => {
-  await userEvent.click(categoryField());
-  const sheet = await screen.findByRole("dialog", { name: "Categoria" });
-  await within(sheet).findAllByRole("region");
-  return sheet;
-};
 const DESCRIPTION = "Cadastre uma movimentação pontual ou recorrente";
 
 type SheetProps = Parameters<typeof TransactionSheet>[0];
@@ -103,15 +90,6 @@ const setup = (props: Partial<SheetProps> = {}, replies = {}) => {
   return { requests, onOpenChange, sent };
 };
 
-/** Renders Editar on `transaction` over `categories`, for a loop of cases. */
-const renderSheet = (transaction: SheetProps["transaction"], categories: Schemas["Category"][]) => {
-  stubApi({
-    "GET /api/categories": { status: 200, body: categories },
-    "GET /api/bills": { status: 200, body: [] },
-  });
-  return renderWithQuery(<TransactionSheet open onOpenChange={vi.fn()} transaction={transaction} />);
-};
-
 describe("TransactionSheet", () => {
   beforeEach(() => {
     window.innerWidth = 375;
@@ -131,7 +109,7 @@ describe("TransactionSheet", () => {
     expect(dialog).toHaveAccessibleDescription(DESCRIPTION);
     expect(within(dialog).getByText(DESCRIPTION)).toHaveClass("sr-only");
     expect(within(dialog).getByRole("button", { name: "Salvar Lançamento" }).closest(FOOTER)).not.toBeNull();
-    await chosenIs("Comida fora");
+    expect(await screen.findByRole("radio", { name: "Comida fora" })).toHaveAttribute("aria-checked", "true");
     expect(screen.getByRole("radio", { name: "Diário" })).toBeChecked();
     await userEvent.keyboard("35,90");
     expect(screen.getByLabelText("Valor do gasto")).toHaveValue("35,90");
@@ -180,15 +158,11 @@ describe("TransactionSheet", () => {
     expect(amount).toHaveValue("12.345,60");
   });
 
-  it("saves a subcategory picked from its group in the Categoria sheet", async () => {
+  it("saves a subcategory picked from the parent's Sub: pills", async () => {
     const { sent } = setup({}, { "GET /api/categories": { status: 200, body: [...CATEGORIES, PETS, RACAO] } });
 
-    await chosenIs("Comida fora");
-    const sheet = await openPicker();
-    await userEvent.click(
-      within(within(sheet).getByRole("region", { name: "Pets" })).getByRole("button", { name: "Ração" }),
-    );
-    await chosenIs("Pets › Ração");
+    await userEvent.click(await screen.findByRole("radio", { name: "Pets" }));
+    await userEvent.click(screen.getByRole("radio", { name: "Pets › Ração" }));
     await userEvent.type(screen.getByLabelText(/^Valor d/), "4590");
     await userEvent.click(screen.getByRole("button", { name: "Salvar Lançamento" }));
 
@@ -206,8 +180,7 @@ describe("TransactionSheet", () => {
     const used = TRANSACTIONS.map((row) => ({ ...row, kind: "daily" as const, category: COMIDA }));
     setup({}, { "GET /api/transactions?month=2026-11": { status: 200, body: used } });
 
-    await chosenIs("Comida fora");
-    const row = await within(await openPicker()).findByRole("radiogroup", { name: "Mais usadas" });
+    const row = await screen.findByRole("radiogroup", { name: "Categoria" });
     await waitFor(() =>
       expect(
         within(row)
@@ -222,9 +195,9 @@ describe("TransactionSheet", () => {
     const { sent } = setup();
 
     await userEvent.click(await screen.findByRole("radio", { name: "Entrada" }));
-    await chosenIs("Salário");
-    await userEvent.click(within(await openPicker()).getByRole("button", { name: "Extra" }));
-    await chosenIs("Extra");
+    expect(await screen.findByRole("radio", { name: "Salário" })).toHaveAttribute("aria-checked", "true");
+    await userEvent.click(screen.getByRole("button", { name: "Ver todas" }));
+    await userEvent.click(await screen.findByRole("option", { name: "Extra" }));
     await userEvent.type(screen.getByLabelText("Valor da entrada"), "abc1.250,00");
     await userEvent.click(screen.getByRole("button", { name: "Ontem" }));
     const note = screen.getByRole("textbox", { name: "Observação" });
@@ -252,7 +225,7 @@ describe("TransactionSheet", () => {
       { "GET /api/categories": { status: 200, body: WITH_COFRINHOS } },
     );
 
-    await chosenIs("Economia › Reserva");
+    expect(await screen.findByRole("radio", { name: "Economia › Reserva" })).toHaveAttribute("aria-checked", "true");
     expect(screen.getByRole("radio", { name: "Conta" })).toBeChecked();
     await userEvent.keyboard("200,00");
     await userEvent.click(screen.getByRole("button", { name: "Salvar Lançamento" }));
@@ -288,8 +261,9 @@ describe("TransactionSheet", () => {
 
     await userEvent.click(await screen.findByRole("button", { name: "Salvar Lançamento" }));
     expect(await screen.findByText("Informe um valor")).toBeInTheDocument();
-    expect(categoryField()).toHaveAttribute("aria-invalid", "true");
-    expect(categoryField()).toHaveAccessibleDescription("Escolha uma categoria");
+    const row = screen.getByRole("radiogroup", { name: "Categoria" });
+    expect(row).toHaveAttribute("aria-invalid", "true");
+    expect(row).toHaveAccessibleDescription("Escolha uma categoria");
 
     await userEvent.type(screen.getByLabelText(/^Valor d/), "0");
     await userEvent.click(screen.getByRole("button", { name: "Salvar Lançamento" }));
@@ -304,7 +278,7 @@ describe("TransactionSheet", () => {
     const amount = screen.getByLabelText(/^Valor d/);
     expect(amount).toHaveValue("184,31");
     expect(screen.getByLabelText("Observação")).toHaveValue("Compras da semana");
-    await chosenIs("Mercado");
+    expect(await screen.findByRole("radio", { name: "Mercado" })).toHaveAttribute("aria-checked", "true");
     expect(screen.getByRole("button", { name: "Hoje" })).toHaveAttribute("aria-pressed", "true");
     await userEvent.clear(amount);
     await userEvent.type(amount, "20000");
@@ -333,17 +307,11 @@ describe("TransactionSheet", () => {
     };
     const withCard = { "GET /api/bills": { status: 200, body: [BILL_ALUGUEL, PORTO] } };
     const cardField = () => screen.findByRole("combobox", { name: "Cartão" });
-    /** Cartão once the cards arrived. */
-    const withPorto = async () => {
-      const field = await cardField();
-      await within(field).findByRole("option", { name: "Porto" });
-      return field;
-    };
 
     it("offers Cartão on Diário with Nenhum first and posts the card", async () => {
       const { sent } = setup({}, withCard);
 
-      const field = await withPorto();
+      const field = await cardField();
       expect(
         within(field)
           .getAllByRole("option")
@@ -357,137 +325,17 @@ describe("TransactionSheet", () => {
       expect(await sent("POST")).toMatchObject({ kind: "daily", amount: "35.90", card_id: PORTO.id });
     });
 
-    /** Fills the open Novo cartão sheet as Porto, the API answering with it from then on. */
-    const createPorto = async (categories = CATEGORIES) => {
-      const sheet = await screen.findByRole("dialog", { name: "Novo cartão" });
-      const requests = stubApi({
-        "GET /api/categories": { status: 200, body: categories },
-        "GET /api/bills": { status: 200, body: [BILL_ALUGUEL, PORTO] },
-        "POST /api/bills": { status: 201, body: PORTO },
-        "POST /api/transactions": { status: 201, body: MERCADO_ROW },
-      });
-      await userEvent.type(within(sheet).getByLabelText("Nome do cartão"), "Porto");
-      await userEvent.type(within(sheet).getByLabelText("Fecha dia"), "3");
-      await userEvent.click(within(sheet).getByRole("button", { name: "Dia 10" }));
-      await userEvent.click(within(sheet).getByRole("button", { name: "Criar cartão" }));
-      await waitFor(() => expect(screen.queryByRole("dialog", { name: "Novo cartão" })).not.toBeInTheDocument());
-      return requests;
-    };
-
-    it("with no card offers Nenhum and a thumb-sized + Novo cartão under it, which creates one, selects it and takes focus back", async () => {
+    it("hides Cartão with no card", async () => {
       setup({}, { "GET /api/bills": { status: 200, body: [BILL_ALUGUEL] } });
 
-      const field = await cardField();
-      await waitFor(() =>
-        expect(
-          within(field)
-            .getAllByRole("option")
-            .map((option) => option.textContent),
-        ).toEqual(["Nenhum"]),
-      );
-      await userEvent.type(screen.getByLabelText(/^Valor d/), "12345");
-      const newCard = screen.getByRole("button", { name: "Novo cartão" });
-      expect(newCard).toHaveClass("min-h-11");
-      await userEvent.click(newCard);
-      expect(field).toHaveValue("");
-      const requests = await createPorto();
-
-      await waitFor(() => expect(field).toHaveValue(PORTO.id));
-      await waitFor(() => expect(newCard).toHaveFocus());
-      expect(screen.getByLabelText(/^Valor d/)).toHaveValue("123,45");
-      await userEvent.click(screen.getByRole("button", { name: "Salvar Lançamento" }));
-      await waitFor(() => expect(requests.some((request) => request.url.endsWith("/api/transactions"))).toBe(true));
-      expect(await requests.find((request) => request.url.endsWith("/api/transactions"))?.json()).toMatchObject({
-        amount: "123.45",
-        kind: "daily",
-        card_id: PORTO.id,
-      });
-    });
-
-    it("from Conta, the card group's Novo cartão makes the card and goes to Diário on it, the list open", async () => {
-      const categories = [...CATEGORIES, CARTAO];
-      setup(
-        {},
-        { "GET /api/categories": { status: 200, body: categories }, "GET /api/bills": { status: 200, body: [] } },
-      );
-
-      await userEvent.click(await screen.findByRole("radio", { name: "Conta" }));
-      await userEvent.type(screen.getByLabelText(/^Valor d/), "9990");
-      const sheet = await openPicker();
-      await userEvent.click(
-        within(within(sheet).getByRole("region", { name: "Cartão" })).getByRole("button", { name: "Novo cartão" }),
-      );
-      await createPorto(categories);
-
-      // The Categoria sheet stays open over the form.
-      expect(screen.getByRole("radio", { name: "Diário", hidden: true })).toBeChecked();
-      await waitFor(() => expect(screen.getByRole("combobox", { name: "Cartão", hidden: true })).toHaveValue(PORTO.id));
-      const picker = screen.getByRole("dialog", { name: "Categoria" });
-      await waitFor(() =>
-        expect(
-          within(picker)
-            .getAllByRole("region")
-            .map((region) => region.getAttribute("aria-label")),
-        ).toEqual(["Comida fora", "Mercado"]),
-      );
-      expect(screen.getByRole("textbox", { name: /^Valor d/, hidden: true })).toHaveValue("99,90");
-    });
-
-    it("keeps the chosen category when Novo cartão comes from a header-only card group on Diário", async () => {
-      const anuidade: Schemas["Category"] = {
-        ...MERCADO,
-        id: "c1000000-0000-4000-8000-000000000026",
-        name: "Anuidade",
-        color: CARTAO.color,
-        parent_id: CARTAO.id,
-      };
-      const categories = [...CATEGORIES, CARTAO, anuidade];
-      setup(
-        {},
-        { "GET /api/categories": { status: 200, body: categories }, "GET /api/bills": { status: 200, body: [] } },
-      );
-
-      await userEvent.click(within(await openPicker()).getByRole("button", { name: "Mercado" }));
-      await chosenIs("Mercado");
-      const sheet = await openPicker();
-      await userEvent.click(
-        within(within(sheet).getByRole("region", { name: "Cartão" })).getByRole("button", { name: "Novo cartão" }),
-      );
-      const requests = await createPorto(categories);
-      await userEvent.keyboard("{Escape}");
-      await chosenIs("Mercado");
-      await userEvent.type(screen.getByLabelText(/^Valor d/), "1000");
-      await userEvent.click(screen.getByRole("button", { name: "Salvar Lançamento" }));
-
-      await waitFor(() => expect(requests.some((request) => request.url.endsWith("/api/transactions"))).toBe(true));
-      expect(await requests.find((request) => request.url.endsWith("/api/transactions"))?.json()).toMatchObject({
-        kind: "daily",
-        category_id: MERCADO.id,
-        card_id: PORTO.id,
-      });
-    });
-
-    it("offers no Novo cartão from the card group, nor another kind, where Tipo is hidden", async () => {
-      const categories = [...CATEGORIES, CARTAO];
-      for (const transaction of [{ ...ALUGUEL_ROW, recurring_bill_id: "b1" }, MEMBER]) {
-        const { unmount } = renderSheet(transaction, categories);
-
-        const sheet = await openPicker();
-        const cartao = within(sheet).getByRole("region", { name: "Cartão" });
-        expect(within(cartao).queryByRole("button", { name: "Novo cartão" })).not.toBeInTheDocument();
-        await userEvent.click(within(sheet).getByRole("button", { name: "Novo grupo" }));
-        const form = await screen.findByRole("dialog", { name: "Nova Categoria" });
-        await userEvent.type(within(form).getByLabelText("Nome do agrupador"), "Mercado");
-        expect(within(form).queryByText("Quando acontece")).not.toBeInTheDocument();
-        expect(within(form).queryByRole("button", { name: "Usar esta categoria" })).not.toBeInTheDocument();
-        unmount();
-      }
+      expect(await screen.findByRole("radio", { name: "Comida fora" })).toBeInTheDocument();
+      expect(screen.queryByRole("combobox", { name: "Cartão" })).not.toBeInTheDocument();
     });
 
     it("drops the card when the kind leaves Diário", async () => {
       const { sent } = setup({}, withCard);
 
-      await userEvent.selectOptions(await withPorto(), "Porto");
+      await userEvent.selectOptions(await cardField(), "Porto");
       await userEvent.click(screen.getByRole("radio", { name: "Conta" }));
       expect(screen.queryByRole("combobox", { name: "Cartão" })).not.toBeInTheDocument();
       await userEvent.click(screen.getByRole("radio", { name: "Diário" }));
@@ -503,7 +351,7 @@ describe("TransactionSheet", () => {
     it("keeps the card on every member of a counted Recorrente", async () => {
       const { sent } = setup({}, withCard);
 
-      await userEvent.selectOptions(await withPorto(), "Porto");
+      await userEvent.selectOptions(await cardField(), "Porto");
       await userEvent.click(screen.getByRole("switch", { name: "Recorrente" }));
       await userEvent.click(screen.getByRole("radio", { name: "3" }));
       await userEvent.click(screen.getByLabelText(/^Valor d/));
@@ -516,7 +364,7 @@ describe("TransactionSheet", () => {
     it("sends Sempre on a card spend as an open series on the card", async () => {
       const { sent } = setup({}, withCard);
 
-      await userEvent.selectOptions(await withPorto(), "Porto");
+      await userEvent.selectOptions(await cardField(), "Porto");
       await userEvent.click(screen.getByRole("switch", { name: "Recorrente" }));
       expect(screen.getByRole("radio", { name: "Sempre" })).toBeChecked();
       await userEvent.click(screen.getByLabelText(/^Valor d/));
@@ -549,45 +397,24 @@ describe("TransactionSheet", () => {
     expect(await screen.findByText("Não foi possível salvar o lançamento.")).toBeInTheDocument();
   });
 
-  it("logs in a new subcategory in four taps after the amount: Categoria, +, name, Criar Categoria, Salvar", async () => {
-    const padaria = { ...MERCADO, id: "c1000000-0000-4000-8000-000000000099", name: "Padaria", parent_id: MERCADO.id };
-    const { requests } = setup({}, { "POST /api/categories": { status: 201, body: padaria } });
+  it("creates a category from the picker, selects it and keeps the sheet open", async () => {
+    const carro = { ...MERCADO, id: "c1000000-0000-4000-8000-000000000099", name: "Carro", icon: "car" };
+    setup();
 
-    await chosenIs("Comida fora");
-    await userEvent.type(screen.getByLabelText(/^Valor d/), "1250");
-    await userEvent.click(categoryField());
-    await userEvent.click(await screen.findByRole("button", { name: "Adicionar subcategoria em Mercado" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Ver todas" }));
+    await userEvent.click(
+      within(await screen.findByRole("dialog", { name: "Categoria" })).getByRole("button", { name: "Nova categoria" }),
+    );
     const create = await screen.findByRole("dialog", { name: "Nova Categoria" });
-    await userEvent.type(await within(create).findByLabelText("Nome do agrupador"), "Padaria");
-    await userEvent.click(within(create).getByRole("button", { name: "Criar Categoria" }));
-
-    await chosenIs("Mercado › Padaria");
-    expect(screen.queryByRole("dialog", { name: "Categoria" })).not.toBeInTheDocument();
-    expect(screen.getByLabelText(/^Valor d/)).toHaveValue("12,50");
-    await userEvent.click(screen.getByRole("button", { name: "Salvar Lançamento" }));
-    await waitFor(() => expect(requests.some((request) => request.url.endsWith("/api/transactions"))).toBe(true));
-    expect(await requests.find((request) => request.url.endsWith("/api/transactions"))?.json()).toMatchObject({
-      amount: "12.50",
-      kind: "daily",
-      category_id: padaria.id,
+    const requests = stubApi({
+      "GET /api/categories": { status: 200, body: [...CATEGORIES, carro] },
+      "POST /api/categories": { status: 201, body: carro },
     });
-  });
+    await userEvent.type(within(create).getByLabelText("Nome do agrupador"), "Carro{Enter}");
 
-  it("uses a Conta category typed in Diário, moving to Conta with the amount kept", async () => {
-    const { sent } = setup();
-
-    await chosenIs("Comida fora");
-    await userEvent.type(screen.getByLabelText(/^Valor d/), "8000");
-    await userEvent.click(within(await openPicker()).getByRole("button", { name: "Novo grupo" }));
-    const create = await screen.findByRole("dialog", { name: "Nova Categoria" });
-    await userEvent.type(await within(create).findByLabelText("Nome do agrupador"), "luz");
-    await userEvent.click(within(create).getByRole("button", { name: "Usar esta categoria" }));
-
-    expect(screen.getByRole("radio", { name: "Conta" })).toBeChecked();
-    await chosenIs("Luz");
-    expect(screen.getByLabelText(/^Valor d/)).toHaveValue("80,00");
-    await userEvent.click(screen.getByRole("button", { name: "Salvar Lançamento" }));
-    expect(await sent("POST")).toMatchObject({ amount: "80.00", kind: "bill", category_id: LUZ.id });
+    expect(await screen.findByRole("radio", { name: "Carro" })).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByRole("dialog", { name: "Novo Registro" })).toBeInTheDocument();
+    expect(requests.filter((request) => request.url.endsWith("/api/transactions"))).toHaveLength(0);
   });
 
   it("repeats a launch: Recorrente on preselects Sempre, a count changes the summary and the POST", async () => {
@@ -1296,7 +1123,7 @@ describe("TransactionSheet", () => {
     );
 
     await userEvent.click(await screen.findByRole("radio", { name: "Conta" }));
-    await chosenIs("Aluguel");
+    expect(await screen.findByRole("radio", { name: "Aluguel" })).toHaveAttribute("aria-checked", "true");
     await userEvent.type(screen.getByLabelText(/^Valor d/), "120000");
     await userEvent.click(screen.getByRole("button", { name: "Criar como Conta Fixa" }));
     expect(requests.some((request) => request.method === "POST")).toBe(false);
@@ -1370,7 +1197,7 @@ describe("TransactionSheet", () => {
 
   it("saves on Enter in Valor", async () => {
     const { sent } = setup();
-    await chosenIs("Comida fora");
+    await screen.findByRole("radiogroup", { name: "Categoria" });
     await userEvent.keyboard("35,90{Enter}");
     expect(await sent("POST")).toMatchObject({ amount: "35.90", kind: "daily" });
   });
@@ -1418,7 +1245,7 @@ describe("TransactionSheet", () => {
 
   it("keeps Enter in the note from saving", async () => {
     const { requests } = setup();
-    await chosenIs("Comida fora");
+    await screen.findByRole("radiogroup", { name: "Categoria" });
     await userEvent.keyboard("35,90");
     await userEvent.type(screen.getByLabelText("Observação"), "Feira{Enter}");
 

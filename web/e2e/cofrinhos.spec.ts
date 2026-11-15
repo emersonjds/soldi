@@ -45,7 +45,7 @@ test("a cofrinho fills from a Saída in Economia and empties with a resgate", as
   await reserva.getByRole("button", { name: "Guardar primeiro valor" }).click();
   const lancar = page.getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ });
   await expect(lancar.getByRole("radio", { name: "Conta" })).toBeChecked();
-  await expect(lancar.getByRole("button", { name: "Categoria Economia › Reserva" })).toBeVisible();
+  await expect(lancar.getByRole("radio", { name: "Economia › Reserva" })).toHaveAttribute("aria-checked", "true");
   await lancar.getByLabel("Valor").fill("200,00");
   await lancar.getByRole("button", { name: "Salvar" }).click();
 
