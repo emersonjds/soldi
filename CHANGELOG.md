@@ -7,6 +7,14 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.62.1
+
+> Headline: Lançar's categories back as they were
+
+### Web
+
+- Lançar's category chips, the `Sub` row and `Ver todas` are back as in 0.61.0; the 0.62.0 picker sheet is removed (SOL-145). The server changes of 0.62.0 stay.
+
 ## 0.62.0
 
 > Headline: pick and create categories right inside Lançar
