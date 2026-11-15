@@ -94,11 +94,14 @@ test("Economia folds two cofrinhos and lists both their entries, unclipped from 
     .getByRole("navigation", { name: "Navegação principal" })
     .getByRole("link", { name: "Para onde vai" })
     .click();
-  await page.setViewportSize({ width: 1440, height: 900 });
   const legend = page.getByRole("list", { name: "Categorias" });
   await expect(legend.getByRole("button", { name: /^Economia/ })).toContainText("R$ 14.840,77");
   await legend.getByRole("button", { name: "Mostrar subcategorias de Economia" }).click();
-  await expect(legend).toContainText("Economia (sem subcategoria)R$ 150,00");
+  const remainder = legend.getByRole("listitem").filter({ hasText: /^Economia \(sem subcategoria\)/ });
+  await expect(remainder).toBeVisible();
+  await expect(remainder).toContainText("R$ 150,00");
+  await expect(legend.getByRole("listitem").filter({ hasText: /^Reserva/ })).toBeVisible();
+  await page.setViewportSize({ width: 1440, height: 900 });
   await legend.getByRole("button", { name: /^Economia/ }).click();
 
   const entries = page.getByRole("region", { name: "Lançamentos: Economia" });

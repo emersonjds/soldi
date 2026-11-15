@@ -274,18 +274,14 @@ const GroupRow = ({ group, shares, previous, open, picked, onOpen, onPick }: Gro
             aria-controls={listId}
             aria-label={`${open ? "Ocultar" : "Mostrar"} subcategorias de ${group.name}`}
             onClick={onOpen}
-            className="flex size-11 shrink-0 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring max-lg:hidden"
+            className="flex size-11 shrink-0 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"
           >
             <ChevronDown aria-hidden className={cn("size-5 transition-transform", open && "rotate-180")} />
           </button>
         )}
       </div>
       {folds && (
-        <ul
-          id={listId}
-          hidden={!open}
-          className="mt-1 ml-14 flex flex-col rounded-xl bg-muted/60 px-3 py-1 max-lg:hidden"
-        >
+        <ul id={listId} hidden={!open} className="mt-1 ml-4 flex flex-col rounded-xl bg-muted/60 px-3 py-1 lg:ml-14">
           {children.map((child) => (
             <li
               key={child.category_id}
