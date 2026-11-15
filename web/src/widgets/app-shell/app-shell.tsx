@@ -84,7 +84,10 @@ const SAVINGS_PAIR = [
 ];
 
 /** The pages that read `?m=`; the switcher shows only there. */
-const MONTH_PAGES = ["/mes", "/para-onde-vai", "/economia", "/ajustes", "/ajustes/contas", "/ajustes/categorias"];
+const MONTH_PAGES = ["/mes", "/para-onde-vai", "/economia", "/ajustes", "/ajustes/contas"];
+
+/** Under a month page, yet reading no month. */
+const MONTHLESS_PAGES = ["/ajustes/categorias"];
 
 /** Month pages whose own hero carries the switcher below 1024 px; the rest get it in a card under the app bar. */
 const HERO_SWITCHER_PAGES = ["/mes", "/para-onde-vai"];
@@ -160,7 +163,7 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
     .filter((item) => isAt(item.href))
     .sort((a, b) => b.href.length - a.href.length)[0];
   const pageName = PAGE_NAMES.find(([href]) => isAt(href))?.[1];
-  const readsMonth = MONTH_PAGES.some(isAt);
+  const readsMonth = MONTH_PAGES.some(isAt) && !MONTHLESS_PAGES.some(isAt);
   const switcherCard = readsMonth && !HERO_SWITCHER_PAGES.some(isAt);
 
   return (

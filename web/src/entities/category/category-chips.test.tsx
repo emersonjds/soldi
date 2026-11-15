@@ -126,7 +126,7 @@ const openCreate = async (parent?: string) => {
   await userEvent.click(
     within(await screen.findByRole("dialog", { name: "Categoria" })).getByRole("button", { name: "Nova categoria" }),
   );
-  const sheet = await screen.findByRole("dialog", { name: "Nova Categoria" });
+  const sheet = await screen.findByRole("dialog", { name: "Nova categoria" });
   if (parent) {
     await userEvent.click(within(sheet).getByRole("radio", { name: "Subcategoria" }));
     await userEvent.click(await within(sheet).findByRole("radio", { name: parent }));
@@ -272,7 +272,7 @@ describe("CategoryChips", () => {
     await userEvent.click(
       within(await screen.findByRole("dialog", { name: "Categoria" })).getByRole("button", { name: "Nova categoria" }),
     );
-    await screen.findByRole("dialog", { name: "Nova Categoria" });
+    await screen.findByRole("dialog", { name: "Nova categoria" });
     await userEvent.keyboard("{Escape}");
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     await waitFor(() => expect(more).toHaveFocus());
@@ -403,17 +403,18 @@ describe("CategoryChips", () => {
     setup();
 
     const sheet = await openCreate();
-    expect(within(sheet).getByLabelText("Nome do agrupador")).toHaveAttribute("maxlength", "40");
+    expect(within(sheet).getByLabelText("Nome")).toHaveAttribute("maxlength", "40");
+    await userEvent.click(within(sheet).getByRole("button", { name: "Trocar" }));
     expect(within(sheet).getByRole("radio", { name: "Ícone circle-dashed" })).toBeChecked();
     expect(within(sheet).getAllByRole("radio", { name: /^Ícone / })).toHaveLength(24);
     expect(within(sheet).getByRole("radio", { name: "Cor Azul" })).toBeChecked();
-    await userEvent.type(within(sheet).getByLabelText("Nome do agrupador"), "  Carro ");
+    await userEvent.type(within(sheet).getByLabelText("Nome"), "  Carro ");
     await userEvent.click(within(sheet).getByRole("radio", { name: "Ícone car" }));
     const requests = stubApi({
       "GET /api/categories": { status: 200, body: [...CATEGORIES, CARRO] },
       "POST /api/categories": { status: 201, body: CARRO },
     });
-    await userEvent.click(within(sheet).getByRole("button", { name: "Criar Categoria" }));
+    await userEvent.click(within(sheet).getByRole("button", { name: "Criar" }));
 
     await waitFor(() => expect(requests.some((request) => request.method === "POST")).toBe(true));
     expect(await requests.find((request) => request.method === "POST")?.json()).toEqual({
@@ -440,13 +441,13 @@ describe("CategoryChips", () => {
 
     const sheet = await openCreate("Gasto 1");
     expect(
-      within(sheet).queryByText("Todas as 24 cores estão em uso. Crie como subcategoria ou arquive uma categoria."),
+      within(sheet).queryByText("Todas as 24 cores estão em uso. Crie como subcategoria ou exclua uma categoria."),
     ).not.toBeInTheDocument();
-    await userEvent.click(within(sheet).getByRole("button", { name: "Criar Categoria" }));
+    await userEvent.click(within(sheet).getByRole("button", { name: "Criar" }));
     expect(within(sheet).getByText("Informe o nome.")).toBeInTheDocument();
     expect(requests.some((request) => request.method === "POST")).toBe(false);
 
-    await userEvent.type(within(sheet).getByLabelText("Nome do agrupador"), "Feira{Enter}");
+    await userEvent.type(within(sheet).getByLabelText("Nome"), "Feira{Enter}");
     expect(await posted()).toEqual({ name: "Feira", kind: "daily", icon: MERCADO.icon, parent_id: full[0].id });
   });
 
@@ -454,7 +455,8 @@ describe("CategoryChips", () => {
     setup({}, WITH_CHILDREN);
     const sheet = await openCreate("Pets");
 
-    await userEvent.type(within(sheet).getByLabelText("Nome do agrupador"), "Pet shop");
+    await userEvent.type(within(sheet).getByLabelText("Nome"), "Pet shop");
+    await userEvent.click(within(sheet).getByRole("button", { name: "Trocar" }));
     await userEvent.type(within(sheet).getByLabelText("Buscar ícone"), "dog");
     await userEvent.click(await within(sheet).findByRole("radio", { name: "Ícone dog" }));
     expect(within(sheet).getByText("Usa a cor de Pets")).toBeInTheDocument();
@@ -470,7 +472,7 @@ describe("CategoryChips", () => {
       "GET /api/categories": { status: 200, body: [...WITH_CHILDREN, created] },
       "POST /api/categories": { status: 201, body: created },
     });
-    await userEvent.click(within(sheet).getByRole("button", { name: "Criar Categoria" }));
+    await userEvent.click(within(sheet).getByRole("button", { name: "Criar" }));
 
     await waitFor(() => expect(requests.some((request) => request.method === "POST")).toBe(true));
     expect(await requests.find((request) => request.method === "POST")?.json()).toEqual({
@@ -486,18 +488,18 @@ describe("CategoryChips", () => {
     setup({ "POST /api/categories": { status: 409, body: problem(409, "already-exists") } });
 
     const sheet = await openCreate();
-    await userEvent.type(within(sheet).getByLabelText("Nome do agrupador"), "Mercado{Enter}");
+    await userEvent.type(within(sheet).getByLabelText("Nome"), "Mercado{Enter}");
 
-    expect(await within(sheet).findByText("Já existe uma categoria com esse nome")).toBeInTheDocument();
+    expect(await within(sheet).findByText('Já existe "Mercado" em Diário.')).toBeInTheDocument();
   });
 
   it("says when the server refuses for another reason", async () => {
     setup({ "POST /api/categories": { status: 422, body: problem(422, "name") } });
 
     const sheet = await openCreate();
-    await userEvent.type(within(sheet).getByLabelText("Nome do agrupador"), "Feira{Enter}");
+    await userEvent.type(within(sheet).getByLabelText("Nome"), "Feira{Enter}");
 
-    expect(await within(sheet).findByText("Não foi possível criar a categoria.")).toBeInTheDocument();
+    expect(await within(sheet).findByText("Não foi possível criar a categoria. Tente de novo.")).toBeInTheDocument();
   });
 });
 

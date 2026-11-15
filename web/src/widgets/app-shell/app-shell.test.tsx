@@ -235,6 +235,13 @@ describe("AppShell", () => {
     },
   );
 
+  it("shows no month switcher on Categorias, which reads no month", () => {
+    setPathname("/ajustes/categorias");
+    renderWithQuery(<AppShell>conteúdo</AppShell>);
+
+    expect(screen.queryByRole("group", { name: "Mês" })).not.toBeInTheDocument();
+  });
+
   it("lists Meu ano in the sidebar Menu after Para onde vai and marks it on its page", () => {
     setPathname("/meu-ano");
     renderWithQuery(<AppShell>conteúdo</AppShell>);
@@ -379,13 +386,13 @@ describe("AppShell", () => {
   });
 
   it("keeps the page's other parameters when moving the month", async () => {
-    setPathname("/ajustes/categorias");
+    setPathname("/ajustes/contas");
     setSearch("k=bill&m=2026-12");
     router.replace.mockClear();
     renderWithQuery(<AppShell>conteúdo</AppShell>);
 
     await userEvent.click(screen.getAllByRole("button", { name: "Próximo mês" })[0]);
-    expect(window.location.pathname + window.location.search).toBe("/ajustes/categorias?k=bill&m=2027-01");
+    expect(window.location.pathname + window.location.search).toBe("/ajustes/contas?k=bill&m=2027-01");
   });
 
   it("takes the sidebar user card and the top-bar avatar to Minha conta, with no version and no sign-out", async () => {
