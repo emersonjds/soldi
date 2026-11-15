@@ -13,3 +13,4 @@ web/playwright-report
 /.lagune/memory/plan.md
 /.lagune/memory/harden.md
 /.lagune/tracking.json
+docs/research/*-audit/

@@ -170,7 +170,7 @@ describe("Posso comprar isso?", () => {
     expect(screen.queryByRole("button", { name: /^Testar em/ })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Criar Cofrinho para juntar à vista" }));
     const sheet = await screen.findByRole("dialog", { name: "Novo cofrinho" });
-    expect(within(sheet).getByRole("textbox", { name: "Nome do agrupador" })).toHaveValue(COMIDA.name);
+    expect(within(sheet).getByRole("textbox", { name: "Nome" })).toHaveValue(COMIDA.name);
     expect(within(sheet).getByLabelText("Meta")).toHaveValue("120,00");
   });
 

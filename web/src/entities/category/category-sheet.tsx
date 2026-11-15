@@ -1,9 +1,9 @@
 "use client";
 
-import { type FormEvent, useEffect, useState } from "react";
+import { type FormEvent, useEffect, useRef, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
-import { Check, Palette, Trash2 } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -31,7 +31,7 @@ import { BrandButton } from "@/shared/ui/brand-button";
 import { CategoryIcon, categoryBg } from "@/shared/ui/category-icon";
 import { DateField } from "@/shared/ui/date-field";
 import { PageError, PageLoading } from "@/shared/ui/page-state";
-import { ResponsiveSheet } from "@/shared/ui/responsive-sheet";
+import { ResponsiveSheet, ResponsiveSheetFooter } from "@/shared/ui/responsive-sheet";
 
 import {
   categoriesQuery,
@@ -84,7 +84,7 @@ const freeColor = (list: Category[], except?: string) =>
   COLOR_NAMES.find(([token]) => !holderOf(list, token, except))?.[0];
 
 const allTaken = (editing: boolean) =>
-  `Todas as 24 cores estão em uso. ${editing ? "Mantenha" : "Crie"} como subcategoria ou arquive uma categoria.`;
+  `Todas as 24 cores estão em uso. ${editing ? "Mantenha" : "Crie"} como subcategoria ou exclua uma categoria.`;
 
 /** Names a new cofrinho can start from, with their icons. */
 const SUGGESTIONS: [name: string, icon: string][] = [
@@ -100,23 +100,31 @@ const chip =
 
 const field = "h-12 text-base md:text-base";
 
-const problemOf = (error: Error | null, editing: boolean) => {
-  if (!error) return undefined;
-  if (hasStatus(error, 409)) return "Já existe uma categoria com esse nome";
-  if (hasProblem(error, "color-taken")) return "Essa cor já é de outra categoria";
-  if (hasProblem(error, "palette-full")) return allTaken(editing);
-  return editing ? "Não foi possível salvar a categoria." : "Não foi possível criar a categoria.";
+/** The kind words Lançar uses. */
+export const KIND_NAMES: Record<Kind, string> = { daily: "Diário", bill: "Conta", income: "Entrada" };
+
+const OUTFLOW_KINDS: Kind[] = ["daily", "bill"];
+
+const FLOW_KINDS: Kind[] = [...OUTFLOW_KINDS, "income"];
+
+/** A "+" fixes the side: Diário and Conta under an outflow group, nothing under an income one. */
+const kindChoicesUnder = (group?: Category): Kind[] => {
+  if (!group) return FLOW_KINDS;
+  return group.kind === "income" ? [] : OUTFLOW_KINDS;
 };
 
-const OUTFLOW_KINDS: [kind: Kind, label: string][] = [
-  ["daily", "Diário"],
-  ["bill", "Fixa"],
-];
+const placeholderOf = (cofrinho: boolean, sub: boolean) => {
+  if (cofrinho) return "Ex.: Viagem";
+  return sub ? "Ex.: Farmácia" : "Ex.: Educação";
+};
 
-const FLOW_KINDS: [kind: Kind, label: string][] = [...OUTFLOW_KINDS, ["income", "Entrada"]];
-
-/** D27: the confirmation keeps the word Saída while `Tipo de Fluxo` reads Fixa. */
-const CONFIRM_KINDS: Record<Kind, string> = { daily: "Diário", bill: "Saída", income: "Entrada" };
+/** Any failure but a taken name, which Nome itself shows. */
+const problemOf = (error: Error | null, editing: boolean) => {
+  if (!error || hasStatus(error, 409)) return undefined;
+  if (hasProblem(error, "color-taken")) return "Essa cor já é de outra categoria.";
+  if (hasProblem(error, "palette-full")) return allTaken(editing);
+  return `Não foi possível ${editing ? "salvar" : "criar"} a categoria. Tente de novo.`;
+};
 
 const kindProblemOf = (error: Error) => {
   const message = problemMessage(error);
@@ -137,11 +145,11 @@ type FormProps = {
   kind: Kind;
   /** Given: the form edits it and offers `Excluir`. */
   category?: Category;
-  /** The parent preselected when creating: the form opens in Subcategoria mode. */
+  /** The group a "+" opened the form under: shown read-only. */
   parentId?: string;
   onSaved: (category: Category) => void;
   onArchive: (category: Category) => void;
-  /** Called with the new kind once the API moved or created the category there; given, creating offers `Tipo de Fluxo`. */
+  /** Called with the new kind once the API moved or created the category there; given, creating offers `Tipo`. */
   onKindChange?: (kind: Kind) => void;
   /** Told the parent the form links to, which makes it a cofrinho under Economia. */
   onParentChange?: (parentId: string) => void;
@@ -173,6 +181,9 @@ const CategoryForm = ({
   const [flow, setFlow] = useState(kind);
   const [submitted, setSubmitted] = useState(false);
   const [parentSearch, setParentSearch] = useState("");
+  const nameRef = useRef<HTMLInputElement>(null);
+  const parentsRef = useRef<HTMLDivElement>(null);
+  useEffect(() => nameRef.current?.focus(), []);
   // Edited from another kind's list (D26), a category keeps its own kind.
   const formKind = ownKind ?? flow;
   const list = useQuery(categoriesQuery).data ?? [];
@@ -194,6 +205,7 @@ const CategoryForm = ({
   const noteLength = [...note].length;
   const noteTooLong = noteLength > 140;
   const parent = list.find((each) => each.id === parentId);
+  const lockedParent = category ? undefined : list.find((each) => each.id === presetParent);
   const cofrinho = Boolean(parent?.is_savings);
   const chosenIcon = icon ?? parent?.icon ?? "circle-dashed";
   const free = freeColor(holders, category?.id);
@@ -204,7 +216,7 @@ const CategoryForm = ({
   const full = needsColor && !free;
   const hasChildren = Boolean(category) && list.some((each) => each.parent_id === category?.id);
   // Economia cannot get a parent, and a cofrinho made from Cofrinhos stays under it.
-  const fixedParent = category?.is_savings || list.find((each) => each.id === presetParent)?.is_savings;
+  const fixedParent = category?.is_savings || lockedParent?.is_savings;
   const create = useCreateCategory();
   const update = useUpdateCategory();
   const move = useUpdateCategory();
@@ -237,22 +249,32 @@ const CategoryForm = ({
     );
   };
   const trimmed = name.trim();
-  const nameError = submitted && !trimmed ? "Informe o nome." : undefined;
-  const parentError = submitted && !category && sub && !parentId ? "Escolha a categoria pai." : undefined;
+  const sentName = (category ? update.variables?.name : create.variables?.name) ?? trimmed;
+  const taken = hasStatus(mutation.error, 409) ? `Já existe "${sentName}" em ${KIND_NAMES[formKind]}.` : undefined;
+  const nameError = submitted && !trimmed ? "Informe o nome." : taken;
+  const parentError = submitted && !category && sub && !parentId ? "Escolha o grupo." : undefined;
   const swatches = [
     ...COLOR_NAMES.filter(([token]) => token === chosenColor),
     ...COLOR_NAMES.filter(([token]) => token !== chosenColor && !holderOf(holders, token, category?.id)),
   ];
-  const creatingFlow = !category && onKindChange && !fixedParent;
-  const action = category ? "Salvar" : "Criar";
+  const kindChoices = kindChoicesUnder(lockedParent);
+  const creatingFlow = !category && onKindChange && !fixedParent && kindChoices.length > 0;
   const problem = problemOf(mutation.error, Boolean(category));
+  const placeholder = placeholderOf(cofrinho, Boolean(parentId) || pickingParent);
+  const action = category ? "Salvar" : "Criar";
+  const busy = category ? "Salvando…" : "Criando…";
+  const focusName = (error: Error) => {
+    if (hasStatus(error, 409)) nameRef.current?.focus();
+  };
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
     // React bubbles the submit through the portal to the Lançar form around the picker.
     event.stopPropagation();
     setSubmitted(true);
-    if (!trimmed || (!category && sub && !parentId) || (cofrinho && noteTooLong)) return;
+    if (!trimmed) return nameRef.current?.focus();
+    if (!category && sub && !parentId) return parentsRef.current?.querySelector("input")?.focus();
+    if (cofrinho && noteTooLong) return;
     const noteChange = note === (storedNote ?? "") ? {} : { note: note.trim() || null };
     // Outside Economia the API refuses a goal, so only a cofrinho sends one.
     const goal = cofrinho ? { target: positiveAmount(target), deadline: deadline || null, ...noteChange } : {};
@@ -266,7 +288,7 @@ const CategoryForm = ({
           parent_id: parentId || null,
           ...goal,
         },
-        { onSuccess: onSaved },
+        { onSuccess: onSaved, onError: focusName },
       );
     create.mutate(
       {
@@ -281,23 +303,24 @@ const CategoryForm = ({
           onSaved(created);
           if (formKind !== kind) onKindChange?.(formKind);
         },
+        onError: focusName,
       },
     );
   };
 
   return (
     <form noValidate onSubmit={submit} className="flex flex-col gap-5">
-      {!category && !fixedParent && (
+      {!category && !presetParent && (
         <ToggleGroup
           type="single"
           spacing={0}
           value={sub ? "sub" : "top"}
           onValueChange={(value) => value && setSub(value === "sub")}
-          aria-label="Categoria Pai ou Subcategoria"
+          aria-label="Grupo ou subcategoria"
           className="grid w-full grid-cols-2 rounded-2xl bg-muted p-1"
         >
           <ToggleGroupItem value="top" className={segment}>
-            Categoria Pai
+            Grupo
           </ToggleGroupItem>
           <ToggleGroupItem value="sub" className={segment}>
             Subcategoria
@@ -305,12 +328,13 @@ const CategoryForm = ({
         </ToggleGroup>
       )}
       <Field className="gap-1.5" data-invalid={Boolean(nameError)}>
-        <FieldLabel htmlFor="category-name">Nome do agrupador</FieldLabel>
+        <FieldLabel htmlFor="category-name">Nome</FieldLabel>
         <Input
+          ref={nameRef}
           id="category-name"
           value={name}
           onChange={(event) => setName(event.target.value)}
-          placeholder={cofrinho ? "Ex.: Viagem" : "Ex: Educação & Cursos"}
+          placeholder={placeholder}
           maxLength={40}
           autoComplete="off"
           className={field}
@@ -320,18 +344,18 @@ const CategoryForm = ({
       </Field>
       {creatingFlow && (
         <div className="flex flex-col gap-1.5">
-          <FieldTitle id="category-flow">Tipo de Fluxo</FieldTitle>
+          <FieldTitle id="category-flow">Tipo</FieldTitle>
           <ToggleGroup
             type="single"
             spacing={0}
             value={flow}
             onValueChange={(value: Kind | "") => value && setFlow(value)}
             aria-labelledby="category-flow"
-            className="grid w-full grid-cols-3 gap-2"
+            className={cn("grid w-full gap-2", kindChoices.length === 3 ? "grid-cols-3" : "grid-cols-2")}
           >
-            {FLOW_KINDS.map(([value, label]) => (
+            {kindChoices.map((value) => (
               <ToggleGroupItem key={value} value={value} className={cn(kindChip, "bg-muted")}>
-                {label}
+                {KIND_NAMES[value]}
               </ToggleGroupItem>
             ))}
           </ToggleGroup>
@@ -339,7 +363,7 @@ const CategoryForm = ({
       )}
       {kindChangeable && (
         <div className="flex flex-col gap-1.5">
-          <FieldTitle id="category-kind">Tipo de Fluxo</FieldTitle>
+          <FieldTitle id="category-kind">Tipo</FieldTitle>
           <ToggleGroup
             type="single"
             spacing={0}
@@ -348,18 +372,18 @@ const CategoryForm = ({
             aria-labelledby="category-kind"
             className="grid w-full grid-cols-2 rounded-2xl bg-muted p-1"
           >
-            {OUTFLOW_KINDS.map(([value, label]) => (
+            {OUTFLOW_KINDS.map((value) => (
               <ToggleGroupItem key={value} value={value} className={kindChip}>
-                {label}
+                {KIND_NAMES[value]}
               </ToggleGroupItem>
             ))}
           </ToggleGroup>
           <AlertDialog open={asking} onOpenChange={setAsking}>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>{`Mudar para ${CONFIRM_KINDS[nextKind]}?`}</AlertDialogTitle>
+                <AlertDialogTitle>{`Mudar para ${KIND_NAMES[nextKind]}?`}</AlertDialogTitle>
                 <AlertDialogDescription>
-                  {`Todos os lançamentos de ${category.name} passam a ser ${CONFIRM_KINDS[nextKind]}. O saldo não muda.`}
+                  {`Todos os lançamentos de ${category.name} passam a ser ${KIND_NAMES[nextKind]}. O saldo não muda.`}
                 </AlertDialogDescription>
               </AlertDialogHeader>
               {move.error && (
@@ -379,6 +403,71 @@ const CategoryForm = ({
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
+        </div>
+      )}
+      {lockedParent && !fixedParent && (
+        <p className="flex min-h-11 items-center gap-3 text-base">
+          <CategoryIcon icon={lockedParent.icon} color={lockedParent.color} className="size-8" />
+          {`Dentro de ${lockedParent.name}`}
+        </p>
+      )}
+      {category && !hasChildren && !fixedParent && (
+        <Field className="gap-1.5">
+          <FieldLabel htmlFor="category-parent">Dentro de</FieldLabel>
+          <NativeSelect
+            id="category-parent"
+            value={parentId}
+            onChange={(event) => setParentId(event.target.value)}
+            className="w-full [&>select]:h-12 [&>select]:rounded-xl [&>select]:pl-3 [&>select]:text-base"
+          >
+            <NativeSelectOption value="">Nenhum (é um grupo)</NativeSelectOption>
+            {parents.map((each) => (
+              <NativeSelectOption key={each.id} value={each.id}>
+                {each.name}
+              </NativeSelectOption>
+            ))}
+          </NativeSelect>
+        </Field>
+      )}
+      {!category && sub && !presetParent && (
+        <div className="flex flex-col gap-2">
+          <span id="category-parents" className="font-semibold text-sm">
+            Dentro de
+          </span>
+          {parents.length > 8 && (
+            <Input
+              type="search"
+              aria-label="Buscar categoria"
+              placeholder="Buscar categoria..."
+              value={parentSearch}
+              onChange={(event) => setParentSearch(event.target.value)}
+              className={field}
+            />
+          )}
+          <div ref={parentsRef} role="radiogroup" aria-labelledby="category-parents" className="flex flex-col gap-1">
+            {shownParents.map((each) => (
+              <label
+                key={each.id}
+                className="flex min-h-11 cursor-pointer items-center gap-3 rounded-xl px-2 has-checked:bg-secondary has-focus-visible:outline-2 has-focus-visible:outline-ring"
+              >
+                <input
+                  type="radio"
+                  name="category-parent"
+                  className="sr-only"
+                  checked={picked === each.id}
+                  onChange={() => setPicked(each.id)}
+                />
+                <CategoryIcon icon={each.icon} color={each.color} className="size-8" />
+                <span className="text-base">{each.name}</span>
+              </label>
+            ))}
+            {parents.length === 0 && <p className="text-muted-foreground text-sm">Nenhum grupo deste tipo.</p>}
+          </div>
+          {parentError && (
+            <p role="alert" className="text-destructive text-sm">
+              {parentError}
+            </p>
+          )}
         </div>
       )}
       {cofrinho && !category && (
@@ -446,107 +535,48 @@ const CategoryForm = ({
           {noteTooLong && <FieldError>Use até 140 caracteres.</FieldError>}
         </Field>
       )}
-      {category && !hasChildren && !fixedParent && (
-        <Field className="gap-1.5">
-          <FieldLabel htmlFor="category-parent">Subcategoria de</FieldLabel>
-          <NativeSelect
-            id="category-parent"
-            value={parentId}
-            onChange={(event) => setParentId(event.target.value)}
-            className="w-full [&>select]:h-12 [&>select]:rounded-xl [&>select]:pl-3 [&>select]:text-base"
-          >
-            <NativeSelectOption value="">Nenhuma</NativeSelectOption>
-            {parents.map((parent) => (
-              <NativeSelectOption key={parent.id} value={parent.id}>
-                {parent.name}
-              </NativeSelectOption>
-            ))}
-          </NativeSelect>
-        </Field>
-      )}
-      {!category && sub && !fixedParent && (
-        <div className="flex flex-col gap-2">
-          <span id="category-parents" className="font-semibold text-sm">
-            Vincular à Categoria Pai
-          </span>
-          {parents.length > 8 && (
-            <Input
-              type="search"
-              aria-label="Buscar categoria"
-              placeholder="Buscar categoria..."
-              value={parentSearch}
-              onChange={(event) => setParentSearch(event.target.value)}
-              className={field}
-            />
-          )}
-          <div role="radiogroup" aria-labelledby="category-parents" className="flex flex-col gap-1">
-            {shownParents.map((each) => (
-              <label
-                key={each.id}
-                className="flex min-h-11 cursor-pointer items-center gap-3 rounded-xl px-2 has-checked:bg-secondary has-focus-visible:outline-2 has-focus-visible:outline-ring"
-              >
-                <input
-                  type="radio"
-                  name="category-parent"
-                  className="sr-only"
-                  checked={picked === each.id}
-                  onChange={() => setPicked(each.id)}
-                />
-                <CategoryIcon icon={each.icon} color={each.color} className="size-8" />
-                <span className="text-base">{each.name}</span>
-              </label>
-            ))}
-            {parents.length === 0 && <p className="text-muted-foreground text-sm">Nenhuma categoria pai deste tipo.</p>}
-          </div>
-          {parentError && (
-            <p role="alert" className="text-destructive text-sm">
-              {parentError}
-            </p>
-          )}
+      <div className="flex items-center gap-3">
+        <CategoryIcon icon={chosenIcon} color={chosenColor ?? ""} />
+        <div className="flex min-w-0 flex-1 flex-col">
+          <span className="font-semibold text-base">{needsColor ? "Ícone e cor" : "Ícone"}</span>
+          {parent && <span className="text-muted-foreground text-sm">{`Usa a cor de ${parent.name}`}</span>}
         </div>
-      )}
-      {parent && (
-        <p className="flex items-center gap-2 text-muted-foreground text-sm">
-          <span aria-hidden className={cn("size-4 rounded-full", categoryBg(parent.color))} />
-          Usa a cor de {parent.name}
-        </p>
-      )}
+      </div>
       {full && <p className="text-muted-foreground text-sm">{allTaken(Boolean(category))}</p>}
+      <IconPicker value={chosenIcon} color={chosenColor ?? ""} onChange={setIcon} />
       {needsColor && !full && (
         <fieldset aria-labelledby="category-color" className="flex flex-col gap-2">
           <div className="flex items-center justify-between gap-2">
             <span id="category-color" className="font-semibold text-sm">
-              Cor de Destaque
+              Cor
             </span>
             <span className="font-semibold text-primary text-sm">
               {COLOR_NAMES.find(([token]) => token === chosenColor)?.[1]}
             </span>
           </div>
           <div className="flex flex-wrap gap-2">
-            {swatches.map(([token, label]) => {
-              return (
-                <label
-                  key={token}
-                  className="group flex size-11 cursor-pointer items-center justify-center rounded-full has-focus-visible:outline-2 has-focus-visible:outline-ring"
-                >
-                  <input
-                    type="radio"
-                    name="category-color"
-                    aria-label={`Cor ${label}`}
-                    className="sr-only"
-                    checked={chosenColor === token}
-                    onChange={() => setColor(token)}
-                  />
-                  <span
-                    aria-hidden
-                    className={cn(
-                      "size-8 rounded-full transition-transform group-has-checked:scale-110 group-has-checked:ring-2 group-has-checked:ring-primary group-has-checked:ring-offset-2 group-has-checked:ring-offset-background",
-                      categoryBg(token),
-                    )}
-                  />
-                </label>
-              );
-            })}
+            {swatches.map(([token, label]) => (
+              <label
+                key={token}
+                className="group flex size-11 cursor-pointer items-center justify-center rounded-full has-focus-visible:outline-2 has-focus-visible:outline-ring"
+              >
+                <input
+                  type="radio"
+                  name="category-color"
+                  aria-label={`Cor ${label}`}
+                  className="sr-only"
+                  checked={chosenColor === token}
+                  onChange={() => setColor(token)}
+                />
+                <span
+                  aria-hidden
+                  className={cn(
+                    "size-8 rounded-full transition-transform group-has-checked:scale-110 group-has-checked:ring-2 group-has-checked:ring-primary group-has-checked:ring-offset-2 group-has-checked:ring-offset-background",
+                    categoryBg(token),
+                  )}
+                />
+              </label>
+            ))}
           </div>
         </fieldset>
       )}
@@ -555,32 +585,22 @@ const CategoryForm = ({
           {problem}
         </p>
       )}
-      <IconPicker value={chosenIcon} color={chosenColor ?? ""} onChange={setIcon} />
-      <div className="flex items-center gap-3 rounded-2xl border border-border bg-muted/50 p-3">
-        <CategoryIcon icon={chosenIcon} color={chosenColor ?? ""} />
-        <div className="flex min-w-0 flex-1 flex-col">
-          <span className="truncate font-semibold text-base">{trimmed}</span>
-          <span className="text-muted-foreground text-xs">Prévia em tempo real</span>
-        </div>
-        {!category && (
-          <span className="rounded-full bg-income-soft px-2.5 py-0.5 font-semibold text-income-text text-xs">Novo</span>
+      <ResponsiveSheetFooter>
+        <BrandButton type="submit" disabled={mutation.isPending || full}>
+          {mutation.isPending ? busy : action}
+        </BrandButton>
+        {category && !category.is_savings && (
+          <Button
+            type="button"
+            variant="ghost"
+            className="min-h-11 text-base text-destructive hover:text-destructive"
+            onClick={() => onArchive(category)}
+          >
+            <Trash2 className="size-5" />
+            Excluir
+          </Button>
         )}
-      </div>
-      <BrandButton type="submit" disabled={mutation.isPending || full}>
-        {!cofrinho && <Check />}
-        {cofrinho ? action : `${action} Categoria`}
-      </BrandButton>
-      {category && !category.is_savings && (
-        <Button
-          type="button"
-          variant="ghost"
-          className="min-h-11 text-base text-destructive hover:text-destructive"
-          onClick={() => onArchive(category)}
-        >
-          <Trash2 className="size-5" />
-          Excluir
-        </Button>
-      )}
+      </ResponsiveSheetFooter>
     </form>
   );
 };
@@ -594,22 +614,17 @@ type CategorySheetProps = Omit<FormProps, "onSaved" | "onArchive"> & {
 };
 
 /** The title and the saved toast: a category's, or a cofrinho's under Economia. */
-const useHeading = (category: Category | undefined, parentId: string | null | undefined) => {
+const useHeading = (category: Category | undefined, linked: string | null | undefined, preset?: string) => {
   const list = useQuery(categoriesQuery).data;
-  const cofrinho = Boolean(list?.find((each) => each.id === parentId)?.is_savings);
+  const cofrinho = Boolean(list?.find((each) => each.id === linked)?.is_savings);
   const done = category ? "salv" : "criad";
-  return {
-    title: cofrinho ? `${category ? "Editar" : "Novo"} cofrinho` : `${category ? "Editar" : "Nova"} Categoria`,
-    saved: cofrinho ? `Cofrinho ${done}o` : `Categoria ${done}a`,
-  };
+  if (cofrinho) return { title: `${category ? "Editar" : "Novo"} cofrinho`, saved: `Cofrinho ${done}o` };
+  if (category) return { title: "Editar categoria", saved: "Categoria salva" };
+  return { title: preset ? "Nova subcategoria" : "Nova categoria", saved: "Categoria criada" };
 };
 
 const formKey = ({ category, parentId }: Pick<FormProps, "category" | "parentId">) =>
   category?.id ?? `new-${parentId ?? ""}`;
-
-/** The heading follows the parent the form links to, starting from the given one. */
-const useLinked = ({ category, parentId }: Pick<FormProps, "category" | "parentId">) =>
-  useState(category?.parent_id ?? parentId);
 
 /** The form once the categories arrived; a failure offers to retry. */
 const LoadedForm = (props: FormProps) => {
@@ -620,11 +635,9 @@ const LoadedForm = (props: FormProps) => {
   return <PageLoading />;
 };
 
-const pill = "rounded-full bg-muted px-2.5 py-0.5 font-medium text-muted-foreground text-xs";
-
 /**
- * `Nova Categoria` or `Editar Categoria`: Categoria Pai or Subcategoria, name, kind, icon and a free palette color.
- * Editing a Diário or Fixa category offers `Tipo de Fluxo`, which moves it and its entries after a confirmation.
+ * `Nova categoria`, `Nova subcategoria` (a group's "+") or `Editar categoria`: name, kind, group, icon and a free palette color.
+ * Editing a Diário or Conta category offers `Tipo`, which moves it and its entries after a confirmation.
  * Under Economia it is a cofrinho: `Novo cofrinho` or `Editar cofrinho`, with an optional goal and deadline.
  */
 export const CategorySheet = ({
@@ -635,15 +648,14 @@ export const CategorySheet = ({
   onCloseAutoFocus,
   ...form
 }: CategorySheetProps) => {
-  const [linked, setLinked] = useLinked(form);
-  const { title, saved } = useHeading(form.category, linked);
+  const [linked, setLinked] = useState(form.category?.parent_id ?? form.parentId);
+  const { title, saved } = useHeading(form.category, linked, form.parentId);
   return (
     <ResponsiveSheet
       open={open}
       onOpenChange={onOpenChange}
       title={title}
-      eyebrow={<span className={cn(pill, "self-start")}>Configuração</span>}
-      description="Nome, ícone e cor; subcategoria se quiser agrupar."
+      description="Nome, tipo, ícone e cor."
       onCloseAutoFocus={onCloseAutoFocus}
     >
       <LoadedForm
@@ -661,31 +673,5 @@ export const CategorySheet = ({
         }}
       />
     </ResponsiveSheet>
-  );
-};
-
-/** The same form as a side panel, from 1280 px on Categorias. */
-export const CategoryPanel = ({ onSaved, ...form }: FormProps) => {
-  const [linked, setLinked] = useLinked(form);
-  const { title, saved } = useHeading(form.category, linked);
-  return (
-    <aside aria-labelledby="category-panel-title" className="flex flex-col gap-5 rounded-2xl bg-card p-5 shadow-sm">
-      <div className="flex items-center gap-2">
-        <Palette aria-hidden className="size-5 text-primary" />
-        <h2 id="category-panel-title" className="font-bold text-lg">
-          {title}
-        </h2>
-        <span className={pill}>Configuração</span>
-      </div>
-      <LoadedForm
-        key={formKey(form)}
-        {...form}
-        onParentChange={setLinked}
-        onSaved={(category) => {
-          toast.success(saved);
-          onSaved(category);
-        }}
-      />
-    </aside>
   );
 };
