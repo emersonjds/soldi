@@ -7,6 +7,14 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.64.0
+
+> Headline: subcategories on the phone
+
+### Web
+
+- Para onde vai: on the phone, the chevron beside a group unfolds its subcategories with their amounts and the "sem subcategoria" remainder, as on desktop; tapping the row still opens its entries (SOL-148).
+
 ## 0.63.0
 
 > Headline: Categorias, simple
