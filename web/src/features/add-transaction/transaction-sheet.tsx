@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, type ReactNode, useRef, useState } from "react";
+import { type FormEvent, type ReactNode, useState } from "react";
 
 import {
   ArrowDown,
@@ -15,7 +15,6 @@ import {
   Lightbulb,
   type LucideIcon,
   NotebookPen,
-  Plus,
   ReceiptText,
   Repeat,
   Save,
@@ -30,10 +29,8 @@ import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { type Bill, type BillPrefill, useCards, useCreateBill } from "@/entities/bill/bill-queries";
-import { CardSheet } from "@/entities/bill/card-sheet";
-import { useCategoryChips } from "@/entities/category/category-chips";
-import { CategoryPicker } from "@/entities/category/category-picker";
+import { type BillPrefill, useCards, useCreateBill } from "@/entities/bill/bill-queries";
+import { CategoryChips, useCategoryChips } from "@/entities/category/category-chips";
 import { useSettings } from "@/entities/settings/settings-query";
 import { ScopeRadio } from "@/entities/transaction/scope-radio";
 import { SeriesAllDialog } from "@/entities/transaction/series-all-dialog";
@@ -147,14 +144,6 @@ const TransactionForm = ({
   const [draft, setDraft] = useState(initial);
   const [submitted, setSubmitted] = useState(false);
   const [asking, setAsking] = useState(false);
-  /** Where `Novo cartão` was opened from: Diário's Cartão field or the Conta list's card group. */
-  const [newCard, setNewCard] = useState<"field" | "group" | null>(null);
-  /** The button that opened `Novo cartão`, focused again when it closes. */
-  const cardOpener = useRef<Element | null>(null);
-  const openCard = (from: "field" | "group") => {
-    cardOpener.current = document.activeElement;
-    setNewCard(from);
-  };
   const currency = useCurrency();
   const categories = useCategoryChips(draft.kind);
   const keypad = useKeypad();
@@ -171,8 +160,6 @@ const TransactionForm = ({
   const minMonths = Math.max(2, series?.position ?? 2);
   const monthsValid = Number.isInteger(months) && months >= minMonths && months <= 60;
   const canRepeat = !transaction?.recurring_bill_id && !transaction?.cofrinho_id && !series;
-  // A bill payment stays a Saída and a series member keeps its kind: nothing may switch it.
-  const kindShown = !transaction?.recurring_bill_id && !series;
   const counted = draft.repeat || Boolean(series);
   // A moved date can change the member's position; Quantas vezes waits for the next save.
   const moved = Boolean(series) && draft.date !== transaction?.date;
@@ -225,16 +212,6 @@ const TransactionForm = ({
       : undefined;
 
   const set = (patch: Partial<Draft>) => setDraft((current) => ({ ...current, ...patch }));
-  /** A category of another kind (`Usar esta categoria`) takes the draft to its kind. */
-  const choose = (chosen: Schemas["Category"]) =>
-    set(chosen.kind === draft.kind ? { category: chosen } : { kind: chosen.kind, category: chosen, cardId: "" });
-  /** From the card group, Lançar goes to Diário on the new card: spending on it is why it was made. */
-  const cardMade = (card: Bill) =>
-    set(
-      newCard === "group" && draft.kind !== "daily"
-        ? { kind: "daily", category: undefined, cardId: card.id }
-        : { cardId: card.id },
-    );
 
   /** `repeat` false: the plain entry, for Criar como Conta Fixa. */
   const fields = (repeat = draft.repeat): NewTransaction | undefined => {
@@ -306,17 +283,16 @@ const TransactionForm = ({
     </div>
   );
   const categoryField = (
-    <CategoryPicker
+    <CategoryChips
       kind={draft.kind}
       chosen={category}
-      onChoose={choose}
+      onChoose={(chosen) => set({ category: chosen })}
       entries={thisMonth.isError ? [] : thisMonth.data}
       error={submitted && !category ? "Escolha uma categoria" : undefined}
-      onNewCard={kindShown ? () => openCard("group") : undefined}
-      kindLocked={!kindShown}
     />
   );
-  const cardField = draft.kind === "daily" && (
+  // D25: no card, no field.
+  const cardField = draft.kind === "daily" && cards.length > 0 && (
     <Field className="gap-1.5">
       <FieldLabel htmlFor="transaction-card" className="flex items-center gap-2">
         <CreditCard aria-hidden className="size-4 text-muted-foreground" />
@@ -335,15 +311,6 @@ const TransactionForm = ({
           </NativeSelectOption>
         ))}
       </NativeSelect>
-      <Button
-        type="button"
-        variant="outline"
-        onClick={() => openCard("field")}
-        className="min-h-11 self-start rounded-full text-base text-primary"
-      >
-        <Plus aria-hidden className="size-4" />
-        Novo cartão
-      </Button>
     </Field>
   );
   const dateField = (
@@ -563,17 +530,6 @@ const TransactionForm = ({
 
   return (
     <form noValidate onSubmit={submit} className="flex flex-col gap-6">
-      <CardSheet
-        open={newCard !== null}
-        onOpenChange={(open) => !open && setNewCard(null)}
-        onSaved={cardMade}
-        onCloseAutoFocus={(event) => {
-          const opener = cardOpener.current;
-          if (!(opener instanceof HTMLElement) || !opener.isConnected) return;
-          event.preventDefault();
-          opener.focus();
-        }}
-      />
       {series && transaction ? (
         <>
           <p className="text-muted-foreground text-sm">
@@ -618,7 +574,7 @@ const TransactionForm = ({
         </>
       ) : (
         <>
-          {kindShown && (
+          {!transaction?.recurring_bill_id && (
             <ToggleGroup
               type="single"
               spacing={0}

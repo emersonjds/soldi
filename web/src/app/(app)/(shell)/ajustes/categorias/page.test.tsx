@@ -333,7 +333,7 @@ describe("Ajustes › Categorias", () => {
     await list();
     await userEvent.click(screen.getByRole("button", { name: "Nova Categoria" }));
     const sheet = await screen.findByRole("dialog", { name: "Nova Categoria" });
-    expect(within(sheet).getByRole("radio", { name: "Grupo novo" })).toBeChecked();
+    expect(within(sheet).getByRole("radio", { name: "Categoria Pai" })).toBeChecked();
     expect(within(sheet).getByRole("radio", { name: "Fixa" })).toBeChecked();
     await userEvent.type(within(sheet).getByLabelText("Nome do agrupador"), "Internet{Enter}");
 
@@ -341,22 +341,21 @@ describe("Ajustes › Categorias", () => {
     expect(await sent(requests, "POST")[0].json()).toMatchObject({ name: "Internet", kind: "bill" });
   });
 
-  it("creates in the other Quando acontece and follows it to its tab", async () => {
-    const created = { ...ALUGUEL, id: "c1000000-0000-4000-8000-000000000031", name: "Bônus" };
+  it("creates in another Tipo de Fluxo and follows it to its tab", async () => {
+    const created = { ...SALARIO, id: "c1000000-0000-4000-8000-000000000031", name: "Bônus" };
     const requests = open({ "POST /api/categories": { status: 201, body: created } });
 
     await list();
     await userEvent.click(screen.getByRole("button", { name: "Nova Categoria" }));
     const sheet = await screen.findByRole("dialog", { name: "Nova Categoria" });
-    expect(within(sheet).queryByRole("radio", { name: "Entrada" })).not.toBeInTheDocument();
-    await userEvent.click(within(sheet).getByRole("radio", { name: "Fixa" }));
+    await userEvent.click(within(sheet).getByRole("radio", { name: "Entrada" }));
     await userEvent.type(within(sheet).getByLabelText("Nome do agrupador"), "Bônus");
     expect(within(sheet).getByText("Prévia em tempo real").parentElement).toHaveTextContent("Bônus");
     await userEvent.click(within(sheet).getByRole("button", { name: "Criar Categoria" }));
 
     await waitFor(() => expect(sent(requests, "POST")).toHaveLength(1));
-    expect(await sent(requests, "POST")[0].json()).toMatchObject({ name: "Bônus", kind: "bill" });
-    await waitFor(() => expect(window.location.pathname + window.location.search).toBe("/ajustes/categorias?k=bill"));
+    expect(await sent(requests, "POST")[0].json()).toMatchObject({ name: "Bônus", kind: "income" });
+    await waitFor(() => expect(window.location.pathname + window.location.search).toBe("/ajustes/categorias?k=income"));
   });
 
   it("creates a subcategory from the card's Adicionar subcategoria, its parent preset", async () => {
@@ -364,9 +363,9 @@ describe("Ajustes › Categorias", () => {
 
     await userEvent.click(within(await card("Pets")).getByRole("button", { name: "Adicionar subcategoria" }));
     const sheet = await screen.findByRole("dialog", { name: "Nova Categoria" });
-    expect(within(sheet).queryByRole("radio", { name: "Dentro de um grupo" })).not.toBeInTheDocument();
-    expect(within(sheet).queryByRole("radiogroup", { name: "Escolher grupo" })).not.toBeInTheDocument();
-    expect(within(sheet).getByText("Usa a cor de Pets")).toBeInTheDocument();
+    expect(within(sheet).getByRole("radio", { name: "Subcategoria" })).toBeChecked();
+    const parents = within(sheet).getByRole("radiogroup", { name: "Vincular à Categoria Pai" });
+    expect(within(parents).getByRole("radio", { name: "Pets" })).toBeChecked();
     expect(within(sheet).queryByRole("group", { name: /^Cor de Destaque/ })).not.toBeInTheDocument();
     await userEvent.type(within(sheet).getByLabelText("Nome do agrupador"), "Banho{Enter}");
 
@@ -440,11 +439,11 @@ describe("Ajustes › Categorias", () => {
 
       await userEvent.click(within(await card("Pets")).getByRole("button", { name: "Adicionar subcategoria" }));
       const panel = () => screen.getByRole("complementary", { name: "Nova Categoria" });
-      await waitFor(() => expect(within(panel()).getByText("Usa a cor de Pets")).toBeInTheDocument());
+      await waitFor(() => expect(within(panel()).getByRole("radio", { name: "Subcategoria" })).toBeChecked());
       await waitFor(() => expect(nameField(panel())).toHaveFocus());
 
       await userEvent.click(screen.getByRole("button", { name: "Nova Categoria" }));
-      await waitFor(() => expect(within(panel()).getByRole("radio", { name: "Grupo novo" })).toBeChecked());
+      await waitFor(() => expect(within(panel()).getByRole("radio", { name: "Categoria Pai" })).toBeChecked());
       await waitFor(() => expect(nameField(panel())).toHaveFocus());
     });
 

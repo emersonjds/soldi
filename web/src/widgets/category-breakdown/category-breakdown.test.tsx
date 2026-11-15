@@ -379,9 +379,7 @@ describe("CategoryBreakdown", () => {
     );
 
     const sheet = await screen.findByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ });
-    await waitFor(() =>
-      expect(within(sheet).getByRole("button", { name: /^Categoria/ })).toHaveTextContent(/^Mercado$/),
-    );
+    expect(await within(sheet).findByRole("radio", { name: "Mercado" })).toHaveAttribute("aria-checked", "true");
     expect(within(sheet).getByRole("radio", { name: "Diário" })).toBeChecked();
     expect(within(sheet).getByRole("button", { name: /^Hoje/ })).toHaveAttribute("aria-pressed", "true");
   });
@@ -396,9 +394,7 @@ describe("CategoryBreakdown", () => {
 
     const sheet = await screen.findByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ });
     expect(within(sheet).getByRole("radio", { name: "Conta" })).toBeChecked();
-    await waitFor(() =>
-      expect(within(sheet).getByRole("button", { name: /^Categoria/ })).toHaveTextContent(/^Economia$/),
-    );
+    expect(await within(sheet).findByRole("radio", { name: "Economia" })).toHaveAttribute("aria-checked", "true");
   });
 
   it("dates the entry on the first day of a month other than the current one", async () => {
