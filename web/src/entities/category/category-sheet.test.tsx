@@ -109,9 +109,6 @@ const patched = async (requests: Request[]) => {
   return requests.find((request) => request.method === "PATCH")?.json();
 };
 
-/** Opens the icon and color pickers under `Ícone e cor`. */
-const restyle = (sheet: HTMLElement) => userEvent.click(within(sheet).getByRole("button", { name: "Trocar" }));
-
 describe("CategorySheet", () => {
   beforeEach(() => {
     window.innerWidth = 375;
@@ -137,18 +134,12 @@ describe("CategorySheet", () => {
     expect(within(sheet).queryByRole("button", { name: "Excluir" })).not.toBeInTheDocument();
   });
 
-  it("shows the icon and color behind Trocar, with a Cor heading", async () => {
+  it("shows the icons and colors at once, with no extra tap, under a Cor heading", async () => {
     open({});
 
     const sheet = await sheetNamed("Nova categoria");
     expect(within(sheet).getByText("Ícone e cor")).toBeInTheDocument();
-    const trocar = within(sheet).getByRole("button", { name: "Trocar" });
-    expect(trocar).toHaveClass("min-h-11");
-    expect(trocar).toHaveAttribute("aria-expanded", "false");
-    expect(within(sheet).queryByRole("radio", { name: /^Ícone / })).not.toBeInTheDocument();
-    await restyle(sheet);
-
-    expect(trocar).toHaveAttribute("aria-expanded", "true");
+    expect(within(sheet).queryByRole("button", { name: "Trocar" })).not.toBeInTheDocument();
     expect(within(sheet).getByRole("radio", { name: "Ícone circle-dashed" })).toBeChecked();
     expect(within(sheet).getByRole("group", { name: "Cor" })).toBeInTheDocument();
   });
@@ -222,7 +213,7 @@ describe("CategorySheet", () => {
         .getAllByRole("radio")
         .map((radio) => radio.textContent),
     ).toEqual(["Diário", "Conta"]);
-    expect(within(sheet).getByText("Ícone")).toBeInTheDocument();
+    expect(within(sheet).getByRole("group", { name: "Ícone" })).toBeInTheDocument();
     expect(within(sheet).getByText("Usa a cor de Pets")).toBeInTheDocument();
     await userEvent.click(within(kinds).getByRole("radio", { name: "Conta" }));
     await userEvent.type(within(sheet).getByLabelText("Nome"), "Plano{Enter}");
@@ -261,7 +252,6 @@ describe("CategorySheet", () => {
     await userEvent.type(within(sheet).getByLabelText("Nome"), "Ração e areia");
     await userEvent.selectOptions(within(sheet).getByLabelText("Dentro de"), "");
     expect(within(sheet).queryByText("Usa a cor de Pets")).not.toBeInTheDocument();
-    await restyle(sheet);
     expect(within(sheet).getByRole("radio", { name: "Cor Azul" })).toBeChecked();
     expect(within(sheet).queryByRole("radio", { name: "Cor Roxo" })).not.toBeInTheDocument();
     await userEvent.click(within(sheet).getByRole("button", { name: "Salvar" }));
@@ -286,7 +276,6 @@ describe("CategorySheet", () => {
     const sheet = await sheetNamed("Editar categoria");
     await waitFor(() => expect(within(sheet).getByLabelText("Nome")).toHaveValue("Pets"));
     expect(within(sheet).queryByLabelText("Dentro de")).not.toBeInTheDocument();
-    await restyle(sheet);
     expect(within(sheet).getByRole("radio", { name: "Cor Roxo" })).toBeChecked();
     expect(within(sheet).getByRole("radio", { name: "Cor Roxo" })).toBeEnabled();
     expect(within(sheet).queryByRole("radio", { name: "Cor Âmbar" })).not.toBeInTheDocument();
@@ -315,7 +304,6 @@ describe("CategorySheet", () => {
       );
 
       const sheet = await sheetNamed("Editar categoria");
-      await restyle(sheet);
       await waitFor(() => expect(within(sheet).getByRole("radio", { name: "Cor Ciano" })).toBeChecked());
       expect(within(sheet).queryByRole("radio", { name: "Cor Âmbar" })).not.toBeInTheDocument();
       expect(within(sheet).queryByRole("radio", { name: "Cor Índigo" })).not.toBeInTheDocument();
@@ -385,7 +373,6 @@ describe("CategorySheet", () => {
     expect(within(sheet).getByText("Dentro de Pets")).toBeInTheDocument();
     expect(within(sheet).queryByRole("radio", { name: "Subcategoria" })).not.toBeInTheDocument();
     expect(sheet.querySelector("select")).toBeNull();
-    await restyle(sheet);
     expect(within(sheet).getByRole("radio", { name: "Ícone paw-print" })).toBeChecked();
     expect(within(sheet).getByText("Usa a cor de Pets")).toBeInTheDocument();
     expect(within(sheet).queryByRole("radio", { name: /^Cor / })).not.toBeInTheDocument();
@@ -407,7 +394,6 @@ describe("CategorySheet", () => {
     await choose("Grupo");
 
     const sheet = await sheetNamed("Nova categoria");
-    await restyle(sheet);
     await waitFor(() => expect(within(sheet).getByRole("radio", { name: "Cor Azul" })).toBeChecked());
     expect(within(sheet).getAllByRole("radio", { name: /^Cor / })).toHaveLength(21);
     expect(within(sheet).queryByRole("radio", { name: "Cor Âmbar" })).not.toBeInTheDocument();
@@ -485,7 +471,6 @@ describe("CategorySheet", () => {
     renderWithQuery(<CategorySheet kind="income" open onOpenChange={vi.fn()} />);
 
     const sheet = await sheetNamed("Nova categoria");
-    await restyle(sheet);
     await waitFor(() => expect(within(sheet).getByRole("radio", { name: "Cor Laranja" })).toBeChecked());
     expect(within(sheet).queryByRole("radio", { name: "Cor Âmbar" })).not.toBeInTheDocument();
   });
@@ -634,7 +619,6 @@ describe("CategorySheet", () => {
     it("lists the current color first, its name beside the title", async () => {
       open({ category: ALUGUEL });
       const sheet = await sheetNamed("Editar categoria");
-      await restyle(sheet);
 
       const colors = await within(sheet).findByRole("group", { name: "Cor" });
       expect(within(colors).getAllByRole("radio")[0]).toHaveAccessibleName("Cor Índigo");
@@ -674,7 +658,6 @@ describe("CategorySheet", () => {
       expect(within(sheet).getByLabelText("Nome")).toHaveValue("Viagem");
       expect(within(sheet).getByLabelText("Nome")).toHaveAttribute("placeholder", "Ex.: Viagem");
       expect(within(sheet).queryByText(/^Dentro de/)).not.toBeInTheDocument();
-      await restyle(sheet);
       expect(within(sheet).getByRole("radio", { name: "Ícone plane" })).toBeChecked();
       await userEvent.type(within(sheet).getByLabelText("Meta"), "500000");
       await pickDate("Prazo", "2027-06-30", sheet);

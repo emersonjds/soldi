@@ -404,7 +404,6 @@ describe("CategoryChips", () => {
 
     const sheet = await openCreate();
     expect(within(sheet).getByLabelText("Nome")).toHaveAttribute("maxlength", "40");
-    await userEvent.click(within(sheet).getByRole("button", { name: "Trocar" }));
     expect(within(sheet).getByRole("radio", { name: "Ícone circle-dashed" })).toBeChecked();
     expect(within(sheet).getAllByRole("radio", { name: /^Ícone / })).toHaveLength(24);
     expect(within(sheet).getByRole("radio", { name: "Cor Azul" })).toBeChecked();
@@ -456,7 +455,6 @@ describe("CategoryChips", () => {
     const sheet = await openCreate("Pets");
 
     await userEvent.type(within(sheet).getByLabelText("Nome"), "Pet shop");
-    await userEvent.click(within(sheet).getByRole("button", { name: "Trocar" }));
     await userEvent.type(within(sheet).getByLabelText("Buscar ícone"), "dog");
     await userEvent.click(await within(sheet).findByRole("radio", { name: "Ícone dog" }));
     expect(within(sheet).getByText("Usa a cor de Pets")).toBeInTheDocument();

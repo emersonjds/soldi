@@ -180,7 +180,6 @@ const CategoryForm = ({
   const [picked, setPicked] = useState(presetParent ?? "");
   const [flow, setFlow] = useState(kind);
   const [submitted, setSubmitted] = useState(false);
-  const [styling, setStyling] = useState(false);
   const [parentSearch, setParentSearch] = useState("");
   const nameRef = useRef<HTMLInputElement>(null);
   const parentsRef = useRef<HTMLDivElement>(null);
@@ -542,19 +541,10 @@ const CategoryForm = ({
           <span className="font-semibold text-base">{needsColor ? "Ícone e cor" : "Ícone"}</span>
           {parent && <span className="text-muted-foreground text-sm">{`Usa a cor de ${parent.name}`}</span>}
         </div>
-        <Button
-          type="button"
-          variant="ghost"
-          aria-expanded={styling}
-          onClick={() => setStyling(!styling)}
-          className="min-h-11 px-3 font-semibold text-base text-primary"
-        >
-          Trocar
-        </Button>
       </div>
       {full && <p className="text-muted-foreground text-sm">{allTaken(Boolean(category))}</p>}
-      {styling && <IconPicker value={chosenIcon} color={chosenColor ?? ""} onChange={setIcon} />}
-      {styling && needsColor && !full && (
+      <IconPicker value={chosenIcon} color={chosenColor ?? ""} onChange={setIcon} />
+      {needsColor && !full && (
         <fieldset aria-labelledby="category-color" className="flex flex-col gap-2">
           <div className="flex items-center justify-between gap-2">
             <span id="category-color" className="font-semibold text-sm">
