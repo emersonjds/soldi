@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, useEffect, useRef, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { Check, Palette, Trash2 } from "lucide-react";
@@ -102,6 +102,7 @@ const field = "h-12 text-base md:text-base";
 
 const problemOf = (error: Error | null, editing: boolean) => {
   if (!error) return undefined;
+  if (hasStatus(error, 409)) return "Já existe uma categoria com esse nome";
   if (hasProblem(error, "color-taken")) return "Essa cor já é de outra categoria";
   if (hasProblem(error, "palette-full")) return allTaken(editing);
   return editing ? "Não foi possível salvar a categoria." : "Não foi possível criar a categoria.";
@@ -112,9 +113,9 @@ const OUTFLOW_KINDS: [kind: Kind, label: string][] = [
   ["bill", "Fixa"],
 ];
 
-const OTHER_OUTFLOW: Partial<Record<Kind, Kind>> = { daily: "bill", bill: "daily" };
+const FLOW_KINDS: [kind: Kind, label: string][] = [...OUTFLOW_KINDS, ["income", "Entrada"]];
 
-/** D27: the confirmation keeps the word Saída while `Quando acontece` reads Fixa. */
+/** D27: the confirmation keeps the word Saída while `Tipo de Fluxo` reads Fixa. */
 const CONFIRM_KINDS: Record<Kind, string> = { daily: "Diário", bill: "Saída", income: "Entrada" };
 
 const kindProblemOf = (error: Error) => {
@@ -136,11 +137,11 @@ type FormProps = {
   kind: Kind;
   /** Given: the form edits it and offers `Excluir`. */
   category?: Category;
-  /** The parent preselected when creating: the form creates inside it, the group locked. */
+  /** The parent preselected when creating: the form opens in Subcategoria mode. */
   parentId?: string;
   onSaved: (category: Category) => void;
   onArchive: (category: Category) => void;
-  /** Called with the new kind once the API moved or created the category there; given, creating offers `Quando acontece`. */
+  /** Called with the new kind once the API moved or created the category there; given, creating offers `Tipo de Fluxo`. */
   onKindChange?: (kind: Kind) => void;
   /** Told the parent the form links to, which makes it a cofrinho under Economia. */
   onParentChange?: (parentId: string) => void;
@@ -148,8 +149,6 @@ type FormProps = {
   initial?: { name: string; target: string };
   /** Editing a cofrinho: its stored note, which `Category` does not carry. */
   note?: string | null;
-  /** Given, a name taken in the other outflow kind offers `Usar esta categoria`. */
-  onUseExisting?: (category: Category) => void;
 };
 
 const CategoryForm = ({
@@ -162,9 +161,7 @@ const CategoryForm = ({
   onParentChange,
   initial,
   note: storedNote,
-  onUseExisting,
 }: FormProps) => {
-  const nameInput = useRef<HTMLInputElement>(null);
   const [name, setName] = useState(category?.name ?? initial?.name ?? "");
   const [ownKind, setOwnKind] = useState(category?.kind);
   const [asking, setAsking] = useState(false);
@@ -240,29 +237,15 @@ const CategoryForm = ({
     );
   };
   const trimmed = name.trim();
-  const taken = hasStatus(mutation.error, 409);
-  const takenError = taken ? "Já existe uma categoria com esse nome" : undefined;
-  const nameError = submitted && !trimmed ? "Informe o nome." : takenError;
-  const parentError = submitted && !category && sub && !parentId ? "Escolha o grupo." : undefined;
+  const nameError = submitted && !trimmed ? "Informe o nome." : undefined;
+  const parentError = submitted && !category && sub && !parentId ? "Escolha a categoria pai." : undefined;
   const swatches = [
     ...COLOR_NAMES.filter(([token]) => token === chosenColor),
     ...COLOR_NAMES.filter(([token]) => token !== chosenColor && !holderOf(holders, token, category?.id)),
   ];
-  const locked = Boolean(presetParent) && !category;
-  const flows = kind === "income" ? [] : OUTFLOW_KINDS;
-  const children = list.filter((each) => each.parent_id === presetParent);
-  const mixed = children.length === 0 || !children.every((child) => child.kind === kind);
-  const creatingFlow = !category && onKindChange && !fixedParent && flows.length > 0 && (!presetParent || mixed);
-  const other = OTHER_OUTFLOW[formKind];
-  const twin =
-    !category &&
-    onUseExisting &&
-    trimmed &&
-    list.find((each) => each.kind === other && each.name.toLowerCase() === trimmed.toLowerCase());
-  const twinGroup = twin && list.find((each) => each.id === twin.parent_id)?.name;
+  const creatingFlow = !category && onKindChange && !fixedParent;
   const action = category ? "Salvar" : "Criar";
-  const problem = taken ? undefined : problemOf(mutation.error, Boolean(category));
-  const focusTaken = (error: Error) => hasStatus(error, 409) && nameInput.current?.focus();
+  const problem = problemOf(mutation.error, Boolean(category));
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -283,7 +266,7 @@ const CategoryForm = ({
           parent_id: parentId || null,
           ...goal,
         },
-        { onSuccess: onSaved, onError: focusTaken },
+        { onSuccess: onSaved },
       );
     create.mutate(
       {
@@ -298,40 +281,35 @@ const CategoryForm = ({
           onSaved(created);
           if (formKind !== kind) onKindChange?.(formKind);
         },
-        onError: focusTaken,
       },
     );
   };
 
   return (
     <form noValidate onSubmit={submit} className="flex flex-col gap-5">
-      {!category && !fixedParent && !locked && (
+      {!category && !fixedParent && (
         <ToggleGroup
           type="single"
           spacing={0}
           value={sub ? "sub" : "top"}
           onValueChange={(value) => value && setSub(value === "sub")}
-          aria-label="Grupo novo ou dentro de um grupo"
+          aria-label="Categoria Pai ou Subcategoria"
           className="grid w-full grid-cols-2 rounded-2xl bg-muted p-1"
         >
           <ToggleGroupItem value="top" className={segment}>
-            Grupo novo
+            Categoria Pai
           </ToggleGroupItem>
           <ToggleGroupItem value="sub" className={segment}>
-            Dentro de um grupo
+            Subcategoria
           </ToggleGroupItem>
         </ToggleGroup>
       )}
       <Field className="gap-1.5" data-invalid={Boolean(nameError)}>
         <FieldLabel htmlFor="category-name">Nome do agrupador</FieldLabel>
         <Input
-          ref={nameInput}
           id="category-name"
           value={name}
-          onChange={(event) => {
-            setName(event.target.value);
-            if (taken) mutation.reset();
-          }}
+          onChange={(event) => setName(event.target.value)}
           placeholder={cofrinho ? "Ex.: Viagem" : "Ex: Educação & Cursos"}
           maxLength={40}
           autoComplete="off"
@@ -340,35 +318,18 @@ const CategoryForm = ({
         />
         {nameError && <FieldError>{nameError}</FieldError>}
       </Field>
-      {twin && (
-        <div className="flex flex-col gap-2">
-          <p className="text-muted-foreground text-sm">
-            {twinGroup
-              ? `"${twin.name}" já existe em ${twinGroup}, para outro tipo de gasto.`
-              : `"${twin.name}" já existe, para outro tipo de gasto.`}
-          </p>
-          <Button
-            type="button"
-            variant="outline"
-            className="min-h-11 self-start text-base"
-            onClick={() => onUseExisting(twin)}
-          >
-            Usar esta categoria
-          </Button>
-        </div>
-      )}
       {creatingFlow && (
         <div className="flex flex-col gap-1.5">
-          <FieldTitle id="category-flow">Quando acontece</FieldTitle>
+          <FieldTitle id="category-flow">Tipo de Fluxo</FieldTitle>
           <ToggleGroup
             type="single"
             spacing={0}
             value={flow}
             onValueChange={(value: Kind | "") => value && setFlow(value)}
             aria-labelledby="category-flow"
-            className="grid w-full grid-cols-2 gap-2"
+            className="grid w-full grid-cols-3 gap-2"
           >
-            {flows.map(([value, label]) => (
+            {FLOW_KINDS.map(([value, label]) => (
               <ToggleGroupItem key={value} value={value} className={cn(kindChip, "bg-muted")}>
                 {label}
               </ToggleGroupItem>
@@ -378,7 +339,7 @@ const CategoryForm = ({
       )}
       {kindChangeable && (
         <div className="flex flex-col gap-1.5">
-          <FieldTitle id="category-kind">Quando acontece</FieldTitle>
+          <FieldTitle id="category-kind">Tipo de Fluxo</FieldTitle>
           <ToggleGroup
             type="single"
             spacing={0}
@@ -487,7 +448,7 @@ const CategoryForm = ({
       )}
       {category && !hasChildren && !fixedParent && (
         <Field className="gap-1.5">
-          <FieldLabel htmlFor="category-parent">Grupo</FieldLabel>
+          <FieldLabel htmlFor="category-parent">Subcategoria de</FieldLabel>
           <NativeSelect
             id="category-parent"
             value={parentId}
@@ -503,10 +464,10 @@ const CategoryForm = ({
           </NativeSelect>
         </Field>
       )}
-      {!category && sub && !fixedParent && !locked && (
+      {!category && sub && !fixedParent && (
         <div className="flex flex-col gap-2">
           <span id="category-parents" className="font-semibold text-sm">
-            Escolher grupo
+            Vincular à Categoria Pai
           </span>
           {parents.length > 8 && (
             <Input
@@ -535,7 +496,7 @@ const CategoryForm = ({
                 <span className="text-base">{each.name}</span>
               </label>
             ))}
-            {parents.length === 0 && <p className="text-muted-foreground text-sm">Nenhum grupo deste tipo.</p>}
+            {parents.length === 0 && <p className="text-muted-foreground text-sm">Nenhuma categoria pai deste tipo.</p>}
           </div>
           {parentError && (
             <p role="alert" className="text-destructive text-sm">
@@ -662,8 +623,8 @@ const LoadedForm = (props: FormProps) => {
 const pill = "rounded-full bg-muted px-2.5 py-0.5 font-medium text-muted-foreground text-xs";
 
 /**
- * `Nova Categoria` or `Editar Categoria`: Grupo novo or Dentro de um grupo, name, kind, icon and a free palette color.
- * Editing a Diário or Fixa category offers `Quando acontece`, which moves it and its entries after a confirmation.
+ * `Nova Categoria` or `Editar Categoria`: Categoria Pai or Subcategoria, name, kind, icon and a free palette color.
+ * Editing a Diário or Fixa category offers `Tipo de Fluxo`, which moves it and its entries after a confirmation.
  * Under Economia it is a cofrinho: `Novo cofrinho` or `Editar cofrinho`, with an optional goal and deadline.
  */
 export const CategorySheet = ({

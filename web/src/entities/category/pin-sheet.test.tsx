@@ -53,7 +53,7 @@ const setup = (pins: string[] | null, categories = CATEGORIES, put = { status: 2
 };
 
 const open = async () => {
-  await screen.findByRole("radiogroup", { name: "Mais usadas" });
+  await screen.findByRole("radiogroup", { name: "Categoria" });
   await userEvent.click(screen.getByRole("button", { name: "Personalizar" }));
   return screen.findByRole("dialog", { name: "Personalizar categorias" });
 };

@@ -9,8 +9,7 @@ import { Field, FieldLabel } from "@/components/ui/field";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useCards } from "@/entities/bill/bill-queries";
-import { useCategoryChips } from "@/entities/category/category-chips";
-import { CategoryPicker } from "@/entities/category/category-picker";
+import { CategoryChips, useCategoryChips } from "@/entities/category/category-chips";
 import { useForecast } from "@/entities/forecast/forecast-query";
 import { useMonth } from "@/entities/month/month-query";
 import { useTransactions } from "@/entities/transaction/transaction-queries";
@@ -289,12 +288,11 @@ export const PurchaseSimulator = () => {
             </Field>
           )}
 
-          <CategoryPicker
+          <CategoryChips
             kind="daily"
             chosen={category}
             onChoose={(chosen) => set({ category: chosen })}
             entries={thisMonth.isError ? [] : thisMonth.data}
-            kindLocked
             label="Categoria do bem ou serviço"
           />
 

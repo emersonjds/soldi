@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -18,10 +18,6 @@ import {
 } from "@/test/stub-api";
 
 import { PurchaseSimulator } from "./purchase-simulator";
-
-const categoryField = () => screen.getByRole("button", { name: /^Categoria do bem ou serviço/ });
-/** Waits for the category field to read `label`. */
-const chosenIs = (label: string) => waitFor(() => expect(categoryField()).toHaveTextContent(label));
 
 const forecast = (march: string) =>
   forecastFixture("2026-11-10", "2026-11-10", "2027-10-31", [
@@ -110,7 +106,7 @@ describe("Posso comprar isso?", () => {
     expect(screen.getByText(/^O Soldi cruza seus lançamentos futuros/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Calcular Projeção" })).toBeDisabled();
     expect(screen.queryByText("Comprometimento de Renda")).not.toBeInTheDocument();
-    await chosenIs("Comida fora");
+    expect(await screen.findByRole("radiogroup", { name: "Categoria do bem ou serviço" })).toBeInTheDocument();
   });
 
   it("6× R$ 2.400,00 over a red March: the verdict, the curve, six months and the actions; Testar em 10x fits", async () => {
@@ -166,11 +162,7 @@ describe("Posso comprar isso?", () => {
 
   it("offers the next count up to 12x only, and Criar Cofrinho opens Novo cofrinho with the name and the total", async () => {
     setup({ "GET /api/forecast": { status: 200, body: forecast("30.00") } });
-    await chosenIs(COMIDA.name);
-    await userEvent.click(categoryField());
-    await userEvent.click(
-      within(await screen.findByRole("dialog", { name: "Categoria" })).getByRole("button", { name: COMIDA.name }),
-    );
+    await userEvent.click(await screen.findByRole("radio", { name: COMIDA.name }));
     await typeAmount("120,00");
     await userEvent.click(screen.getByRole("radio", { name: "12x" }));
     await calculate();
@@ -180,19 +172,6 @@ describe("Posso comprar isso?", () => {
     const sheet = await screen.findByRole("dialog", { name: "Novo cofrinho" });
     expect(within(sheet).getByRole("textbox", { name: "Nome do agrupador" })).toHaveValue(COMIDA.name);
     expect(within(sheet).getByLabelText("Meta")).toHaveValue("120,00");
-  });
-
-  it("creates only Diário categories from its picker: no Quando acontece, no Usar esta categoria", async () => {
-    setup();
-
-    await userEvent.click(categoryField());
-    const picker = await screen.findByRole("dialog", { name: "Categoria" });
-    await userEvent.click(await within(picker).findByRole("button", { name: "Novo grupo" }));
-    const form = await screen.findByRole("dialog", { name: "Nova Categoria" });
-    await userEvent.type(within(form).getByLabelText("Nome do agrupador"), "Luz");
-
-    expect(within(form).queryByText("Quando acontece")).not.toBeInTheDocument();
-    expect(within(form).queryByRole("button", { name: "Usar esta categoria" })).not.toBeInTheDocument();
   });
 
   it("fits à vista: the green verdict and no actions; no Comprometimento at income 0", async () => {
@@ -354,7 +333,7 @@ describe("Histórico", () => {
 
   it("shows only after a Calcular, lists it, and restores a row's inputs with the results", async () => {
     signedIn();
-    await chosenIs("Comida fora");
+    await screen.findByRole("radio", { name: "Comida fora" });
     expect(screen.queryByRole("button", { name: "Histórico" })).not.toBeInTheDocument();
 
     await typeAmount("2400,00");
@@ -364,11 +343,7 @@ describe("Histórico", () => {
     await userEvent.click(screen.getByRole("button", { name: "Limpar valor" }));
     await typeAmount("50,00");
     await userEvent.click(screen.getByRole("radio", { name: "À vista" }));
-    await userEvent.click(categoryField());
-    const picker = await screen.findByRole("dialog", { name: "Categoria" });
-    expect(within(picker).queryByRole("button", { name: "Novo cartão" })).not.toBeInTheDocument();
-    await userEvent.click(within(picker).getByRole("button", { name: "Mercado" }));
-    await chosenIs("Mercado");
+    await userEvent.click(screen.getByRole("radio", { name: "Mercado" }));
     await calculate();
 
     await userEvent.click(screen.getByRole("button", { name: "Histórico" }));
@@ -382,7 +357,7 @@ describe("Histórico", () => {
     expect(screen.getByLabelText("Valor total estimado")).toHaveValue("2.400,00");
     expect(screen.getByRole("radio", { name: "6x" })).toBeChecked();
     expect(screen.getByLabelText("Cartão")).toHaveValue(NUBANK.id);
-    await chosenIs("Comida fora");
+    expect(screen.getByRole("radio", { name: "Comida fora" })).toBeChecked();
     expect(await screen.findByRole("region", { name: "Veredito do orçamento" })).toBeInTheDocument();
     expect(JSON.parse(localStorage.getItem(KEY) ?? "[]")).toHaveLength(2);
   });
@@ -468,7 +443,7 @@ describe("Histórico", () => {
     localStorage.setItem(KEY, "{oops");
     signedIn();
 
-    await chosenIs("Comida fora");
+    await screen.findByRole("radio", { name: "Comida fora" });
     expect(screen.queryByRole("button", { name: "Histórico" })).not.toBeInTheDocument();
   });
 });
