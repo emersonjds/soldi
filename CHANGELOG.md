@@ -7,6 +7,16 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.63.0
+
+> Headline: Categorias, simple
+
+### Web
+
+- Ajustes › Categorias: no filler header, tabs Diário · Contas · Entradas, each group with its subcategories below and a + to add one; tapping a row edits it; stat cards, per-category amounts and the month switcher are gone from this page (Para onde vai shows the amounts).
+- `Nova categoria` and every + open the same short sheet at every width — Nome, Tipo, Dentro de, Ícone e cor — with Criar always visible; creating a group or a subcategory takes 2 taps.
+- Market benchmark of 20 finance apps and a full usability audit in `docs/research/` (SOL-146).
+
 ## 0.62.1
 
 > Headline: Lançar's categories back as they were
