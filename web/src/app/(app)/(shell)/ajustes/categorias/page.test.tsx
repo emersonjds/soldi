@@ -54,44 +54,6 @@ const IMPORTADO: Category = {
 /** In the API's order: kind, parent name, then the children by name. */
 const LIST = [EXTRA, SALARIO, ALUGUEL, ECONOMIA, RESERVA, VIAGEM, LUZ, COMIDA, IMPORTADO, MERCADO, PETS, RACAO, VET];
 
-const EMPTY_REPORT = { month: "2026-11", outflow_total: "0", income_total: "0", outflow: [], income: [], groups: [] };
-const REPORT = {
-  ...EMPTY_REPORT,
-  outflow_total: "565.00",
-  outflow: [{ ...RACAO, category_id: RACAO.id, amount: "300.00", pct: "53.1", previous_amount: "0" }],
-  groups: [
-    {
-      ...PETS,
-      category_id: PETS.id,
-      amount: "300.00",
-      pct: "53.1",
-      previous_amount: "0",
-      delta_pct: null,
-      children: [RACAO.id],
-    },
-  ],
-};
-
-const share = (category: Category, amount: string, pct: string) => ({
-  ...category,
-  category_id: category.id,
-  amount,
-  pct,
-  previous_amount: "0",
-});
-const group = (category: Category, amount: string, pct: string, children: string[]) => ({
-  ...share(category, amount, pct),
-  delta_pct: null,
-  children,
-});
-/** Veículo is Fixa with a Diário and a Fixa subcategory (D26). */
-const MIXED_REPORT = {
-  ...EMPTY_REPORT,
-  outflow_total: "580.00",
-  outflow: [share(COMBUSTIVEL, "80.00", "13.8"), share(PARCELA, "500.00", "86.2")],
-  groups: [group(VEICULO, "580.00", "100.0", [COMBUSTIVEL.id, PARCELA.id])],
-};
-
 const page = () => (
   <>
     <CategoriasPage />
@@ -99,16 +61,11 @@ const page = () => (
   </>
 );
 let rendered: ReturnType<typeof renderWithQuery>;
-/** Renders again with the current `?k=`/`?m=`; the stand-in router changes nothing by itself. */
+/** Renders again with the current `?k=`; the stand-in router changes nothing by itself. */
 const rerender = () => rendered.rerender(<QueryClientProvider client={rendered.client}>{page()}</QueryClientProvider>);
 
 const open = (replies: Record<string, Reply> = {}) => {
-  const requests = signedIn({
-    "GET /api/categories": { status: 200, body: LIST },
-    "GET /api/reports/categories": { status: 200, body: EMPTY_REPORT },
-    "GET /api/transactions": { status: 200, body: [] },
-    ...replies,
-  });
+  const requests = signedIn({ "GET /api/categories": { status: 200, body: LIST }, ...replies });
   rendered = renderWithQuery(page());
   return requests;
 };
@@ -116,15 +73,16 @@ const open = (replies: Record<string, Reply> = {}) => {
 const sent = (requests: Request[], method: string) => requests.filter((request) => request.method === method);
 const list = () => screen.findByRole("list", { name: /^Categorias de / });
 const card = async (name: string) => within(await list()).getByRole("listitem", { name });
-const menu = async (name: string, user = userEvent.setup()) => {
-  await user.click(within(await list()).getByRole("button", { name: `Mais ações de ${name}` }));
-  const items = within(await screen.findByRole("menu")).getAllByRole("menuitem");
-  return { user, items, labels: items.map((item) => item.textContent) };
-};
 const names = (element: HTMLElement) =>
   within(element)
     .queryAllByRole("button", { name: /^Editar / })
     .map((button) => button.getAttribute("aria-label"));
+/** The sheet once its form arrived with the category list. */
+const sheetNamed = async (name: string) => {
+  const sheet = await screen.findByRole("dialog", { name });
+  await within(sheet).findByLabelText("Nome");
+  return sheet;
+};
 
 describe("Ajustes › Categorias", () => {
   beforeEach(() => {
@@ -133,20 +91,18 @@ describe("Ajustes › Categorias", () => {
     router.replace.mockClear();
   });
 
-  it("opens on Gastos Diários: a card per parent with its subcategories, imported ones too", async () => {
-    open();
+  it("opens on Diário with no description, stats or month totals: a card per group with its subcategories", async () => {
+    const requests = open();
 
-    expect(screen.getByRole("heading", { level: 1, name: "Categorias & Subcategorias" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Configurações" })).toHaveAttribute("href", "/ajustes");
-    expect(screen.getByText("Gestão de Categorias")).toBeInTheDocument();
+    const heading = screen.getByRole("heading", { level: 1, name: "Categorias" });
+    expect(heading.nextElementSibling).toHaveAccessibleName("Nova categoria");
+    const crumbs = screen.getByRole("navigation", { name: "breadcrumb" });
+    expect(within(crumbs).getByRole("link", { name: "Ajustes" })).toHaveAttribute("href", "/ajustes");
+    expect(within(crumbs).getByText("Categorias")).toHaveAttribute("aria-current", "page");
     const daily = await list();
-    expect(screen.getByRole("radio", { name: "Gastos Diários (4)" })).toBeChecked();
-    expect(screen.getAllByRole("radio").map((tab) => tab.textContent)).toEqual([
-      "Gastos Diários (4)",
-      "Contas Fixas (3)",
-      "Entradas & Receitas (2)",
-    ]);
-    expect(daily).toHaveAccessibleName("Categorias de Gastos Diários");
+    expect(screen.getAllByRole("radio").map((tab) => tab.textContent)).toEqual(["Diário", "Contas", "Entradas"]);
+    expect(screen.getByRole("radio", { name: "Diário" })).toBeChecked();
+    expect(daily).toHaveAccessibleName("Categorias de Diário");
     expect(names(daily)).toEqual([
       "Editar Comida fora",
       "Editar Importado (diário)",
@@ -156,103 +112,65 @@ describe("Ajustes › Categorias", () => {
       "Editar Veterinário",
     ]);
     const pets = await card("Pets");
-    expect(within(pets).getByText("Diário · 2 subcategorias")).toBeInTheDocument();
+    expect(within(pets).queryByText(/subcategoria/)).not.toBeInTheDocument();
     expect(names(within(pets).getByRole("list", { name: "Subcategorias de Pets" }))).toEqual([
       "Editar Ração",
       "Editar Veterinário",
     ]);
-    expect(within(daily).getAllByRole("button", { name: /^Mais ações de / })).toHaveLength(4);
+    expect(within(pets).getByRole("button", { name: "Nova subcategoria em Pets" })).toHaveClass("size-11");
+    expect(screen.queryByRole("button", { name: /^Mais ações/ })).not.toBeInTheDocument();
+    expect(screen.queryByText("Total no mês")).not.toBeInTheDocument();
+    expect(screen.queryByText(/ESTRUTURA ATIVA|MAIOR CONCENTRAÇÃO/)).not.toBeInTheDocument();
+    expect(sent(requests, "GET").some((request) => /reports|transactions/.test(request.url))).toBe(false);
   });
 
-  it("counts the active structure across kinds", async () => {
+  it("keeps Nova categoria disabled over skeleton rows until the list arrives", async () => {
     open();
 
-    const tile = await screen.findByRole("region", { name: "ESTRUTURA ATIVA" });
-    expect(tile).toHaveTextContent("9categorias principais");
-    expect(within(tile).getByText("4 subcategorias vinculadas")).toBeInTheDocument();
-    expect(screen.queryByRole("region", { name: "MAIOR CONCENTRAÇÃO" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Nova categoria" })).toHaveAttribute("aria-disabled", "true");
+    expect(screen.getAllByTestId("row-skeleton").length).toBeGreaterThan(0);
+    await list();
+    expect(screen.getByRole("button", { name: "Nova categoria" })).toHaveAttribute("aria-disabled", "false");
   });
 
-  it("shows the month's totals, entry counts and the largest group", async () => {
-    setSearch("m=2026-09");
-    const entry = { id: "t1", date: "2026-09-05", amount: "300.00", kind: "daily", note: "", category: RACAO };
+  it("keeps 44 px targets and 16 px fields", async () => {
+    open();
+    await list();
+
+    for (const tab of screen.getAllByRole("radio")) expect(tab).toHaveClass("min-h-11");
+    expect(screen.getByRole("searchbox", { name: "Buscar categoria" })).toHaveClass("h-11", "text-base");
+    expect(screen.getByRole("button", { name: "Editar Ração" })).toHaveClass("min-h-11");
+    expect(screen.getByRole("button", { name: "Nova categoria" })).toHaveClass("min-h-11");
+  });
+
+  it("shows a group of another kind (D26) in each tab with only that tab's subs, no kind label", async () => {
+    const created = { ...COMBUSTIVEL, id: "c1000000-0000-4000-8000-000000000050", name: "Pedágio" };
     const requests = open({
-      "GET /api/reports/categories": { status: 200, body: REPORT },
-      "GET /api/transactions": { status: 200, body: [entry] },
-    });
-
-    const top = await screen.findByRole("region", { name: "MAIOR CONCENTRAÇÃO" });
-    expect(top).toHaveTextContent("Pets(Ração)");
-    expect(within(top).getByText("53,1% dos gastos de Set")).toBeInTheDocument();
-    for (const path of ["/api/reports/categories", "/api/transactions"])
-      expect(sent(requests, "GET").find((request) => request.url.includes(path))?.url).toContain("month=2026-09");
-    const pets = await card("Pets");
-    expect(within(pets).getByText("Total no mês").nextSibling).toHaveTextContent(/300,00/);
-    const racao = within(pets).getByRole("button", { name: "Editar Ração" });
-    expect(racao).toHaveTextContent(/1 lanç\..*300,00/);
-    expect(within(pets).getByRole("button", { name: "Editar Veterinário" })).toHaveTextContent(/^Veterinário.*0,00$/);
-    expect(within(await card("Mercado")).getByText("Total no mês").nextSibling).toHaveTextContent(/0,00/);
-  });
-
-  it("counts one parent and one subcategory in the singular, with no largest group from income alone", async () => {
-    open({
-      "GET /api/categories": { status: 200, body: [PETS, RACAO] },
-      "GET /api/reports/categories": {
-        status: 200,
-        body: { ...EMPTY_REPORT, income_total: "900.00", groups: [group(SALARIO, "900.00", "100.0", [])] },
-      },
-    });
-
-    const tile = await screen.findByRole("region", { name: "ESTRUTURA ATIVA" });
-    expect(tile).toHaveTextContent("1categoria principal");
-    expect(within(tile).getByText("1 subcategoria vinculada")).toBeInTheDocument();
-    await waitFor(async () =>
-      expect(within(await card("Pets")).getByText("Total no mês").nextSibling).toHaveTextContent(/0,00/),
-    );
-    expect(screen.queryByRole("region", { name: "MAIOR CONCENTRAÇÃO" })).not.toBeInTheDocument();
-  });
-
-  it("shows a group of another kind as a header over this tab's children, totalling only them", async () => {
-    open({
       "GET /api/categories": { status: 200, body: [...LIST, VEICULO, COMBUSTIVEL, PARCELA] },
-      "GET /api/reports/categories": { status: 200, body: MIXED_REPORT },
+      "POST /api/categories": { status: 201, body: created },
     });
 
-    expect(await screen.findByRole("radio", { name: "Gastos Diários (5)" })).toBeChecked();
     const daily = await card("Veículo");
-    expect(within(daily).getByText("Fixa · 1 subcategoria")).toBeInTheDocument();
     expect(names(within(daily).getByRole("list", { name: "Subcategorias de Veículo" }))).toEqual([
       "Editar Combustível",
     ]);
-    await waitFor(() => expect(within(daily).getByText("Total no mês").nextSibling).toHaveTextContent(/(^|\D)80,00/));
+    expect(within(daily).queryByText(/Fixa|Conta/)).not.toBeInTheDocument();
+    await userEvent.click(within(daily).getByRole("button", { name: "Nova subcategoria em Veículo" }));
+    const sheet = await sheetNamed("Nova subcategoria");
+    expect(within(sheet).getByText("Dentro de Veículo")).toBeInTheDocument();
+    expect(within(sheet).getByRole("radio", { name: "Diário" })).toHaveAttribute("data-state", "on");
+    await userEvent.type(within(sheet).getByLabelText("Nome"), "Pedágio{Enter}");
+    await waitFor(() => expect(sent(requests, "POST")).toHaveLength(1));
+    expect(await sent(requests, "POST")[0].json()).toMatchObject({ kind: "daily", parent_id: VEICULO.id });
 
     setSearch("k=bill");
     rerender();
-    expect(screen.getByRole("radio", { name: "Contas Fixas (4)" })).toBeChecked();
+    expect(screen.getByRole("radio", { name: "Contas" })).toBeChecked();
     const bills = await card("Veículo");
-    expect(within(bills).getByText("Fixa · 1 subcategoria")).toBeInTheDocument();
     expect(names(within(bills).getByRole("list", { name: "Subcategorias de Veículo" }))).toEqual(["Editar Parcela"]);
-    expect(within(bills).getByText("Total no mês").nextSibling).toHaveTextContent(/580,00/);
   });
 
-  it.each([
-    ["the report", "GET /api/reports/categories"],
-    ["the entries", "GET /api/transactions"],
-  ])("offers to retry the month's totals when %s fail", async (_what, route) => {
-    const requests = open({ [route]: { status: 500, body: problem(500, "Falhou.") } });
-    const path = route.slice(4);
-    const asked = () => sent(requests, "GET").filter((request) => request.url.includes(path)).length;
-
-    await list();
-    const retry = await screen.findByRole("button", { name: "Tentar de novo" });
-    expect(screen.getByText("Não foi possível carregar os totais do mês.")).toBeInTheDocument();
-    const before = asked();
-    await userEvent.click(retry);
-
-    await waitFor(() => expect(asked()).toBeGreaterThan(before));
-  });
-
-  it("filters parents and children ignoring case and accents", async () => {
+  it("filters groups and subcategories ignoring case and accents", async () => {
     open();
     await list();
 
@@ -264,42 +182,11 @@ describe("Ajustes › Categorias", () => {
     expect(await screen.findByText("Nenhuma categoria encontrada.")).toBeInTheDocument();
   });
 
-  it("offers Editar and Excluir on a parent's kebab", async () => {
-    open();
-
-    expect(within(await list()).queryByRole("button", { name: "Mais ações de Ração" })).not.toBeInTheDocument();
-    expect((await menu("Pets")).labels).toEqual(["Editar", "Excluir"]);
-  });
-
-  it("opens the edit sheet from the kebab's Editar", async () => {
-    open();
-
-    const { user, items } = await menu("Mercado");
-    await user.click(items[0]);
-
-    const sheet = await screen.findByRole("dialog", { name: "Editar Categoria" });
-    expect(within(sheet).getByLabelText("Nome do agrupador")).toHaveValue("Mercado");
-  });
-
-  it("opens the kebab with Enter and gives focus back to it on Esc", async () => {
-    open();
-    const user = userEvent.setup();
-
-    const kebab = within(await list()).getByRole("button", { name: "Mais ações de Mercado" });
-    kebab.focus();
-    await user.keyboard("{Enter}");
-    expect(await screen.findByRole("menu")).toBeInTheDocument();
-    await user.keyboard("{Escape}");
-
-    await waitFor(() => expect(screen.queryByRole("menu")).not.toBeInTheDocument());
-    expect(kebab).toHaveFocus();
-  });
-
-  it("switches kind through ?k=, keeping the month", async () => {
+  it("switches kind through ?k=, keeping ?m= untouched", async () => {
     setSearch("m=2026-11");
     open();
 
-    await userEvent.click(screen.getByRole("radio", { name: /^Entradas & Receitas/ }));
+    await userEvent.click(screen.getByRole("radio", { name: "Entradas" }));
 
     expect(window.location.pathname + window.location.search).toBe("/ajustes/categorias?m=2026-11&k=income");
   });
@@ -308,175 +195,149 @@ describe("Ajustes › Categorias", () => {
     setSearch("k=income");
     open();
 
-    expect(screen.getByRole("radio", { name: /^Entradas & Receitas/ })).toBeChecked();
+    expect(screen.getByRole("radio", { name: "Entradas" })).toBeChecked();
     expect(names(await list())).toEqual(["Editar Extra", "Editar Salário"]);
   });
 
-  it("says when a kind has no categories yet, and retries after an error", async () => {
+  it("retries after an error, then teaches an empty tab and creates in its kind", async () => {
     setSearch("k=bill");
     const requests = open({ "GET /api/categories": { status: 500, body: problem(500, "Falhou.") } });
     const listed = () => sent(requests, "GET").filter((request) => request.url.endsWith("/api/categories"));
 
+    expect(await screen.findByText("Não foi possível carregar as categorias.")).toBeInTheDocument();
     await userEvent.click(await screen.findByRole("button", { name: "Tentar de novo" }));
     await waitFor(() => expect(listed()).toHaveLength(2));
 
     signedIn({ "GET /api/categories": { status: 200, body: [MERCADO] } });
     await userEvent.click(screen.getByRole("button", { name: "Tentar de novo" }));
-    expect(await screen.findByText("Nenhuma categoria aqui ainda")).toBeInTheDocument();
+    expect(await screen.findByText("Nenhuma categoria de Conta ainda.")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Criar categoria" }));
+    const sheet = await sheetNamed("Nova categoria");
+    expect(within(sheet).getByRole("radio", { name: "Conta" })).toHaveAttribute("data-state", "on");
   });
 
-  it("creates a category of the open kind from the header", async () => {
+  it("creates a group of the open kind from Nova categoria, Nome focused", async () => {
     setSearch("k=bill");
     const created = { ...MERCADO, id: "c1000000-0000-4000-8000-000000000030", name: "Internet", kind: "bill" };
     const requests = open({ "POST /api/categories": { status: 201, body: created } });
 
     await list();
-    await userEvent.click(screen.getByRole("button", { name: "Nova Categoria" }));
-    const sheet = await screen.findByRole("dialog", { name: "Nova Categoria" });
-    expect(within(sheet).getByRole("radio", { name: "Categoria Pai" })).toBeChecked();
-    expect(within(sheet).getByRole("radio", { name: "Fixa" })).toBeChecked();
-    await userEvent.type(within(sheet).getByLabelText("Nome do agrupador"), "Internet{Enter}");
+    await userEvent.click(screen.getByRole("button", { name: "Nova categoria" }));
+    const sheet = await sheetNamed("Nova categoria");
+    expect(within(sheet).getByRole("radio", { name: "Grupo" })).toBeChecked();
+    expect(within(sheet).getByRole("radio", { name: "Conta" })).toHaveAttribute("data-state", "on");
+    await waitFor(() => expect(within(sheet).getByLabelText("Nome")).toHaveFocus());
+    await userEvent.keyboard("Internet");
+    await userEvent.click(within(sheet).getByRole("button", { name: "Criar" }));
 
     await waitFor(() => expect(sent(requests, "POST")).toHaveLength(1));
     expect(await sent(requests, "POST")[0].json()).toMatchObject({ name: "Internet", kind: "bill" });
   });
 
-  it("creates in another Tipo de Fluxo and follows it to its tab", async () => {
+  it("creates in another Tipo and follows it to its tab", async () => {
     const created = { ...SALARIO, id: "c1000000-0000-4000-8000-000000000031", name: "Bônus" };
     const requests = open({ "POST /api/categories": { status: 201, body: created } });
 
     await list();
-    await userEvent.click(screen.getByRole("button", { name: "Nova Categoria" }));
-    const sheet = await screen.findByRole("dialog", { name: "Nova Categoria" });
+    await userEvent.click(screen.getByRole("button", { name: "Nova categoria" }));
+    const sheet = await sheetNamed("Nova categoria");
     await userEvent.click(within(sheet).getByRole("radio", { name: "Entrada" }));
-    await userEvent.type(within(sheet).getByLabelText("Nome do agrupador"), "Bônus");
-    expect(within(sheet).getByText("Prévia em tempo real").parentElement).toHaveTextContent("Bônus");
-    await userEvent.click(within(sheet).getByRole("button", { name: "Criar Categoria" }));
+    await userEvent.type(within(sheet).getByLabelText("Nome"), "Bônus");
+    await userEvent.click(within(sheet).getByRole("button", { name: "Criar" }));
 
     await waitFor(() => expect(sent(requests, "POST")).toHaveLength(1));
     expect(await sent(requests, "POST")[0].json()).toMatchObject({ name: "Bônus", kind: "income" });
     await waitFor(() => expect(window.location.pathname + window.location.search).toBe("/ajustes/categorias?k=income"));
   });
 
-  it("creates a subcategory from the card's Adicionar subcategoria, its parent preset", async () => {
+  it("creates a subcategory from the group's +, its group read-only", async () => {
     const requests = open({ "POST /api/categories": { status: 201, body: { ...VET, name: "Banho" } } });
 
-    await userEvent.click(within(await card("Pets")).getByRole("button", { name: "Adicionar subcategoria" }));
-    const sheet = await screen.findByRole("dialog", { name: "Nova Categoria" });
-    expect(within(sheet).getByRole("radio", { name: "Subcategoria" })).toBeChecked();
-    const parents = within(sheet).getByRole("radiogroup", { name: "Vincular à Categoria Pai" });
-    expect(within(parents).getByRole("radio", { name: "Pets" })).toBeChecked();
-    expect(within(sheet).queryByRole("group", { name: /^Cor de Destaque/ })).not.toBeInTheDocument();
-    await userEvent.type(within(sheet).getByLabelText("Nome do agrupador"), "Banho{Enter}");
+    await userEvent.click(within(await card("Pets")).getByRole("button", { name: "Nova subcategoria em Pets" }));
+    const sheet = await sheetNamed("Nova subcategoria");
+    expect(within(sheet).getByText("Dentro de Pets")).toBeInTheDocument();
+    expect(within(sheet).queryByRole("radio", { name: "Subcategoria" })).not.toBeInTheDocument();
+    expect(within(sheet).queryByRole("radiogroup", { name: "Dentro de" })).not.toBeInTheDocument();
+    await waitFor(() => expect(within(sheet).getByLabelText("Nome")).toHaveFocus());
+    await userEvent.keyboard("Banho{Enter}");
 
     await waitFor(() => expect(sent(requests, "POST")).toHaveLength(1));
     expect(await sent(requests, "POST")[0].json()).toMatchObject({ name: "Banho", parent_id: PETS.id });
   });
 
-  it("opens the edit sheet from a row", async () => {
+  it("edits from a row tap and gives focus back to the row on close", async () => {
     open();
 
-    await userEvent.click(within(await list()).getByRole("button", { name: "Editar Ração" }));
-    const sheet = await screen.findByRole("dialog", { name: "Editar Categoria" });
-    expect(within(sheet).getByLabelText("Nome do agrupador")).toHaveValue("Ração");
-    expect(within(sheet).getByRole("button", { name: "Salvar Categoria" })).toBeInTheDocument();
+    const row = within(await list()).getByRole("button", { name: "Editar Ração" });
+    await userEvent.click(row);
+    const sheet = await sheetNamed("Editar categoria");
+    expect(within(sheet).getByLabelText("Nome")).toHaveValue("Ração");
+    expect(within(sheet).getByRole("button", { name: "Salvar" })).toBeInTheDocument();
+    await userEvent.click(within(sheet).getByRole("button", { name: "Fechar" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(row).toHaveFocus();
   });
 
-  it("marks Economia as the cofrinhos, never deletes it and adds a cofrinho from its card", async () => {
+  it("gives focus back to Nova categoria on Esc", async () => {
+    open();
+    await list();
+
+    const button = screen.getByRole("button", { name: "Nova categoria" });
+    await userEvent.click(button);
+    await sheetNamed("Nova categoria");
+    await userEvent.keyboard("{Escape}");
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(button).toHaveFocus();
+  });
+
+  it("marks Economia as the cofrinhos, never deletes it and adds a cofrinho from its +", async () => {
     setSearch("k=bill");
     open();
 
     const economia = within(await list()).getByRole("button", { name: "Editar Economia" });
     expect(within(economia).getByText("Cofrinhos")).toBeInTheDocument();
     expect(screen.getByRole("list", { name: "Subcategorias de Economia" })).toHaveTextContent(/Reserva.*Viagem/);
-    expect((await menu("Economia")).labels).toEqual(["Editar"]);
-    await userEvent.keyboard("{Escape}");
-    await userEvent.click(within(await card("Economia")).getByRole("button", { name: "Adicionar cofrinho" }));
+    await userEvent.click(economia);
+    const edit = await sheetNamed("Editar categoria");
+    expect(within(edit).queryByRole("button", { name: "Excluir" })).not.toBeInTheDocument();
+    await userEvent.click(within(edit).getByRole("button", { name: "Fechar" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
 
-    const sheet = await screen.findByRole("dialog", { name: "Novo cofrinho" });
+    await userEvent.click(within(await card("Economia")).getByRole("button", { name: "Novo cofrinho em Economia" }));
+    const sheet = await sheetNamed("Novo cofrinho");
     expect(within(sheet).getByLabelText("Meta")).toBeInTheDocument();
   });
 
-  it("keeps the form in a side panel at 1280 px and up", async () => {
+  it("opens the same dialog at 1440 px, with no form docked beside the list", async () => {
     window.innerWidth = 1440;
     open();
 
-    const panel = await screen.findByRole("complementary", { name: "Nova Categoria" });
-    expect(within(panel).getByText("Configuração")).toBeInTheDocument();
-    await userEvent.click(within(await list()).getByRole("button", { name: "Editar Ração" }));
+    await list();
+    expect(screen.queryByRole("complementary")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Nova categoria" }));
+    expect(await sheetNamed("Nova categoria")).toBeInTheDocument();
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
 
-    const editing = await screen.findByRole("complementary", { name: "Editar Categoria" });
-    expect(within(editing).getByLabelText("Nome do agrupador")).toHaveValue("Ração");
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Editar Ração" }));
+    expect(within(await sheetNamed("Editar categoria")).getByLabelText("Nome")).toHaveValue("Ração");
   });
 
-  describe("with the side panel (1440 px)", () => {
-    beforeEach(() => {
-      window.innerWidth = 1440;
+  it("changes the kind once and follows it to its tab", async () => {
+    const requests = open({
+      [`PATCH /api/categories/${MERCADO.id}`]: { status: 200, body: { ...MERCADO, kind: "bill" } },
     });
 
-    const nameField = (panel: HTMLElement) => within(panel).getByLabelText("Nome do agrupador");
+    await userEvent.click(within(await list()).getByRole("button", { name: "Editar Mercado" }));
+    const sheet = await sheetNamed("Editar categoria");
+    await userEvent.click(within(sheet).getByRole("radio", { name: "Conta" }));
+    const confirm = await screen.findByRole("alertdialog", { name: "Mudar para Conta?" });
+    await userEvent.click(within(confirm).getByRole("button", { name: "Mudar tipo" }));
 
-    it("focuses the name on Editar, saves, clears the panel and gives focus back to the row", async () => {
-      const requests = open({
-        [`PATCH /api/categories/${RACAO.id}`]: { status: 200, body: { ...RACAO, name: "Ração premium" } },
-      });
-
-      const row = within(await list()).getByRole("button", { name: "Editar Ração" });
-      await userEvent.click(row);
-      const panel = await screen.findByRole("complementary", { name: "Editar Categoria" });
-      await waitFor(() => expect(nameField(panel)).toHaveFocus());
-      await userEvent.type(nameField(panel), " premium{Enter}");
-
-      expect(await screen.findByText("Categoria salva")).toBeInTheDocument();
-      expect(await sent(requests, "PATCH")[0].json()).toMatchObject({ name: "Ração premium" });
-      expect(await screen.findByRole("complementary", { name: "Nova Categoria" })).toBeInTheDocument();
-      await waitFor(() => expect(row).toHaveFocus());
-    });
-
-    it("focuses the name on Adicionar subcategoria and on Nova Categoria, which starts over", async () => {
-      open();
-
-      await userEvent.click(within(await card("Pets")).getByRole("button", { name: "Adicionar subcategoria" }));
-      const panel = () => screen.getByRole("complementary", { name: "Nova Categoria" });
-      await waitFor(() => expect(within(panel()).getByRole("radio", { name: "Subcategoria" })).toBeChecked());
-      await waitFor(() => expect(nameField(panel())).toHaveFocus());
-
-      await userEvent.click(screen.getByRole("button", { name: "Nova Categoria" }));
-      await waitFor(() => expect(within(panel()).getByRole("radio", { name: "Categoria Pai" })).toBeChecked());
-      await waitFor(() => expect(nameField(panel())).toHaveFocus());
-    });
-
-    it("deletes from the panel, which starts over", async () => {
-      open();
-
-      await userEvent.click(within(await list()).getByRole("button", { name: "Editar Mercado" }));
-      const panel = await screen.findByRole("complementary", { name: "Editar Categoria" });
-      await userEvent.click(within(panel).getByRole("button", { name: "Excluir" }));
-
-      expect(await screen.findByText("Categoria excluída")).toBeInTheDocument();
-      expect(await screen.findByRole("complementary", { name: "Nova Categoria" })).toBeInTheDocument();
-      expect(within(await list()).queryByRole("button", { name: "Editar Mercado" })).not.toBeInTheDocument();
-    });
-
-    it("changes the kind once and keeps showing the new one in its tab", async () => {
-      const requests = open({
-        [`PATCH /api/categories/${MERCADO.id}`]: { status: 200, body: { ...MERCADO, kind: "bill" } },
-      });
-
-      await userEvent.click(within(await list()).getByRole("button", { name: "Editar Mercado" }));
-      const panel = await screen.findByRole("complementary", { name: "Editar Categoria" });
-      await userEvent.click(within(panel).getByRole("radio", { name: "Fixa" }));
-      const confirm = await screen.findByRole("alertdialog", { name: "Mudar para Saída?" });
-      await userEvent.click(within(confirm).getByRole("button", { name: "Mudar tipo" }));
-      await waitFor(() => expect(window.location.pathname + window.location.search).toBe("/ajustes/categorias?k=bill"));
-
-      setSearch("k=bill");
-      rerender();
-      const moved = await screen.findByRole("complementary", { name: "Editar Categoria" });
-      expect(within(moved).getByRole("radio", { name: "Fixa" })).toHaveAttribute("data-state", "on");
-      expect(sent(requests, "PATCH")).toHaveLength(1);
-    });
+    await waitFor(() => expect(window.location.pathname + window.location.search).toBe("/ajustes/categorias?k=bill"));
+    expect(sent(requests, "PATCH")).toHaveLength(1);
   });
 
   describe("deleting", () => {
@@ -489,19 +350,13 @@ describe("Ajustes › Categorias", () => {
     });
 
     const archive = async (name: string) => {
-      const { user } = await menu(name, userEvent.setup({ advanceTimers: vi.advanceTimersByTime }));
-      await user.click(screen.getByRole("menuitem", { name: "Excluir" }));
-      return user;
-    };
-
-    const archiveFromSheet = async (name: string) => {
       const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
       await user.click(within(await list()).getByRole("button", { name: `Editar ${name}` }));
       await user.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Excluir" }));
       return user;
     };
 
-    it("hides a parent with its subcategories, holds the archive while Desfazer shows and sends nothing when undone", async () => {
+    it("hides a group with its subcategories, holds the archive while Desfazer shows and sends nothing when undone", async () => {
       const requests = open({ [`DELETE /api/categories/${PETS.id}`]: { status: 204 } });
 
       const user = await archive("Pets");
@@ -539,19 +394,10 @@ describe("Ajustes › Categorias", () => {
       ).toBeInTheDocument();
     });
 
-    it("deletes from the edit sheet the same way", async () => {
-      open();
-
-      await archiveFromSheet("Mercado");
-
-      expect(await screen.findByText("Categoria excluída")).toBeInTheDocument();
-      expect(screen.getByText("Lançamentos continuam com a categoria.")).toBeInTheDocument();
-    });
-
     it("deletes once the toast is gone; a subcategory only says the entries stay", async () => {
       const requests = open({ [`DELETE /api/categories/${RACAO.id}`]: { status: 204 } });
 
-      await archiveFromSheet("Ração");
+      await archive("Ração");
       await screen.findByText("Subcategoria excluída");
       expect(screen.getByText("Lançamentos continuam com a categoria.")).toBeInTheDocument();
       expect(screen.queryByText(/também/)).not.toBeInTheDocument();
@@ -570,7 +416,7 @@ describe("Ajustes › Categorias", () => {
         },
       });
 
-      await archiveFromSheet("Reserva");
+      await archive("Reserva");
       await screen.findByText("Cofrinho excluído");
       act(() => vi.advanceTimersByTime(6000));
 

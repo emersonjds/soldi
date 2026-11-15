@@ -1,10 +1,20 @@
-import { expect, test } from "@playwright/test";
+import { expect, type Locator, test } from "@playwright/test";
 
 import { requireServer } from "./server";
 
 const SHOTS = process.env.E2E_SHOTS;
 
-test("a subcategory is created from Gasto's card, renamed, and deleted with its parent until Desfazer", async ({
+/** Counts the taps a task takes; typing is not a tap (SOL-147 §4). */
+const counter = () => {
+  let count = 0;
+  const tap = async (target: Locator) => {
+    count += 1;
+    await target.click();
+  };
+  return { tap, taken: () => count };
+};
+
+test("a group and a subcategory take two taps each at 375 px, then rename, delete and Desfazer from the sheet", async ({
   page,
   request,
 }) => {
@@ -28,18 +38,38 @@ test("a subcategory is created from Gasto's card, renamed, and deleted with its 
 
   await page.getByRole("navigation", { name: "Navegação principal" }).getByRole("link", { name: "Ajustes" }).click();
   await page.getByRole("link", { name: /^Categorias/ }).click();
-  await expect(page.getByRole("heading", { level: 1, name: "Categorias & Subcategorias" })).toBeVisible();
-  await expect(page.getByRole("radio", { name: /^Gastos Diários/ })).toBeChecked();
+  await expect(page.getByRole("heading", { level: 1, name: "Categorias" })).toBeVisible();
+  await expect(page.getByRole("radio", { name: "Diário", exact: true })).toBeChecked();
+  await expect(page.getByRole("radio", { name: "Entradas", exact: true })).toBeInViewport();
+  await expect(page.getByRole("group", { name: "Mês" })).toHaveCount(0);
 
-  await page.getByRole("listitem", { name: "Gasto" }).getByRole("button", { name: "Adicionar subcategoria" }).click();
-  const create = page.getByRole("dialog", { name: "Nova Categoria" });
-  await expect(
-    create.getByRole("radiogroup", { name: "Vincular à Categoria Pai" }).getByRole("radio", { name: "Gasto" }),
-  ).toBeChecked();
-  await create.getByLabel("Nome do agrupador").fill("Pet shop");
-  await create.getByRole("button", { name: "Criar Categoria" }).click();
+  const group = counter();
+  await group.tap(page.getByRole("button", { name: "Nova categoria", exact: true }));
+  const create = page.getByRole("dialog", { name: "Nova categoria" });
+  await expect(create.getByLabel("Nome", { exact: true })).toBeFocused();
+  await page.keyboard.type("Cursos livres");
+  await expect(create.getByRole("button", { name: "Criar", exact: true })).toBeInViewport();
+  await page.setViewportSize({ width: 375, height: 476 });
+  await expect(create.getByRole("button", { name: "Criar", exact: true })).toBeInViewport();
+  await page.setViewportSize({ width: 375, height: 812 });
+  if (SHOTS) await page.screenshot({ path: `${SHOTS}/categorias-new-375.png` });
+  await group.tap(create.getByRole("button", { name: "Criar", exact: true }));
+  await expect(page.getByText("Categoria criada")).toBeVisible();
+  await expect(page.getByRole("listitem", { name: "Cursos livres", exact: true })).toBeVisible();
+  expect(group.taken()).toBe(2);
+
+  const sub = counter();
+  const gasto = page.getByRole("listitem", { name: "Gasto", exact: true });
+  await sub.tap(gasto.getByRole("button", { name: "Nova subcategoria em Gasto", exact: true }));
+  const child = page.getByRole("dialog", { name: "Nova subcategoria" });
+  await expect(child.getByText("Dentro de Gasto")).toBeVisible();
+  await expect(child.getByLabel("Nome", { exact: true })).toBeFocused();
+  await page.keyboard.type("Pet shop");
+  await expect(child.getByRole("button", { name: "Criar", exact: true })).toBeInViewport();
+  await sub.tap(child.getByRole("button", { name: "Criar", exact: true }));
   const children = page.getByRole("list", { name: "Subcategorias de Gasto" });
   await expect(children.getByRole("button", { name: "Editar Pet shop" })).toBeVisible();
+  expect(sub.taken()).toBe(2);
   if (SHOTS) await page.screenshot({ path: `${SHOTS}/categorias-375.png`, fullPage: true });
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
 
@@ -48,36 +78,30 @@ test("a subcategory is created from Gasto's card, renamed, and deleted with its 
   await page.getByRole("searchbox", { name: "Buscar categoria" }).fill("");
 
   await children.getByRole("button", { name: "Editar Pet shop" }).click();
-  const edit = page.getByRole("dialog", { name: "Editar Categoria" });
-  await edit.getByLabel("Nome do agrupador").fill("Pet shop e banho");
-  await edit.getByRole("button", { name: "Salvar Categoria" }).click();
+  const edit = page.getByRole("dialog", { name: "Editar categoria" });
+  await edit.getByLabel("Nome", { exact: true }).fill("Pet shop e banho");
+  await expect(edit.getByRole("button", { name: "Excluir" })).toBeInViewport();
+  if (SHOTS) await page.screenshot({ path: `${SHOTS}/categorias-edit-375.png` });
+  await edit.getByRole("button", { name: "Salvar", exact: true }).click();
   await expect(children.getByRole("button", { name: "Editar Pet shop e banho" })).toBeVisible();
 
-  await page.getByRole("button", { name: "Mais ações de Gasto" }).click();
-  await page.getByRole("menuitem", { name: "Excluir" }).click();
+  await gasto.getByRole("button", { name: "Editar Gasto", exact: true }).click();
+  await page.getByRole("dialog", { name: "Editar categoria" }).getByRole("button", { name: "Excluir" }).click();
   await expect(page.getByText("Categoria excluída")).toBeVisible();
   await expect(page.getByText("1 subcategoria também; lançamentos continuam com a categoria.")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Editar Gasto" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Editar Gasto", exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Editar Pet shop e banho" })).toHaveCount(0);
   await page.getByRole("button", { name: "Desfazer" }).click();
   await expect(children.getByRole("button", { name: "Editar Pet shop e banho" })).toBeVisible();
 
   await page.setViewportSize({ width: 1440, height: 900 });
-  await expect(page.getByRole("complementary", { name: "Nova Categoria" })).toBeVisible();
-  if (SHOTS) {
-    await page.screenshot({ path: `${SHOTS}/categorias-1440.png`, fullPage: true });
-    await page.getByRole("listitem", { name: "Gasto" }).getByRole("button", { name: "Adicionar subcategoria" }).click();
-    await page
-      .getByRole("complementary", { name: "Nova Categoria" })
-      .getByRole("radio", { name: "Subcategoria" })
-      .waitFor();
-    await page.screenshot({ path: `${SHOTS}/categorias-sub-1440.png`, fullPage: true });
-    await page.setViewportSize({ width: 375, height: 812 });
-    await page.getByRole("button", { name: "Editar Pet shop e banho" }).click();
-    await expect(page.getByRole("dialog", { name: "Editar Categoria" })).toBeVisible();
-    await page.waitForTimeout(400);
-    await page.screenshot({ path: `${SHOTS}/categorias-edit-375.png` });
-  }
+  await expect(page.getByRole("main").getByRole("complementary")).toHaveCount(0);
+  if (SHOTS) await page.screenshot({ path: `${SHOTS}/categorias-1440.png`, fullPage: true });
+  await page.getByRole("button", { name: "Nova subcategoria em Gasto", exact: true }).click();
+  const wide = page.getByRole("dialog", { name: "Nova subcategoria" });
+  await expect(wide.getByLabel("Nome", { exact: true })).toBeFocused();
+  await expect(wide.getByRole("button", { name: "Criar", exact: true })).toBeInViewport();
+  if (SHOTS) await page.screenshot({ path: `${SHOTS}/categorias-sub-1440.png` });
 });
 
 test("Personalizar pins two categories at the head of Lançar's row, kept after a reload", async ({ page, request }) => {
