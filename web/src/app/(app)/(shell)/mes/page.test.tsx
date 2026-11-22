@@ -824,7 +824,7 @@ describe("Mês", () => {
       id: "t-porto",
       note: "Porto",
       date: "2026-11-01",
-      series: { id: "s", position: 9, total: 24, last_date: "2028-04-01", every: "month", open_ended: false },
+      series: { id: "s", position: 9, total: 26, last_date: "2028-04-01", every: "month", open_ended: false },
     };
     const requests = open({
       "GET /api/transactions": { status: 200, body: [porto] },
@@ -846,7 +846,7 @@ describe("Mês", () => {
       ),
     ).toBeInTheDocument();
     expect(within(bill).getByRole("switch", { name: "Parcelado" })).toBeChecked();
-    expect(within(bill).getByLabelText("Quantas parcelas")).toHaveValue("24");
+    expect(within(bill).getByLabelText("Quantas parcelas")).toHaveValue("26");
     expect(within(bill).queryByRole("switch", { name: "Cartão de crédito" })).not.toBeInTheDocument();
     await userEvent.click(within(bill).getByRole("button", { name: "Salvar Conta Fixa" }));
 
@@ -855,7 +855,7 @@ describe("Mês", () => {
     );
     const post = requests.find((request) => request.method === "POST" && request.url.includes("/api/bills"));
     expect(new URL(post?.url ?? "").searchParams.get("transaction_id")).toBe("t-porto");
-    expect(await post?.json()).toMatchObject({ installments: 24, last_month: "2028-04-01" });
+    expect(await post?.json()).toMatchObject({ installments: 26, last_month: "2028-04-01" });
   });
 
   it("warns above the cards of the first red day and its two largest outflows; Ver o dia jumps, rings it for 2 s and names the cause", async () => {
