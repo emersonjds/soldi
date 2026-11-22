@@ -461,7 +461,7 @@ test("a future Conta on Recorrente Sempre becomes a conta fixa paid on its day, 
   expect(day.projected_balance).toBe("822.69");
 
   await page.goto(`/mes?m=${month}`);
-  await expect(page.getByRole("region", { name: "Contas a pagar" })).toContainText("1 de 1 pagas");
+  await expect(page.getByRole("region", { name: "Contas a pagar" })).toContainText("1 de 1 paga");
   const ledger = page.getByRole("region", { name: "Lançamentos" });
   await expect(ledger.locator(`#dia-${due}`).getByText("Gás")).toHaveCount(1);
   await expect(ledger.getByText("Conta fixa · a pagar")).toHaveCount(0);

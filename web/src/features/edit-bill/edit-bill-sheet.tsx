@@ -2,7 +2,7 @@
 
 import { type FormEvent, useId, useState } from "react";
 
-import { Archive, Check, Repeat, TrendingDown } from "lucide-react";
+import { Check, Repeat, Trash2, TrendingDown } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Switch } from "@/components/ui/switch";
 import { firstMonth, installmentOf, lastMonthOf } from "@/entities/bill/bill-plan";
-import { type Bill, useCreateBill, useUpdateBill } from "@/entities/bill/bill-queries";
+import { type Bill, useArchiveBill, useCreateBill, useUpdateBill } from "@/entities/bill/bill-queries";
 import { categoryLabel } from "@/entities/category/categories-query";
 import { useCategoryChips } from "@/entities/category/category-chips";
 import { cn } from "@/lib/utils";
@@ -432,15 +432,20 @@ export const BillForm = ({
         </label>
       )}
       {bill && (
-        <Button
-          type="button"
-          variant="ghost"
-          className="min-h-11 text-base text-destructive hover:text-destructive"
-          onClick={() => onArchive(bill)}
-        >
-          <Archive className="size-5" />
-          Arquivar
-        </Button>
+        <div className="flex flex-col items-center gap-1">
+          <Button
+            type="button"
+            variant="ghost"
+            className="min-h-11 text-base text-destructive hover:text-destructive"
+            onClick={() => onArchive(bill)}
+          >
+            <Trash2 className="size-5" />
+            {bill.closing_day == null ? "Excluir conta fixa" : "Excluir cartão"}
+          </Button>
+          <p className="text-center text-muted-foreground text-xs">
+            Sai de todos os meses; os pagamentos já feitos continuam nos lançamentos.
+          </p>
+        </div>
       )}
       {pinned ? (
         <ResponsiveSheetFooter>{actions}</ResponsiveSheetFooter>
@@ -463,6 +468,38 @@ export const useSaveBill = (bill?: Bill, onCreate?: (fields: Schemas["CreateBill
     if (bill) return update.mutate({ id: bill.id, ...fields, ...(active !== bill.active && { active }) }, feedback);
     if (onCreate) return onCreate(fields);
     create.mutate(fields, feedback);
+  };
+};
+
+// ponytail: no unarchive endpoint, so the DELETE waits for the toast; closing the tab inside those 5 s keeps the bill.
+/** SOL-153: hides a bill at once and deletes it when the 5 s Desfazer toast closes; Desfazer or a failure brings it back. */
+export const useArchiveLater = (onHide: (id: string) => void, onRestore: (id: string) => void) => {
+  const archive = useArchiveBill();
+  return (bill: Bill) => {
+    onHide(bill.id);
+    const card = bill.closing_day != null;
+    let undone = false;
+    const commit = () => {
+      if (undone) return;
+      undone = true;
+      // The screen may be gone by now; mutate's own callbacks would not run.
+      archive.mutateAsync(bill.id).catch(() => {
+        onRestore(bill.id);
+        toast.error(card ? "Não foi possível excluir o cartão." : "Não foi possível excluir a conta fixa.");
+      });
+    };
+    toast(card ? "Cartão excluído" : "Conta fixa excluída", {
+      duration: 5000,
+      action: {
+        label: "Desfazer",
+        onClick: () => {
+          undone = true;
+          onRestore(bill.id);
+        },
+      },
+      onAutoClose: commit,
+      onDismiss: commit,
+    });
   };
 };
 
@@ -517,10 +554,20 @@ type EditBillSheetProps = {
   onCreate?: (fields: Schemas["CreateBill"]) => void;
   /** A line above the form. */
   hint?: string;
+  onCloseAutoFocus?: (event: Event) => void;
 };
 
 /** Add or edit a recurring bill: nome, valor, dia 1–31, categoria and, when editing, Ativa; a new one may be a card (D28), which has Fecha dia instead of valor and no pause. */
-export const EditBillSheet = ({ open, onOpenChange, bill, onArchive, prefill, onCreate, hint }: EditBillSheetProps) => {
+export const EditBillSheet = ({
+  open,
+  onOpenChange,
+  bill,
+  onArchive,
+  prefill,
+  onCreate,
+  hint,
+  onCloseAutoFocus,
+}: EditBillSheetProps) => {
   const save = useSaveBill(bill, onCreate);
 
   return (
@@ -529,6 +576,7 @@ export const EditBillSheet = ({ open, onOpenChange, bill, onArchive, prefill, on
       onOpenChange={onOpenChange}
       title={bill ? "Editar conta" : "Nova conta"}
       description="Uma conta que se repete todo mês."
+      onCloseAutoFocus={onCloseAutoFocus}
     >
       {hint && <p className="rounded-xl bg-secondary px-4 py-3 font-medium text-primary text-sm">{hint}</p>}
       <BillForm

@@ -1,5 +1,5 @@
 import { QueryClientProvider } from "@tanstack/react-query";
-import { screen, waitFor, within } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Toaster } from "sonner";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -10,6 +10,7 @@ import { renderWithQuery } from "@/test/render";
 import {
   BILL_ALUGUEL,
   BILL_LUZ,
+  BILLS,
   BILLS_OF_MONTH,
   CARRIED_ALUGUEL,
   CATEGORIES,
@@ -114,11 +115,16 @@ describe("Contas a pagar", () => {
     show();
     await loaded();
 
-    expect(card()).toHaveTextContent("Contas do Mês");
-    expect(card()).toHaveTextContent("2 obrigações cadastradas");
+    expect(card()).toHaveTextContent("Contas a pagar");
+    expect(card()).not.toHaveTextContent("Contas do Mês");
+    expect(card()).not.toHaveTextContent("obrigações");
     expect(card()).toHaveTextContent("0 de 2 pagas");
-    expect(card()).toHaveTextContent("Próxima: dia 10 · R$ 2.259,56");
-    expect(within(card()).getByRole("link", { name: "Ver todas" })).toHaveAttribute("href", "/ajustes/contas");
+    expect(card()).toHaveTextContent("1 vencida Próxima: dia 10 · R$ 2.259,56");
+    expect(within(card()).queryByRole("link", { name: "Ver todas" })).not.toBeInTheDocument();
+    const manage = within(card()).getByRole("link", { name: "Gerenciar contas fixas" });
+    expect(manage).toHaveAttribute("href", "/ajustes/contas");
+    expect(manage).toHaveClass("min-h-11");
+    expect(within(card()).queryByRole("heading", { level: 3 })).not.toBeInTheDocument();
 
     const rent = rowOf("Aluguel Residencial");
     expect(rent).toHaveTextContent("Vence dia 10/11");
@@ -433,14 +439,15 @@ describe("Contas a pagar", () => {
     await loaded();
 
     expect(card()).toHaveTextContent("Todas as contas do mês pagas");
-    expect(card()).toHaveTextContent("1 de 1 pagas");
+    expect(card()).toHaveTextContent("1 de 1 paga");
+    expect(card()).not.toHaveTextContent("1 de 1 pagas");
     expect(rowOf("Aluguel Residencial")).toHaveTextContent("Pago");
   });
 
   it("counts a single bill in the singular", async () => {
     show([{ ...BILLS_OF_MONTH[1], due_date: "2026-11-05" }]);
     await loaded();
-    expect(card()).toHaveTextContent("1 obrigação cadastrada");
+    expect(card()).toHaveTextContent("0 de 1 paga");
     expect(card()).toHaveTextContent("Próxima: dia 05 · R$ 2.259,56");
   });
 
@@ -510,25 +517,28 @@ describe("Contas a pagar", () => {
 
     const nameLine = (name: string) => within(rowOf(name)).getByText("Fies").parentElement;
 
-    it("reads the parcela after the name, wrapping under it at 375 px before the amount moves", async () => {
+    it("reads the parcela and its last month after the name, wrapping under it at 375 px before the amount moves", async () => {
       show([{ ...FIES, installment: 4 }], {}, "2026-12");
       await loaded();
-      expect(nameLine("Fies")).toHaveTextContent("Fies · 4/6");
+      expect(nameLine("Fies")).toHaveTextContent("Fies · Parcela 4/6 · termina em fev/27");
       expect(nameLine("Fies")).toHaveClass("flex-wrap");
-      expect(within(rowOf("Fies")).getByText("· 4/6")).toHaveClass("whitespace-nowrap");
+      expect(within(rowOf("Fies")).getByText("· Parcela 4/6 · termina em fev/27")).not.toHaveClass("whitespace-nowrap");
     });
 
     it("names the last parcela", async () => {
       show([{ ...FIES, installment: 6 }], {}, "2026-12");
       await loaded();
-      expect(nameLine("Fies")).toHaveTextContent("Fies · última parcela");
+      expect(nameLine("Fies")).toHaveTextContent("Fies · Última parcela");
+      expect(rowOf("Fies")).not.toHaveTextContent("termina em");
       expect(rowOf("Fies")).not.toHaveTextContent("6/6");
     });
 
     it("keeps a carried parcela's position and says when it was due", async () => {
       show([{ ...FIES, installment: 4, due_date: "2026-11-10", overdue: true }], {}, "2026-12");
       await loaded();
-      expect(nameLine("Fies de novembro")).toHaveTextContent("Fies · 4/6 · venceu em novembro");
+      expect(nameLine("Fies de novembro")).toHaveTextContent(
+        "Fies · Parcela 4/6 · termina em jan/27 · venceu em novembro",
+      );
     });
 
     it("leaves a bill without parcelas as it was", async () => {
@@ -536,6 +546,314 @@ describe("Contas a pagar", () => {
       await loaded();
       expect(within(rowOf("Inglês")).getByText("Inglês")).toHaveTextContent(/^Inglês$/);
       expect(rowOf("Inglês")).not.toHaveTextContent("·");
+    });
+  });
+
+  describe("groups by kind of amount (SOL-153)", () => {
+    const AGUA: Schemas["BillOfMonth"] = {
+      ...BILLS_OF_MONTH[1],
+      bill_id: "b-agua",
+      name: "Água",
+      amount: "430.00",
+      due_date: "2026-11-25",
+      variable: true,
+    };
+    const PARCELADO = { ...BILLS_OF_MONTH[1], installment: 2, installments: 6 };
+    const PORTO = { ...FATURA, due_date: "2026-11-12" };
+    const MIXED = [BILLS_OF_MONTH[0], PARCELADO, PORTO, AGUA];
+
+    const headers = () =>
+      within(card())
+        .queryAllByRole("heading", { level: 3 })
+        .map((heading) => within(heading).getByRole("button"));
+    const text = (element: Element) => element.textContent?.replace(/\s+/g, " ");
+    const header = (name: string) => within(card()).getByRole("button", { name: new RegExp(`^${name}`) });
+    const group = (name: string) => within(card()).getByRole("list", { name });
+
+    it("opens Valor fixo, Valor variável and Faturas de cartão, in that order, each with its count and what is left", async () => {
+      show(MIXED);
+      await loaded();
+
+      expect(headers().map(text)).toEqual([
+        "Valor fixo0 de 2 pagas · falta R$ 2.543,66 · 1 vencida",
+        "Valor variável0 de 1 paga · falta ≈ R$ 430,00",
+        "Faturas de cartão0 de 1 paga · falta R$ 450,00",
+      ]);
+      for (const button of headers()) {
+        expect(button).toHaveAttribute("aria-expanded", "true");
+        expect(button).toHaveClass("min-h-11");
+      }
+      expect(card()).toHaveTextContent("0 de 4 pagas");
+      expect(
+        within(group("Valor fixo"))
+          .getAllByRole("listitem")
+          .map((row) => row.getAttribute("aria-label")),
+      ).toEqual(["Luz (Enel)", "Aluguel Residencial"]);
+      expect(within(group("Valor variável")).getByRole("listitem", { name: "Água" })).toBeInTheDocument();
+      expect(within(group("Faturas de cartão")).getByRole("listitem", { name: "Fatura Porto" })).toBeInTheDocument();
+    });
+
+    it("hides a group's rows when its header closes and keeps its summary", async () => {
+      show(MIXED);
+      await loaded();
+
+      await userEvent.click(header("Valor fixo"));
+
+      expect(header("Valor fixo")).toHaveAttribute("aria-expanded", "false");
+      expect(header("Valor fixo")).toHaveTextContent("0 de 2 pagas · falta R$ 2.543,66 · 1 vencida");
+      expect(within(card()).queryByRole("listitem", { name: "Aluguel Residencial" })).not.toBeInTheDocument();
+      expect(rowOf("Água")).toBeInTheDocument();
+    });
+
+    it("counts October's carried rent in Valor fixo and in the subtitle as overdue (D17)", async () => {
+      show([CARRIED_ALUGUEL, ...BILLS_OF_MONTH, AGUA]);
+      await loaded();
+
+      expect(header("Valor fixo")).toHaveTextContent("0 de 3 pagas · falta R$ 4.803,22 · 2 vencidas");
+      expect(
+        within(group("Valor fixo")).getByRole("listitem", { name: "Aluguel Residencial de outubro" }),
+      ).toBeInTheDocument();
+      expect(card()).toHaveTextContent("2 vencidas Próxima: dia 10 · R$ 2.259,56");
+      expect(card()).toHaveTextContent("0 de 4 pagas");
+    });
+
+    it("keeps a group open with a tick once its last bill is paid, and the round check undoes it", async () => {
+      const { serverHas } = show(
+        [PAID_RENT, { ...BILLS_OF_MONTH[1], bill_id: BILL_LUZ.id, name: "Luz (Enel)" }, AGUA],
+        {
+          [`POST /api/bills/${BILL_LUZ.id}/pay`]: { status: 201, body: PAYMENT },
+          [`DELETE /api/bills/${BILL_LUZ.id}/pay`]: { status: 204 },
+        },
+      );
+      await loaded();
+      const paidLuz = {
+        ...BILLS_OF_MONTH[1],
+        bill_id: BILL_LUZ.id,
+        name: "Luz (Enel)",
+        paid: true,
+        transaction_id: "t2",
+      };
+      serverHas([PAID_RENT, paidLuz, AGUA]);
+
+      await userEvent.click(within(rowOf("Luz (Enel)")).getByRole("button", { name: /^Marcar/ }));
+
+      await waitFor(() => expect(header("Valor fixo")).toHaveTextContent("Valor fixo2 de 2 pagas"));
+      expect(header("Valor fixo")).not.toHaveTextContent("falta");
+      expect(within(header("Valor fixo")).getByText("2 de 2 pagas").closest("span")).toHaveClass("text-income-text");
+      expect(header("Valor fixo")).toHaveAttribute("aria-expanded", "true");
+      expect(card()).toHaveTextContent("2 de 3 pagas");
+
+      serverHas([PAID_RENT, { ...paidLuz, paid: false, transaction_id: null }, AGUA]);
+      await waitFor(() =>
+        expect(within(rowOf("Luz (Enel)")).getByRole("button", { name: /^Desmarcar/ })).toBeEnabled(),
+      );
+      await userEvent.click(within(rowOf("Luz (Enel)")).getByRole("button", { name: /^Desmarcar/ }));
+
+      expect(await screen.findByText("Pagamento desfeito")).toBeInTheDocument();
+      await waitFor(() => expect(header("Valor fixo")).toHaveTextContent("1 de 2 pagas · falta R$ 2.259,56"));
+      expect(card()).toHaveTextContent("1 de 3 pagas");
+    });
+
+    it("lists one kind of bill flat, with no group header", async () => {
+      show([AGUA, { ...AGUA, bill_id: "b-gas", name: "Gás" }]);
+      await loaded();
+
+      expect(headers()).toEqual([]);
+      expect(rows()).toEqual(["Água", "Gás"]);
+      expect(card()).toHaveTextContent("0 de 2 pagas");
+    });
+
+    it("opens every group with a match for a chosen day, hides the rest and restores them on a second tap", async () => {
+      show(MIXED);
+      await loaded();
+      await userEvent.click(header("Valor variável"));
+      expect(header("Valor variável")).toHaveAttribute("aria-expanded", "false");
+
+      const day = within(chips()).getByRole("radio", { name: "dia 25, 1 conta a pagar" });
+      await userEvent.click(day);
+
+      expect(headers().map(text)).toEqual(["Valor variável0 de 1 paga · falta ≈ R$ 430,00"]);
+      expect(header("Valor variável")).toHaveAttribute("aria-expanded", "true");
+      expect(rows()).toEqual(["Água"]);
+      expect(card()).toHaveTextContent("0 de 4 pagas");
+
+      await userEvent.click(day);
+      expect(headers()).toHaveLength(3);
+      expect(rows()).toEqual(["Luz (Enel)", "Aluguel Residencial", "Água", "Fatura Porto"]);
+    });
+
+    it("keeps the month's numbers in a group's summary while a day is chosen", async () => {
+      show(MIXED);
+      await loaded();
+
+      await userEvent.click(within(chips()).getByRole("radio", { name: /^dia 10,/ }));
+
+      expect(rows()).toEqual(["Aluguel Residencial"]);
+      expect(header("Valor fixo")).toHaveTextContent("0 de 2 pagas · falta R$ 2.543,66 · 1 vencida");
+    });
+
+    it("keeps a large amount left on its own unbroken fragment", async () => {
+      show([{ ...BILLS_OF_MONTH[1], amount: "99999.99" }, AGUA]);
+      await loaded();
+
+      expect(within(header("Valor fixo")).getByText("· falta R$ 99.999,99")).toHaveClass("whitespace-nowrap");
+    });
+  });
+
+  describe("edit and remove from the name (SOL-153)", () => {
+    const EDITING = {
+      "GET /api/bills": { status: 200, body: BILLS },
+      "GET /api/categories": { status: 200, body: CATEGORIES },
+    };
+    const editOf = (name: string) => within(rowOf(name)).getByRole("button", { name: `Editar ${name}` });
+    const sent = (requests: Request[], method: string) =>
+      requests.filter((request) => request.method === method && request.url.includes("/api/bills/"));
+
+    it("keeps the name disabled until the bills load, then opens Editar conta with the bill and saves it", async () => {
+      const { requests } = show(BILLS_OF_MONTH, {
+        ...EDITING,
+        [`PATCH /api/bills/${BILL_ALUGUEL.id}`]: { status: 200, body: BILL_ALUGUEL },
+      });
+      await loaded();
+      expect(editOf("Aluguel Residencial")).toHaveClass("min-h-11");
+      await waitFor(() => expect(editOf("Aluguel Residencial")).toBeEnabled());
+
+      await userEvent.click(editOf("Aluguel Residencial"));
+      const sheet = await screen.findByRole("dialog", { name: "Editar conta" });
+      expect(within(sheet).getByLabelText("Nome da conta fixa")).toHaveValue("Aluguel Residencial");
+      expect(within(sheet).getByLabelText("Valor mensal fixo estimado")).toHaveValue("2.259,56");
+      await userEvent.click(within(sheet).getByRole("button", { name: "Salvar Conta Fixa" }));
+
+      expect(await screen.findByText("Conta salva")).toBeInTheDocument();
+      expect(sent(requests, "PATCH")).toHaveLength(1);
+    });
+
+    it("reads the row's caption as the edit button's description", async () => {
+      show([{ ...BILLS_OF_MONTH[0], variable: true }], EDITING);
+      await loaded();
+
+      expect(editOf("Luz (Enel)")).toHaveAccessibleDescription(/Venceu dia 02\/11/);
+      expect(editOf("Luz (Enel)")).toHaveAccessibleDescription(/valor variável/);
+    });
+
+    it("hides the chevron while the name cannot open Editar conta", async () => {
+      show(BILLS_OF_MONTH);
+      await loaded();
+
+      expect(editOf("Luz (Enel)")).toBeDisabled();
+      expect(editOf("Luz (Enel)").querySelector(".lucide-chevron-right")).toBeNull();
+    });
+
+    it("names a carried row's edit after its month and leaves a card on its fatura", async () => {
+      show([CARRIED_ALUGUEL, FATURA], EDITING);
+      await loaded();
+
+      expect(editOf("Aluguel Residencial de outubro")).toBeInTheDocument();
+      expect(within(rowOf("Fatura Porto")).queryByRole("button", { name: /^Editar/ })).not.toBeInTheDocument();
+    });
+
+    describe("Excluir conta fixa", () => {
+      beforeEach(() => {
+        vi.useFakeTimers({ shouldAdvanceTime: true, toFake: ["Date", "setTimeout", "clearTimeout"] });
+        vi.setSystemTime(new Date(2026, 10, 5, 12));
+      });
+
+      const remove = async (name: string) => {
+        const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+        await waitFor(() => expect(editOf(name)).toBeEnabled());
+        await user.click(editOf(name));
+        const sheet = await screen.findByRole("dialog", { name: "Editar conta" });
+        await user.click(within(sheet).getByRole("button", { name: "Excluir conta fixa" }));
+        return user;
+      };
+
+      it("hides the row at once with the counts, and Desfazer brings it back with no request", async () => {
+        const { requests } = show(BILLS_OF_MONTH, EDITING);
+        await loaded();
+
+        const user = await remove("Luz (Enel)");
+
+        expect(await screen.findByText("Conta fixa excluída")).toBeInTheDocument();
+        expect(screen.queryByRole("dialog", { name: "Editar conta" })).not.toBeInTheDocument();
+        expect(rows()).toEqual(["Aluguel Residencial"]);
+        expect(card()).toHaveTextContent("0 de 1 paga");
+        expect(card()).not.toHaveTextContent("vencida");
+        await user.click(screen.getByRole("button", { name: "Desfazer" }));
+
+        expect(rows()).toEqual(["Luz (Enel)", "Aluguel Residencial"]);
+        expect(card()).toHaveTextContent("0 de 2 pagas");
+        act(() => vi.advanceTimersByTime(6000));
+        expect(sent(requests, "DELETE")).toHaveLength(0);
+      });
+
+      it("deletes once the toast is gone", async () => {
+        const { requests } = show(BILLS_OF_MONTH, {
+          ...EDITING,
+          [`DELETE /api/bills/${BILL_LUZ.id}`]: { status: 204 },
+        });
+        await loaded();
+
+        await remove("Luz (Enel)");
+        await screen.findByText("Conta fixa excluída");
+        expect(sent(requests, "DELETE")).toHaveLength(0);
+        act(() => vi.advanceTimersByTime(6000));
+
+        await waitFor(() => expect(sent(requests, "DELETE")).toHaveLength(1));
+        expect(new URL(sent(requests, "DELETE")[0].url).pathname).toBe(`/api/bills/${BILL_LUZ.id}`);
+        expect(rows()).toEqual(["Aluguel Residencial"]);
+      });
+
+      it("brings the row back with its own words when deleting fails", async () => {
+        show(BILLS_OF_MONTH, {
+          ...EDITING,
+          [`DELETE /api/bills/${BILL_LUZ.id}`]: { status: 409, body: problem(409, "Texto do servidor.") },
+        });
+        await loaded();
+
+        await remove("Luz (Enel)");
+        await screen.findByText("Conta fixa excluída");
+        act(() => vi.advanceTimersByTime(6000));
+
+        expect(await screen.findByText("Não foi possível excluir a conta fixa.")).toBeInTheDocument();
+        expect(screen.queryByText("Texto do servidor.")).not.toBeInTheDocument();
+        expect(rows()).toEqual(["Luz (Enel)", "Aluguel Residencial"]);
+      });
+
+      it("puts the focus on the card's title once the row is gone", async () => {
+        show(BILLS_OF_MONTH, EDITING);
+        await loaded();
+
+        await remove("Luz (Enel)");
+        await screen.findByText("Conta fixa excluída");
+
+        await waitFor(() => expect(within(card()).getByRole("heading", { level: 2 }).firstElementChild).toHaveFocus());
+      });
+
+      it("lets go of a chosen day once its only bill is gone", async () => {
+        show(BILLS_OF_MONTH, EDITING);
+        await loaded();
+        const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+        await user.click(within(chips()).getByRole("radio", { name: /^dia 02,/ }));
+        expect(rows()).toEqual(["Luz (Enel)"]);
+
+        await remove("Luz (Enel)");
+        await screen.findByText("Conta fixa excluída");
+
+        expect(rows()).toEqual(["Aluguel Residencial"]);
+      });
+
+      it("drops the card with its last bill and Desfazer brings it back", async () => {
+        show([BILLS_OF_MONTH[1]], EDITING);
+        await loaded();
+
+        const user = await remove("Aluguel Residencial");
+
+        await screen.findByText("Conta fixa excluída");
+        expect(screen.queryByRole("region", { name: "Contas a pagar" })).not.toBeInTheDocument();
+        await user.click(screen.getByRole("button", { name: "Desfazer" }));
+        expect(await loaded()).toBeInTheDocument();
+        expect(rows()).toEqual(["Aluguel Residencial"]);
+      });
     });
   });
 

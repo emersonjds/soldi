@@ -147,11 +147,12 @@ test("a parcelado conta fixa shows its parcela each month and leaves after the l
 
   const fies = page.getByRole("region", { name: "Contas a pagar" }).getByRole("listitem", { name: /^Fies/ });
   for (const [shown, parcela] of [
-    [first, "2/3"],
-    [second, "última parcela"],
+    [first, `Parcela 2/3 · termina em ${abbrev(second)}`],
+    [second, "Última parcela"],
   ]) {
     await page.goto(`/mes?m=${shown}`);
     await expect(fies).toContainText(`Fies · ${parcela}`);
+    await expectNoClipped(page);
   }
   await page.goto(`/mes?m=${after}`);
   await expect(page.getByRole("region", { name: "Saldo hoje" })).toBeVisible();

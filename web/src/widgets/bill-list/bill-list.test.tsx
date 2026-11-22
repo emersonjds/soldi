@@ -420,12 +420,15 @@ describe("Contas fixas", () => {
       expect(await panel()).toBeInTheDocument();
     });
 
-    it("archives from the panel with an undo", async () => {
+    it("removes from the panel with an undo", async () => {
       open();
 
       await userEvent.click(await screen.findByRole("button", { name: /^Aluguel Residencial/ }));
-      await userEvent.click(within(await panel()).getByRole("button", { name: "Arquivar" }));
-      expect(await screen.findByText("Conta arquivada")).toBeInTheDocument();
+      expect(
+        within(await panel()).getByText("Sai de todos os meses; os pagamentos já feitos continuam nos lançamentos."),
+      ).toBeInTheDocument();
+      await userEvent.click(within(await panel()).getByRole("button", { name: "Excluir conta fixa" }));
+      expect(await screen.findByText("Conta fixa excluída")).toBeInTheDocument();
       expect(names()).toEqual(["Luz (Enel)", "Academia"]);
       expect(within(await panel()).getByLabelText("Nome da conta fixa")).toHaveValue("");
     });
@@ -671,6 +674,7 @@ describe("Contas fixas", () => {
       expect(within(sheet).queryByRole("switch")).not.toBeInTheDocument();
       expect(within(sheet).queryByLabelText("Valor mensal fixo estimado")).not.toBeInTheDocument();
       expect(within(sheet).getByLabelText("Fecha dia")).toHaveValue("3");
+      expect(within(sheet).getByRole("button", { name: "Excluir cartão" })).toBeInTheDocument();
       await userEvent.clear(within(sheet).getByLabelText("Fecha dia"));
       await userEvent.type(within(sheet).getByLabelText("Fecha dia"), "5");
       await userEvent.click(within(sheet).getByRole("button", { name: "Salvar Conta Fixa" }));
@@ -683,6 +687,17 @@ describe("Contas fixas", () => {
         category_id: PORTO.category_id,
       });
     });
+  });
+
+  it("says Cartão excluído when a card is removed (SOL-153)", async () => {
+    open({ bills: [BILL_ALUGUEL, PORTO] });
+
+    await userEvent.click(await screen.findByRole("button", { name: /^Porto/ }));
+    const sheet = await screen.findByRole("dialog", { name: "Editar conta" });
+    await userEvent.click(within(sheet).getByRole("button", { name: "Excluir cartão" }));
+
+    expect(await screen.findByText("Cartão excluído")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Porto/ })).not.toBeInTheDocument();
   });
 
   describe("parcelado (SOL-118)", () => {
