@@ -119,7 +119,9 @@ describe("Ajustes › Contas fixas", () => {
       .getByRole("button", { name: "Salvar Conta Fixa" })
       .closest('[data-slot="responsive-sheet-footer"]');
     expect(
-      within(sheet).getByRole("button", { name: "Arquivar" }).closest('[data-slot="responsive-sheet-footer"]'),
+      within(sheet)
+        .getByRole("button", { name: "Excluir conta fixa" })
+        .closest('[data-slot="responsive-sheet-footer"]'),
     ).toBeNull();
     expect(pinned).not.toBeNull();
     await userEvent.click(within(sheet).getByRole("switch", { name: "Ativa" }));
@@ -176,7 +178,7 @@ describe("Ajustes › Contas fixas", () => {
     const archive = async (name: string) => {
       const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
       await user.click(await screen.findByRole("button", { name: `Mais ações de ${name}` }));
-      await user.click(await screen.findByRole("menuitem", { name: "Arquivar" }));
+      await user.click(await screen.findByRole("menuitem", { name: "Excluir" }));
       return user;
     };
 
@@ -185,7 +187,7 @@ describe("Ajustes › Contas fixas", () => {
 
       const user = await archive("Luz (Enel)");
 
-      expect(await screen.findByText("Conta arquivada")).toBeInTheDocument();
+      expect(await screen.findByText("Conta fixa excluída")).toBeInTheDocument();
       expect(screen.queryByRole("button", { name: /^Luz \(Enel\)/ })).not.toBeInTheDocument();
       await user.click(screen.getByRole("button", { name: "Desfazer" }));
       expect(await screen.findByRole("button", { name: /^Luz \(Enel\)/ })).toBeInTheDocument();
@@ -197,7 +199,7 @@ describe("Ajustes › Contas fixas", () => {
       const requests = open({ [`DELETE /api/bills/${BILL_LUZ.id}`]: { status: 204 } });
 
       await archive("Luz (Enel)");
-      await screen.findByText("Conta arquivada");
+      await screen.findByText("Conta fixa excluída");
       expect(sent(requests, "DELETE")).toHaveLength(0);
       act(() => vi.advanceTimersByTime(6000));
 
@@ -208,10 +210,10 @@ describe("Ajustes › Contas fixas", () => {
       open({ [`DELETE /api/bills/${BILL_LUZ.id}`]: { status: 500, body: problem(500, "Falhou.") } });
 
       await archive("Luz (Enel)");
-      await screen.findByText("Conta arquivada");
+      await screen.findByText("Conta fixa excluída");
       act(() => vi.advanceTimersByTime(6000));
 
-      expect(await screen.findByText("Não foi possível arquivar a conta.")).toBeInTheDocument();
+      expect(await screen.findByText("Não foi possível excluir a conta fixa.")).toBeInTheDocument();
       expect(screen.getByRole("button", { name: /^Luz \(Enel\)/ })).toBeInTheDocument();
     });
   });

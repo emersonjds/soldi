@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Schemas } from "@/shared/api/client";
 import { renderWithQuery } from "@/test/render";
-import { ALUGUEL, CATEGORIES, stubApi } from "@/test/stub-api";
+import { ALUGUEL, BILL_ALUGUEL, CATEGORIES, stubApi } from "@/test/stub-api";
 
 import { EditBillSheet } from "./edit-bill-sheet";
 
@@ -59,5 +59,34 @@ describe("EditBillSheet with a series prefill (SOL-152)", () => {
     await userEvent.click(within(form).getByRole("button", { name: "Salvar Conta Fixa" }));
 
     expect(onCreate).toHaveBeenCalledWith({ ...PORTO, due_day: 1, installments: 9, last_month: "2027-06-01" });
+  });
+});
+
+describe("EditBillSheet removal (SOL-153)", () => {
+  const edit = (bill: Schemas["Bill"]) => {
+    stubApi({ "GET /api/categories": { status: 200, body: CATEGORIES } });
+    const onArchive = vi.fn();
+    renderWithQuery(<EditBillSheet open onOpenChange={vi.fn()} bill={bill} onArchive={onArchive} />);
+    return onArchive;
+  };
+
+  it("names the removal Excluir conta fixa and says the payments stay", async () => {
+    const onArchive = edit(BILL_ALUGUEL);
+
+    const form = await screen.findByRole("dialog", { name: "Editar conta" });
+    const remove = within(form).getByRole("button", { name: "Excluir conta fixa" });
+    expect(remove).toHaveClass("min-h-11");
+    expect(within(form).getByText("Os pagamentos já feitos continuam nos lançamentos.")).toBeInTheDocument();
+    await userEvent.click(remove);
+
+    expect(onArchive).toHaveBeenCalledWith(BILL_ALUGUEL);
+  });
+
+  it("keeps a card's word: Excluir cartão", async () => {
+    edit({ ...BILL_ALUGUEL, name: "Porto", amount: null, closing_day: 3 });
+
+    const form = await screen.findByRole("dialog", { name: "Editar conta" });
+    expect(within(form).getByRole("button", { name: "Excluir cartão" })).toBeInTheDocument();
+    expect(within(form).queryByRole("button", { name: "Excluir conta fixa" })).not.toBeInTheDocument();
   });
 });

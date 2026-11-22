@@ -2,7 +2,7 @@
 
 import { type FormEvent, useId, useState } from "react";
 
-import { Archive, Check, Repeat, TrendingDown } from "lucide-react";
+import { Check, Repeat, Trash2, TrendingDown } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Switch } from "@/components/ui/switch";
 import { firstMonth, installmentOf, lastMonthOf } from "@/entities/bill/bill-plan";
-import { type Bill, useCreateBill, useUpdateBill } from "@/entities/bill/bill-queries";
+import { type Bill, useArchiveBill, useCreateBill, useUpdateBill } from "@/entities/bill/bill-queries";
 import { categoryLabel } from "@/entities/category/categories-query";
 import { useCategoryChips } from "@/entities/category/category-chips";
 import { cn } from "@/lib/utils";
@@ -432,15 +432,20 @@ export const BillForm = ({
         </label>
       )}
       {bill && (
-        <Button
-          type="button"
-          variant="ghost"
-          className="min-h-11 text-base text-destructive hover:text-destructive"
-          onClick={() => onArchive(bill)}
-        >
-          <Archive className="size-5" />
-          Arquivar
-        </Button>
+        <div className="flex flex-col items-center gap-1">
+          <Button
+            type="button"
+            variant="ghost"
+            className="min-h-11 text-base text-destructive hover:text-destructive"
+            onClick={() => onArchive(bill)}
+          >
+            <Trash2 className="size-5" />
+            {bill.closing_day == null ? "Excluir conta fixa" : "Excluir cartão"}
+          </Button>
+          <p className="text-center text-muted-foreground text-xs">
+            Os pagamentos já feitos continuam nos lançamentos.
+          </p>
+        </div>
       )}
       {pinned ? (
         <ResponsiveSheetFooter>{actions}</ResponsiveSheetFooter>
@@ -463,6 +468,38 @@ export const useSaveBill = (bill?: Bill, onCreate?: (fields: Schemas["CreateBill
     if (bill) return update.mutate({ id: bill.id, ...fields, ...(active !== bill.active && { active }) }, feedback);
     if (onCreate) return onCreate(fields);
     create.mutate(fields, feedback);
+  };
+};
+
+// ponytail: no unarchive endpoint, so the DELETE waits for the toast; closing the tab inside those 5 s keeps the bill.
+/** SOL-153: hides a bill at once and deletes it when the 5 s Desfazer toast closes; Desfazer or a failure brings it back. */
+export const useArchiveLater = (onHide: (id: string) => void, onRestore: (id: string) => void) => {
+  const archive = useArchiveBill();
+  return (bill: Bill) => {
+    onHide(bill.id);
+    let undone = false;
+    const commit = () => {
+      if (undone) return;
+      undone = true;
+      archive.mutate(bill.id, {
+        onError: () => {
+          onRestore(bill.id);
+          toast.error("Não foi possível excluir a conta fixa.");
+        },
+      });
+    };
+    toast(bill.closing_day == null ? "Conta fixa excluída" : "Cartão excluído", {
+      duration: 5000,
+      action: {
+        label: "Desfazer",
+        onClick: () => {
+          undone = true;
+          onRestore(bill.id);
+        },
+      },
+      onAutoClose: commit,
+      onDismiss: commit,
+    });
   };
 };
 
