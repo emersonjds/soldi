@@ -1,3 +1,7 @@
 # Only `cargo deny check advisories` runs in CI; licenses, bans and sources are unchecked.
 [advisories]
-ignore = []
+ignore = [
+  # Unmaintained, no safe upgrade, and sqlx 0.9 itself depends on chrono; SOL-151 moves off it.
+  { id = "RUSTSEC-2026-0543", reason = "chrono unmaintained; no alternative sqlx supports yet (SOL-151)" },
+  { id = "RUSTSEC-2026-0555", reason = "chrono-tz unmaintained; replaced with chrono (SOL-151)" },
+]
