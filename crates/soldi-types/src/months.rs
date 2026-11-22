@@ -92,6 +92,8 @@ pub struct BillOfMonth {
     pub installment: Option<i16>,
     /// The parcelado bill's number of parcelas.
     pub installments: Option<i16>,
+    /// The conta fixa's amount is an estimate (D44); false on a card.
+    pub variable: bool,
 }
 
 /// SOL-119: a card's fatura due in `month`, what fills it, and the next six months' committed totals.

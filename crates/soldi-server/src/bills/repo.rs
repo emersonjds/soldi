@@ -14,7 +14,7 @@ pub async fn list(
         Bill,
         r#"SELECT id, category_id, name, amount, due_day,
                   (last_month IS NULL OR installments IS NOT NULL) AS "active!", closing_day,
-                  last_month, installments
+                  last_month, installments, variable
          FROM recurring_bills
          WHERE user_id = $1 AND archived_at IS NULL
            AND ($2 OR last_month IS NULL OR last_month >= $3)
@@ -37,7 +37,7 @@ pub async fn find(
         Bill,
         r#"SELECT id, category_id, name, amount, due_day,
                   (last_month IS NULL OR installments IS NOT NULL) AS "active!", closing_day,
-                  last_month, installments
+                  last_month, installments, variable
          FROM recurring_bills
          WHERE user_id = $1 AND id = $2 AND archived_at IS NULL"#,
         user_id,
@@ -57,7 +57,7 @@ pub async fn find_payable(
         Bill,
         r#"SELECT id, category_id, name, amount, due_day,
                   (last_month IS NULL OR installments IS NOT NULL) AS "active!", closing_day,
-                  last_month, installments
+                  last_month, installments, variable
          FROM recurring_bills
          WHERE user_id = $1 AND id = $2 AND (archived_at IS NULL OR closing_day IS NOT NULL)"#,
         user_id,
@@ -77,7 +77,7 @@ pub async fn find_card(
         Bill,
         r#"SELECT id, category_id, name, amount, due_day,
                   (last_month IS NULL OR installments IS NOT NULL) AS "active!", closing_day,
-                  last_month, installments
+                  last_month, installments, variable
          FROM recurring_bills
          WHERE user_id = $1 AND id = $2 AND archived_at IS NULL AND closing_day IS NOT NULL"#,
         user_id,
@@ -95,11 +95,12 @@ pub async fn insert(
     sqlx::query_as!(
         Bill,
         r#"INSERT INTO recurring_bills
-             (user_id, name, amount, due_day, category_id, closing_day, installments, last_month)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+             (user_id, name, amount, due_day, category_id, closing_day, installments, last_month,
+              variable)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
          RETURNING id, category_id, name, amount, due_day,
                    (last_month IS NULL OR installments IS NOT NULL) AS "active!", closing_day,
-                   last_month, installments"#,
+                   last_month, installments, variable"#,
         user_id,
         bill.name,
         bill.amount,
@@ -107,7 +108,8 @@ pub async fn insert(
         bill.category_id,
         bill.closing_day,
         bill.installments,
-        bill.last_month
+        bill.last_month,
+        bill.variable
     )
     .fetch_one(&mut *conn)
     .await
@@ -127,14 +129,14 @@ pub async fn update(
         Bill,
         r#"UPDATE recurring_bills
          SET name = $3, amount = $4, due_day = $5, category_id = $6, closing_day = $7,
-             last_month = $8, installments = $10,
+             last_month = $8, installments = $10, variable = $11,
              active_since = CASE WHEN $9 THEN (now() AT TIME ZONE 'America/Sao_Paulo')::date
                                  ELSE active_since END,
              updated_at = now()
          WHERE user_id = $1 AND id = $2 AND archived_at IS NULL
          RETURNING id, category_id, name, amount, due_day,
                    (last_month IS NULL OR installments IS NOT NULL) AS "active!", closing_day,
-                   last_month, installments"#,
+                   last_month, installments, variable"#,
         user_id,
         id,
         bill.name,
@@ -144,7 +146,8 @@ pub async fn update(
         bill.closing_day,
         last_month,
         restart,
-        bill.installments
+        bill.installments,
+        bill.variable
     )
     .fetch_optional(&mut *conn)
     .await
@@ -231,16 +234,19 @@ pub async fn insert_all(
         })
         .collect();
     let closing_days: Vec<Option<i16>> = bills.iter().map(|bill| bill.closing_day).collect();
+    let variables: Vec<bool> = bills.iter().map(|bill| bill.variable).collect();
     sqlx::query!(
-        "INSERT INTO recurring_bills (user_id, name, amount, due_day, category_id, closing_day)
+        "INSERT INTO recurring_bills
+           (user_id, name, amount, due_day, category_id, closing_day, variable)
          SELECT $1, * FROM UNNEST($2::text[], $3::numeric[], $4::smallint[], $5::uuid[],
-                                  $6::smallint[])",
+                                  $6::smallint[], $7::boolean[])",
         user_id,
         &names as &[&str],
         &amounts as &[Option<rust_decimal::Decimal>],
         &due_days,
         &category_ids,
-        &closing_days as &[Option<i16>]
+        &closing_days as &[Option<i16>],
+        &variables
     )
     .execute(&mut *conn)
     .await?;
@@ -312,7 +318,7 @@ pub async fn find_any_card(
         Bill,
         r#"SELECT id, category_id, name, amount, due_day,
                   (last_month IS NULL OR installments IS NOT NULL) AS "active!", closing_day,
-                  last_month, installments
+                  last_month, installments, variable
          FROM recurring_bills
          WHERE user_id = $1 AND id = $2 AND closing_day IS NOT NULL"#,
         user_id,
@@ -361,6 +367,7 @@ mod tests {
             closing_day: None,
             installments: None,
             last_month: None,
+            variable: false,
         }
     }
 

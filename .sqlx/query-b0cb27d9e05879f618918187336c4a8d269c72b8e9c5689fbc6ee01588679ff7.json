@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, category_id, name, amount, due_day,\n                  (last_month IS NULL OR installments IS NOT NULL) AS \"active!\", closing_day,\n                  last_month, installments\n         FROM recurring_bills\n         WHERE user_id = $1 AND id = $2 AND (archived_at IS NULL OR closing_day IS NOT NULL)",
+  "query": "INSERT INTO recurring_bills\n             (user_id, name, amount, due_day, category_id, closing_day, installments, last_month,\n              variable)\n         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)\n         RETURNING id, category_id, name, amount, due_day,\n                   (last_month IS NULL OR installments IS NOT NULL) AS \"active!\", closing_day,\n                   last_month, installments, variable",
   "describe": {
     "columns": [
       {
@@ -96,12 +96,30 @@
             "name": "installments"
           }
         }
+      },
+      {
+        "ordinal": 9,
+        "name": "variable",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "recurring_bills",
+            "name": "variable"
+          }
+        }
       }
     ],
     "parameters": {
       "Left": [
         "Uuid",
-        "Uuid"
+        "Text",
+        "Numeric",
+        "Int2",
+        "Uuid",
+        "Int2",
+        "Int2",
+        "Date",
+        "Bool"
       ]
     },
     "nullable": [
@@ -113,8 +131,9 @@
       null,
       true,
       true,
-      true
+      true,
+      false
     ]
   },
-  "hash": "3ec9e549373bcf88646d9e8d51067be24f3ed6656695022b25035736ac95a2e7"
+  "hash": "b0cb27d9e05879f618918187336c4a8d269c72b8e9c5689fbc6ee01588679ff7"
 }

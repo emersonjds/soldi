@@ -74,6 +74,10 @@ const Caption = ({ bill, paidOn }: { bill: BillOfMonth; paidOn?: string }) => {
   );
 };
 
+/** A card or a variable bill opens Pagar instead of booking its amount (D44). */
+const payLabel = (bill: BillOfMonth, label: string) =>
+  bill.is_card || bill.variable ? `Pagar ${label}` : `Marcar ${label} como paga`;
+
 /** A 24 px circle inside a 44 px target; the fill and the tick scale in 150 ms (spec §4.7). */
 const RoundCheck = ({
   bill,
@@ -89,7 +93,7 @@ const RoundCheck = ({
   <button
     type="button"
     aria-pressed={bill.paid}
-    aria-label={bill.paid ? `Desmarcar ${label}` : `Marcar ${label} como paga`}
+    aria-label={bill.paid ? `Desmarcar ${label}` : payLabel(bill, label)}
     onClick={onToggle}
     disabled={busy}
     className="group/check -ml-2 hidden size-11 shrink-0 items-center justify-center rounded-full focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-60 lg:flex"
@@ -142,18 +146,22 @@ const Row = ({
   const late = carriedFrom(bill, month);
   const title = billTitle(bill);
   const label = late ? `${title} de ${late}` : title;
+  const estimated = bill.variable && !bill.paid;
   const parcel =
     bill.installments &&
     (bill.installment === bill.installments ? "última parcela" : `${bill.installment}/${bill.installments}`);
   const amount = (
-    <Money
-      amount={bill.amount}
-      className={cn(
-        "text-sm sm:text-base lg:text-lg",
-        bill.paid ? "text-muted-foreground" : "font-bold",
-        bill.overdue && "text-expense",
-      )}
-    />
+    <span className="whitespace-nowrap">
+      {estimated && <span aria-hidden>≈ </span>}
+      <Money
+        amount={bill.amount}
+        className={cn(
+          "text-sm sm:text-base lg:text-lg",
+          bill.paid ? "text-muted-foreground" : "font-bold",
+          bill.overdue && "text-expense",
+        )}
+      />
+    </span>
   );
   const name = (
     <>
@@ -177,6 +185,7 @@ const Row = ({
               </span>
             </>
           )}
+          {estimated && <span className="whitespace-nowrap text-muted-foreground text-sm"> · valor variável</span>}
         </span>
         <Caption bill={bill} paidOn={paidOn} />
       </span>
@@ -209,7 +218,7 @@ const Row = ({
       ) : (
         <button
           type="button"
-          aria-label={`${formatMoney(bill.amount, currency)}: ajustar pagamento de ${label}`}
+          aria-label={`${estimated ? "valor estimado " : ""}${formatMoney(bill.amount, currency)}: ajustar pagamento de ${label}`}
           onClick={onAdjust}
           className="min-h-11 shrink-0 rounded-lg px-1 transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"
         >
@@ -241,7 +250,9 @@ export const BillsOfMonth = ({ view, className }: { view: Schemas["MonthView"]; 
   const shown = bills.filter((bill) => day === null || bill.due_date === day);
   const paid = bills.filter((bill) => bill.paid).length;
   const next = nextDue(bills, todayISO());
-  let upcoming = next && `Próxima: dia ${next.due_date.slice(8)} · ${formatMoney(next.amount, currency)}`;
+  let upcoming =
+    next &&
+    `Próxima: dia ${next.due_date.slice(8)} · ${next.variable ? "≈ " : ""}${formatMoney(next.amount, currency)}`;
   if (paid === bills.length) upcoming = ALL_BILLS_PAID;
 
   const adjust = (bill: BillOfMonth) => {
@@ -249,9 +260,9 @@ export const BillsOfMonth = ({ view, className }: { view: Schemas["MonthView"]; 
     setSheetOpen(true);
   };
 
-  // A fatura is paid only through the sheet: the API wants its amount (D28).
+  // A fatura and a variable bill are paid only through the sheet (D28, D44).
   const payNow = (bill: BillOfMonth) => {
-    if (bill.is_card) return adjust(bill);
+    if (bill.is_card || bill.variable) return adjust(bill);
     const month = bill.due_date.slice(0, 7);
     pay.mutate(
       { billId: bill.bill_id, month, date: payDateFor(month, bill.due_date) },

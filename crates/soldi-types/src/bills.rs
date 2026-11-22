@@ -23,6 +23,8 @@ pub struct Bill {
     pub last_month: Option<chrono::NaiveDate>,
     /// Set on a parcelado bill: `last_month` holds parcela `installments`.
     pub installments: Option<i16>,
+    /// The amount is an estimate that changes every month (D44); never on a card.
+    pub variable: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
@@ -53,6 +55,9 @@ pub struct CreateBill {
     /// last parcela. Only with `installments`.
     #[serde(default)]
     pub last_month: Option<chrono::NaiveDate>,
+    /// The amount is an estimate that changes every month (D44). Not on a card.
+    #[serde(default)]
+    pub variable: bool,
 }
 
 /// Absent fields stay as they are. `active: false` is Parar: the bill owes up to this month or its
@@ -83,6 +88,9 @@ pub struct UpdateBill {
     /// Sent with `installments`; not before the latest paid month.
     #[serde(default)]
     pub last_month: Option<chrono::NaiveDate>,
+    /// Marks the amount as an estimate (D44). Not on a card.
+    #[serde(default)]
+    pub variable: Option<bool>,
 }
 
 /// `amount` defaults to the bill's amount and is required for a card; the bill never changes.

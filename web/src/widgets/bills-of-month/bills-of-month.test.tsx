@@ -545,6 +545,58 @@ describe("Contas a pagar", () => {
     expect(screen.queryByRole("region")).not.toBeInTheDocument();
   });
 
+  describe("a variable conta fixa (SOL-152)", () => {
+    const LUZ: Schemas["BillOfMonth"] = {
+      ...BILLS_OF_MONTH[1],
+      bill_id: "b-luz",
+      name: "Luz",
+      amount: "180.00",
+      due_date: "2026-11-25",
+      variable: true,
+    };
+
+    it("marks an unpaid variable bill with ≈ and valor variável; its round check and Pagar open the sheet with the estimate and send nothing", async () => {
+      const { requests } = show([LUZ]);
+      await loaded();
+
+      const row = rowOf("Luz");
+      expect(row).toHaveTextContent("Luz · valor variável");
+      expect(row).toHaveTextContent("≈ R$ 180,00");
+      expect(
+        within(row).getByRole("button", { name: /^valor estimado R\$\s180,00: ajustar pagamento de Luz$/ }),
+      ).toBeInTheDocument();
+
+      const [check, pill] = within(row).getAllByRole("button", { name: "Pagar Luz" });
+      expect(pill).toBeDefined();
+      await userEvent.click(check);
+      const sheet = await screen.findByRole("dialog", { name: "Pagar Luz" });
+      expect(within(sheet).getByLabelText("Valor")).toHaveValue("180,00");
+      await userEvent.click(within(sheet).getByRole("button", { name: "Fechar" }));
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+
+      await userEvent.click(within(rowOf("Luz")).getAllByRole("button", { name: "Pagar Luz" })[1]);
+      expect(await screen.findByRole("dialog", { name: "Pagar Luz" })).toBeInTheDocument();
+      expect(requests.some((request) => request.method === "POST")).toBe(false);
+    });
+
+    it("shows a paid variable bill's amount with no mark", async () => {
+      show([{ ...LUZ, paid: true, transaction_id: "t-paid" }]);
+      await loaded();
+
+      const row = rowOf("Luz");
+      expect(row).toHaveTextContent("R$ 180,00");
+      expect(row).not.toHaveTextContent("≈");
+      expect(row).not.toHaveTextContent("valor variável");
+    });
+
+    it("says Próxima with ≈ when the next bill is variable", async () => {
+      show([LUZ]);
+      await loaded();
+
+      expect(card()).toHaveTextContent("Próxima: dia 25 · ≈ R$ 180,00");
+    });
+  });
+
   describe("a card's fatura", () => {
     it("reads Fatura Porto with the fatura; Pagar opens the sheet pre-filled with the hint and posts the amount", async () => {
       const { requests } = show([FATURA], { "POST /api/bills/card-porto/pay": { status: 201, body: PAYMENT } });
@@ -552,7 +604,7 @@ describe("Contas a pagar", () => {
 
       expect(rowOf("Fatura Porto")).toHaveTextContent("Fatura Porto");
       expect(rowOf("Fatura Porto")).toHaveTextContent("R$ 450,00");
-      await userEvent.click(within(rowOf("Fatura Porto")).getByRole("button", { name: "Pagar Fatura Porto" }));
+      await userEvent.click(within(rowOf("Fatura Porto")).getAllByRole("button", { name: "Pagar Fatura Porto" })[1]);
       const sheet = await screen.findByRole("dialog", { name: "Pagar Fatura Porto" });
       expect(requests.some((request) => request.method === "POST")).toBe(false);
       expect(within(sheet).getByLabelText("Valor")).toHaveValue("450,00");
@@ -568,7 +620,9 @@ describe("Contas a pagar", () => {
       const { requests } = show([FATURA]);
       await loaded();
 
-      await userEvent.click(within(rowOf("Fatura Porto")).getByRole("button", { name: /^Marcar Fatura Porto/ }));
+      const [check, pill] = within(rowOf("Fatura Porto")).getAllByRole("button", { name: "Pagar Fatura Porto" });
+      expect(pill).toBeDefined();
+      await userEvent.click(check);
 
       expect(await screen.findByRole("dialog", { name: "Pagar Fatura Porto" })).toBeInTheDocument();
       expect(requests.some((request) => request.method === "POST")).toBe(false);
@@ -612,7 +666,7 @@ describe("Contas a pagar", () => {
       await userEvent.click(within(panel).getByRole("button", { name: "Fechar" }));
       await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
 
-      await userEvent.click(within(rowOf("Fatura Porto")).getByRole("button", { name: "Pagar Fatura Porto" }));
+      await userEvent.click(within(rowOf("Fatura Porto")).getAllByRole("button", { name: "Pagar Fatura Porto" })[1]);
       const sheet = await screen.findByRole("dialog", { name: "Pagar Fatura Porto" });
       serverHas([{ ...FATURA, paid: true, transaction_id: "t-paid" }]);
       await userEvent.click(within(sheet).getByRole("button", { name: "Confirmar" }));
@@ -626,10 +680,14 @@ describe("Contas a pagar", () => {
       show([FATURA], FATURA_REPLIES);
       await loaded();
       const row = () => rowOf("Fatura Porto");
-      const pays = [/^Marcar Fatura Porto/, /: ajustar pagamento de Fatura Porto$/, "Pagar Fatura Porto"];
+      const pays = () => [
+        ...within(row()).getAllByRole("button", { name: "Pagar Fatura Porto" }),
+        within(row()).getByRole("button", { name: /: ajustar pagamento de Fatura Porto$/ }),
+      ];
+      expect(pays()).toHaveLength(3);
 
-      for (const name of pays) {
-        await userEvent.click(within(row()).getByRole("button", { name }));
+      for (const index of [0, 1, 2]) {
+        await userEvent.click(pays()[index]);
         expect(await screen.findByRole("dialog", { name: "Pagar Fatura Porto" })).toBeInTheDocument();
         expect(screen.queryByRole("dialog", { name: "Fatura Porto" })).not.toBeInTheDocument();
         await userEvent.click(screen.getByRole("button", { name: "Fechar" }));

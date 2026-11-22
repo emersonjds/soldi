@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "UPDATE recurring_bills\n         SET name = $3, amount = $4, due_day = $5, category_id = $6, closing_day = $7,\n             last_month = $8, installments = $10,\n             active_since = CASE WHEN $9 THEN (now() AT TIME ZONE 'America/Sao_Paulo')::date\n                                 ELSE active_since END,\n             updated_at = now()\n         WHERE user_id = $1 AND id = $2 AND archived_at IS NULL\n         RETURNING id, category_id, name, amount, due_day,\n                   (last_month IS NULL OR installments IS NOT NULL) AS \"active!\", closing_day,\n                   last_month, installments",
+  "query": "SELECT id, category_id, name, amount, due_day,\n                  (last_month IS NULL OR installments IS NOT NULL) AS \"active!\", closing_day,\n                  last_month, installments, variable\n         FROM recurring_bills\n         WHERE user_id = $1 AND archived_at IS NULL\n           AND ($2 OR last_month IS NULL OR last_month >= $3)\n         ORDER BY due_day, lower(name), id",
   "describe": {
     "columns": [
       {
@@ -96,20 +96,24 @@
             "name": "installments"
           }
         }
+      },
+      {
+        "ordinal": 9,
+        "name": "variable",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "recurring_bills",
+            "name": "variable"
+          }
+        }
       }
     ],
     "parameters": {
       "Left": [
         "Uuid",
-        "Uuid",
-        "Text",
-        "Numeric",
-        "Int2",
-        "Uuid",
-        "Int2",
-        "Date",
         "Bool",
-        "Int2"
+        "Date"
       ]
     },
     "nullable": [
@@ -121,8 +125,9 @@
       null,
       true,
       true,
-      true
+      true,
+      false
     ]
   },
-  "hash": "bde2a6aa913d1d8e1aac91b94ba1837be43aeab9d41aa11e4906da9b94e00189"
+  "hash": "f663c6194d2d855d9f9356934e34aeec2694260596ad2a7bd274557545ddc761"
 }

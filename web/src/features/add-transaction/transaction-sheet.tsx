@@ -29,6 +29,7 @@ import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { monthsBetween } from "@/entities/bill/bill-plan";
 import { type BillPrefill, useCards, useCreateBill } from "@/entities/bill/bill-queries";
 import { CategoryChips, useCategoryChips } from "@/entities/category/category-chips";
 import { useSettings } from "@/entities/settings/settings-query";
@@ -47,7 +48,7 @@ import { useIsLg } from "@/hooks/use-lg";
 import { cn } from "@/lib/utils";
 import { ApiError, problemMessage, type Schemas } from "@/shared/api/client";
 import { useCurrency } from "@/shared/lib/currency";
-import { isoWeekStart, todayISO, weekdayName } from "@/shared/lib/date";
+import { isoWeekStart, lastDay, todayISO, weekdayName } from "@/shared/lib/date";
 import { formatMoney, positiveAmount } from "@/shared/lib/money";
 import { cents, fromCents } from "@/shared/lib/tier";
 import { AmountKeypad, useKeypad } from "@/shared/ui/amount-keypad";
@@ -113,12 +114,38 @@ const presetOf = (open: boolean, total: string) => {
   return PRESETS.includes(total) ? total : "other";
 };
 
-const prefillOf = ({ note, category, amount, date }: Source): BillPrefill => ({
-  name: (note ?? category.name).slice(0, 100),
-  amount,
-  due_day: Number(date.slice(8)),
-  category_id: category.id,
-});
+const SERIES_HINT =
+  "Os lançamentos desta série até este mês viram pagamentos desta conta. Os dos próximos meses saem da lista: a conta passa a prever cada mês.";
+
+/** D20's series day: the last member's, or the larger of the two when it sits clamped on its month's last day. */
+const seriesDay = (lastDate: string, date: string) => {
+  const day = Number(lastDate.slice(8));
+  return day === lastDay(lastDate.slice(0, 7)) ? Math.max(day, Number(date.slice(8))) : day;
+};
+
+/**
+ * D44: a series running through this month keeps its end as a parcelado bill, over its month span from the first
+ * member (deleted members leave `total` short of it).
+ */
+const prefillOf = (source: Source): BillPrefill => {
+  const { note, category, amount, date } = source;
+  const prefill = {
+    name: (note ?? category.name).slice(0, 100),
+    amount,
+    due_day: Number(date.slice(8)),
+    category_id: category.id,
+  };
+  const series = "series" in source ? source.series : undefined;
+  if (!series) return prefill;
+  const month = series.last_date.slice(0, 7);
+  const runsOn = !series.open_ended && month >= todayISO().slice(0, 7);
+  const installments = Math.max(series.total, monthsBetween(date, month) + series.position);
+  return {
+    ...prefill,
+    due_day: seriesDay(series.last_date, date),
+    ...(runsOn && { installments, last_month: `${month}-01` }),
+  };
+};
 
 const TransactionForm = ({
   initial,
@@ -256,7 +283,15 @@ const TransactionForm = ({
     save();
   };
 
-  const convertible = onConvert && (transaction?.kind ?? draft.kind) === "bill" && !counting;
+  // D44: the server takes a monthly series member, never a weekly or yearly one, and one that ended before this
+  // month leaves nothing to owe.
+  const ended = series != null && series.last_date.slice(0, 7) < todayISO().slice(0, 7);
+  const convertible =
+    onConvert &&
+    (transaction?.kind ?? draft.kind) === "bill" &&
+    !counting &&
+    (series?.every ?? "month") === "month" &&
+    !ended;
 
   // Editar converts the stored entry; its unsaved edits stay out.
   const convert = () => {
@@ -666,6 +701,7 @@ type TransactionSheetProps = {
   /** The bill sheet that Criar como Conta Fixa opens; absent, the link is not offered. */
   billSheet?: (props: {
     prefill: BillPrefill;
+    hint?: string;
     onOpenChange: (open: boolean) => void;
     onCreate: (bill: BillPrefill) => void;
   }) => ReactNode;
@@ -755,9 +791,11 @@ export const TransactionSheet = ({
       { ...bill, transactionId },
       {
         onSuccess: () => toast.success("Conta fixa criada"),
-        onError: () =>
+        onError: (error) =>
           toast.error(
-            transaction ? "Não foi possível criar a conta fixa." : "Lançado, mas a conta fixa não foi criada.",
+            transaction
+              ? (problemMessage(error) ?? "Não foi possível criar a conta fixa.")
+              : "Lançado, mas a conta fixa não foi criada.",
           ),
       },
     );
@@ -838,6 +876,7 @@ export const TransactionSheet = ({
       {converting &&
         billSheet?.({
           prefill: prefillOf(converting),
+          hint: "series" in converting && converting.series ? SERIES_HINT : undefined,
           onOpenChange: (open) => open || setConverting(undefined),
           onCreate: (bill) => void convert(converting, bill),
         })}

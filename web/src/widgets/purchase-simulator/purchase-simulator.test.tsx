@@ -33,6 +33,7 @@ const outflow = (name: string, amount: string, on = "2027-03-15"): Schemas["Bill
   due_date: on,
   icon: "receipt",
   is_card: false,
+  variable: false,
   lands_on: on,
   name,
   overdue: false,

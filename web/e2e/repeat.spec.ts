@@ -466,3 +466,68 @@ test("a future Conta on Recorrente Sempre becomes a conta fixa paid on its day, 
   await expect(ledger.locator(`#dia-${due}`).getByText("Gás")).toHaveCount(1);
   await expect(ledger.getByText("Conta fixa · a pagar")).toHaveCount(0);
 });
+
+test("a 24x Conta series from three months ago becomes a variable conta fixa; past months keep their totals", async ({
+  page,
+  request,
+}) => {
+  await requireServer(request);
+  test.setTimeout(90_000);
+  const api = page.request;
+  await api.post("/api/auth/sign-up", {
+    data: { email: `e2e-series-bill-${Date.now()}@example.com`, password: "uma-senha-bem-longa" },
+  });
+  await api.post("/api/onboarding", { data: { opening_balance: "5000.00", opening_date: `${monthFrom(-3)}-01` } });
+  await api.post("/api/me/tour-seen");
+  await page.setViewportSize({ width: 375, height: 812 });
+  const categories: { id: string; kind: string; is_savings: boolean }[] = await (
+    await api.get("/api/categories")
+  ).json();
+  const billCategory = categories.find((category) => category.kind === "bill" && !category.is_savings);
+  const created = await api.post("/api/transactions", {
+    data: {
+      date: `${monthFrom(-3)}-01`,
+      amount: "500.00",
+      kind: "bill",
+      category_id: billCategory?.id,
+      note: "Porto",
+      repeat_months: 24,
+    },
+  });
+  expect(created.ok()).toBe(true);
+  const past = monthFrom(-2);
+  const totalsOf = async (month: string) => {
+    const { totals, projected_balance } = await (await api.get(`/api/months/${month}`)).json();
+    return { totals, projected_balance };
+  };
+  const before = await totalsOf(past);
+
+  await page.goto(`/mes?m=${past}`);
+  await page
+    .getByRole("region", { name: "Lançamentos" })
+    .getByRole("button", { name: /^Porto/ })
+    .click();
+  await page.getByRole("dialog", { name: "Porto" }).getByRole("button", { name: "Editar" }).click();
+  await page
+    .getByRole("dialog", { name: "Editar Lançamento Recorrente" })
+    .getByRole("button", { name: "Criar como Conta Fixa" })
+    .click();
+  const sheet = page.getByRole("dialog", { name: "Nova conta" });
+  await expect(sheet).toContainText("Os lançamentos desta série até este mês viram pagamentos desta conta.");
+  await expect(sheet.getByRole("switch", { name: "Parcelado" })).toBeChecked();
+  await sheet.getByRole("switch", { name: "Valor varia todo mês" }).click();
+  await sheet.getByRole("button", { name: "Salvar Conta Fixa" }).click();
+  await expect(page.getByText("Conta fixa criada")).toBeVisible();
+
+  await page.goto(`/mes?m=${monthFrom(0)}`);
+  const thisMonth = page.getByRole("region", { name: "Contas a pagar" }).getByRole("listitem", { name: "Porto" });
+  await expect(thisMonth).toContainText("R$ 500,00");
+  await expect(thisMonth).not.toContainText("≈");
+  await page.goto(`/mes?m=${monthFrom(1)}`);
+  const nextMonth = page.getByRole("region", { name: "Contas a pagar" }).getByRole("listitem", { name: "Porto" });
+  await expect(nextMonth).toContainText("≈");
+  await expect(nextMonth).toContainText("valor variável");
+
+  expect(await totalsOf(past)).toEqual(before);
+  expect(await (await api.get(`/api/transactions?month=${monthFrom(1)}`)).json()).toEqual([]);
+});
