@@ -74,6 +74,10 @@ const Caption = ({ bill, paidOn }: { bill: BillOfMonth; paidOn?: string }) => {
   );
 };
 
+/** A card or a variable bill opens Pagar instead of booking its amount (D44). */
+const payLabel = (bill: BillOfMonth, label: string) =>
+  bill.is_card || bill.variable ? `Pagar ${label}` : `Marcar ${label} como paga`;
+
 /** A 24 px circle inside a 44 px target; the fill and the tick scale in 150 ms (spec §4.7). */
 const RoundCheck = ({
   bill,
@@ -89,7 +93,7 @@ const RoundCheck = ({
   <button
     type="button"
     aria-pressed={bill.paid}
-    aria-label={bill.paid ? `Desmarcar ${label}` : `Marcar ${label} como paga`}
+    aria-label={bill.paid ? `Desmarcar ${label}` : payLabel(bill, label)}
     onClick={onToggle}
     disabled={busy}
     className="group/check -ml-2 hidden size-11 shrink-0 items-center justify-center rounded-full focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-60 lg:flex"
