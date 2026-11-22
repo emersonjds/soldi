@@ -679,6 +679,16 @@ describe("Contas a pagar", () => {
       expect(rows()).toEqual(["Luz (Enel)", "Aluguel Residencial", "Água", "Fatura Porto"]);
     });
 
+    it("keeps the month's numbers in a group's summary while a day is chosen", async () => {
+      show(MIXED);
+      await loaded();
+
+      await userEvent.click(within(chips()).getByRole("radio", { name: /^dia 10,/ }));
+
+      expect(rows()).toEqual(["Aluguel Residencial"]);
+      expect(header("Valor fixo")).toHaveTextContent("0 de 2 pagas · falta R$ 2.543,66 · 1 vencida");
+    });
+
     it("keeps a large amount left on its own unbroken fragment", async () => {
       show([{ ...BILLS_OF_MONTH[1], amount: "99999.99" }, AGUA]);
       await loaded();
@@ -713,6 +723,22 @@ describe("Contas a pagar", () => {
 
       expect(await screen.findByText("Conta salva")).toBeInTheDocument();
       expect(sent(requests, "PATCH")).toHaveLength(1);
+    });
+
+    it("reads the row's caption as the edit button's description", async () => {
+      show([{ ...BILLS_OF_MONTH[0], variable: true }], EDITING);
+      await loaded();
+
+      expect(editOf("Luz (Enel)")).toHaveAccessibleDescription(/Venceu dia 02\/11/);
+      expect(editOf("Luz (Enel)")).toHaveAccessibleDescription(/valor variável/);
+    });
+
+    it("hides the chevron while the name cannot open Editar conta", async () => {
+      show(BILLS_OF_MONTH);
+      await loaded();
+
+      expect(editOf("Luz (Enel)")).toBeDisabled();
+      expect(editOf("Luz (Enel)").querySelector(".lucide-chevron-right")).toBeNull();
     });
 
     it("names a carried row's edit after its month and leaves a card on its fatura", async () => {
@@ -788,6 +814,29 @@ describe("Contas a pagar", () => {
         expect(await screen.findByText("Não foi possível excluir a conta fixa.")).toBeInTheDocument();
         expect(screen.queryByText("Texto do servidor.")).not.toBeInTheDocument();
         expect(rows()).toEqual(["Luz (Enel)", "Aluguel Residencial"]);
+      });
+
+      it("puts the focus on the card's title once the row is gone", async () => {
+        show(BILLS_OF_MONTH, EDITING);
+        await loaded();
+
+        await remove("Luz (Enel)");
+        await screen.findByText("Conta fixa excluída");
+
+        await waitFor(() => expect(within(card()).getByRole("heading", { level: 2 }).firstElementChild).toHaveFocus());
+      });
+
+      it("lets go of a chosen day once its only bill is gone", async () => {
+        show(BILLS_OF_MONTH, EDITING);
+        await loaded();
+        const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+        await user.click(within(chips()).getByRole("radio", { name: /^dia 02,/ }));
+        expect(rows()).toEqual(["Luz (Enel)"]);
+
+        await remove("Luz (Enel)");
+        await screen.findByText("Conta fixa excluída");
+
+        expect(rows()).toEqual(["Aluguel Residencial"]);
       });
 
       it("drops the card with its last bill and Desfazer brings it back", async () => {

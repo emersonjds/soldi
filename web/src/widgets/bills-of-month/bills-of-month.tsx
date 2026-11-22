@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useRef, useState } from "react";
 
 import Link from "next/link";
 
@@ -210,6 +210,7 @@ const Row = ({
   busy: boolean;
 }) => {
   const currency = useCurrency();
+  const captionId = useId();
   const late = carriedFrom(bill, month);
   const title = billTitle(bill);
   const label = late ? `${title} de ${late}` : title;
@@ -233,7 +234,7 @@ const Row = ({
   const name = (
     <>
       <CategoryIcon icon={bill.icon} color={bill.color} tintedOnDesktop />
-      <span className="flex min-w-0 flex-1 flex-col items-start gap-1">
+      <span id={captionId} className="flex min-w-0 flex-1 flex-col items-start gap-1">
         <span className="flex max-w-full flex-wrap items-baseline gap-x-1">
           <span
             title={title}
@@ -270,12 +271,13 @@ const Row = ({
       <button
         type="button"
         aria-label={`${bill.is_card ? "Ver" : "Editar"} ${label}`}
+        aria-describedby={captionId}
         onClick={onOpenName}
         disabled={!onOpenName}
         className="flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-lg text-left focus-visible:outline-2 focus-visible:outline-ring sm:gap-3"
       >
         {name}
-        <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+        {onOpenName && <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />}
       </button>
       {bill.paid ? (
         amount
@@ -308,6 +310,7 @@ export const BillsOfMonth = ({ view, className }: { view: Schemas["MonthView"]; 
   const [editing, setEditing] = useState<Bill>();
   const [editOpen, setEditOpen] = useState(false);
   const [hidden, setHidden] = useState<string[]>([]);
+  const title = useRef<HTMLSpanElement>(null);
   const saved = useBills({ includeInactive: true });
   const archiveLater = useArchiveLater(
     (id) => setHidden((ids) => [...ids, id]),
@@ -319,7 +322,7 @@ export const BillsOfMonth = ({ view, className }: { view: Schemas["MonthView"]; 
   const transactions = useTransactions(view.month);
   const paidOn = new Map(transactions.data?.map((transaction) => [transaction.id, transaction.date]));
   const bills = view.bills_of_month.filter((bill) => !hidden.includes(bill.bill_id));
-  const day = chosen?.month === view.month ? chosen.date : null;
+  const day = chosen?.month === view.month && bills.some((bill) => bill.due_date === chosen.date) ? chosen.date : null;
   const shown = bills.filter((bill) => day === null || bill.due_date === day);
   const late = overdueOf(bills);
   const next = nextDue(bills, todayISO());
@@ -395,7 +398,11 @@ export const BillsOfMonth = ({ view, className }: { view: Schemas["MonthView"]; 
   return (
     <DashCard
       title={
-        <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <span
+          ref={title}
+          tabIndex={-1}
+          className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-sm focus-visible:outline-2 focus-visible:outline-ring"
+        >
           <span aria-hidden className="h-4 w-1 rounded-full bg-primary lg:hidden" />
           Contas a pagar
           <span className="inline-flex rounded-full bg-muted px-2 font-medium text-muted-foreground text-xs leading-5">
@@ -489,7 +496,17 @@ export const BillsOfMonth = ({ view, className }: { view: Schemas["MonthView"]; 
         open={sheetOpen}
         onOpenChange={setSheetOpen}
       />
-      <EditBillSheet open={editOpen} onOpenChange={setEditOpen} bill={editing} onArchive={archiveLater} />
+      <EditBillSheet
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        bill={editing}
+        onArchive={archiveLater}
+        onCloseAutoFocus={(event) => {
+          if (!editing || !hidden.includes(editing.id)) return;
+          event.preventDefault();
+          title.current?.focus();
+        }}
+      />
       <FaturaSheet
         bill={fatura}
         open={faturaOpen}

@@ -554,10 +554,20 @@ type EditBillSheetProps = {
   onCreate?: (fields: Schemas["CreateBill"]) => void;
   /** A line above the form. */
   hint?: string;
+  onCloseAutoFocus?: (event: Event) => void;
 };
 
 /** Add or edit a recurring bill: nome, valor, dia 1–31, categoria and, when editing, Ativa; a new one may be a card (D28), which has Fecha dia instead of valor and no pause. */
-export const EditBillSheet = ({ open, onOpenChange, bill, onArchive, prefill, onCreate, hint }: EditBillSheetProps) => {
+export const EditBillSheet = ({
+  open,
+  onOpenChange,
+  bill,
+  onArchive,
+  prefill,
+  onCreate,
+  hint,
+  onCloseAutoFocus,
+}: EditBillSheetProps) => {
   const save = useSaveBill(bill, onCreate);
 
   return (
@@ -566,6 +576,7 @@ export const EditBillSheet = ({ open, onOpenChange, bill, onArchive, prefill, on
       onOpenChange={onOpenChange}
       title={bill ? "Editar conta" : "Nova conta"}
       description="Uma conta que se repete todo mês."
+      onCloseAutoFocus={onCloseAutoFocus}
     >
       {hint && <p className="rounded-xl bg-secondary px-4 py-3 font-medium text-primary text-sm">{hint}</p>}
       <BillForm
