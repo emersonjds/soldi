@@ -1,0 +1,32 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT COALESCE(bool_or(kind <> 'bill' OR card_id IS NOT NULL OR cofrinho_id IS NOT NULL\n                                   OR recurring_bill_id IS NOT NULL), false) AS \"mixed!\",\n                  count(*) FILTER (WHERE date <= $3)\n                    > count(DISTINCT date_trunc('month', date)) FILTER (WHERE date <= $3)\n                    AS \"shared_month!\"\n           FROM transactions WHERE user_id = $1 AND series_id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "mixed!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 1,
+        "name": "shared_month!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Date"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "fec583921ae37ae800b4e384f3bf874f21c112587ef927cd5aca468cc961f213"
+}

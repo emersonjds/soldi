@@ -94,8 +94,8 @@ pub async fn check_fatura_open(
     Ok(())
 }
 
-/// R8 (SOL-21): with `transaction_id`, that entry becomes the new bill's payment, in the
-/// same database transaction.
+/// R8 (SOL-21), D44: with `transaction_id`, that entry becomes the new bill's payment; a monthly
+/// series member brings its series. Same database transaction.
 pub async fn create(
     pool: &PgPool,
     user: &CurrentUser,
@@ -113,11 +113,30 @@ pub async fn create(
         ));
     }
     let mut tx = pool.begin().await?;
+    // D44: the series and the last day its members stay as payments.
+    let mut series = None;
     if let Some(id) = transaction_id {
         let entry = transactions::repo::find(&mut tx, user.id, id)
             .await?
             .ok_or(AppError::NotFound)?;
-        transactions::domain::check_convertible(&entry)?;
+        match &entry.series {
+            None => transactions::domain::check_convertible(&entry)?,
+            Some(member) => {
+                transactions::domain::check_series_convertible(&entry)?;
+                transactions::repo::lock_series(&mut tx, member.id).await?;
+                let through = month_end(first_of(crate::today_sao_paulo()));
+                let blockers =
+                    transactions::repo::series_blockers(&mut tx, user.id, member.id, through)
+                        .await?;
+                if blockers.mixed {
+                    return Err(transactions::domain::cannot_become_bill());
+                }
+                if blockers.shared_month {
+                    return Err(transactions::domain::series_shared_month());
+                }
+                series = Some((member.id, through));
+            }
+        }
     }
     let category_id = match input.category_id {
         Some(id) => {
@@ -138,10 +157,20 @@ pub async fn create(
         ..input
     };
     let bill = repo::insert(&mut tx, user.id, &input).await?;
-    if let Some(id) = transaction_id
-        && !transactions::repo::link_bill(&mut tx, user.id, id, bill.id, bill.category_id).await?
-    {
-        return Err(transactions::domain::cannot_become_bill());
+    match (transaction_id, series) {
+        (Some(_), Some((series_id, through))) => {
+            transactions::repo::link_series(&mut tx, user.id, series_id, bill.id, through)
+                .await
+                .map_err(transactions::service::paid_once)?;
+        }
+        (Some(id), None) => {
+            if !transactions::repo::link_bill(&mut tx, user.id, id, bill.id, bill.category_id)
+                .await?
+            {
+                return Err(transactions::domain::cannot_become_bill());
+            }
+        }
+        (None, _) => {}
     }
     tx.commit().await?;
     Ok(bill)

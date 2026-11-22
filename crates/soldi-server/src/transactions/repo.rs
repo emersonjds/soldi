@@ -546,6 +546,70 @@ pub async fn link_bill(
     Ok(result.rows_affected() == 1)
 }
 
+/// D44: what keeps a series from becoming one conta fixa.
+pub struct SeriesBlockers {
+    /// A member is not a plain `bill` entry.
+    pub mixed: bool,
+    /// Two members dated through `through` share a month.
+    pub shared_month: bool,
+}
+
+pub async fn series_blockers(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    series_id: Uuid,
+    through: NaiveDate,
+) -> Result<SeriesBlockers, sqlx::Error> {
+    let row = sqlx::query!(
+        r#"SELECT COALESCE(bool_or(kind <> 'bill' OR card_id IS NOT NULL OR cofrinho_id IS NOT NULL
+                                   OR recurring_bill_id IS NOT NULL), false) AS "mixed!",
+                  count(*) FILTER (WHERE date <= $3)
+                    > count(DISTINCT date_trunc('month', date)) FILTER (WHERE date <= $3)
+                    AS "shared_month!"
+           FROM transactions WHERE user_id = $1 AND series_id = $2"#,
+        user_id,
+        series_id,
+        through
+    )
+    .fetch_one(&mut *conn)
+    .await?;
+    Ok(SeriesBlockers {
+        mixed: row.mixed,
+        shared_month: row.shared_month,
+    })
+}
+
+/// D44: deletes the series' members after `through`; the rest become `bill_id`'s payments, out of
+/// any series, each keeping its date, amount, note and category.
+pub async fn link_series(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    series_id: Uuid,
+    bill_id: Uuid,
+    through: NaiveDate,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        "DELETE FROM transactions WHERE user_id = $1 AND series_id = $2 AND date > $3",
+        user_id,
+        series_id,
+        through
+    )
+    .execute(&mut *conn)
+    .await?;
+    sqlx::query!(
+        "UPDATE transactions
+         SET recurring_bill_id = $3, series_id = NULL, series_every = NULL, series_open = false,
+             series_offset = 0, updated_at = now()
+         WHERE user_id = $1 AND series_id = $2",
+        user_id,
+        series_id,
+        bill_id
+    )
+    .execute(&mut *conn)
+    .await?;
+    Ok(())
+}
+
 /// Returns false when the user has no entry with this id.
 pub async fn update(
     conn: &mut PgConnection,

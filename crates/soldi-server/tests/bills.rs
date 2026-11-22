@@ -707,6 +707,209 @@ fn from_entry(entry: &serde_json::Value) -> String {
     )
 }
 
+fn month_text(month: chrono::NaiveDate) -> String {
+    month.format("%Y-%m").to_string()
+}
+
+/// The month view's totals and projected balance.
+async fn month_numbers(
+    app: &TestApp,
+    month: chrono::NaiveDate,
+) -> (serde_json::Value, serde_json::Value) {
+    let (_, view) = app.get(&format!("/api/months/{}", month_text(month))).await;
+    (view["totals"].clone(), view["projected_balance"].clone())
+}
+
+async fn listed_in(app: &TestApp, month: chrono::NaiveDate) -> Vec<serde_json::Value> {
+    let (_, listed) = app
+        .get(&format!("/api/transactions?month={}", month_text(month)))
+        .await;
+    listed.as_array().unwrap().clone()
+}
+
+#[sqlx::test]
+async fn sol152_a_monthly_conta_series_becomes_a_conta_fixa_paid_in_its_months(pool: PgPool) {
+    let ana = TestApp::signed_in(pool, "ana@example.com").await;
+    let start = this_month() - chrono::Months::new(3);
+    ana.open_at("5000", &start.to_string()).await;
+    let light = category_id(&ana, "Luz").await;
+    let first = entry(
+        &ana,
+        json!({ "date": start, "amount": "500", "kind": "bill", "category_id": light, "repeat_months": 24 }),
+    )
+    .await;
+    let gap = start + chrono::Months::new(1);
+    let gone = &listed_in(&ana, gap).await[0];
+    ana.delete(&format!(
+        "/api/transactions/{}?scope=this",
+        gone["id"].as_str().unwrap()
+    ))
+    .await;
+    let months: Vec<_> = (0..=3).map(|n| start + chrono::Months::new(n)).collect();
+    let next = this_month() + chrono::Months::new(1);
+    let mut before = Vec::new();
+    for month in &months {
+        before.push(month_numbers(&ana, *month).await);
+    }
+    let next_before = month_numbers(&ana, next).await.1;
+    let year_uri = format!("/api/reports/year?year={}", this_month().format("%Y"));
+    let spending_uri = format!("/api/reports/categories?month={}", month_text(this_month()));
+    let (year, spending) = (ana.get(&year_uri).await.1, ana.get(&spending_uri).await.1);
+    let last_month = start + chrono::Months::new(23);
+    let body = json!({ "name": "Porto", "amount": "500", "due_day": 1, "category_id": light,
+                       "installments": 24, "last_month": last_month });
+
+    let (status, bill) = ana.post(&from_entry(&first), body).await;
+
+    assert_eq!(status, StatusCode::CREATED, "{bill}");
+    assert_eq!(ana.get("/api/bills").await.1.as_array().unwrap().len(), 1);
+    for (month, numbers) in months.iter().zip(&before) {
+        let rows = listed_in(&ana, *month).await;
+        if *month == gap {
+            assert!(rows.is_empty());
+            let (_, view) = ana.get(&format!("/api/months/{}", month_text(gap))).await;
+            let row = &view["bills_of_month"][0];
+            assert_eq!(
+                (&row["paid"], &row["overdue"], &row["lands_on"]),
+                (&json!(false), &json!(false), &json!(null))
+            );
+        } else {
+            assert_eq!(rows.len(), 1, "{month}");
+            assert_eq!(rows[0]["recurring_bill_id"], bill["id"]);
+            assert_eq!(rows[0]["series"], json!(null));
+            assert_eq!(
+                (&rows[0]["amount"], &rows[0]["date"]),
+                (&json!("500.00"), &json!(month.to_string()))
+            );
+            assert_eq!(rows[0]["category"]["id"], light.to_string());
+        }
+        assert_eq!(&month_numbers(&ana, *month).await, numbers, "{month}");
+    }
+    assert_eq!(month_numbers(&ana, next).await.1, next_before);
+    assert_eq!(ana.get(&year_uri).await.1, year);
+    assert_eq!(ana.get(&spending_uri).await.1, spending);
+    ana.get("/api/forecast").await;
+    assert!(listed_in(&ana, next).await.is_empty());
+    assert!(listed_in(&ana, last_month).await.is_empty());
+}
+
+#[sqlx::test]
+async fn sol152_todays_member_becomes_the_payment_and_later_ones_leave(pool: PgPool) {
+    use chrono::Datelike;
+    let ana = TestApp::signed_in(pool, "ana@example.com").await;
+    let today = soldi_server::today_sao_paulo();
+    ana.open_at("0", &this_month().to_string()).await;
+    let light = category_id(&ana, "Luz").await;
+    let first = entry(
+        &ana,
+        json!({ "date": today, "amount": "300", "kind": "bill", "category_id": light, "repeat_months": 3 }),
+    )
+    .await;
+    let body = json!({ "name": "Psicóloga", "amount": "300", "due_day": today.day(), "category_id": light });
+
+    let (status, bill) = ana.post(&from_entry(&first), body).await;
+
+    assert_eq!(status, StatusCode::CREATED, "{bill}");
+    let rows = listed_in(&ana, this_month()).await;
+    assert_eq!(
+        (rows.len(), &rows[0]["recurring_bill_id"]),
+        (1, &bill["id"])
+    );
+    for ahead in 1..=2 {
+        assert!(
+            listed_in(&ana, this_month() + chrono::Months::new(ahead))
+                .await
+                .is_empty()
+        );
+    }
+    let (_, view) = ana
+        .get(&format!("/api/months/{}", month_text(this_month())))
+        .await;
+    assert_eq!(view["bills_of_month"][0]["paid"], true);
+}
+
+#[sqlx::test]
+async fn sol152_a_series_a_bill_cannot_hold_is_refused_and_nothing_changes(pool: PgPool) {
+    let ana = TestApp::signed_in(pool.clone(), "ana@example.com").await;
+    let bia = ana.another_user("bia@example.com").await;
+    let start = this_month() - chrono::Months::new(2);
+    ana.open_at("0", &start.to_string()).await;
+    bia.open_at("0", &start.to_string()).await;
+    let light = category_id(&ana, "Luz").await;
+    let conta = |date: chrono::NaiveDate, extra: serde_json::Value| {
+        let mut body =
+            json!({ "date": date, "amount": "100", "kind": "bill", "category_id": light });
+        body.as_object_mut()
+            .unwrap()
+            .extend(extra.as_object().unwrap().clone());
+        body
+    };
+    let shared = entry(&ana, conta(start, json!({ "repeat_months": 6 }))).await;
+    let second = &listed_in(&ana, start + chrono::Months::new(1)).await[0];
+    let (status, _) = ana
+        .patch(
+            &format!(
+                "/api/transactions/{}?scope=this",
+                second["id"].as_str().unwrap()
+            ),
+            json!({ "date": start + chrono::Days::new(14) }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    let weekly = entry(
+        &ana,
+        conta(start, json!({ "repeat_months": 3, "repeat_every": "week" })),
+    )
+    .await;
+    let yearly = entry(
+        &ana,
+        conta(start, json!({ "repeat_months": 2, "repeat_every": "year" })),
+    )
+    .await;
+    let paid_bill = create(
+        &ana,
+        json!({ "name": "Água", "amount": "80", "due_day": 1, "category_id": light }),
+    )
+    .await;
+    let (_, payment) = ana
+        .post(
+            &format!("{}/pay", bill_uri(&paid_bill)),
+            json!({ "date": this_month() }),
+        )
+        .await;
+    let theirs = entry(
+        &bia,
+        json!({ "date": start, "amount": "100", "kind": "bill",
+                "category_id": category_id(&bia, "Luz").await, "repeat_months": 2 }),
+    )
+    .await;
+    let members = || {
+        sqlx::query_scalar::<_, i64>(
+            "SELECT count(*) FROM transactions WHERE series_id IS NOT NULL",
+        )
+        .fetch_one(&pool)
+    };
+    let held = members().await.unwrap();
+    let body = json!({ "name": "Luz", "amount": "100", "due_day": 1, "category_id": light });
+
+    for (refused, slug) in [
+        (&shared, "series-shared-month"),
+        (&weekly, "cannot-become-bill"),
+        (&yearly, "cannot-become-bill"),
+        (&payment, "cannot-become-bill"),
+    ] {
+        let (status, problem) = ana.post(&from_entry(refused), body.clone()).await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{refused}");
+        assert_eq!(problem["type"], format!("urn:soldi:error:{slug}"));
+    }
+    assert_eq!(
+        ana.post(&from_entry(&theirs), body).await.0,
+        StatusCode::NOT_FOUND
+    );
+    assert_eq!(ana.get("/api/bills").await.1.as_array().unwrap().len(), 1);
+    assert_eq!(members().await.unwrap(), held);
+}
+
 #[sqlx::test]
 async fn r8_a_saida_entry_becomes_a_bill_and_its_payment(pool: PgPool) {
     let ana = TestApp::signed_in(pool, "ana@example.com").await;
@@ -754,7 +957,7 @@ async fn r8_only_the_callers_standalone_saida_becomes_a_bill(pool: PgPool) {
     .await;
     let member = entry(
         &ana,
-        json!({ "date": "2026-11-07", "amount": "10", "kind": "bill", "category_id": rent, "repeat_months": 2 }),
+        json!({ "date": "2026-11-07", "amount": "10", "kind": "bill", "category_id": rent, "repeat_months": 2, "repeat_every": "week" }),
     )
     .await;
     entry(
@@ -1220,16 +1423,16 @@ async fn d33_all_refuses_a_paid_fatura_on_an_earlier_member(pool: PgPool) {
 }
 
 #[sqlx::test]
-async fn d33_a_series_member_never_becomes_a_bill_payment(pool: PgPool) {
+async fn d33_a_yearly_series_member_never_becomes_a_bill_payment(pool: PgPool) {
     let ana = TestApp::signed_in(pool, "ana@example.com").await;
     ana.open_at("0", "2026-11-01").await;
     let rent = category_id(&ana, "Aluguel").await;
     entry(
         &ana,
-        json!({ "date": "2026-11-07", "amount": "10", "kind": "bill", "category_id": rent, "repeat_months": 3 }),
+        json!({ "date": "2026-11-07", "amount": "10", "kind": "bill", "category_id": rent, "repeat_months": 3, "repeat_every": "year" }),
     )
     .await;
-    let (_, december) = ana.get("/api/transactions?month=2026-12").await;
+    let (_, december) = ana.get("/api/transactions?month=2027-11").await;
     let body = json!({ "name": "Aluguel", "amount": "10", "due_day": 7, "category_id": rent });
 
     let (status, problem) = ana.post(&from_entry(&december[0]), body).await;

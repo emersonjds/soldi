@@ -384,6 +384,27 @@ pub fn cannot_become_bill() -> AppError {
     )
 }
 
+/// D44: a member of a monthly `bill` series off any card brings its series into a conta fixa.
+pub fn check_series_convertible(entry: &Transaction) -> Result<(), AppError> {
+    let monthly = entry
+        .series
+        .as_ref()
+        .is_some_and(|series| matches!(series.every, RepeatEvery::Month));
+    let loose =
+        entry.recurring_bill_id.is_none() && entry.cofrinho_id.is_none() && entry.card_id.is_none();
+    if entry.kind != CategoryKind::Bill || !loose || !monthly {
+        return Err(cannot_become_bill());
+    }
+    Ok(())
+}
+
+pub fn series_shared_month() -> AppError {
+    AppError::rule(
+        "series-shared-month",
+        "Two entries of this series fall in one month; delete one first.",
+    )
+}
+
 pub fn check_kind(kind: CategoryKind, category: &Category) -> Result<(), AppError> {
     if kind != category.kind {
         return Err(AppError::invalid(
@@ -773,6 +794,38 @@ mod tests {
             },
         ] {
             assert_eq!(slug(check_convertible(&other)), "cannot-become-bill");
+        }
+    }
+
+    #[test]
+    fn d44_a_monthly_bill_series_member_converts() {
+        let member = Transaction {
+            series: series(),
+            ..saved(CategoryKind::Bill)
+        };
+        assert!(check_series_convertible(&member).is_ok());
+        let step = |every| Transaction {
+            series: series().map(|s| TransactionSeries { every, ..s }),
+            ..member.clone()
+        };
+        for other in [
+            step(RepeatEvery::Week),
+            step(RepeatEvery::Year),
+            Transaction {
+                kind: CategoryKind::Daily,
+                ..member.clone()
+            },
+            Transaction {
+                recurring_bill_id: Some(Uuid::nil()),
+                ..member.clone()
+            },
+            Transaction {
+                card_id: Some(Uuid::nil()),
+                ..member.clone()
+            },
+            saved(CategoryKind::Bill),
+        ] {
+            assert_eq!(slug(check_series_convertible(&other)), "cannot-become-bill");
         }
     }
 
