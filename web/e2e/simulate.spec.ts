@@ -11,7 +11,7 @@ const monthFrom = (offset: number) => {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 };
 
-test("Recorrente 3x writes three parcelas", async ({ page, request }) => {
+test("Parcelado 3x writes three parcelas", async ({ page, request }) => {
   await requireServer(request);
   test.setTimeout(90_000);
 
@@ -33,7 +33,7 @@ test("Recorrente 3x writes three parcelas", async ({ page, request }) => {
   await tabs.getByRole("button", { name: "Lançar" }).click();
   await launch.getByRole("radio", { name: "Conta" }).click();
   await launch.getByLabel("Valor").fill("100,00");
-  await launch.getByRole("switch", { name: "Recorrente" }).click();
+  await launch.getByRole("switch", { name: "Parcelado" }).click();
   await launch.getByRole("radio", { name: "3", exact: true }).click();
   await expect(launch).toContainText("3× de R$ 100,00 · repete todo dia");
   await launch.getByRole("button", { name: "Salvar" }).click();

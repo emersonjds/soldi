@@ -37,7 +37,7 @@ const signUp = async (page: Page, name: string) => {
     .click();
 };
 
-test("a weekly 4x entry lands four rows a week apart", async ({ page, request }) => {
+test("a weekly Parcelado Conta asks for a count, then lands four rows a week apart", async ({ page, request }) => {
   await requireServer(request);
   test.setTimeout(90_000);
   await signUp(page, "weekly");
@@ -48,8 +48,13 @@ test("a weekly 4x entry lands four rows a week apart", async ({ page, request })
   await launch.getByRole("radio", { name: "Conta" }).click();
   await launch.getByLabel("Valor").fill("100,00");
   await launch.getByLabel("Observação").fill("Diarista");
-  await launch.getByRole("switch", { name: "Recorrente" }).click();
+  await expect(launch.getByRole("switch", { name: "Recorrente" })).toHaveCount(0);
+  await expect(launch.getByRole("button", { name: "Criar como Conta Fixa" })).toHaveCount(0);
+  await launch.getByRole("switch", { name: "Parcelado" }).click();
   await launch.getByRole("radio", { name: "Semanal" }).click();
+  await launch.getByRole("button", { name: "Salvar" }).click();
+  await expect(launch.getByRole("alert")).toHaveText("Escolha quantas parcelas.");
+  await expectNoClipped(page);
   await launch.getByRole("radio", { name: "Outro" }).click();
   await launch.getByLabel("Semanas").fill("4");
   await expect(launch.getByText(/repete toda semana até/)).toBeVisible();
@@ -89,7 +94,7 @@ test("Toda a série from the second entry rewrites and deletes the first too, af
   await launch.getByLabel("Valor").fill("100,00");
   await pickDate(launch, "Outra data", `${first}-01`);
   await launch.getByLabel("Observação").fill("Internet");
-  await launch.getByRole("switch", { name: "Recorrente" }).click();
+  await launch.getByRole("switch", { name: "Parcelado" }).click();
   await launch.getByRole("radio", { name: "3", exact: true }).click();
   await launch.getByRole("button", { name: "Salvar" }).click();
   await expect(page.getByText("3 lançamentos criados")).toBeVisible();
@@ -163,7 +168,7 @@ test("an entry repeated 3x shows in three months; edit and delete reach this one
   await launch.getByLabel("Valor").fill("100,00");
   await pickDate(launch, "Outra data", `${first}-01`);
   await launch.getByLabel("Observação").fill("Internet");
-  await launch.getByRole("switch", { name: "Recorrente" }).click();
+  await launch.getByRole("switch", { name: "Parcelado" }).click();
   await launch.getByRole("radio", { name: "3", exact: true }).click();
   await launch.getByRole("button", { name: "Salvar" }).click();
   await expect(page.getByText("3 lançamentos criados")).toBeVisible();
@@ -257,7 +262,7 @@ test("a 12x series shrinks to 6 from its first entry and grows back to 12 from i
   await launch.getByLabel("Valor").fill("100,00");
   await pickDate(launch, "Outra data", `${first}-01`);
   await launch.getByLabel("Observação").fill("Internet");
-  await launch.getByRole("switch", { name: "Recorrente" }).click();
+  await launch.getByRole("switch", { name: "Parcelado" }).click();
   await launch.getByRole("radio", { name: "12", exact: true }).click();
   await launch.getByRole("button", { name: "Salvar" }).click();
   await expect(page.getByText("12 lançamentos criados")).toBeVisible();
@@ -312,7 +317,7 @@ test("a 12x series on the 5th moves to the 10th from its third entry on", async 
   await launch.getByLabel("Valor").fill("100,00");
   await pickDate(launch, "Outra data", `${first}-05`);
   await launch.getByLabel("Observação").fill("Internet");
-  await launch.getByRole("switch", { name: "Recorrente" }).click();
+  await launch.getByRole("switch", { name: "Parcelado" }).click();
   await launch.getByRole("radio", { name: "12", exact: true }).click();
   await launch.getByRole("button", { name: "Salvar" }).click();
   await expect(page.getByText("12 lançamentos criados")).toBeVisible();
@@ -432,10 +437,7 @@ test("a Diário on a card with Recorrente Sempre lands in the faturas ahead", as
   ).toContainText("R$ 39,90");
 });
 
-test("a future Conta on Recorrente Sempre becomes a conta fixa paid on its day, counted once", async ({
-  page,
-  request,
-}) => {
+test("a future Conta on Conta fixa becomes a conta fixa paid on its day, counted once", async ({ page, request }) => {
   await requireServer(request);
   test.setTimeout(90_000);
   await signUp(page, "future-conta");
@@ -449,9 +451,12 @@ test("a future Conta on Recorrente Sempre becomes a conta fixa paid on its day, 
   await launch.getByLabel("Valor").fill("177,31");
   await launch.getByLabel("Observação").fill("Gás");
   await pickDate(launch, "Outra data", due);
-  await launch.getByRole("switch", { name: "Recorrente" }).click();
+  await launch.getByRole("switch", { name: "Conta fixa" }).click();
+  await expect(launch.getByText("Todo mês, sem fim. Ao salvar, abre o cadastro da conta fixa.")).toBeVisible();
+  await expectNoClipped(page);
   await launch.getByRole("button", { name: "Salvar" }).click();
   const sheet = page.getByRole("dialog", { name: "Nova conta" });
+  await expect(sheet.getByLabel("Nome da conta fixa")).toHaveValue("Gás");
   await sheet.getByRole("button", { name: "Salvar Conta Fixa" }).click();
   await expect(page.getByText("Conta fixa criada")).toBeVisible();
 
