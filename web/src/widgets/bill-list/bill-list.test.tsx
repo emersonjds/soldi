@@ -424,7 +424,9 @@ describe("Contas fixas", () => {
       open();
 
       await userEvent.click(await screen.findByRole("button", { name: /^Aluguel Residencial/ }));
-      expect(within(await panel()).getByText("Os pagamentos já feitos continuam nos lançamentos.")).toBeInTheDocument();
+      expect(
+        within(await panel()).getByText("Sai de todos os meses; os pagamentos já feitos continuam nos lançamentos."),
+      ).toBeInTheDocument();
       await userEvent.click(within(await panel()).getByRole("button", { name: "Excluir conta fixa" }));
       expect(await screen.findByText("Conta fixa excluída")).toBeInTheDocument();
       expect(names()).toEqual(["Luz (Enel)", "Academia"]);

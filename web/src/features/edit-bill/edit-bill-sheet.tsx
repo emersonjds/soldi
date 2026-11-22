@@ -443,7 +443,7 @@ export const BillForm = ({
             {bill.closing_day == null ? "Excluir conta fixa" : "Excluir cartão"}
           </Button>
           <p className="text-center text-muted-foreground text-xs">
-            Os pagamentos já feitos continuam nos lançamentos.
+            Sai de todos os meses; os pagamentos já feitos continuam nos lançamentos.
           </p>
         </div>
       )}
@@ -477,18 +477,18 @@ export const useArchiveLater = (onHide: (id: string) => void, onRestore: (id: st
   const archive = useArchiveBill();
   return (bill: Bill) => {
     onHide(bill.id);
+    const card = bill.closing_day != null;
     let undone = false;
     const commit = () => {
       if (undone) return;
       undone = true;
-      archive.mutate(bill.id, {
-        onError: () => {
-          onRestore(bill.id);
-          toast.error("Não foi possível excluir a conta fixa.");
-        },
+      // The screen may be gone by now; mutate's own callbacks would not run.
+      archive.mutateAsync(bill.id).catch(() => {
+        onRestore(bill.id);
+        toast.error(card ? "Não foi possível excluir o cartão." : "Não foi possível excluir a conta fixa.");
       });
     };
-    toast(bill.closing_day == null ? "Conta fixa excluída" : "Cartão excluído", {
+    toast(card ? "Cartão excluído" : "Conta fixa excluída", {
       duration: 5000,
       action: {
         label: "Desfazer",

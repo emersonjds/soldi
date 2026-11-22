@@ -1,12 +1,15 @@
-import { screen, within } from "@testing-library/react";
+import { useState } from "react";
+
+import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { Toaster, toast } from "sonner";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Schemas } from "@/shared/api/client";
 import { renderWithQuery } from "@/test/render";
-import { ALUGUEL, BILL_ALUGUEL, CATEGORIES, stubApi } from "@/test/stub-api";
+import { ALUGUEL, BILL_ALUGUEL, CATEGORIES, problem, stubApi } from "@/test/stub-api";
 
-import { EditBillSheet } from "./edit-bill-sheet";
+import { EditBillSheet, useArchiveLater } from "./edit-bill-sheet";
 
 const PORTO = { name: "Porto", amount: "1200.00", category_id: ALUGUEL.id };
 
@@ -76,7 +79,9 @@ describe("EditBillSheet removal (SOL-153)", () => {
     const form = await screen.findByRole("dialog", { name: "Editar conta" });
     const remove = within(form).getByRole("button", { name: "Excluir conta fixa" });
     expect(remove).toHaveClass("min-h-11");
-    expect(within(form).getByText("Os pagamentos já feitos continuam nos lançamentos.")).toBeInTheDocument();
+    expect(
+      within(form).getByText("Sai de todos os meses; os pagamentos já feitos continuam nos lançamentos."),
+    ).toBeInTheDocument();
     await userEvent.click(remove);
 
     expect(onArchive).toHaveBeenCalledWith(BILL_ALUGUEL);
@@ -88,5 +93,80 @@ describe("EditBillSheet removal (SOL-153)", () => {
     const form = await screen.findByRole("dialog", { name: "Editar conta" });
     expect(within(form).getByRole("button", { name: "Excluir cartão" })).toBeInTheDocument();
     expect(within(form).queryByRole("button", { name: "Excluir conta fixa" })).not.toBeInTheDocument();
+  });
+});
+
+describe("useArchiveLater (SOL-153)", () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true, toFake: ["Date", "setTimeout", "clearTimeout"] });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  type Props = { bill: Schemas["Bill"]; onRestore: (id: string) => void };
+
+  const Archiver = ({ bill, onRestore }: Props) => {
+    const archive = useArchiveLater(vi.fn(), onRestore);
+    return (
+      <button type="button" onClick={() => archive(bill)}>
+        Excluir
+      </button>
+    );
+  };
+
+  const Screen = (props: Props) => {
+    const [here, setHere] = useState(true);
+    return (
+      <>
+        {here && <Archiver {...props} />}
+        <button type="button" onClick={() => setHere(false)}>
+          Sair
+        </button>
+        <Toaster />
+      </>
+    );
+  };
+
+  const archive = async (bill: Schemas["Bill"], reply: { status: number; body?: unknown }) => {
+    const requests = stubApi({ [`DELETE /api/bills/${bill.id}`]: reply });
+    const onRestore = vi.fn();
+    renderWithQuery(<Screen bill={bill} onRestore={onRestore} />);
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    await user.click(screen.getByRole("button", { name: "Excluir" }));
+    const deletes = () => requests.filter((request) => request.method === "DELETE");
+    return { onRestore, user, deletes };
+  };
+
+  it("says so and brings the bill back when the DELETE fails after the screen is gone", async () => {
+    const { onRestore, user } = await archive(BILL_ALUGUEL, { status: 500, body: problem(500, "Erro.") });
+    await screen.findByText("Conta fixa excluída");
+    await user.click(screen.getByRole("button", { name: "Sair" }));
+    act(() => vi.advanceTimersByTime(6000));
+
+    expect(await screen.findByText("Não foi possível excluir a conta fixa.")).toBeInTheDocument();
+    expect(onRestore).toHaveBeenCalledWith(BILL_ALUGUEL.id);
+  });
+
+  it("names a card in its failure", async () => {
+    await archive({ ...BILL_ALUGUEL, amount: null, closing_day: 3 }, { status: 500, body: problem(500, "Erro.") });
+    await screen.findByText("Cartão excluído");
+    act(() => vi.advanceTimersByTime(6000));
+
+    expect(await screen.findByText("Não foi possível excluir o cartão.")).toBeInTheDocument();
+  });
+
+  it("deletes once when the toast closes on its timer and is dismissed too", async () => {
+    const { deletes } = await archive(BILL_ALUGUEL, { status: 204 });
+    await screen.findByText("Conta fixa excluída");
+    act(() => vi.advanceTimersByTime(5000));
+    act(() => {
+      toast.dismiss();
+    });
+
+    await waitFor(() => expect(deletes()).toHaveLength(1));
+    act(() => vi.advanceTimersByTime(1000));
+    expect(deletes()).toHaveLength(1);
   });
 });
