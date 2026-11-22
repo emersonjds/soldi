@@ -7,6 +7,23 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.65.0
+
+> Headline: contas mensais, fixed or variable, and the whole month at a glance
+
+### Web
+
+- Conta fixa: a "Valor varia todo mês" switch marks a variable bill, shown with ≈ and "valor variável"; its round check opens Pagar to adjust the amount (SOL-152).
+- A monthly Conta series becomes a conta fixa from Criar como Conta Fixa on any member: paid months stay as its payments, later months leave the list; a series that ends becomes a Parcelado ending on the same month (SOL-152).
+- Contas a pagar on Mês shows every bill of the month in open groups Valor fixo, Valor variável and Faturas de cartão, with the paid count in the title; tapping a bill's name opens Editar conta, which has Excluir conta fixa with Desfazer; a parcelada reads "Parcela X/N · termina em mmm/aa". Contas fixas says Excluir instead of Arquivar (SOL-153).
+- Lançamentos shows the whole month at once, with filters Todos, Diário, Contas fixas and Valor variável; the day headers and their projection stay as they were (SOL-154).
+- Lançar: on a Conta, "Conta fixa" and "Parcelado" switches replace Recorrente and the Criar como Conta Fixa link; Entrada and Diário keep Recorrente (SOL-156).
+
+### Server
+
+- `recurring_bills.variable` (migration 0030) in the bills API and the month view (SOL-152).
+- `POST /api/bills?transaction_id=` accepts a member of a monthly Conta series and converts the whole series in one transaction under the series lock; a concurrent second conversion answers 422 `cannot-become-bill`, a series with two members in one month 422 `series-shared-month` (SOL-152, D44).
+
 ## 0.64.2
 
 > Headline: a conta fixa made from a future entry is covered by a test

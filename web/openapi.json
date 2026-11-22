@@ -7,7 +7,7 @@
       "name": "AGPL-3.0-only",
       "identifier": "AGPL-3.0-only"
     },
-    "version": "0.64.2"
+    "version": "0.65.0"
   },
   "paths": {
     "/api/auth/email-verification/confirm": {
