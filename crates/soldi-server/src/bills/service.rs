@@ -124,6 +124,14 @@ pub async fn create(
             Some(member) => {
                 transactions::domain::check_series_convertible(&entry)?;
                 transactions::repo::lock_series(&mut tx, member.id).await?;
+                // Re-read under the lock: a concurrent conversion may have taken the series.
+                let still_member = transactions::repo::find(&mut tx, user.id, id)
+                    .await?
+                    .and_then(|entry| entry.series)
+                    .is_some_and(|series| series.id == member.id);
+                if !still_member {
+                    return Err(transactions::domain::cannot_become_bill());
+                }
                 let through = month_end(first_of(crate::today_sao_paulo()));
                 let blockers =
                     transactions::repo::series_blockers(&mut tx, user.id, member.id, through)
@@ -159,9 +167,7 @@ pub async fn create(
     let bill = repo::insert(&mut tx, user.id, &input).await?;
     match (transaction_id, series) {
         (Some(_), Some((series_id, through))) => {
-            transactions::repo::link_series(&mut tx, user.id, series_id, bill.id, through)
-                .await
-                .map_err(transactions::service::paid_once)?;
+            transactions::repo::link_series(&mut tx, user.id, series_id, bill.id, through).await?;
         }
         (Some(id), None) => {
             if !transactions::repo::link_bill(&mut tx, user.id, id, bill.id, bill.category_id)

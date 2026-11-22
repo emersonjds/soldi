@@ -1,7 +1,7 @@
 mod common;
 
 use axum::http::StatusCode;
-use common::TestApp;
+use common::{TestApp, behind, hold_series};
 use serde_json::json;
 use soldi_types::bills::CreateBill;
 use sqlx::PgPool;
@@ -908,6 +908,68 @@ async fn sol152_a_series_a_bill_cannot_hold_is_refused_and_nothing_changes(pool:
     );
     assert_eq!(ana.get("/api/bills").await.1.as_array().unwrap().len(), 1);
     assert_eq!(members().await.unwrap(), held);
+}
+
+#[sqlx::test]
+async fn sol152_a_series_holding_another_kind_is_refused_and_nothing_changes(pool: PgPool) {
+    let ana = TestApp::signed_in(pool.clone(), "ana@example.com").await;
+    let start = this_month() - chrono::Months::new(1);
+    ana.open_at("0", &start.to_string()).await;
+    let light = category_id(&ana, "Luz").await;
+    let first = entry(
+        &ana,
+        json!({ "date": start, "amount": "100", "kind": "bill", "category_id": light, "repeat_months": 3 }),
+    )
+    .await;
+    let other = &listed_in(&ana, this_month()).await[0];
+    sqlx::query("UPDATE transactions SET kind = 'daily' WHERE id = $1::uuid")
+        .bind(other["id"].as_str().unwrap())
+        .execute(&pool)
+        .await
+        .unwrap();
+    let body = json!({ "name": "Luz", "amount": "100", "due_day": 1, "category_id": light });
+
+    let (status, problem) = ana.post(&from_entry(&first), body).await;
+
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+    assert_eq!(problem["type"], "urn:soldi:error:cannot-become-bill");
+    assert!(ana.get("/api/bills").await.1.as_array().unwrap().is_empty());
+    let members: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM transactions WHERE series_id = $1::uuid AND recurring_bill_id IS NULL",
+    )
+    .bind(first["series"]["id"].as_str().unwrap())
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(members, 3);
+}
+
+#[sqlx::test]
+async fn sol152_two_concurrent_conversions_of_one_series_make_one_bill(pool: PgPool) {
+    let ana = TestApp::signed_in(pool.clone(), "ana@example.com").await;
+    ana.open_at("0", &this_month().to_string()).await;
+    let light = category_id(&ana, "Luz").await;
+    let first = entry(
+        &ana,
+        json!({ "date": this_month(), "amount": "100", "kind": "bill", "category_id": light, "repeat_months": 3 }),
+    )
+    .await;
+    let body = json!({ "name": "Luz", "amount": "100", "due_day": 1, "category_id": light });
+    let uri = from_entry(&first);
+    let lock = hold_series(&pool, &first).await;
+
+    let both = async { tokio::join!(ana.post(&uri, body.clone()), ana.post(&uri, body.clone()),) };
+    let (one, other) = behind(&pool, lock, 2, both).await;
+
+    let (won, lost) = if one.0 == StatusCode::CREATED {
+        (one, other)
+    } else {
+        (other, one)
+    };
+    assert_eq!(won.0, StatusCode::CREATED, "{}", won.1);
+    assert_eq!(lost.0, StatusCode::UNPROCESSABLE_ENTITY, "{}", lost.1);
+    assert_eq!(lost.1["type"], "urn:soldi:error:cannot-become-bill");
+    assert_eq!(ana.get("/api/bills").await.1.as_array().unwrap().len(), 1);
 }
 
 #[sqlx::test]

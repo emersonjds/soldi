@@ -447,18 +447,8 @@
               }
             }
           },
-          "409": {
-            "description": "`bill-already-paid` when a concurrent payment took a month of the series",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
           "422": {
-            "description": "Name not 1 to 100 characters, amount not above zero or with more than two places, missing on a conta fixa or present on a card (`amount`), `closing_day` not 1 to 31, due day not 1 to 31, `category_id` missing on a conta fixa, not one of the caller's active bill categories or, on a card, `Economia` or a cofrinho, `installments` not 2 to 60, missing with `last_month` or on a card, `last_month` missing with `installments`, not a month's first day or not from this month to `installments` months ahead, `variable` on a card, `series-shared-month` when two members through this month share a month, or `cannot-become-bill` when the entry is not a `bill` entry, already a bill's payment, a resgate, or a member of a weekly or yearly series or of one holding a non-`bill` entry; `category_id` when a card has none and a subcategory or cofrinho holds the name `Cartão`, or the card group sits under `Economia`; `palette-full` when a card needs a new card group and all 24 bill colors are taken",
+            "description": "Name not 1 to 100 characters, amount not above zero or with more than two places, missing on a conta fixa or present on a card (`amount`), `closing_day` not 1 to 31, due day not 1 to 31, `category_id` missing on a conta fixa, not one of the caller's active bill categories or, on a card, `Economia` or a cofrinho, `installments` not 2 to 60, missing with `last_month` or on a card, `last_month` missing with `installments`, not a month's first day or not from this month to `installments` months ahead, `variable` on a card, `series-shared-month` when two members through this month share a month, or `cannot-become-bill` when the entry is not a `bill` entry, already a bill's payment, a resgate, or a member of a weekly or yearly series or of one holding a non-`bill` entry, or a member of a series a concurrent conversion already took; `category_id` when a card has none and a subcategory or cofrinho holds the name `Cartão`, or the card group sits under `Economia`; `palette-full` when a card needs a new card group and all 24 bill colors are taken",
             "content": {
               "application/problem+json": {
                 "schema": {
