@@ -805,7 +805,8 @@ describe("Mês", () => {
     await userEvent.click(
       within(await screen.findByRole("dialog", { name: "Aluguel" })).getByRole("button", { name: "Editar" }),
     );
-    await userEvent.click(await screen.findByRole("button", { name: "Criar como Conta Fixa" }));
+    await userEvent.click(await screen.findByRole("switch", { name: "Conta fixa" }));
+    await userEvent.click(screen.getByRole("button", { name: "Salvar Lançamento" }));
 
     const bill = await screen.findByRole("dialog", { name: "Nova conta" });
     expect(within(bill).getByLabelText("Nome da conta fixa")).toHaveValue("Aluguel");
