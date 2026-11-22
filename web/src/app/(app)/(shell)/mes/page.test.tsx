@@ -67,13 +67,6 @@ const dayHeadings = () =>
     .getAllByRole("heading", { level: 3 })
     .map((day) => day.textContent?.replace(/\s/g, " "));
 
-const bill = (date: string): Schemas["Transaction"] => ({
-  ...TRANSACTIONS[1],
-  id: `b-${date}`,
-  date,
-  note: `Conta ${date}`,
-});
-
 const ledger = () => screen.getByRole("region", { name: "Lançamentos" });
 
 const spent = (date: string): Schemas["Transaction"] => ({
@@ -212,21 +205,22 @@ describe("Mês", () => {
     expect(within(ledger()).getByRole("button", { name: /Aluguel/ })).toHaveTextContent("AluguelSaída- R$ 1.200,00");
   });
 
-  it("puts the title, the filter and Ver o mês inteiro with an arrow on one row from lg", async () => {
-    open({
-      "GET /api/transactions": {
-        status: 200,
-        body: ["10", "09", "08", "07", "06", "04", "03", "02", "01"].map((day) => spent(`2026-11-${day}`)),
-      },
-    });
+  it("lays the four filters as a 2 × 2 grid below lg and beside the title from lg, each a 44 px target in 16 px text", async () => {
+    open();
 
-    const toggle = await within(await screen.findByRole("region", { name: "Lançamentos" })).findByRole("button", {
-      name: "Ver o mês inteiro",
+    await within(await screen.findByRole("region", { name: "Lançamentos" })).findByRole("button", {
+      name: /Compras da semana/,
     });
-    expect(ledger()).toHaveClass("lg:grid-cols-[auto_1fr_auto]");
-    expect(toggle).toHaveClass("lg:col-start-3", "lg:row-start-1");
-    expect(toggle.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
-    expect(toggle).not.toHaveTextContent("dias");
+    expect(ledger()).toHaveClass("lg:grid-cols-[auto_1fr]");
+    expect(filter()).toHaveClass("grid", "w-full", "grid-cols-2", "lg:flex", "lg:w-fit");
+    const segments = within(filter()).getAllByRole("radio");
+    expect(segments.map((segment) => segment.textContent)).toEqual([
+      "Todos",
+      "Diário",
+      "Contas fixas",
+      "Valor variável",
+    ]);
+    for (const segment of segments) expect(segment).toHaveClass("min-h-11", "text-base");
   });
 
   it("shows saving into a cofrinho as Guardado and a resgate as Resgatado, in income color", async () => {
@@ -913,30 +907,7 @@ describe("Mês", () => {
     expect(day).not.toHaveClass("ring-2");
   });
 
-  it("expands the capped ledger before jumping to a red day it hides", async () => {
-    const scroll = vi.spyOn(Element.prototype, "scrollIntoView");
-    open({
-      "GET /api/months/2026-11": { status: 200, body: FORECAST_MONTH },
-      "GET /api/transactions": {
-        status: 200,
-        body: [...FORECAST_TRANSACTIONS, ...["06", "07", "08"].map((day) => spent(`2026-11-${day}`))],
-      },
-    });
-
-    const first = await screen.findByRole("button", { name: "Ver o dia 23" });
-    await within(ledger()).findByRole("button", { name: /Gasto 2026-11-06/ });
-    expect(document.getElementById("dia-2026-11-23")).toBeNull();
-
-    fireEvent.click(first);
-    const day = document.getElementById("dia-2026-11-23");
-    expect(day).not.toBeNull();
-    expect(scroll.mock.contexts.at(-1)).toBe(day);
-    expect(day).toHaveFocus();
-    expect(within(ledger()).getByRole("button", { name: "Mostrar menos" })).toHaveAttribute("aria-expanded", "true");
-    scroll.mockRestore();
-  });
-
-  it("caps the ledger to the next 3 scheduled days, today and the 6 before, and expands in place keeping focus", async () => {
+  it("shows every day of the month on open, with no control to see more or less", async () => {
     open({
       "GET /api/transactions": {
         status: 200,
@@ -944,65 +915,101 @@ describe("Mês", () => {
       },
     });
 
-    const toggle = await within(await screen.findByRole("region", { name: "Lançamentos" })).findByRole("button", {
-      name: "Ver o mês inteiro",
+    await within(await screen.findByRole("region", { name: "Lançamentos" })).findByRole("button", {
+      name: /Gasto 2026-11-10/,
     });
-    const shownDays = () =>
+    expect(
       within(ledger())
         .getAllByRole("heading", { level: 3 })
-        .map((heading) => heading.closest("[id]")?.id);
-    expect(shownDays()).toEqual([
-      "dia-2026-11-08",
-      "dia-2026-11-07",
-      "dia-2026-11-06",
-      "dia-2026-11-04",
-      "dia-2026-11-03",
-      "dia-2026-11-02",
-      "dia-2026-11-01",
-    ]);
-    expect(toggle).toHaveAttribute("aria-expanded", "false");
-
-    toggle.focus();
-    await userEvent.click(toggle);
-    expect(toggle).toHaveTextContent("Mostrar menos");
-    expect(toggle).toHaveFocus();
-    expect(shownDays()).toHaveLength(9);
-
-    await userEvent.click(toggle);
-    expect(toggle).toHaveTextContent("Ver o mês inteiro");
-    expect(toggle).toHaveFocus();
-    expect(shownDays()).toHaveLength(7);
+        .map((heading) => heading.closest("[id]")?.id),
+    ).toEqual(["10", "09", "08", "07", "06", "04", "03", "02", "01"].map((day) => `dia-2026-11-${day}`));
+    expect(within(ledger()).queryByRole("button", { name: /Ver o mês inteiro|Mostrar menos/ })).not.toBeInTheDocument();
   });
 
-  it("shows the last 7 days of a past month", async () => {
-    setSearch("m=2026-10");
-    const october = {
-      ...MONTH,
-      month: "2026-10",
-      days: MONTH.days.map((day) => ({
-        ...day,
-        date: day.date.replace("-11-", "-10-"),
-        is_today: false,
-        is_future: false,
-      })),
+  it("puts a variable bill's payment and its unpaid due row under Valor variável only, keeping each day's projection", async () => {
+    const VARIABLE = {
+      ...BILL_ALUGUEL,
+      id: "b1000000-0000-4000-8000-000000000077",
+      name: "Luz variável",
+      variable: true,
     };
     open({
-      "GET /api/months/2026-10": { status: 200, body: october },
+      "GET /api/months/2026-11": {
+        status: 200,
+        body: {
+          ...MONTH,
+          bills_of_month: [
+            { ...BILLS_OF_MONTH[1], lands_on: "2026-11-10" },
+            {
+              ...BILLS_OF_MONTH[1],
+              bill_id: VARIABLE.id,
+              name: "Luz variável",
+              variable: true,
+              lands_on: "2026-11-10",
+            },
+          ],
+        },
+      },
       "GET /api/transactions": {
         status: 200,
-        body: ["30", "28", "25", "20", "15", "10", "05", "02"].map((day) => spent(`2026-10-${day}`)),
+        body: [
+          ...TRANSACTIONS,
+          { ...TRANSACTIONS[1], id: "t-luz", note: "Luz de outubro", recurring_bill_id: VARIABLE.id },
+          { ...TRANSACTIONS[1], id: "t-fixa", note: "Aluguel pago", recurring_bill_id: BILL_ALUGUEL.id },
+        ],
       },
+      "GET /api/bills?include_inactive=true": { status: 200, body: [BILL_ALUGUEL, VARIABLE] },
     });
 
     await within(await screen.findByRole("region", { name: "Lançamentos" })).findByRole("button", {
-      name: "Ver o mês inteiro",
+      name: /Compras da semana/,
     });
-    expect(within(ledger()).queryByRole("button", { name: /Gasto 2026-10-02/ })).not.toBeInTheDocument();
-    expect(within(ledger()).getByRole("button", { name: /Gasto 2026-10-05/ })).toBeInTheDocument();
-    expect(within(ledger()).getByRole("button", { name: /Gasto 2026-10-30/ })).toBeInTheDocument();
+    const all = dayHeadings();
+
+    await userEvent.click(within(filter()).getByRole("radio", { name: "Valor variável" }));
+    await waitFor(() => expect(within(ledger()).getByRole("button", { name: /Luz de outubro/ })).toBeInTheDocument());
+    expect(within(ledger()).getByRole("listitem", { name: "Luz variável" })).toBeInTheDocument();
+    expect(within(ledger()).queryByRole("listitem", { name: "Aluguel Residencial" })).not.toBeInTheDocument();
+    expect(within(ledger()).queryByRole("button", { name: /Aluguel pago|Compras da semana/ })).not.toBeInTheDocument();
+    expect(dayHeadings()).toEqual([all[0], all[2]]);
+
+    await userEvent.click(within(filter()).getByRole("radio", { name: "Contas fixas" }));
+    expect(within(ledger()).getByRole("listitem", { name: "Aluguel Residencial" })).toBeInTheDocument();
+    expect(within(ledger()).getByRole("button", { name: /Aluguel pago/ })).toBeInTheDocument();
+    expect(within(ledger()).queryByRole("listitem", { name: "Luz variável" })).not.toBeInTheDocument();
+    expect(within(ledger()).queryByRole("button", { name: /Luz de outubro/ })).not.toBeInTheDocument();
+    expect(dayHeadings()).toEqual([all[0], all[2]]);
   });
 
-  it("filters Lançamentos by Diário or Contas on the loaded month, keeping each day's own balance", async () => {
+  it("counts a bill payment as a conta fixa while the bills are still loading", async () => {
+    signedIn({
+      "GET /api/months/2026-11": { status: 200, body: MONTH },
+      "GET /api/transactions": {
+        status: 200,
+        body: [
+          { ...TRANSACTIONS[1], note: "Luz de outubro", recurring_bill_id: "b1000000-0000-4000-8000-000000000077" },
+        ],
+      },
+      "GET /api/categories": { status: 200, body: CATEGORIES },
+      "GET /api/reports/categories": { status: 200, body: REPORT },
+      "GET /api/cofrinhos": { status: 200, body: COFRINHOS },
+    });
+    const answer = globalThis.fetch;
+    vi.stubGlobal("fetch", (request: Request) =>
+      new URL(request.url).pathname === "/api/bills" ? new Promise<Response>(() => undefined) : answer(request),
+    );
+    renderWithQuery(page());
+
+    await within(await screen.findByRole("region", { name: "Lançamentos" })).findByRole("button", {
+      name: /Luz de outubro/,
+    });
+    await userEvent.click(within(filter()).getByRole("radio", { name: "Contas fixas" }));
+    expect(within(ledger()).getByRole("button", { name: /Luz de outubro/ })).toBeInTheDocument();
+    await userEvent.click(within(filter()).getByRole("radio", { name: "Valor variável" }));
+    expect(within(ledger()).getByText("Nenhuma conta de valor variável neste mês.")).toBeInTheDocument();
+  });
+
+  it("filters Lançamentos by Diário or Contas fixas on the loaded month, keeping each day's own balance", async () => {
     const requests = open({
       "GET /api/months/2026-11": {
         status: 200,
@@ -1022,7 +1029,7 @@ describe("Mês", () => {
     expect(within(ledger()).getByRole("button", { name: /Compras da semana/ })).toBeInTheDocument();
     expect(within(ledger()).queryByRole("button", { name: /Aluguel/ })).not.toBeInTheDocument();
 
-    await userEvent.click(within(filter()).getByRole("radio", { name: "Contas" }));
+    await userEvent.click(within(filter()).getByRole("radio", { name: "Contas fixas" }));
     expect(dayHeadings()).toEqual([
       "Previsto · 10 novProjeção:R$ 957,79Apertado",
       "Ontem, 4 novSaldo ao final:R$ 1.142,10Confortável",
@@ -1046,29 +1053,11 @@ describe("Mês", () => {
     );
     expect(within(ledger()).getByText("Nenhum gasto diário neste mês.")).toBeInTheDocument();
     expect(within(ledger()).queryAllByRole("heading", { level: 3 })).toHaveLength(0);
-    await userEvent.click(within(filter()).getByRole("radio", { name: "Contas" }));
-    expect(within(ledger()).getByText("Nenhuma conta neste mês.")).toBeInTheDocument();
+    await userEvent.click(within(filter()).getByRole("radio", { name: "Contas fixas" }));
+    expect(within(ledger()).getByText("Nenhuma conta fixa neste mês.")).toBeInTheDocument();
+    await userEvent.click(within(filter()).getByRole("radio", { name: "Valor variável" }));
+    expect(within(ledger()).getByText("Nenhuma conta de valor variável neste mês.")).toBeInTheDocument();
     expect(within(ledger()).queryByText("Nenhum lançamento ainda")).not.toBeInTheDocument();
-  });
-
-  it("keeps Ver o mês inteiro without a count while the filtered days pass the cap", async () => {
-    open({
-      "GET /api/transactions": {
-        status: 200,
-        body: [
-          ...["10", "09", "08", "07", "06", "04", "03", "02", "01"].map((day) => spent(`2026-11-${day}`)),
-          ...["12", "15"].map((day) => bill(`2026-11-${day}`)),
-        ],
-      },
-    });
-
-    await within(await screen.findByRole("region", { name: "Lançamentos" })).findByRole("button", {
-      name: "Ver o mês inteiro",
-    });
-    await userEvent.click(within(filter()).getByRole("radio", { name: "Diário" }));
-    expect(within(ledger()).getByRole("button", { name: "Ver o mês inteiro" })).toBeInTheDocument();
-    await userEvent.click(within(filter()).getByRole("radio", { name: "Contas" }));
-    expect(within(ledger()).queryByRole("button", { name: /Ver o mês inteiro/ })).not.toBeInTheDocument();
   });
 
   it("goes back to Todos before jumping to a red day the filter hides", async () => {
@@ -1095,7 +1084,7 @@ describe("Mês", () => {
     await within(await screen.findByRole("region", { name: "Lançamentos" })).findByRole("button", {
       name: /Compras da semana/,
     });
-    await userEvent.click(within(filter()).getByRole("radio", { name: "Contas" }));
+    await userEvent.click(within(filter()).getByRole("radio", { name: "Contas fixas" }));
     setSearch("m=2026-12");
     rerender(<QueryClientProvider client={client}>{page()}</QueryClientProvider>);
 
@@ -1109,7 +1098,7 @@ describe("Mês", () => {
     expect(within(filter()).getByRole("radio", { name: "Todos" })).toHaveAttribute("aria-checked", "true");
   });
 
-  it("keeps an unpaid conta fixa under Contas and out of Diário", async () => {
+  it("keeps an unpaid conta fixa under Contas fixas and out of Diário", async () => {
     open({
       "GET /api/months/2026-11": {
         status: 200,
@@ -1121,20 +1110,20 @@ describe("Mês", () => {
     await within(await screen.findByRole("region", { name: "Lançamentos" })).findByRole("button", {
       name: /Compras da semana/,
     });
-    await userEvent.click(within(filter()).getByRole("radio", { name: "Contas" }));
+    await userEvent.click(within(filter()).getByRole("radio", { name: "Contas fixas" }));
     expect(within(ledger()).getByRole("listitem", { name: "Aluguel Residencial" })).toBeInTheDocument();
     await userEvent.click(within(filter()).getByRole("radio", { name: "Diário" }));
     expect(within(ledger()).queryByRole("listitem", { name: "Aluguel Residencial" })).not.toBeInTheDocument();
   });
 
-  it("leaves money put in a cofrinho out of Contas and in Todos", async () => {
+  it("leaves money put in a cofrinho out of Contas fixas and in Todos", async () => {
     open({
       "GET /api/categories": { status: 200, body: WITH_COFRINHOS },
       "GET /api/transactions": { status: 200, body: [TRANSACTIONS[1], MOVEMENTS[1]] },
     });
 
     await within(await screen.findByRole("region", { name: "Lançamentos" })).findByText("Guardado");
-    await userEvent.click(within(filter()).getByRole("radio", { name: "Contas" }));
+    await userEvent.click(within(filter()).getByRole("radio", { name: "Contas fixas" }));
     expect(within(ledger()).getByRole("button", { name: /Aluguel/ })).toBeInTheDocument();
     expect(within(ledger()).queryByText("Guardado")).not.toBeInTheDocument();
     await userEvent.click(within(filter()).getByRole("radio", { name: "Todos" }));

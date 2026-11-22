@@ -32,7 +32,6 @@ const MonthScreen = () => {
   const [launching, setLaunching] = useState<"income" | "bill" | "daily" | null>(fromTour ? "income" : null);
   const [hint, setHint] = useState(fromTour);
   const [highlight, setHighlight] = useState<{ date: string } | null>(null);
-  const [expandedMonth, setExpandedMonth] = useState<string | null>(null);
   const [filter, setFilter] = useState<LedgerFilter>("all");
   const [filterMonth, setFilterMonth] = useState(month);
   if (filterMonth !== month) {
@@ -64,10 +63,7 @@ const MonthScreen = () => {
   const monthFailed = view.isError && !view.data;
   const entriesFailed = transactions.isError && !entries;
   const jump = (date: string) => {
-    flushSync(() => {
-      setExpandedMonth(month);
-      setFilter("all");
-    });
+    flushSync(() => setFilter("all"));
     const group = document.getElementById(`dia-${date}`);
     group?.scrollIntoView({ block: "start" });
     group?.focus({ preventScroll: true });
@@ -112,8 +108,6 @@ const MonthScreen = () => {
               transactions={entries}
               highlight={highlight?.date ?? null}
               causes={causes}
-              expanded={expandedMonth === month}
-              onExpandedChange={(expanded) => setExpandedMonth(expanded ? month : null)}
               filter={filter}
               onFilterChange={setFilter}
               className="max-lg:order-3"

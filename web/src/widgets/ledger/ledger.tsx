@@ -3,16 +3,15 @@
 import { useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
-import { ArrowRight, CreditCard, Pencil, Trash2 } from "lucide-react";
+import { CreditCard, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { useCards } from "@/entities/bill/bill-queries";
+import { useBills, useCards } from "@/entities/bill/bill-queries";
 import { categoriesQuery, categoryLabel } from "@/entities/category/categories-query";
 import { billKey } from "@/entities/month/forecast-alert";
-import { visibleDays } from "@/entities/month/schedule";
 import { ScopeRadio } from "@/entities/transaction/scope-radio";
 import { SeriesAllDialog } from "@/entities/transaction/series-all-dialog";
 import { OPEN_LABEL } from "@/entities/transaction/series-step";
@@ -164,13 +163,25 @@ const Row = ({ transaction, entry, cause, onOpen }: RowProps) => (
   </li>
 );
 
-export type LedgerFilter = "all" | "daily" | "bill";
+export type LedgerFilter = "all" | "daily" | "fixed" | "variable";
 
 const FILTERS: { value: LedgerFilter; label: string; empty?: string }[] = [
   { value: "all", label: "Todos" },
   { value: "daily", label: "Diário", empty: "Nenhum gasto diário neste mês." },
-  { value: "bill", label: "Contas", empty: "Nenhuma conta neste mês." },
+  { value: "fixed", label: "Contas fixas", empty: "Nenhuma conta fixa neste mês." },
+  { value: "variable", label: "Valor variável", empty: "Nenhuma conta de valor variável neste mês." },
 ];
+
+/** A bill payment counts as fixed until the bills load; income shows only under Todos. */
+const filterOf = (
+  transaction: Transaction,
+  categories: Schemas["Category"][] = [],
+  bills: Schemas["Bill"][] = [],
+): LedgerFilter | null => {
+  if (bills.some(({ id, variable }) => variable && id === transaction.recurring_bill_id)) return "variable";
+  if (transaction.kind === "income" || isSaved(transaction, categories)) return null;
+  return transaction.kind === "bill" ? "fixed" : "daily";
+};
 
 type LedgerProps = {
   view: Schemas["MonthView"];
@@ -179,32 +190,28 @@ type LedgerProps = {
   highlight?: string | null;
   /** Ids (`transaction.id` or `billKey(bill)`) captioned `Motivo da queda`. */
   causes?: ReadonlySet<string>;
-  /** The whole month instead of the spec §3.3 cap; the page owns it so a jump can expand before it scrolls. */
-  expanded: boolean;
-  onExpandedChange: (expanded: boolean) => void;
-  /** Contas holds bills and the unpaid contas fixas, not money put in a cofrinho; the page owns it so a jump can reset it before it scrolls. */
+  /** SOL-154 §2; the page owns it so a jump can reset it before it scrolls. */
   filter: LedgerFilter;
   onFilterChange: (filter: LedgerFilter) => void;
   className?: string;
 };
 
 /**
- * `Lançamentos`: entries grouped by day, capped to recent days until expanded in place;
- * a row opens Editar / Excluir, and Excluir can be undone for 5 s.
+ * `Lançamentos`: the whole month's entries grouped by day; a row opens Editar / Excluir,
+ * and Excluir can be undone for 5 s.
  */
 export const Ledger = ({
   view,
   transactions,
   highlight = null,
   causes = new Set<string>(),
-  expanded,
-  onExpandedChange,
   filter,
   onFilterChange,
   className,
 }: LedgerProps) => {
   const categories = useQuery(categoriesQuery).data;
   const cards = useCards({ includeInactive: true }).data;
+  const bills = useBills({ includeInactive: true }).data;
   const describe = (transaction: Transaction): Entry => ({
     ...entryOf(transaction, categories),
     card: cards?.find(({ id }) => id === transaction.card_id)?.name,
@@ -218,15 +225,12 @@ export const Ledger = ({
   const create = useCreateTransaction();
   const remove = useDeleteTransaction();
   const any = groupByDay(view.days, transactions, view.bills_of_month).length > 0;
-  const all = groupByDay(
+  const shown = (kind: LedgerFilter | null) => filter === "all" || kind === filter;
+  const groups = groupByDay(
     view.days,
-    filter === "all"
-      ? transactions
-      : transactions.filter((transaction) => transaction.kind === filter && !isSaved(transaction, categories)),
-    filter === "daily" ? [] : view.bills_of_month,
+    transactions.filter((transaction) => shown(filterOf(transaction, categories, bills))),
+    view.bills_of_month.filter((bill) => shown(bill.variable ? "variable" : "fixed")),
   );
-  const groups = visibleDays(all, todayISO(), expanded);
-  const capped = visibleDays(all, todayISO(), false).length < all.length;
 
   const open = (transaction: Transaction) => {
     setSelected(transaction);
@@ -275,7 +279,7 @@ export const Ledger = ({
     <section
       aria-labelledby="ledger-title"
       className={cn(
-        "flex flex-col gap-2 rounded-2xl bg-card p-4 shadow-sm lg:grid lg:grid-cols-[auto_1fr_auto] lg:items-center lg:gap-x-4 lg:p-6",
+        "flex flex-col gap-2 rounded-2xl bg-card p-4 shadow-sm lg:grid lg:grid-cols-[auto_1fr] lg:items-center lg:gap-x-4 lg:p-6",
         className,
       )}
     >
@@ -288,20 +292,20 @@ export const Ledger = ({
         value={filter}
         onValueChange={(value: LedgerFilter | "") => value && onFilterChange(value)}
         aria-label="Filtrar lançamentos"
-        className="mb-2 rounded-xl bg-muted p-1 lg:mb-0 lg:justify-self-start"
+        className="mb-2 grid w-full grid-cols-2 rounded-xl bg-muted p-1 lg:mb-0 lg:flex lg:w-fit lg:justify-self-start"
       >
         {FILTERS.map((option) => (
           <ToggleGroupItem
             key={option.value}
             value={option.value}
-            className="h-11 rounded-lg! px-4 font-medium text-base text-muted-foreground data-[state=on]:bg-card data-[state=on]:text-primary data-[state=on]:shadow-sm"
+            className="min-h-11 rounded-lg! px-4 font-medium text-base text-muted-foreground data-[state=on]:bg-card data-[state=on]:text-primary data-[state=on]:shadow-sm"
           >
             {option.label}
           </ToggleGroupItem>
         ))}
       </ToggleGroup>
-      <div className="flex flex-col gap-2 lg:col-span-3 lg:row-start-2">
-        {all.length === 0 && (
+      <div className="flex flex-col gap-2 lg:col-span-2 lg:row-start-2">
+        {groups.length === 0 && (
           <p className="px-2 py-8 text-center text-muted-foreground">
             {FILTERS.find((option) => option.value === filter)?.empty}
           </p>
@@ -341,23 +345,6 @@ export const Ledger = ({
           </div>
         ))}
       </div>
-      {capped && (
-        <Button
-          variant="ghost"
-          aria-expanded={expanded}
-          onClick={() => onExpandedChange(!expanded)}
-          className="min-h-11 self-center px-4 font-semibold text-primary text-sm lg:col-start-3 lg:row-start-1"
-        >
-          {expanded ? (
-            "Mostrar menos"
-          ) : (
-            <>
-              Ver o mês inteiro
-              <ArrowRight aria-hidden />
-            </>
-          )}
-        </Button>
-      )}
 
       <Sheet open={acting} onOpenChange={setActing}>
         <SheetContent
