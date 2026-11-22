@@ -420,7 +420,7 @@ describe("CategoryBreakdown", () => {
     expect(within(panel("Mercado")).queryByRole("button", { name: /^Adicionar lançamento/ })).not.toBeInTheDocument();
   });
 
-  it("hands Transformar em conta fixa to the bill sheet", async () => {
+  it("hands Conta fixa to the bill sheet", async () => {
     show();
     await open("Aluguel");
     await userEvent.click(
@@ -428,7 +428,8 @@ describe("CategoryBreakdown", () => {
     );
     await userEvent.type(await screen.findByLabelText(/^Valor d/), "12");
 
-    await userEvent.click(await screen.findByRole("button", { name: "Criar como Conta Fixa" }));
+    await userEvent.click(await screen.findByRole("switch", { name: "Conta fixa" }));
+    await userEvent.click(screen.getByRole("button", { name: "Salvar Lançamento" }));
 
     expect(await screen.findByRole("dialog", { name: "Nova conta" })).toBeInTheDocument();
   });
