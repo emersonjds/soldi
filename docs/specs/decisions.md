@@ -410,3 +410,37 @@ Revisit when Soldi adds verify-before-account (then sign-up answers the same 202
 **Cards.** `CreateBill.category_id` is optional on a card: absent, the server puts the card in the account's card group, the `Cartão` top-level flagged `is_card_group` (migration 0029 backfills it by name on active top-level `bill` rows; the D29 seed sets it; at most one active per user). With none active it creates `Cartão` or adopts an active `bill` of that name, in the same transaction, so no orphan category can exist. The group keeps its kind (`kind-locked`). A conta fixa still requires `category_id`. No reader needs a per-card category: reports leave fatura payments out (D28, D31), Mês and Contas fixas read only icon and color. Trade-off: new cards' payments read `Cartão`, not `Cartão › Porto`. Rejected: a `Cartão › {nome}` sub per card (an insert, a name collision with contas fixas, a row that outlives an archived card), a web two-step (orphan category on a failed second call), matching the localized name on the web. Cards are created from Lançar's Diário card field and from the card group's `+`; BillForm's card branch drops its category field. Amends D25 for Lançar: the Diário `Cartão` field always shows, with `Nenhum` alone when there is no card, because its `+ Novo cartão` button sits under the select. The card group's `Novo cartão` and `Usar esta categoria`/`Quando acontece` are offered only where Lançar's kind can change (not on a bill payment or a series member, nor in Posso comprar isso?). A card made with no category always lands in a top-level `Cartão`: the server never adopts a subcategory or cofrinho of that name (it answers 422 instead), never re-parents the card group and never files a card under `Economia`.
 
 **Categories in Lançar.** One sheet: search, the pinned row, every group of the kind with a `+` for a sub (D26 header-only parents included), `Novo grupo`; `Ver todas` and its nested dialog are gone. Duplicate names: same kind stays the server's 409 (`lower(name)` per kind); another outflow kind is matched client-side over the loaded list and offers `Usar esta categoria`; archived names are not flagged (no unarchive exists; the index allows the name again). Copy: `Tipo de Fluxo` reads `Quando acontece`, `Categoria Pai`/`Subcategoria` read `Grupo novo`/`Dentro de um grupo`, everywhere. Detail: `docs/specs/cards/SOL-140.md` "Technical design".
+
+## D44 — A monthly Conta series becomes a conta fixa; a conta fixa may vary (2026-11-22, owner + SOL-152, orchestrator; extends R8, keeps D35)
+
+**Variable.**
+
+- `recurring_bills.variable` (bool, default false, never on a card) marks a conta fixa whose `amount` is an estimate that changes every month.
+- Projection, D17, D35 and the forecast are untouched: the estimate is the projected amount, as before.
+- The web marks an unpaid variable row with `≈` and "valor variável". Its check opens Pagar with the estimate instead of booking it.
+
+**Series to conta fixa.** `POST /api/bills?transaction_id=<member>` on a member of a monthly `bill` series (no card, no resgate, no payment) converts the whole series in one database transaction, under the series lock:
+
+- members dated through the end of this São Paulo month become the new bill's payments, detached from the series, each keeping its date, amount and category;
+- members in later months are deleted;
+- the body is the bill as the form shows it. The web prefills it from the opened member, with D20's series day, and as Parcelado (`installments` = the series' total, `last_month` = its last member's month) when the series runs past this month;
+- refusals: weekly, yearly and mixed series answer 422 `cannot-become-bill`; two members in one month through this one answer 422 `series-shared-month`;
+- R8's standalone path is unchanged, and still moves its entry to the bill's category.
+
+Trade-offs:
+
+- Every month through this one stays exact: Mês, Meu ano, Para onde vai, Economia.
+- A future month's Saídas move from recorded rows to the bill's unpaid projection. Its projected balance stays equal only while the bill amount equals each deleted member's.
+- A member dated later this month reads as paid (SOL-155's rule).
+- There is no undo. Excluir on the bill keeps its payments.
+
+Rejected:
+
+- cutting at today, which moves this month's totals and contradicts SOL-155;
+- moving members to the bill's category, which rewrites Para onde vai history (D35);
+- server-derived bill fields, which would ignore the form;
+- a Fixo with no end for a bounded series, which owes months after the series' end (D19 has no parcelas flag);
+- refusing Economia, since reports count deposits by category and R8 already allows it;
+- a variable amount computed from past payments (D16: never guessed).
+
+Detail: `docs/specs/cards/SOL-152.md`, plan `docs/specs/plans/SOL-152.md`.
