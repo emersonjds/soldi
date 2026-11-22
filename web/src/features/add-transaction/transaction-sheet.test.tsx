@@ -463,18 +463,19 @@ describe("TransactionSheet", () => {
     expect(await screen.findByText("Lançado")).toBeInTheDocument();
   });
 
-  it("refuses Sempre on a Conta, offering Criar como Conta Fixa; a count still submits", async () => {
-    const { requests, sent } = setup({ initialKind: "bill", billSheet });
+  it("never posts Sempre on a Conta as a series, offering Criar como Conta Fixa; a count still submits", async () => {
+    const { requests, sent } = setup({ initialKind: "bill" });
 
     await userEvent.type(await screen.findByLabelText(/^Valor d/), "9000");
     await userEvent.click(screen.getByRole("switch", { name: "Recorrente" }));
     expect(screen.getByRole("radio", { name: "Sempre" })).toBeChecked();
-    expect(screen.getByRole("button", { name: "Criar como Conta Fixa" })).toBeInTheDocument();
     expect(screen.queryByText(/sem data para parar/)).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Salvar Lançamento" }));
     expect(requests.filter((request) => request.method === "POST")).toHaveLength(0);
+    expect(screen.getByRole("alert")).toHaveTextContent("Uma conta sem fim é uma conta fixa. Escolha quantas vezes.");
 
     await userEvent.click(screen.getByRole("radio", { name: "3" }));
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Criar como Conta Fixa" })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Salvar Lançamento" }));
     expect(await sent("POST")).toMatchObject({ kind: "bill", repeat_months: 3 });
@@ -492,6 +493,28 @@ describe("TransactionSheet", () => {
     await userEvent.type(await screen.findByLabelText(/^Valor d/), "9000");
     await userEvent.click(screen.getByRole("switch", { name: "Recorrente" }));
     await userEvent.click(screen.getByRole("button", { name: "Criar como Conta Fixa" }));
+    await userEvent.click(screen.getByRole("button", { name: "Criar conta" }));
+
+    expect(await screen.findByText("Conta fixa criada")).toBeInTheDocument();
+    const post = requests.find((request) => request.url.endsWith("/api/transactions"));
+    const body = await post?.json();
+    expect(body).toMatchObject({ kind: "bill", amount: "90.00" });
+    expect(body).not.toHaveProperty("open_ended");
+    expect(body).not.toHaveProperty("repeat_every");
+  });
+
+  it("turns Salvar on a Conta on Sempre into the conta fixa, as Criar como Conta Fixa does", async () => {
+    const { requests } = setup(
+      { initialKind: "bill", billSheet },
+      {
+        "POST /api/transactions": { status: 201, body: ALUGUEL_ROW },
+        "POST /api/bills": { status: 201, body: BILL_ALUGUEL },
+      },
+    );
+
+    await userEvent.type(await screen.findByLabelText(/^Valor d/), "9000");
+    await userEvent.click(screen.getByRole("switch", { name: "Recorrente" }));
+    await userEvent.click(screen.getByRole("button", { name: "Salvar Lançamento" }));
     await userEvent.click(screen.getByRole("button", { name: "Criar conta" }));
 
     expect(await screen.findByText("Conta fixa criada")).toBeInTheDocument();
