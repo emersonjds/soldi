@@ -29,7 +29,7 @@ import { PayBillSheet } from "@/features/pay-bill/pay-bill-sheet";
 import { cn } from "@/lib/utils";
 import { problemMessage, type Schemas } from "@/shared/api/client";
 import { type Currency, useCurrency } from "@/shared/lib/currency";
-import { dayMonth, monthName, shortDay, todayISO } from "@/shared/lib/date";
+import { addMonths, dayMonth, monthAbbrev, monthName, shortDay, todayISO } from "@/shared/lib/date";
 import { formatMoney } from "@/shared/lib/money";
 import { cents, fromCents } from "@/shared/lib/tier";
 import { CategoryIcon } from "@/shared/ui/category-icon";
@@ -217,7 +217,9 @@ const Row = ({
   const estimated = bill.variable && !bill.paid;
   const parcel =
     bill.installments &&
-    (bill.installment === bill.installments ? "última parcela" : `${bill.installment}/${bill.installments}`);
+    (bill.installment === bill.installments
+      ? "Última parcela"
+      : `Parcela ${bill.installment}/${bill.installments} · termina em ${monthAbbrev(addMonths(bill.due_date.slice(0, 7), bill.installments - Number(bill.installment)))}`);
   const amount = (
     <span className="whitespace-nowrap">
       {estimated && <span aria-hidden>≈ </span>}
@@ -248,7 +250,7 @@ const Row = ({
           {parcel && (
             <>
               {" "}
-              <span className="whitespace-nowrap text-muted-foreground text-sm">
+              <span className="text-muted-foreground text-sm">
                 · {[parcel, late && `venceu em ${late}`].filter(Boolean).join(" · ")}
               </span>
             </>

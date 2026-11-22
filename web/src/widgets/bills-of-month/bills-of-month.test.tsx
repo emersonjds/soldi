@@ -517,25 +517,28 @@ describe("Contas a pagar", () => {
 
     const nameLine = (name: string) => within(rowOf(name)).getByText("Fies").parentElement;
 
-    it("reads the parcela after the name, wrapping under it at 375 px before the amount moves", async () => {
+    it("reads the parcela and its last month after the name, wrapping under it at 375 px before the amount moves", async () => {
       show([{ ...FIES, installment: 4 }], {}, "2026-12");
       await loaded();
-      expect(nameLine("Fies")).toHaveTextContent("Fies · 4/6");
+      expect(nameLine("Fies")).toHaveTextContent("Fies · Parcela 4/6 · termina em fev/27");
       expect(nameLine("Fies")).toHaveClass("flex-wrap");
-      expect(within(rowOf("Fies")).getByText("· 4/6")).toHaveClass("whitespace-nowrap");
+      expect(within(rowOf("Fies")).getByText("· Parcela 4/6 · termina em fev/27")).not.toHaveClass("whitespace-nowrap");
     });
 
     it("names the last parcela", async () => {
       show([{ ...FIES, installment: 6 }], {}, "2026-12");
       await loaded();
-      expect(nameLine("Fies")).toHaveTextContent("Fies · última parcela");
+      expect(nameLine("Fies")).toHaveTextContent("Fies · Última parcela");
+      expect(rowOf("Fies")).not.toHaveTextContent("termina em");
       expect(rowOf("Fies")).not.toHaveTextContent("6/6");
     });
 
     it("keeps a carried parcela's position and says when it was due", async () => {
       show([{ ...FIES, installment: 4, due_date: "2026-11-10", overdue: true }], {}, "2026-12");
       await loaded();
-      expect(nameLine("Fies de novembro")).toHaveTextContent("Fies · 4/6 · venceu em novembro");
+      expect(nameLine("Fies de novembro")).toHaveTextContent(
+        "Fies · Parcela 4/6 · termina em jan/27 · venceu em novembro",
+      );
     });
 
     it("leaves a bill without parcelas as it was", async () => {

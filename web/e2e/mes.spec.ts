@@ -390,8 +390,14 @@ test("Contas a pagar groups the month by kind with the paid count, pays and undo
     await page.request.get("/api/categories")
   ).json();
   const category = categories.find((each) => each.kind === "bill" && !each.is_savings);
+  const inElevenMonths = new Date(Date.UTC(Number(today.slice(0, 4)), Number(today.slice(5, 7)) + 10, 1));
   for (const data of [
-    { name: "Internet da casa de praia em Ubatuba SP", amount: "99999.99" },
+    {
+      name: "Internet da casa de praia em Ubatuba SP",
+      amount: "99999.99",
+      installments: 12,
+      last_month: inElevenMonths.toISOString().slice(0, 10),
+    },
     { name: "Luz", amount: "180.00", variable: true },
   ]) {
     const created = await page.request.post("/api/bills", {
@@ -409,6 +415,9 @@ test("Contas a pagar groups the month by kind with the paid count, pays and undo
   await expect(fixed).toContainText(/0 de 1 paga · falta R\$\s99\.999,99/);
   await expect(bills.getByRole("button", { name: /^Valor variável/ })).toContainText(/falta ≈ R\$\s180,00/);
   await expect(bills.getByRole("link", { name: "Gerenciar contas fixas" })).toHaveAttribute("href", "/ajustes/contas");
+  await expect(bills.getByRole("listitem", { name: "Internet da casa de praia em Ubatuba SP" })).toContainText(
+    /Parcela 1\/12 · termina em [a-z]{3}\/\d{2}/,
+  );
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await expectNoClipped(page);
 
