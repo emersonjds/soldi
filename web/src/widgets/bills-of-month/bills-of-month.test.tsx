@@ -545,6 +545,56 @@ describe("Contas a pagar", () => {
     expect(screen.queryByRole("region")).not.toBeInTheDocument();
   });
 
+  describe("a variable conta fixa (SOL-152)", () => {
+    const LUZ: Schemas["BillOfMonth"] = {
+      ...BILLS_OF_MONTH[1],
+      bill_id: "b-luz",
+      name: "Luz",
+      amount: "180.00",
+      due_date: "2026-11-25",
+      variable: true,
+    };
+
+    it("marks an unpaid variable bill with ≈ and valor variável; its round check and Pagar open the sheet with the estimate and send nothing", async () => {
+      const { requests } = show([LUZ]);
+      await loaded();
+
+      const row = rowOf("Luz");
+      expect(row).toHaveTextContent("Luz · valor variável");
+      expect(row).toHaveTextContent("≈ R$ 180,00");
+      expect(
+        within(row).getByRole("button", { name: /^valor estimado R\$\s180,00: ajustar pagamento de Luz$/ }),
+      ).toBeInTheDocument();
+
+      await userEvent.click(within(row).getByRole("button", { name: /^Marcar Luz/ }));
+      const sheet = await screen.findByRole("dialog", { name: "Pagar Luz" });
+      expect(within(sheet).getByLabelText("Valor")).toHaveValue("180,00");
+      await userEvent.click(within(sheet).getByRole("button", { name: "Fechar" }));
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+
+      await userEvent.click(within(rowOf("Luz")).getByRole("button", { name: "Pagar Luz" }));
+      expect(await screen.findByRole("dialog", { name: "Pagar Luz" })).toBeInTheDocument();
+      expect(requests.some((request) => request.method === "POST")).toBe(false);
+    });
+
+    it("shows a paid variable bill's amount with no mark", async () => {
+      show([{ ...LUZ, paid: true, transaction_id: "t-paid" }]);
+      await loaded();
+
+      const row = rowOf("Luz");
+      expect(row).toHaveTextContent("R$ 180,00");
+      expect(row).not.toHaveTextContent("≈");
+      expect(row).not.toHaveTextContent("valor variável");
+    });
+
+    it("says Próxima with ≈ when the next bill is variable", async () => {
+      show([LUZ]);
+      await loaded();
+
+      expect(card()).toHaveTextContent("Próxima: dia 25 · ≈ R$ 180,00");
+    });
+  });
+
   describe("a card's fatura", () => {
     it("reads Fatura Porto with the fatura; Pagar opens the sheet pre-filled with the hint and posts the amount", async () => {
       const { requests } = show([FATURA], { "POST /api/bills/card-porto/pay": { status: 201, body: PAYMENT } });

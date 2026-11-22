@@ -33,6 +33,7 @@ type Draft = {
   parcelado: boolean;
   installments: string;
   current: string;
+  variable: boolean;
 };
 
 const input = "h-12 text-base md:text-base";
@@ -101,6 +102,7 @@ const emptyDraft: Draft = {
   parcelado: false,
   installments: "",
   current: "1",
+  variable: false,
 };
 
 const currentOf = (bill?: Bill) => {
@@ -123,6 +125,7 @@ const draftOf = (bill?: Bill, prefill?: Schemas["CreateBill"]): Draft => {
     parcelado: bill?.installments != null,
     installments: bill?.installments ? String(bill.installments) : "",
     current: currentOf(bill),
+    variable: from.variable ?? false,
   };
 };
 
@@ -183,16 +186,17 @@ export const BillForm = ({
     if (!name || !day || !categoryId) return;
     const active = draft.parcelado ? (bill?.active ?? true) : draft.active;
     const fields = { name, due_day: day, category_id: categoryId, active };
+    const variable = draft.variable !== (bill?.variable ?? false) ? { variable: draft.variable } : {};
     if (draft.card) {
       if (closingDay) onSave({ ...fields, closing_day: closingDay });
       return;
     }
     if (!amount) return;
-    if (!draft.parcelado) return onSave({ ...fields, amount });
+    if (!draft.parcelado) return onSave({ ...fields, amount, ...variable });
     if (!lastMonth) return;
     const initial = draftOf(bill, prefill);
     const changed = draft.installments !== initial.installments || draft.current !== initial.current;
-    onSave({ ...fields, amount, ...(changed && { installments: count, last_month: lastMonth }) });
+    onSave({ ...fields, amount, ...variable, ...(changed && { installments: count, last_month: lastMonth }) });
   };
 
   const actions = (
@@ -267,7 +271,9 @@ export const BillForm = ({
         <ClosingDay value={draft.closingDay} error={errors.closingDay} onChange={(closingDay) => set({ closingDay })} />
       ) : (
         <Field className="gap-1.5" data-invalid={Boolean(errors.amount)}>
-          <FieldLabel htmlFor="bill-amount">Valor mensal fixo estimado</FieldLabel>
+          <FieldLabel htmlFor="bill-amount">
+            {draft.variable ? "Valor estimado" : "Valor mensal fixo estimado"}
+          </FieldLabel>
           <AmountInput
             id="bill-amount"
             value={draft.amount}
@@ -277,6 +283,29 @@ export const BillForm = ({
           />
           {errors.amount && <FieldError>{errors.amount}</FieldError>}
         </Field>
+      )}
+      {!draft.card && (
+        <label
+          htmlFor="bill-variable-switch"
+          className="flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-xl bg-muted px-4 py-2"
+        >
+          <span className="flex flex-col">
+            <span id="bill-variable" className="font-medium text-base">
+              Valor varia todo mês
+            </span>
+            {draft.variable && (
+              <span className="text-muted-foreground text-xs">
+                Ex.: luz, água, cartão. O valor fica como estimativa e você ajusta ao pagar.
+              </span>
+            )}
+          </span>
+          <Switch
+            id="bill-variable-switch"
+            aria-labelledby="bill-variable"
+            checked={draft.variable}
+            onCheckedChange={(variable) => set({ variable })}
+          />
+        </label>
       )}
       <Field className="gap-1.5" data-invalid={Boolean(errors.day)}>
         <FieldLabel htmlFor="bill-day">Dia do vencimento recorrente</FieldLabel>

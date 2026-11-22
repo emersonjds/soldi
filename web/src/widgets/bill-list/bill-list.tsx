@@ -109,6 +109,12 @@ const Row = ({
                 <span className="whitespace-nowrap text-muted-foreground text-sm">· {end}</span>
               </>
             )}
+            {bill.variable && (
+              <>
+                {" "}
+                <span className="whitespace-nowrap text-muted-foreground text-sm">· valor variável</span>
+              </>
+            )}
             {!active && !parcelado && (
               <span className={cn(statusPill, "min-h-6 shrink-0 bg-muted text-muted-foreground")}>Pausada</span>
             )}
@@ -121,11 +127,14 @@ const Row = ({
           <span className={cn(pill, "justify-self-start bg-muted text-muted-foreground")}>
             Dia {String(bill.due_day).padStart(2, "0")}
           </span>
-          <Money
-            amount={bill.amount}
-            size="figure"
-            className={cn("justify-self-end text-base leading-6", !active && "text-muted-foreground line-through")}
-          />
+          <span className="justify-self-end whitespace-nowrap text-base leading-6">
+            {bill.variable && <span aria-hidden>≈ </span>}
+            <Money
+              amount={bill.amount}
+              size="figure"
+              className={cn("text-base leading-6", !active && "text-muted-foreground line-through")}
+            />
+          </span>
         </>
       ) : (
         <span className="col-span-2 text-muted-foreground text-sm">

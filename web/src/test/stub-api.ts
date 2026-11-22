@@ -180,6 +180,7 @@ export const BILL_ALUGUEL: Schemas["Bill"] = {
   amount: "2259.56",
   due_day: 10,
   active: true,
+  variable: false,
 };
 
 export const BILL_LUZ: Schemas["Bill"] = {
@@ -189,6 +190,7 @@ export const BILL_LUZ: Schemas["Bill"] = {
   amount: "284.10",
   due_day: 2,
   active: true,
+  variable: false,
 };
 
 export const BILL_PAUSED: Schemas["Bill"] = {
@@ -198,6 +200,7 @@ export const BILL_PAUSED: Schemas["Bill"] = {
   amount: "99.90",
   due_day: 15,
   active: false,
+  variable: false,
 };
 
 export const BILLS = [BILL_ALUGUEL, BILL_LUZ, BILL_PAUSED];
@@ -215,6 +218,7 @@ export const BILLS_OF_MONTH: Schemas["BillOfMonth"][] = [
     transaction_id: null,
     overdue: true,
     is_card: false,
+    variable: false,
   },
   {
     bill_id: BILL_ALUGUEL.id,
@@ -227,6 +231,7 @@ export const BILLS_OF_MONTH: Schemas["BillOfMonth"][] = [
     transaction_id: null,
     overdue: false,
     is_card: false,
+    variable: false,
   },
 ];
 
@@ -270,6 +275,7 @@ const forecastBill = (id: number, name: string, amount: string, due: string): Sc
   transaction_id: null,
   overdue: false,
   is_card: false,
+  variable: false,
   lands_on: due,
 });
 

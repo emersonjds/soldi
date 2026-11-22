@@ -304,6 +304,7 @@ describe("TransactionSheet", () => {
       closing_day: 3,
       due_day: 10,
       active: true,
+      variable: false,
     };
     const withCard = { "GET /api/bills": { status: 200, body: [BILL_ALUGUEL, PORTO] } };
     const cardField = () => screen.findByRole("combobox", { name: "Cartão" });
