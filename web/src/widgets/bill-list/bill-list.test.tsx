@@ -420,12 +420,15 @@ describe("Contas fixas", () => {
       expect(await panel()).toBeInTheDocument();
     });
 
-    it("archives from the panel with an undo", async () => {
+    it("removes from the panel with an undo", async () => {
       open();
 
       await userEvent.click(await screen.findByRole("button", { name: /^Aluguel Residencial/ }));
-      await userEvent.click(within(await panel()).getByRole("button", { name: "Arquivar" }));
-      expect(await screen.findByText("Conta arquivada")).toBeInTheDocument();
+      expect(
+        within(await panel()).getByText("Sai de todos os meses; os pagamentos já feitos continuam nos lançamentos."),
+      ).toBeInTheDocument();
+      await userEvent.click(within(await panel()).getByRole("button", { name: "Excluir conta fixa" }));
+      expect(await screen.findByText("Conta fixa excluída")).toBeInTheDocument();
       expect(names()).toEqual(["Luz (Enel)", "Academia"]);
       expect(within(await panel()).getByLabelText("Nome da conta fixa")).toHaveValue("");
     });
@@ -671,6 +674,7 @@ describe("Contas fixas", () => {
       expect(within(sheet).queryByRole("switch")).not.toBeInTheDocument();
       expect(within(sheet).queryByLabelText("Valor mensal fixo estimado")).not.toBeInTheDocument();
       expect(within(sheet).getByLabelText("Fecha dia")).toHaveValue("3");
+      expect(within(sheet).getByRole("button", { name: "Excluir cartão" })).toBeInTheDocument();
       await userEvent.clear(within(sheet).getByLabelText("Fecha dia"));
       await userEvent.type(within(sheet).getByLabelText("Fecha dia"), "5");
       await userEvent.click(within(sheet).getByRole("button", { name: "Salvar Conta Fixa" }));
@@ -683,6 +687,17 @@ describe("Contas fixas", () => {
         category_id: PORTO.category_id,
       });
     });
+  });
+
+  it("says Cartão excluído when a card is removed (SOL-153)", async () => {
+    open({ bills: [BILL_ALUGUEL, PORTO] });
+
+    await userEvent.click(await screen.findByRole("button", { name: /^Porto/ }));
+    const sheet = await screen.findByRole("dialog", { name: "Editar conta" });
+    await userEvent.click(within(sheet).getByRole("button", { name: "Excluir cartão" }));
+
+    expect(await screen.findByText("Cartão excluído")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Porto/ })).not.toBeInTheDocument();
   });
 
   describe("parcelado (SOL-118)", () => {
@@ -783,7 +798,11 @@ describe("Contas fixas", () => {
 
       await userEvent.click(await screen.findByRole("button", { name: /^Fies/ }));
       const sheet = await screen.findByRole("dialog", { name: "Editar conta" });
-      expect(within(sheet).queryByRole("switch")).not.toBeInTheDocument();
+      expect(
+        within(sheet)
+          .getAllByRole("switch")
+          .map((each) => each.getAttribute("id")),
+      ).toEqual(["bill-variable-switch"]);
       expect(within(sheet).getByLabelText("Quantas parcelas")).toHaveValue("6");
       expect(within(sheet).getByLabelText("Parcela atual")).toHaveValue("5");
       expect(within(sheet).getByText("Parcela 5/6 em nov/26 · termina em dez/26")).toBeInTheDocument();
@@ -927,6 +946,75 @@ describe("Contas fixas", () => {
         expect(within(english).getByText("Pausada")).toBeInTheDocument();
         expect(within(english).getByRole("switch", { name: "Ativa: Inglês" })).not.toBeChecked();
       });
+    });
+  });
+
+  describe("valor variável (SOL-152)", () => {
+    const LUZ_VARIABLE: Schemas["Bill"] = { ...BILL_LUZ, variable: true };
+    const HELPER = "Ex.: luz, água, cartão. O valor fica como estimativa e você ajusta ao pagar.";
+    const rowNamed = async (name: RegExp) => (await screen.findByRole("button", { name })).closest("li");
+
+    it("marks a variable bill with ≈ and valor variável, and a fixed bill or a card with neither", async () => {
+      open({ bills: [BILL_ALUGUEL, LUZ_VARIABLE, PORTO] });
+
+      const luz = await rowNamed(/^Luz \(Enel\)/);
+      expect(luz).toHaveTextContent("Luz (Enel) · valor variável");
+      expect(luz).toHaveTextContent("≈ R$ 284,10");
+      for (const other of [/^Aluguel Residencial/, /^Porto/]) {
+        const row = await rowNamed(other);
+        expect(row).not.toHaveTextContent("≈");
+        expect(row).not.toHaveTextContent("valor variável");
+      }
+    });
+
+    it("turns on Valor varia todo mês for a conta fixa: helper, Valor estimado, sends variable true; no switch with Cartão de crédito", async () => {
+      const { requests } = open({ replies: { "POST /api/bills": { status: 201, body: LUZ_VARIABLE } } });
+      await userEvent.click(await screen.findByRole("button", { name: "Nova Conta Fixa" }));
+      const sheet = await screen.findByRole("dialog", { name: "Nova conta" });
+      const variable = within(sheet).getByRole("switch", { name: "Valor varia todo mês" });
+      expect(within(sheet).queryByText(HELPER)).not.toBeInTheDocument();
+      expect(within(sheet).getByLabelText("Valor mensal fixo estimado")).toBeInTheDocument();
+
+      await userEvent.click(variable);
+      expect(within(sheet).getByText(HELPER)).toBeInTheDocument();
+      await userEvent.type(within(sheet).getByLabelText("Nome da conta fixa"), "Luz");
+      await userEvent.type(within(sheet).getByLabelText("Valor estimado"), "18000");
+      await userEvent.type(within(sheet).getByLabelText("Dia do vencimento recorrente"), "25");
+      await userEvent.click(within(sheet).getByRole("button", { name: "Salvar Conta Fixa" }));
+      await waitFor(() => expect(sent(requests, "POST")).toHaveLength(1));
+      expect(await sent(requests, "POST")[0].json()).toMatchObject({ name: "Luz", amount: "180.00", variable: true });
+
+      await userEvent.click(await screen.findByRole("button", { name: "Nova Conta Fixa" }));
+      const again = await screen.findByRole("dialog", { name: "Nova conta" });
+      await userEvent.click(within(again).getByRole("switch", { name: "Cartão de crédito" }));
+      expect(within(again).queryByRole("switch", { name: "Valor varia todo mês" })).not.toBeInTheDocument();
+    });
+
+    it("edits a variable bill with the switch on, sends variable false when turned off, and no variable key when untouched", async () => {
+      const { requests } = open({
+        bills: [BILL_ALUGUEL, LUZ_VARIABLE],
+        replies: {
+          [`PATCH /api/bills/${BILL_LUZ.id}`]: { status: 200, body: LUZ_VARIABLE },
+          [`PATCH /api/bills/${BILL_ALUGUEL.id}`]: { status: 200, body: BILL_ALUGUEL },
+        },
+      });
+
+      await userEvent.click(await screen.findByRole("button", { name: /^Aluguel Residencial/ }));
+      const rent = await screen.findByRole("dialog", { name: "Editar conta" });
+      expect(within(rent).getByRole("switch", { name: "Valor varia todo mês" })).not.toBeChecked();
+      await userEvent.click(within(rent).getByRole("button", { name: "Salvar Conta Fixa" }));
+      await waitFor(() => expect(patches(requests)).toHaveLength(1));
+      expect(await patches(requests)[0].json()).not.toHaveProperty("variable");
+
+      await userEvent.click(await screen.findByRole("button", { name: /^Luz \(Enel\)/ }));
+      const sheet = await screen.findByRole("dialog", { name: "Editar conta" });
+      const variable = within(sheet).getByRole("switch", { name: "Valor varia todo mês" });
+      expect(variable).toBeChecked();
+      expect(within(sheet).getByLabelText("Valor estimado")).toHaveValue("284,10");
+      await userEvent.click(variable);
+      await userEvent.click(within(sheet).getByRole("button", { name: "Salvar Conta Fixa" }));
+      await waitFor(() => expect(patches(requests)).toHaveLength(2));
+      expect(await patches(requests)[1].json()).toMatchObject({ variable: false });
     });
   });
 });

@@ -304,6 +304,7 @@ describe("TransactionSheet", () => {
       closing_day: 3,
       due_day: 10,
       active: true,
+      variable: false,
     };
     const withCard = { "GET /api/bills": { status: 200, body: [BILL_ALUGUEL, PORTO] } };
     const cardField = () => screen.findByRole("combobox", { name: "Cartão" });
@@ -463,25 +464,62 @@ describe("TransactionSheet", () => {
     expect(await screen.findByText("Lançado")).toBeInTheDocument();
   });
 
-  it("never posts Sempre on a Conta as a series, offering Criar como Conta Fixa; a count still submits", async () => {
+  it("offers Conta fixa and Parcelado on a Conta, exclusive, with no Recorrente nor Criar como Conta Fixa link", async () => {
+    setup({ initialKind: "bill", billSheet });
+
+    const fixed = await screen.findByRole("switch", { name: "Conta fixa" });
+    const parcelado = screen.getByRole("switch", { name: "Parcelado" });
+    expect(screen.queryByRole("switch", { name: "Recorrente" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Criar como Conta Fixa" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Prefere transformar/)).not.toBeInTheDocument();
+    for (const row of [fixed, parcelado]) expect(row.closest("label")).toHaveClass("min-h-11", "bg-muted");
+
+    await userEvent.click(fixed);
+    expect(fixed).toBeChecked();
+    expect(screen.getByText("Todo mês, sem fim. Ao salvar, abre o cadastro da conta fixa.")).toBeInTheDocument();
+    expect(screen.queryByRole("radio", { name: "Mensal" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("radiogroup", { name: "Quantas parcelas" })).not.toBeInTheDocument();
+
+    await userEvent.click(parcelado);
+    expect(parcelado).toBeChecked();
+    expect(fixed).not.toBeChecked();
+    expect(screen.queryByText(/Todo mês, sem fim/)).not.toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "Mensal" })).toBeChecked();
+    expect(screen.getByText("Quantas parcelas")).toBeVisible();
+    expect(screen.queryByText("Quantas vezes")).not.toBeInTheDocument();
+    const counts = screen.getByRole("radiogroup", { name: "Quantas parcelas" });
+    const chips = within(counts).getAllByRole("radio");
+    expect(chips.map((chip) => chip.textContent)).toEqual(["2", "3", "6", "12", "Outro"]);
+    for (const chip of chips) expect(chip).not.toBeChecked();
+
+    await userEvent.click(fixed);
+    expect(parcelado).not.toBeChecked();
+    await userEvent.click(screen.getByRole("radio", { name: "Diário" }));
+    expect(screen.getByRole("switch", { name: "Recorrente" })).not.toBeChecked();
+    expect(screen.queryByRole("radiogroup", { name: "Quantas vezes" })).not.toBeInTheDocument();
+  });
+
+  it("asks how many parcelas before saving a Parcelado Conta, weekly included, with only Parcelado without a bill sheet", async () => {
     const { requests, sent } = setup({ initialKind: "bill" });
 
     await userEvent.type(await screen.findByLabelText(/^Valor d/), "9000");
-    await userEvent.click(screen.getByRole("switch", { name: "Recorrente" }));
-    expect(screen.getByRole("radio", { name: "Sempre" })).toBeChecked();
-    expect(screen.queryByText(/sem data para parar/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("switch", { name: "Conta fixa" })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("switch", { name: "Parcelado" }));
     await userEvent.click(screen.getByRole("button", { name: "Salvar Lançamento" }));
     expect(requests.filter((request) => request.method === "POST")).toHaveLength(0);
-    expect(screen.getByRole("alert")).toHaveTextContent("Uma conta sem fim é uma conta fixa. Escolha quantas vezes.");
+    expect(screen.getByRole("alert")).toHaveTextContent("Escolha quantas parcelas.");
 
+    await userEvent.click(screen.getByRole("radio", { name: "Semanal" }));
     await userEvent.click(screen.getByRole("radio", { name: "3" }));
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Criar como Conta Fixa" })).not.toBeInTheDocument();
+    expect(screen.getByText("3× de R$ 90,00 · repete toda semana até 19 nov 2026")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Salvar Lançamento" }));
-    expect(await sent("POST")).toMatchObject({ kind: "bill", repeat_months: 3 });
+
+    expect(await sent("POST")).toMatchObject({ kind: "bill", repeat_months: 3, repeat_every: "week" });
+    expect(await screen.findByText("3 lançamentos criados")).toBeInTheDocument();
   });
 
-  it("converts a Conta on Sempre into a bill from the plain entry", async () => {
+  it("turns Salvar on a Conta fixa into the conta fixa, from the plain entry", async () => {
     const { requests } = setup(
       { initialKind: "bill", billSheet },
       {
@@ -491,29 +529,7 @@ describe("TransactionSheet", () => {
     );
 
     await userEvent.type(await screen.findByLabelText(/^Valor d/), "9000");
-    await userEvent.click(screen.getByRole("switch", { name: "Recorrente" }));
-    await userEvent.click(screen.getByRole("button", { name: "Criar como Conta Fixa" }));
-    await userEvent.click(screen.getByRole("button", { name: "Criar conta" }));
-
-    expect(await screen.findByText("Conta fixa criada")).toBeInTheDocument();
-    const post = requests.find((request) => request.url.endsWith("/api/transactions"));
-    const body = await post?.json();
-    expect(body).toMatchObject({ kind: "bill", amount: "90.00" });
-    expect(body).not.toHaveProperty("open_ended");
-    expect(body).not.toHaveProperty("repeat_every");
-  });
-
-  it("turns Salvar on a Conta on Sempre into the conta fixa, as Criar como Conta Fixa does", async () => {
-    const { requests } = setup(
-      { initialKind: "bill", billSheet },
-      {
-        "POST /api/transactions": { status: 201, body: ALUGUEL_ROW },
-        "POST /api/bills": { status: 201, body: BILL_ALUGUEL },
-      },
-    );
-
-    await userEvent.type(await screen.findByLabelText(/^Valor d/), "9000");
-    await userEvent.click(screen.getByRole("switch", { name: "Recorrente" }));
+    await userEvent.click(screen.getByRole("switch", { name: "Conta fixa" }));
     await userEvent.click(screen.getByRole("button", { name: "Salvar Lançamento" }));
     await userEvent.click(screen.getByRole("button", { name: "Criar conta" }));
 
@@ -1115,27 +1131,6 @@ describe("TransactionSheet", () => {
     expect(await screen.findByText("Não foi possível salvar o lançamento.")).toBeInTheDocument();
   });
 
-  it("offers Transformar em conta fixa only for a Saída without a counted Recorrente", async () => {
-    setup({ billSheet });
-
-    const link = "Criar como Conta Fixa";
-    expect(await screen.findByRole("switch", { name: "Recorrente" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: link })).not.toBeInTheDocument();
-    await userEvent.click(screen.getByRole("radio", { name: "Conta" }));
-    expect(screen.getByText(/Prefere transformar em conta fixa recorrente\?/)).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("switch", { name: "Recorrente" }));
-    expect(screen.getByRole("button", { name: link })).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("radio", { name: "12" }));
-    expect(screen.queryByRole("button", { name: link })).not.toBeInTheDocument();
-  });
-
-  it("offers no Transformar em conta fixa when the host has no bill sheet", async () => {
-    setup({ initialKind: "bill" });
-
-    expect(await screen.findByRole("switch", { name: "Recorrente" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Criar como Conta Fixa" })).not.toBeInTheDocument();
-  });
-
   it("launches the Saída, then turns it into a bill prefilled from it", async () => {
     const { requests, onOpenChange } = setup(
       { billSheet },
@@ -1148,7 +1143,8 @@ describe("TransactionSheet", () => {
     await userEvent.click(await screen.findByRole("radio", { name: "Conta" }));
     expect(await screen.findByRole("radio", { name: "Aluguel" })).toHaveAttribute("aria-checked", "true");
     await userEvent.type(screen.getByLabelText(/^Valor d/), "120000");
-    await userEvent.click(screen.getByRole("button", { name: "Criar como Conta Fixa" }));
+    await userEvent.click(screen.getByRole("switch", { name: "Conta fixa" }));
+    await userEvent.click(screen.getByRole("button", { name: "Salvar Lançamento" }));
     expect(requests.some((request) => request.method === "POST")).toBe(false);
     await userEvent.click(screen.getByRole("button", { name: "Criar conta" }));
 
@@ -1172,7 +1168,8 @@ describe("TransactionSheet", () => {
 
     await userEvent.type(await screen.findByLabelText(/^Valor d/), "100");
     await userEvent.type(screen.getByLabelText("Observação"), "Internet");
-    await userEvent.click(screen.getByRole("button", { name: "Criar como Conta Fixa" }));
+    await userEvent.click(screen.getByRole("switch", { name: "Conta fixa" }));
+    await userEvent.click(screen.getByRole("button", { name: "Salvar Lançamento" }));
     await userEvent.click(screen.getByRole("button", { name: "Criar conta" }));
 
     expect(await screen.findByText("Lançado, mas a conta fixa não foi criada.")).toBeInTheDocument();
@@ -1187,7 +1184,8 @@ describe("TransactionSheet", () => {
     );
 
     await userEvent.type(await screen.findByLabelText(/^Valor d/), "100");
-    await userEvent.click(screen.getByRole("button", { name: "Criar como Conta Fixa" }));
+    await userEvent.click(screen.getByRole("switch", { name: "Conta fixa" }));
+    await userEvent.click(screen.getByRole("button", { name: "Salvar Lançamento" }));
     await userEvent.click(screen.getByRole("button", { name: "Criar conta" }));
 
     expect(await screen.findByText("Não foi possível salvar o lançamento.")).toBeInTheDocument();
@@ -1201,7 +1199,8 @@ describe("TransactionSheet", () => {
     );
 
     await userEvent.type(await screen.findByLabelText("Observação"), "Rascunho");
-    await userEvent.click(screen.getByRole("button", { name: "Criar como Conta Fixa" }));
+    await userEvent.click(screen.getByRole("switch", { name: "Conta fixa" }));
+    await userEvent.click(screen.getByRole("button", { name: "Salvar Lançamento" }));
     await userEvent.click(screen.getByRole("button", { name: "Criar conta" }));
 
     expect(await screen.findByText("Não foi possível criar a conta fixa.")).toBeInTheDocument();
@@ -1211,11 +1210,124 @@ describe("TransactionSheet", () => {
     expect(await posts[0].json()).toEqual({ name: "Aluguel", amount: "1200.00", due_day: 4, category_id: ALUGUEL.id });
   });
 
-  it("offers no Transformar em conta fixa in Editar when the stored entry is not a Saída", async () => {
+  it("offers only Parcelado in Editar when the stored entry is not a Saída", async () => {
     setup({ transaction: MERCADO_ROW, billSheet });
 
     await userEvent.click(await screen.findByRole("radio", { name: "Conta" }));
+    expect(screen.getByRole("switch", { name: "Parcelado" })).toBeInTheDocument();
+    expect(screen.queryByRole("switch", { name: "Conta fixa" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Criar como Conta Fixa" })).not.toBeInTheDocument();
+  });
+
+  describe("Criar como Conta Fixa on a series member (SOL-152)", () => {
+    const SERIES_HINT =
+      "Os lançamentos desta série até este mês viram pagamentos desta conta. Os dos próximos meses saem da lista: a conta passa a prever cada mês.";
+    const SERIES: Schemas["TransactionSeries"] = {
+      id: "s",
+      position: 8,
+      total: 26,
+      last_date: "2028-04-01",
+      every: "month",
+      open_ended: false,
+    };
+    const PORTO_MEMBER: Schemas["Transaction"] = { ...ALUGUEL_ROW, note: "Porto", date: "2026-10-01", series: SERIES };
+    const member = (series: Partial<Schemas["TransactionSeries"]>, date = PORTO_MEMBER.date) => ({
+      ...PORTO_MEMBER,
+      date,
+      series: { ...SERIES, ...series },
+    });
+    const convertWith = async (transaction: Schemas["Transaction"], replies = {}) => {
+      const sheet = vi.fn(billSheet);
+      const { requests } = setup({ transaction, billSheet: sheet }, replies);
+      await userEvent.click(await screen.findByRole("button", { name: "Criar como Conta Fixa" }));
+      return { requests, props: sheet.mock.lastCall?.[0] };
+    };
+
+    it("keeps a Conta series member's edit as it was: Quantas vezes with Sempre, Ciclo Atual, the link, no new switch", async () => {
+      setup({ transaction: PORTO_MEMBER, billSheet });
+
+      const counts = await screen.findByRole("radiogroup", { name: "Quantas vezes" });
+      expect(within(counts).getByRole("radio", { name: "Sempre" })).toBeDisabled();
+      expect(screen.getByRole("button", { name: "Ciclo Atual" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Criar como Conta Fixa" })).toBeInTheDocument();
+      for (const name of ["Conta fixa", "Parcelado", "Recorrente"])
+        expect(screen.queryByRole("switch", { name })).not.toBeInTheDocument();
+    });
+
+    it("offers Criar como Conta Fixa on a monthly Conta series member, with the series hint and a Parcelado prefill", async () => {
+      const { requests, props } = await convertWith(PORTO_MEMBER, {
+        "POST /api/bills": { status: 201, body: BILL_ALUGUEL },
+      });
+
+      expect(props?.hint).toBe(SERIES_HINT);
+      expect(props?.prefill).toEqual({
+        name: "Porto",
+        amount: "1200.00",
+        due_day: 1,
+        category_id: ALUGUEL.id,
+        installments: 26,
+        last_month: "2028-04-01",
+      });
+      await userEvent.click(screen.getByRole("button", { name: "Criar conta" }));
+
+      expect(await screen.findByText("Conta fixa criada")).toBeInTheDocument();
+      const posts = requests.filter((request) => request.method === "POST");
+      expect(posts).toHaveLength(1);
+      expect(new URL(posts[0].url).pathname).toBe("/api/bills");
+      expect(new URL(posts[0].url).searchParams.get("transaction_id")).toBe(PORTO_MEMBER.id);
+    });
+
+    it("prefills a Parcelado ending this month when the series' last member is this month", async () => {
+      const { props } = await convertWith(member({ last_date: "2026-11-01", total: 9 }));
+
+      expect(props?.prefill).toEqual({
+        name: "Porto",
+        amount: "1200.00",
+        due_day: 1,
+        category_id: ALUGUEL.id,
+        installments: 9,
+        last_month: "2026-11-01",
+      });
+    });
+
+    it("prefills the series' month span when deleted members leave its total short", async () => {
+      const { props } = await convertWith(member({ position: 1, total: 2, last_date: "2027-01-05" }, "2026-11-05"));
+
+      expect(props?.prefill).toMatchObject({ due_day: 5, installments: 3, last_month: "2027-01-01" });
+    });
+
+    it("takes the larger day when the last member sits clamped on its month's last day", async () => {
+      const { props } = await convertWith(member({ last_date: "2027-02-28" }, "2026-10-31"));
+
+      expect(props?.prefill).toMatchObject({ due_day: 31, installments: 26, last_month: "2027-02-01" });
+    });
+
+    it.each([
+      ["a weekly member", member({ every: "week" })],
+      ["a yearly member", member({ every: "year" })],
+      ["a series that ended last month", member({ last_date: "2026-10-01", total: 8 })],
+      ["a bill payment", { ...ALUGUEL_ROW, recurring_bill_id: BILL_ALUGUEL.id }],
+      ["a resgate", { ...ALUGUEL_ROW, cofrinho_id: "c1000000-0000-4000-8000-000000000001" }],
+    ])("offers no Criar como Conta Fixa on %s", async (_, transaction) => {
+      setup({ transaction, billSheet });
+
+      expect(await screen.findByLabelText("Observação")).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Criar como Conta Fixa" })).not.toBeInTheDocument();
+    });
+
+    it("says a series with two entries in one month cannot become a conta fixa", async () => {
+      await convertWith(PORTO_MEMBER, {
+        "POST /api/bills": {
+          status: 422,
+          body: { ...problem(422, "Shared."), type: "urn:soldi:error:series-shared-month" },
+        },
+      });
+      await userEvent.click(screen.getByRole("button", { name: "Criar conta" }));
+
+      expect(
+        await screen.findByText("Esta série tem dois lançamentos no mesmo mês. Exclua um deles e tente de novo."),
+      ).toBeInTheDocument();
+    });
   });
 
   it("saves on Enter in Valor", async () => {

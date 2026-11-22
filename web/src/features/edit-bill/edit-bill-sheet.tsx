@@ -2,7 +2,7 @@
 
 import { type FormEvent, useId, useState } from "react";
 
-import { Archive, Check, Repeat, TrendingDown } from "lucide-react";
+import { Check, Repeat, Trash2, TrendingDown } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Switch } from "@/components/ui/switch";
 import { firstMonth, installmentOf, lastMonthOf } from "@/entities/bill/bill-plan";
-import { type Bill, useCreateBill, useUpdateBill } from "@/entities/bill/bill-queries";
+import { type Bill, useArchiveBill, useCreateBill, useUpdateBill } from "@/entities/bill/bill-queries";
 import { categoryLabel } from "@/entities/category/categories-query";
 import { useCategoryChips } from "@/entities/category/category-chips";
 import { cn } from "@/lib/utils";
@@ -33,6 +33,7 @@ type Draft = {
   parcelado: boolean;
   installments: string;
   current: string;
+  variable: boolean;
 };
 
 const input = "h-12 text-base md:text-base";
@@ -101,11 +102,12 @@ const emptyDraft: Draft = {
   parcelado: false,
   installments: "",
   current: "1",
+  variable: false,
 };
 
-const currentOf = (bill?: Bill) => {
-  if (!bill?.installments || !bill.last_month) return "1";
-  const current = installmentOf(firstMonth(todayISO(), bill.due_day), bill.last_month, bill.installments);
+const currentOf = (from: { due_day: number; installments?: number | null; last_month?: string | null }) => {
+  if (!from.installments || !from.last_month) return "1";
+  const current = installmentOf(firstMonth(todayISO(), from.due_day), from.last_month, from.installments);
   return String(current ?? 1);
 };
 
@@ -120,9 +122,10 @@ const draftOf = (bill?: Bill, prefill?: Schemas["CreateBill"]): Draft => {
     card: from.closing_day != null,
     categoryId: from.category_id ?? undefined,
     active: bill?.active ?? true,
-    parcelado: bill?.installments != null,
-    installments: bill?.installments ? String(bill.installments) : "",
-    current: currentOf(bill),
+    parcelado: from.installments != null,
+    installments: from.installments ? String(from.installments) : "",
+    current: currentOf(from),
+    variable: from.variable ?? false,
   };
 };
 
@@ -159,6 +162,10 @@ export const BillForm = ({
   const maxCurrent = count || 60;
   const current = Number(draft.current) >= 1 && Number(draft.current) <= maxCurrent ? Number(draft.current) : 0;
   const lastMonth = count && current && day ? lastMonthOf(todayISO(), day, count, current - 1) : undefined;
+  const initial = draftOf(bill, prefill);
+  const planTouched = draft.installments !== initial.installments || draft.current !== initial.current;
+  // D44: an untouched prefill keeps the series' last month, which the form cannot work out once its due day passed.
+  const endMonth = (!bill && !planTouched && prefill?.last_month) || lastMonth;
   const dayError = "Escolha um dia de 1 a 31.";
   const errors = {
     name: submitted && !name ? "Informe o nome." : undefined,
@@ -183,16 +190,16 @@ export const BillForm = ({
     if (!name || !day || !categoryId) return;
     const active = draft.parcelado ? (bill?.active ?? true) : draft.active;
     const fields = { name, due_day: day, category_id: categoryId, active };
+    const variable = draft.variable !== (bill?.variable ?? false) ? { variable: draft.variable } : {};
     if (draft.card) {
       if (closingDay) onSave({ ...fields, closing_day: closingDay });
       return;
     }
     if (!amount) return;
-    if (!draft.parcelado) return onSave({ ...fields, amount });
+    if (!draft.parcelado) return onSave({ ...fields, amount, ...variable });
     if (!lastMonth) return;
-    const initial = draftOf(bill, prefill);
-    const changed = draft.installments !== initial.installments || draft.current !== initial.current;
-    onSave({ ...fields, amount, ...(changed && { installments: count, last_month: lastMonth }) });
+    const changed = !bill || planTouched;
+    onSave({ ...fields, amount, ...variable, ...(changed && { installments: count, last_month: endMonth }) });
   };
 
   const actions = (
@@ -229,9 +236,9 @@ export const BillForm = ({
         />
         {errors.name && <FieldError>{errors.name}</FieldError>}
       </Field>
-      {!prefill && (!bill || (bill.closing_day == null && bill.installments == null)) && (
+      {(!bill || (bill.closing_day == null && bill.installments == null)) && (
         <div className="grid gap-2 sm:grid-cols-2">
-          {!bill && (
+          {!bill && !prefill && (
             <label
               htmlFor="bill-card-switch"
               className="flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-xl bg-muted px-4 py-2"
@@ -267,7 +274,9 @@ export const BillForm = ({
         <ClosingDay value={draft.closingDay} error={errors.closingDay} onChange={(closingDay) => set({ closingDay })} />
       ) : (
         <Field className="gap-1.5" data-invalid={Boolean(errors.amount)}>
-          <FieldLabel htmlFor="bill-amount">Valor mensal fixo estimado</FieldLabel>
+          <FieldLabel htmlFor="bill-amount">
+            {draft.variable ? "Valor estimado" : "Valor mensal fixo estimado"}
+          </FieldLabel>
           <AmountInput
             id="bill-amount"
             value={draft.amount}
@@ -277,6 +286,29 @@ export const BillForm = ({
           />
           {errors.amount && <FieldError>{errors.amount}</FieldError>}
         </Field>
+      )}
+      {!draft.card && (
+        <label
+          htmlFor="bill-variable-switch"
+          className="flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-xl bg-muted px-4 py-2"
+        >
+          <span className="flex flex-col">
+            <span id="bill-variable" className="font-medium text-base">
+              Valor varia todo mês
+            </span>
+            {draft.variable && (
+              <span className="text-muted-foreground text-xs">
+                Ex.: luz, água, cartão. O valor fica como estimativa e você ajusta ao pagar.
+              </span>
+            )}
+          </span>
+          <Switch
+            id="bill-variable-switch"
+            aria-labelledby="bill-variable"
+            checked={draft.variable}
+            onCheckedChange={(variable) => set({ variable })}
+          />
+        </label>
       )}
       <Field className="gap-1.5" data-invalid={Boolean(errors.day)}>
         <FieldLabel htmlFor="bill-day">Dia do vencimento recorrente</FieldLabel>
@@ -334,7 +366,7 @@ export const BillForm = ({
             />
             {errors.current && <FieldError>{errors.current}</FieldError>}
           </Field>
-          {lastMonth && (
+          {lastMonth && endMonth === lastMonth && (
             <p className="-mt-3 text-muted-foreground text-sm">
               {`Parcela ${current}/${count} em ${monthAbbrev(firstMonth(todayISO(), day))} · termina em ${monthAbbrev(lastMonth)}`}
             </p>
@@ -400,15 +432,20 @@ export const BillForm = ({
         </label>
       )}
       {bill && (
-        <Button
-          type="button"
-          variant="ghost"
-          className="min-h-11 text-base text-destructive hover:text-destructive"
-          onClick={() => onArchive(bill)}
-        >
-          <Archive className="size-5" />
-          Arquivar
-        </Button>
+        <div className="flex flex-col items-center gap-1">
+          <Button
+            type="button"
+            variant="ghost"
+            className="min-h-11 text-base text-destructive hover:text-destructive"
+            onClick={() => onArchive(bill)}
+          >
+            <Trash2 className="size-5" />
+            {bill.closing_day == null ? "Excluir conta fixa" : "Excluir cartão"}
+          </Button>
+          <p className="text-center text-muted-foreground text-xs">
+            Sai de todos os meses; os pagamentos já feitos continuam nos lançamentos.
+          </p>
+        </div>
       )}
       {pinned ? (
         <ResponsiveSheetFooter>{actions}</ResponsiveSheetFooter>
@@ -431,6 +468,38 @@ export const useSaveBill = (bill?: Bill, onCreate?: (fields: Schemas["CreateBill
     if (bill) return update.mutate({ id: bill.id, ...fields, ...(active !== bill.active && { active }) }, feedback);
     if (onCreate) return onCreate(fields);
     create.mutate(fields, feedback);
+  };
+};
+
+// ponytail: no unarchive endpoint, so the DELETE waits for the toast; closing the tab inside those 5 s keeps the bill.
+/** SOL-153: hides a bill at once and deletes it when the 5 s Desfazer toast closes; Desfazer or a failure brings it back. */
+export const useArchiveLater = (onHide: (id: string) => void, onRestore: (id: string) => void) => {
+  const archive = useArchiveBill();
+  return (bill: Bill) => {
+    onHide(bill.id);
+    const card = bill.closing_day != null;
+    let undone = false;
+    const commit = () => {
+      if (undone) return;
+      undone = true;
+      // The screen may be gone by now; mutate's own callbacks would not run.
+      archive.mutateAsync(bill.id).catch(() => {
+        onRestore(bill.id);
+        toast.error(card ? "Não foi possível excluir o cartão." : "Não foi possível excluir a conta fixa.");
+      });
+    };
+    toast(card ? "Cartão excluído" : "Conta fixa excluída", {
+      duration: 5000,
+      action: {
+        label: "Desfazer",
+        onClick: () => {
+          undone = true;
+          onRestore(bill.id);
+        },
+      },
+      onAutoClose: commit,
+      onDismiss: commit,
+    });
   };
 };
 
@@ -483,10 +552,22 @@ type EditBillSheetProps = {
   prefill?: Schemas["CreateBill"];
   /** Takes over saving a new bill. */
   onCreate?: (fields: Schemas["CreateBill"]) => void;
+  /** A line above the form. */
+  hint?: string;
+  onCloseAutoFocus?: (event: Event) => void;
 };
 
 /** Add or edit a recurring bill: nome, valor, dia 1–31, categoria and, when editing, Ativa; a new one may be a card (D28), which has Fecha dia instead of valor and no pause. */
-export const EditBillSheet = ({ open, onOpenChange, bill, onArchive, prefill, onCreate }: EditBillSheetProps) => {
+export const EditBillSheet = ({
+  open,
+  onOpenChange,
+  bill,
+  onArchive,
+  prefill,
+  onCreate,
+  hint,
+  onCloseAutoFocus,
+}: EditBillSheetProps) => {
   const save = useSaveBill(bill, onCreate);
 
   return (
@@ -495,7 +576,9 @@ export const EditBillSheet = ({ open, onOpenChange, bill, onArchive, prefill, on
       onOpenChange={onOpenChange}
       title={bill ? "Editar conta" : "Nova conta"}
       description="Uma conta que se repete todo mês."
+      onCloseAutoFocus={onCloseAutoFocus}
     >
+      {hint && <p className="rounded-xl bg-secondary px-4 py-3 font-medium text-primary text-sm">{hint}</p>}
       <BillForm
         key={bill?.id ?? "new"}
         bill={bill}

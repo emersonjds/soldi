@@ -12,6 +12,7 @@ import {
   CircleX,
   CreditCard,
   InfinityIcon,
+  Layers,
   Lightbulb,
   type LucideIcon,
   NotebookPen,
@@ -29,6 +30,7 @@ import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { monthsBetween } from "@/entities/bill/bill-plan";
 import { type BillPrefill, useCards, useCreateBill } from "@/entities/bill/bill-queries";
 import { CategoryChips, useCategoryChips } from "@/entities/category/category-chips";
 import { useSettings } from "@/entities/settings/settings-query";
@@ -47,7 +49,7 @@ import { useIsLg } from "@/hooks/use-lg";
 import { cn } from "@/lib/utils";
 import { ApiError, problemMessage, type Schemas } from "@/shared/api/client";
 import { useCurrency } from "@/shared/lib/currency";
-import { isoWeekStart, todayISO, weekdayName } from "@/shared/lib/date";
+import { isoWeekStart, lastDay, todayISO, weekdayName } from "@/shared/lib/date";
 import { formatMoney, positiveAmount } from "@/shared/lib/money";
 import { cents, fromCents } from "@/shared/lib/tier";
 import { AmountKeypad, useKeypad } from "@/shared/ui/amount-keypad";
@@ -67,6 +69,15 @@ const KINDS: { value: Kind; label: string; icon: LucideIcon }[] = [
 /** `always`: Sempre, an open series (D36). */
 const PRESETS = ["always", "2", "3", "6", "12", "other"];
 const PRESET_LABELS: Record<string, string> = { always: "Sempre", other: "Outro" };
+
+const REPEAT_OFF = {
+  repeat: false,
+  every: "month",
+  preset: "always",
+  custom: "",
+  starting: false,
+  first: "1",
+} as const;
 
 const caption = "font-semibold text-muted-foreground text-xs uppercase tracking-[0.12em]";
 
@@ -113,12 +124,38 @@ const presetOf = (open: boolean, total: string) => {
   return PRESETS.includes(total) ? total : "other";
 };
 
-const prefillOf = ({ note, category, amount, date }: Source): BillPrefill => ({
-  name: (note ?? category.name).slice(0, 100),
-  amount,
-  due_day: Number(date.slice(8)),
-  category_id: category.id,
-});
+const SERIES_HINT =
+  "Os lançamentos desta série até este mês viram pagamentos desta conta. Os dos próximos meses saem da lista: a conta passa a prever cada mês.";
+
+/** D20's series day: the last member's, or the larger of the two when it sits clamped on its month's last day. */
+const seriesDay = (lastDate: string, date: string) => {
+  const day = Number(lastDate.slice(8));
+  return day === lastDay(lastDate.slice(0, 7)) ? Math.max(day, Number(date.slice(8))) : day;
+};
+
+/**
+ * D44: a series running through this month keeps its end as a parcelado bill, over its month span from the first
+ * member (deleted members leave `total` short of it).
+ */
+const prefillOf = (source: Source): BillPrefill => {
+  const { note, category, amount, date } = source;
+  const prefill = {
+    name: (note ?? category.name).slice(0, 100),
+    amount,
+    due_day: Number(date.slice(8)),
+    category_id: category.id,
+  };
+  const series = "series" in source ? source.series : undefined;
+  if (!series) return prefill;
+  const month = series.last_date.slice(0, 7);
+  const runsOn = !series.open_ended && month >= todayISO().slice(0, 7);
+  const installments = Math.max(series.total, monthsBetween(date, month) + series.position);
+  return {
+    ...prefill,
+    due_day: seriesDay(series.last_date, date),
+    ...(runsOn && { installments, last_month: `${month}-01` }),
+  };
+};
 
 const TransactionForm = ({
   initial,
@@ -160,7 +197,6 @@ const TransactionForm = ({
   const minMonths = Math.max(2, series?.position ?? 2);
   const monthsValid = Number.isInteger(months) && months >= minMonths && months <= 60;
   const canRepeat = !transaction?.recurring_bill_id && !transaction?.cofrinho_id && !series;
-  const counted = draft.repeat || Boolean(series);
   // A moved date can change the member's position; Quantas vezes waits for the next save.
   const moved = Boolean(series) && draft.date !== transaction?.date;
   // An open member has no length to resize (D36).
@@ -176,6 +212,9 @@ const TransactionForm = ({
   const written = offset ? months - first + 1 : months;
   // `open_ended` 422s on a bill (D36): Criar como Conta Fixa instead.
   const refused = draft.repeat && openEnded && draft.kind === "bill";
+  const counted = (draft.repeat && !refused) || Boolean(series);
+  // SOL-156: a new or standalone Conta counts parcelas, never Sempre.
+  const parcelado = draft.kind === "bill" && !series;
   const unit = UNITS[every];
   const weekly = every === "week";
   // D20, D32: a move keeps each member in its own month (its own ISO week when weekly).
@@ -245,7 +284,7 @@ const TransactionForm = ({
   const save = (confirmed = false) => {
     const valid = fields();
     if (!valid) return;
-    if (refused) return onConvert && convert();
+    if (refused) return convert();
     // D33: asked here, before onSave closes the sheet and this dialog with it.
     if (series && draft.scope === "all" && !confirmed) return setAsking(true);
     onSave(valid, series ? draft.scope : undefined, moving);
@@ -256,7 +295,10 @@ const TransactionForm = ({
     save();
   };
 
-  const convertible = onConvert && (transaction?.kind ?? draft.kind) === "bill" && !counting;
+  // D44: the server takes a monthly series member, never a weekly or yearly one, and one that ended before this
+  // month leaves nothing to owe.
+  const ended = series != null && series.last_date.slice(0, 7) < todayISO().slice(0, 7);
+  const convertible = onConvert && transaction?.kind === "bill" && series?.every === "month" && !ended;
 
   // Editar converts the stored entry; its unsaved edits stay out.
   const convert = () => {
@@ -365,28 +407,40 @@ const TransactionForm = ({
   const recurringNote = transaction?.recurring_bill_id && (
     <p className="text-muted-foreground text-sm">Já é uma conta fixa recorrente.</p>
   );
+  const repeatSwitch = (id: string, Icon: LucideIcon, label: string, checked: boolean, preset = "always") => (
+    <label
+      htmlFor={`${id}-switch`}
+      className="flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-xl bg-muted px-4"
+    >
+      <span id={id} className="flex items-center gap-2 font-medium text-base">
+        <Icon aria-hidden className="size-5 shrink-0 text-muted-foreground" />
+        {label}
+      </span>
+      <Switch
+        id={`${id}-switch`}
+        aria-labelledby={id}
+        checked={checked}
+        onCheckedChange={(on) => set({ ...REPEAT_OFF, ...(on && { repeat: true, preset }) })}
+      />
+    </label>
+  );
+  // A stored Diário or Entrada switched to Conta is not a conta fixa to convert.
+  const fixable = onConvert && (transaction ?? draft).kind === "bill";
   const monthsField = (canRepeat || series) && (
     <div className="flex flex-col gap-3">
-      {canRepeat && (
-        <label
-          htmlFor="transaction-repeat-switch"
-          className="flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-xl bg-muted px-4"
-        >
-          <span id="transaction-repeat" className="flex items-center gap-2 font-medium text-base">
-            <Repeat aria-hidden className="size-5 shrink-0 text-muted-foreground" />
-            Recorrente
-          </span>
-          <Switch
-            id="transaction-repeat-switch"
-            aria-labelledby="transaction-repeat"
-            checked={draft.repeat}
-            onCheckedChange={(repeat) =>
-              set({ repeat, every: "month", preset: "always", custom: "", starting: false, first: "1" })
-            }
-          />
-        </label>
+      {canRepeat && !parcelado && repeatSwitch("transaction-repeat", Repeat, "Recorrente", draft.repeat)}
+      {canRepeat && parcelado && (
+        <>
+          {fixable && repeatSwitch("transaction-fixed", Repeat, "Conta fixa", refused)}
+          {refused && (
+            <p className="text-muted-foreground text-sm">
+              Todo mês, sem fim. Ao salvar, abre o cadastro da conta fixa.
+            </p>
+          )}
+          {repeatSwitch("transaction-installments", Layers, "Parcelado", counting, "")}
+        </>
       )}
-      {draft.repeat && (
+      {draft.repeat && !refused && (
         <ToggleGroup
           type="single"
           spacing={0}
@@ -405,7 +459,7 @@ const TransactionForm = ({
       {counted && (
         <>
           <div className="flex min-h-11 items-center justify-between gap-3">
-            <span className={caption}>Quantas vezes</span>
+            <span className={caption}>{parcelado ? "Quantas parcelas" : "Quantas vezes"}</span>
             {series && (
               <Button
                 type="button"
@@ -423,11 +477,11 @@ const TransactionForm = ({
             spacing={0}
             value={draft.preset}
             onValueChange={(preset: string) => preset && set({ preset })}
-            aria-label="Quantas vezes"
+            aria-label={parcelado ? "Quantas parcelas" : "Quantas vezes"}
             disabled={moved || series?.open_ended}
             className="grid w-full grid-cols-3 rounded-2xl bg-muted p-1"
           >
-            {PRESETS.map((preset) => (
+            {(parcelado ? PRESETS.slice(1) : PRESETS).map((preset) => (
               <ToggleGroupItem
                 key={preset}
                 value={preset}
@@ -441,6 +495,11 @@ const TransactionForm = ({
               </ToggleGroupItem>
             ))}
           </ToggleGroup>
+          {submitted && counting && !draft.preset && (
+            <p role="alert" className="text-destructive text-sm">
+              Escolha quantas parcelas.
+            </p>
+          )}
           {draft.preset === "other" && (
             <div className="flex flex-col gap-1.5">
               <Input
@@ -495,15 +554,10 @@ const TransactionForm = ({
               {`${amount ? `${written}× de ${formatMoney(amount, currency)} · ` : ""}${repeatSummary(every, draft.date, written)}`}
             </p>
           )}
-          {draft.repeat && openEnded && !refused && (
+          {draft.repeat && openEnded && (
             <p className="flex items-center gap-2 text-muted-foreground text-sm">
               <Lightbulb aria-hidden className="size-4 shrink-0" />
               {`Repete ${openLine}, sem data para parar.`}
-            </p>
-          )}
-          {submitted && refused && !onConvert && (
-            <p role="alert" className="text-destructive text-sm">
-              Uma conta sem fim é uma conta fixa. Escolha quantas vezes.
             </p>
           )}
           {resizeNote && (
@@ -585,7 +639,15 @@ const TransactionForm = ({
               type="single"
               spacing={0}
               value={draft.kind}
-              onValueChange={(kind: Kind | "") => kind && set({ kind, category: undefined, cardId: "" })}
+              onValueChange={(kind: Kind | "") =>
+                kind &&
+                set({
+                  kind,
+                  category: undefined,
+                  cardId: "",
+                  ...((kind === "bill" || draft.kind === "bill") && REPEAT_OFF),
+                })
+              }
               aria-label="Tipo"
               className="grid w-full grid-cols-3 rounded-2xl bg-muted p-1"
             >
@@ -666,6 +728,7 @@ type TransactionSheetProps = {
   /** The bill sheet that Criar como Conta Fixa opens; absent, the link is not offered. */
   billSheet?: (props: {
     prefill: BillPrefill;
+    hint?: string;
     onOpenChange: (open: boolean) => void;
     onCreate: (bill: BillPrefill) => void;
   }) => ReactNode;
@@ -755,9 +818,11 @@ export const TransactionSheet = ({
       { ...bill, transactionId },
       {
         onSuccess: () => toast.success("Conta fixa criada"),
-        onError: () =>
+        onError: (error) =>
           toast.error(
-            transaction ? "Não foi possível criar a conta fixa." : "Lançado, mas a conta fixa não foi criada.",
+            transaction
+              ? (problemMessage(error) ?? "Não foi possível criar a conta fixa.")
+              : "Lançado, mas a conta fixa não foi criada.",
           ),
       },
     );
@@ -838,6 +903,7 @@ export const TransactionSheet = ({
       {converting &&
         billSheet?.({
           prefill: prefillOf(converting),
+          hint: "series" in converting && converting.series ? SERIES_HINT : undefined,
           onOpenChange: (open) => open || setConverting(undefined),
           onCreate: (bill) => void convert(converting, bill),
         })}

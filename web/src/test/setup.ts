@@ -1,12 +1,18 @@
 import "@testing-library/jest-dom/vitest";
 
 import { cleanup } from "@testing-library/react";
-import { afterEach, vi } from "vitest";
+import { afterAll, afterEach, vi } from "vitest";
 
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+});
+
+// sonner removes a dismissed toast 200 ms later with a timer it never clears; it must fire before jsdom goes away.
+afterAll(async () => {
+  vi.useRealTimers();
+  await new Promise((resolve) => setTimeout(resolve, 250));
 });
 
 // jsdom has no matchMedia; the shadcn sidebar asks for it.

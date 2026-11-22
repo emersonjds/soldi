@@ -583,6 +583,8 @@ export interface components {
              */
             last_month?: string | null;
             name: string;
+            /** @description The amount is an estimate that changes every month (D44); never on a card. */
+            variable: boolean;
         };
         /**
          * @description An active recurring bill in the month. `amount` is what was paid, or the bill's amount while
@@ -625,6 +627,8 @@ export interface components {
             paid: boolean;
             /** Format: uuid */
             transaction_id?: string | null;
+            /** @description The conta fixa's amount is an estimate (D44); false on a card. */
+            variable: boolean;
         };
         /** @description SOL-119: a card's fatura due in `month`, what fills it, and the next six months' committed totals. */
         CardFatura: {
@@ -811,6 +815,8 @@ export interface components {
             last_month?: string | null;
             /** @description 1 to 100 characters. */
             name: string;
+            /** @description The amount is an estimate that changes every month (D44). Not on a card. */
+            variable?: boolean;
         };
         /**
          * @description `icon` defaults to `circle-dashed`; `color`, `cat-1` to `cat-24`, to the lowest token free in
@@ -1207,6 +1213,8 @@ export interface components {
              */
             last_month?: string | null;
             name?: string | null;
+            /** @description Marks the amount as an estimate (D44). Not on a card. */
+            variable?: boolean | null;
         };
         /**
          * @description Absent fields stay as they are; `kind`, `daily` or `bill`, moves this category alone, top-level
@@ -1710,7 +1718,7 @@ export interface operations {
     create_bill: {
         parameters: {
             query?: {
-                /** @description A `bill` entry outside any series that becomes this bill's payment, moved to its category */
+                /** @description A `bill` entry that becomes this bill's payment. A standalone one moves to the bill's category; a member of a monthly series brings the series: members dated through the end of this month (São Paulo) become payments, keeping their categories, and later ones are deleted */
                 transaction_id?: string;
             };
             header?: never;
@@ -1757,7 +1765,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Name not 1 to 100 characters, amount not above zero or with more than two places, missing on a conta fixa or present on a card (`amount`), `closing_day` not 1 to 31, due day not 1 to 31, `category_id` missing on a conta fixa, not one of the caller's active bill categories or, on a card, `Economia` or a cofrinho, `installments` not 2 to 60, missing with `last_month` or on a card, `last_month` missing with `installments`, not a month's first day or not from this month to `installments` months ahead, or `cannot-become-bill` when the entry is not a `bill` entry, already a bill's payment, a resgate or a series member; `category_id` when a card has none and a subcategory or cofrinho holds the name `Cartão`, or the card group sits under `Economia`; `palette-full` when a card needs a new card group and all 24 bill colors are taken */
+            /** @description Name not 1 to 100 characters, amount not above zero or with more than two places, missing on a conta fixa or present on a card (`amount`), `closing_day` not 1 to 31, due day not 1 to 31, `category_id` missing on a conta fixa, not one of the caller's active bill categories or, on a card, `Economia` or a cofrinho, `installments` not 2 to 60, missing with `last_month` or on a card, `last_month` missing with `installments`, not a month's first day or not from this month to `installments` months ahead, `variable` on a card, `series-shared-month` when two members through this month share a month, or `cannot-become-bill` when the entry is not a `bill` entry, already a bill's payment, a resgate, or a member of a weekly or yearly series or of one holding a non-`bill` entry, or a member of a series a concurrent conversion already took; `category_id` when a card has none and a subcategory or cofrinho holds the name `Cartão`, or the card group sits under `Economia`; `palette-full` when a card needs a new card group and all 24 bill colors are taken */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -1866,7 +1874,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Same rules as create, on the bill after the change; `closing_day` on a conta fixa, `active: false` on a card, `active` on a parcelado bill or with `installments`/`last_month`; `installments` or `last_month` on a card, sent apart, or `last_month` before the latest paid month; `fatura-paid` when a card's `closing_day` changes while a fatura from this month on is paid (D30b) */
+            /** @description Same rules as create, on the bill after the change; `closing_day` on a conta fixa, `active: false` on a card, `active` on a parcelado bill or with `installments`/`last_month`; `installments` or `last_month` on a card, sent apart, or `last_month` before the latest paid month; `variable` on a card; `fatura-paid` when a card's `closing_day` changes while a fatura from this month on is paid (D30b) */
             422: {
                 headers: {
                     [name: string]: unknown;

@@ -144,6 +144,20 @@ pub async fn hold(pool: &PgPool, entry: &Value) -> sqlx::Transaction<'static, sq
     lock
 }
 
+/// A transaction holding the series' advisory lock, as `repo::lock_series` takes it.
+pub async fn hold_series(
+    pool: &PgPool,
+    series: &Value,
+) -> sqlx::Transaction<'static, sqlx::Postgres> {
+    let mut lock = pool.begin().await.unwrap();
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))")
+        .bind(series["series"]["id"].as_str().unwrap())
+        .execute(&mut *lock)
+        .await
+        .unwrap();
+    lock
+}
+
 /// Returns once `count` sessions of this test's database wait on a lock.
 pub async fn waiting(pool: &PgPool, count: i64) {
     loop {

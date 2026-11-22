@@ -69,6 +69,9 @@ describe("api results", () => {
     expect(problemMessage(new ApiError(422, "Paid.", [], "urn:soldi:error:fatura-paid"))).toBe(
       "Essa fatura já foi paga.",
     );
+    expect(problemMessage(new ApiError(422, "Shared.", [], "urn:soldi:error:series-shared-month"))).toBe(
+      "Esta série tem dois lançamentos no mesmo mês. Exclua um deles e tente de novo.",
+    );
     expect(problemMessage(new ApiError(422, "Full.", [], "urn:soldi:error:quota"))).toBe(
       "Sua conta chegou ao limite de 50.000 lançamentos.",
     );

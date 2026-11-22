@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
-import { Archive, CalendarDays, CirclePlus, MoreVertical, Pencil, ReceiptText, ShieldCheck } from "lucide-react";
+import { CalendarDays, CirclePlus, MoreVertical, Pencil, ReceiptText, ShieldCheck, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -17,12 +17,12 @@ import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { hasEnded } from "@/entities/bill/bill-plan";
-import { type Bill, useArchiveBill, useBills, useUpdateBill } from "@/entities/bill/bill-queries";
+import { type Bill, useBills, useUpdateBill } from "@/entities/bill/bill-queries";
 import { statusPill } from "@/entities/bill/bill-status";
 import { categoriesQuery, categoryLabel } from "@/entities/category/categories-query";
 import { useMonth } from "@/entities/month/month-query";
 import { ALL_BILLS_PAID } from "@/entities/month/schedule";
-import { BillFormPanel, EditBillSheet } from "@/features/edit-bill/edit-bill-sheet";
+import { BillFormPanel, EditBillSheet, useArchiveLater } from "@/features/edit-bill/edit-bill-sheet";
 import { useIsXl } from "@/hooks/use-xl";
 import { cn } from "@/lib/utils";
 import { problemMessage, type Schemas } from "@/shared/api/client";
@@ -109,6 +109,12 @@ const Row = ({
                 <span className="whitespace-nowrap text-muted-foreground text-sm">· {end}</span>
               </>
             )}
+            {bill.variable && (
+              <>
+                {" "}
+                <span className="whitespace-nowrap text-muted-foreground text-sm">· valor variável</span>
+              </>
+            )}
             {!active && !parcelado && (
               <span className={cn(statusPill, "min-h-6 shrink-0 bg-muted text-muted-foreground")}>Pausada</span>
             )}
@@ -121,11 +127,14 @@ const Row = ({
           <span className={cn(pill, "justify-self-start bg-muted text-muted-foreground")}>
             Dia {String(bill.due_day).padStart(2, "0")}
           </span>
-          <Money
-            amount={bill.amount}
-            size="figure"
-            className={cn("justify-self-end text-base leading-6", !active && "text-muted-foreground line-through")}
-          />
+          <span className="justify-self-end whitespace-nowrap text-base leading-6">
+            {bill.variable && <span aria-hidden>≈ </span>}
+            <Money
+              amount={bill.amount}
+              size="figure"
+              className={cn("text-base leading-6", !active && "text-muted-foreground line-through")}
+            />
+          </span>
         </>
       ) : (
         <span className="col-span-2 text-muted-foreground text-sm">
@@ -175,8 +184,8 @@ const Row = ({
               Editar
             </DropdownMenuItem>
             <DropdownMenuItem className="min-h-11 text-base" variant="destructive" onSelect={onArchive}>
-              <Archive />
-              Arquivar
+              <Trash2 />
+              Excluir
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -286,7 +295,6 @@ const Summary = ({ active, month }: { active: (Bill & { amount: string })[]; mon
 export const BillList = ({ month }: { month: string }) => {
   const bills = useBills({ includeInactive: true });
   const categories = useQuery(categoriesQuery);
-  const archive = useArchiveBill();
   const update = useUpdateBill();
   const wide = useIsXl();
   const [toggled, setToggled] = useState<Record<string, boolean | undefined>>({});
@@ -306,34 +314,10 @@ export const BillList = ({ month }: { month: string }) => {
     if (!wide) setEditing(true);
   };
 
-  const restore = (id: string) => setArchiving((ids) => ids.filter((each) => each !== id));
-
-  // ponytail: no unarchive endpoint, so the DELETE waits for the toast; closing the tab inside those 5 s keeps the bill.
-  const archiveLater = (bill: Bill) => {
-    setArchiving((ids) => [...ids, bill.id]);
-    let undone = false;
-    const commit = () => {
-      if (undone) return;
-      archive.mutate(bill.id, {
-        onError: (error) => {
-          restore(bill.id);
-          toast.error(problemMessage(error) ?? "Não foi possível arquivar a conta.");
-        },
-      });
-    };
-    toast("Conta arquivada", {
-      duration: 5000,
-      action: {
-        label: "Desfazer",
-        onClick: () => {
-          undone = true;
-          restore(bill.id);
-        },
-      },
-      onAutoClose: commit,
-      onDismiss: commit,
-    });
-  };
+  const archiveLater = useArchiveLater(
+    (id) => setArchiving((ids) => [...ids, id]),
+    (id) => setArchiving((ids) => ids.filter((each) => each !== id)),
+  );
 
   const settle = (id: string) => setToggled((current) => ({ ...current, [id]: undefined }));
 
@@ -344,7 +328,7 @@ export const BillList = ({ month }: { month: string }) => {
       .then(onSaved, (error) => toast.error(problemMessage(error) ?? "Não foi possível salvar."))
       .finally(() => settle(bill.id));
 
-  // D17: resuming sets active_since to today and drops the bill's overdue occurrences, so the pause waits for the toast like archiveLater and Desfazer sends nothing.
+  // D17: resuming sets active_since to today and drops the bill's overdue occurrences, so the pause waits for the toast like useArchiveLater and Desfazer sends nothing.
   const pauseLater = (bill: Bill) => {
     let done = false;
     const commit = () => {
