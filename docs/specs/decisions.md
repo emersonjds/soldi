@@ -423,7 +423,8 @@ Revisit when Soldi adds verify-before-account (then sign-up answers the same 202
 
 - members dated through the end of this São Paulo month become the new bill's payments, detached from the series, each keeping its date, amount and category;
 - members in later months are deleted;
-- the body is the bill as the form shows it. The web prefills it from the opened member, with D20's series day, and as Parcelado (`installments` = the series' total, `last_month` = its last member's month) when the series runs past this month;
+- the body is the bill as the form shows it. The web prefills it from the opened member, with D20's series day, and as Parcelado (`installments` = the series' total or its month span when larger, `last_month` = its last member's month) when the series runs through this month or later;
+- owner, 2026-11-22: a series whose last member is this month becomes a Parcelado ending this month; one whose last member is before this month offers no conversion, since nothing is left to owe;
 - refusals: weekly, yearly and mixed series answer 422 `cannot-become-bill`; two members in one month through this one answer 422 `series-shared-month`;
 - R8's standalone path is unchanged, and still moves its entry to the bill's category.
 

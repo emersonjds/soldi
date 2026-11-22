@@ -162,6 +162,10 @@ export const BillForm = ({
   const maxCurrent = count || 60;
   const current = Number(draft.current) >= 1 && Number(draft.current) <= maxCurrent ? Number(draft.current) : 0;
   const lastMonth = count && current && day ? lastMonthOf(todayISO(), day, count, current - 1) : undefined;
+  const initial = draftOf(bill, prefill);
+  const planTouched = draft.installments !== initial.installments || draft.current !== initial.current;
+  // D44: an untouched prefill keeps the series' last month, which the form cannot work out once its due day passed.
+  const endMonth = (!bill && !planTouched && prefill?.last_month) || lastMonth;
   const dayError = "Escolha um dia de 1 a 31.";
   const errors = {
     name: submitted && !name ? "Informe o nome." : undefined,
@@ -194,9 +198,8 @@ export const BillForm = ({
     if (!amount) return;
     if (!draft.parcelado) return onSave({ ...fields, amount, ...variable });
     if (!lastMonth) return;
-    const initial = draftOf(bill, prefill);
-    const changed = !bill || draft.installments !== initial.installments || draft.current !== initial.current;
-    onSave({ ...fields, amount, ...variable, ...(changed && { installments: count, last_month: lastMonth }) });
+    const changed = !bill || planTouched;
+    onSave({ ...fields, amount, ...variable, ...(changed && { installments: count, last_month: endMonth }) });
   };
 
   const actions = (
@@ -363,7 +366,7 @@ export const BillForm = ({
             />
             {errors.current && <FieldError>{errors.current}</FieldError>}
           </Field>
-          {lastMonth && (
+          {lastMonth && endMonth === lastMonth && (
             <p className="-mt-3 text-muted-foreground text-sm">
               {`Parcela ${current}/${count} em ${monthAbbrev(firstMonth(todayISO(), day))} · termina em ${monthAbbrev(lastMonth)}`}
             </p>

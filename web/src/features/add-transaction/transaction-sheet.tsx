@@ -29,6 +29,7 @@ import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { monthsBetween } from "@/entities/bill/bill-plan";
 import { type BillPrefill, useCards, useCreateBill } from "@/entities/bill/bill-queries";
 import { CategoryChips, useCategoryChips } from "@/entities/category/category-chips";
 import { useSettings } from "@/entities/settings/settings-query";
@@ -122,7 +123,10 @@ const seriesDay = (lastDate: string, date: string) => {
   return day === lastDay(lastDate.slice(0, 7)) ? Math.max(day, Number(date.slice(8))) : day;
 };
 
-/** D44: a series still running after this month keeps its end as a parcelado bill. */
+/**
+ * D44: a series running through this month keeps its end as a parcelado bill, over its month span from the first
+ * member (deleted members leave `total` short of it).
+ */
 const prefillOf = (source: Source): BillPrefill => {
   const { note, category, amount, date } = source;
   const prefill = {
@@ -134,11 +138,12 @@ const prefillOf = (source: Source): BillPrefill => {
   const series = "series" in source ? source.series : undefined;
   if (!series) return prefill;
   const month = series.last_date.slice(0, 7);
-  const runsOn = !series.open_ended && month > todayISO().slice(0, 7);
+  const runsOn = !series.open_ended && month >= todayISO().slice(0, 7);
+  const installments = Math.max(series.total, monthsBetween(date, month) + series.position);
   return {
     ...prefill,
     due_day: seriesDay(series.last_date, date),
-    ...(runsOn && { installments: series.total, last_month: `${month}-01` }),
+    ...(runsOn && { installments, last_month: `${month}-01` }),
   };
 };
 
@@ -278,9 +283,15 @@ const TransactionForm = ({
     save();
   };
 
-  // D44: the server takes a monthly series member, never a weekly or yearly one.
+  // D44: the server takes a monthly series member, never a weekly or yearly one, and one that ended before this
+  // month leaves nothing to owe.
+  const ended = series != null && series.last_date.slice(0, 7) < todayISO().slice(0, 7);
   const convertible =
-    onConvert && (transaction?.kind ?? draft.kind) === "bill" && !counting && (series?.every ?? "month") === "month";
+    onConvert &&
+    (transaction?.kind ?? draft.kind) === "bill" &&
+    !counting &&
+    (series?.every ?? "month") === "month" &&
+    !ended;
 
   // Editar converts the stored entry; its unsaved edits stay out.
   const convert = () => {

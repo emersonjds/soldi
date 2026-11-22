@@ -2,7 +2,7 @@ import { addMonths, lastDay } from "@/shared/lib/date";
 
 import type { Bill } from "./bill-queries";
 
-const monthsBetween = (from: string, to: string) =>
+export const monthsBetween = (from: string, to: string) =>
   (Number(to.slice(0, 4)) - Number(from.slice(0, 4))) * 12 + Number(to.slice(5, 7)) - Number(from.slice(5, 7));
 
 /** Mirror of the server's parcela: `month` holds parcela `installments − months(month → lastMonth)`; null outside 1..N. */

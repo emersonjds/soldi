@@ -1225,7 +1225,7 @@ describe("TransactionSheet", () => {
     const SERIES: Schemas["TransactionSeries"] = {
       id: "s",
       position: 8,
-      total: 24,
+      total: 26,
       last_date: "2028-04-01",
       every: "month",
       open_ended: false,
@@ -1254,7 +1254,7 @@ describe("TransactionSheet", () => {
         amount: "1200.00",
         due_day: 1,
         category_id: ALUGUEL.id,
-        installments: 24,
+        installments: 26,
         last_month: "2028-04-01",
       });
       await userEvent.click(screen.getByRole("button", { name: "Criar conta" }));
@@ -1266,21 +1266,35 @@ describe("TransactionSheet", () => {
       expect(new URL(posts[0].url).searchParams.get("transaction_id")).toBe(PORTO_MEMBER.id);
     });
 
-    it("prefills a Fixo when the series ends this month", async () => {
-      const { props } = await convertWith(member({ last_date: "2026-11-01" }));
+    it("prefills a Parcelado ending this month when the series' last member is this month", async () => {
+      const { props } = await convertWith(member({ last_date: "2026-11-01", total: 9 }));
 
-      expect(props?.prefill).toEqual({ name: "Porto", amount: "1200.00", due_day: 1, category_id: ALUGUEL.id });
+      expect(props?.prefill).toEqual({
+        name: "Porto",
+        amount: "1200.00",
+        due_day: 1,
+        category_id: ALUGUEL.id,
+        installments: 9,
+        last_month: "2026-11-01",
+      });
+    });
+
+    it("prefills the series' month span when deleted members leave its total short", async () => {
+      const { props } = await convertWith(member({ position: 1, total: 2, last_date: "2027-01-05" }, "2026-11-05"));
+
+      expect(props?.prefill).toMatchObject({ due_day: 5, installments: 3, last_month: "2027-01-01" });
     });
 
     it("takes the larger day when the last member sits clamped on its month's last day", async () => {
       const { props } = await convertWith(member({ last_date: "2027-02-28" }, "2026-10-31"));
 
-      expect(props?.prefill).toMatchObject({ due_day: 31, installments: 24, last_month: "2027-02-01" });
+      expect(props?.prefill).toMatchObject({ due_day: 31, installments: 26, last_month: "2027-02-01" });
     });
 
     it.each([
       ["a weekly member", member({ every: "week" })],
       ["a yearly member", member({ every: "year" })],
+      ["a series that ended last month", member({ last_date: "2026-10-01", total: 8 })],
       ["a bill payment", { ...ALUGUEL_ROW, recurring_bill_id: BILL_ALUGUEL.id }],
       ["a resgate", { ...ALUGUEL_ROW, cofrinho_id: "c1000000-0000-4000-8000-000000000001" }],
     ])("offers no Criar como Conta Fixa on %s", async (_, transaction) => {
