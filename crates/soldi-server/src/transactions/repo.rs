@@ -564,7 +564,7 @@ pub async fn series_blockers(
         r#"SELECT COALESCE(bool_or(kind <> 'bill' OR card_id IS NOT NULL OR cofrinho_id IS NOT NULL
                                    OR recurring_bill_id IS NOT NULL), false) AS "mixed!",
                   count(*) FILTER (WHERE date <= $3)
-                    > count(DISTINCT date_trunc('month', date)) FILTER (WHERE date <= $3)
+                    > count(DISTINCT date_trunc('month', date::timestamp)) FILTER (WHERE date <= $3)
                     AS "shared_month!"
            FROM transactions WHERE user_id = $1 AND series_id = $2"#,
         user_id,
