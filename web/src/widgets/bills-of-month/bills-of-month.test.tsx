@@ -1,5 +1,5 @@
 import { QueryClientProvider } from "@tanstack/react-query";
-import { screen, waitFor, within } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Toaster } from "sonner";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -10,6 +10,7 @@ import { renderWithQuery } from "@/test/render";
 import {
   BILL_ALUGUEL,
   BILL_LUZ,
+  BILLS,
   BILLS_OF_MONTH,
   CARRIED_ALUGUEL,
   CATEGORIES,
@@ -683,6 +684,124 @@ describe("Contas a pagar", () => {
       await loaded();
 
       expect(within(header("Valor fixo")).getByText("· falta R$ 99.999,99")).toHaveClass("whitespace-nowrap");
+    });
+  });
+
+  describe("edit and remove from the name (SOL-153)", () => {
+    const EDITING = {
+      "GET /api/bills": { status: 200, body: BILLS },
+      "GET /api/categories": { status: 200, body: CATEGORIES },
+    };
+    const editOf = (name: string) => within(rowOf(name)).getByRole("button", { name: `Editar ${name}` });
+    const sent = (requests: Request[], method: string) =>
+      requests.filter((request) => request.method === method && request.url.includes("/api/bills/"));
+
+    it("keeps the name disabled until the bills load, then opens Editar conta with the bill and saves it", async () => {
+      const { requests } = show(BILLS_OF_MONTH, {
+        ...EDITING,
+        [`PATCH /api/bills/${BILL_ALUGUEL.id}`]: { status: 200, body: BILL_ALUGUEL },
+      });
+      await loaded();
+      expect(editOf("Aluguel Residencial")).toHaveClass("min-h-11");
+      await waitFor(() => expect(editOf("Aluguel Residencial")).toBeEnabled());
+
+      await userEvent.click(editOf("Aluguel Residencial"));
+      const sheet = await screen.findByRole("dialog", { name: "Editar conta" });
+      expect(within(sheet).getByLabelText("Nome da conta fixa")).toHaveValue("Aluguel Residencial");
+      expect(within(sheet).getByLabelText("Valor mensal fixo estimado")).toHaveValue("2.259,56");
+      await userEvent.click(within(sheet).getByRole("button", { name: "Salvar Conta Fixa" }));
+
+      expect(await screen.findByText("Conta salva")).toBeInTheDocument();
+      expect(sent(requests, "PATCH")).toHaveLength(1);
+    });
+
+    it("names a carried row's edit after its month and leaves a card on its fatura", async () => {
+      show([CARRIED_ALUGUEL, FATURA], EDITING);
+      await loaded();
+
+      expect(editOf("Aluguel Residencial de outubro")).toBeInTheDocument();
+      expect(within(rowOf("Fatura Porto")).queryByRole("button", { name: /^Editar/ })).not.toBeInTheDocument();
+    });
+
+    describe("Excluir conta fixa", () => {
+      beforeEach(() => {
+        vi.useFakeTimers({ shouldAdvanceTime: true, toFake: ["Date", "setTimeout", "clearTimeout"] });
+        vi.setSystemTime(new Date(2026, 10, 5, 12));
+      });
+
+      const remove = async (name: string) => {
+        const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+        await waitFor(() => expect(editOf(name)).toBeEnabled());
+        await user.click(editOf(name));
+        const sheet = await screen.findByRole("dialog", { name: "Editar conta" });
+        await user.click(within(sheet).getByRole("button", { name: "Excluir conta fixa" }));
+        return user;
+      };
+
+      it("hides the row at once with the counts, and Desfazer brings it back with no request", async () => {
+        const { requests } = show(BILLS_OF_MONTH, EDITING);
+        await loaded();
+
+        const user = await remove("Luz (Enel)");
+
+        expect(await screen.findByText("Conta fixa excluída")).toBeInTheDocument();
+        expect(screen.queryByRole("dialog", { name: "Editar conta" })).not.toBeInTheDocument();
+        expect(rows()).toEqual(["Aluguel Residencial"]);
+        expect(card()).toHaveTextContent("0 de 1 paga");
+        expect(card()).not.toHaveTextContent("vencida");
+        await user.click(screen.getByRole("button", { name: "Desfazer" }));
+
+        expect(rows()).toEqual(["Luz (Enel)", "Aluguel Residencial"]);
+        expect(card()).toHaveTextContent("0 de 2 pagas");
+        act(() => vi.advanceTimersByTime(6000));
+        expect(sent(requests, "DELETE")).toHaveLength(0);
+      });
+
+      it("deletes once the toast is gone", async () => {
+        const { requests } = show(BILLS_OF_MONTH, {
+          ...EDITING,
+          [`DELETE /api/bills/${BILL_LUZ.id}`]: { status: 204 },
+        });
+        await loaded();
+
+        await remove("Luz (Enel)");
+        await screen.findByText("Conta fixa excluída");
+        expect(sent(requests, "DELETE")).toHaveLength(0);
+        act(() => vi.advanceTimersByTime(6000));
+
+        await waitFor(() => expect(sent(requests, "DELETE")).toHaveLength(1));
+        expect(new URL(sent(requests, "DELETE")[0].url).pathname).toBe(`/api/bills/${BILL_LUZ.id}`);
+        expect(rows()).toEqual(["Aluguel Residencial"]);
+      });
+
+      it("brings the row back with its own words when deleting fails", async () => {
+        show(BILLS_OF_MONTH, {
+          ...EDITING,
+          [`DELETE /api/bills/${BILL_LUZ.id}`]: { status: 409, body: problem(409, "Texto do servidor.") },
+        });
+        await loaded();
+
+        await remove("Luz (Enel)");
+        await screen.findByText("Conta fixa excluída");
+        act(() => vi.advanceTimersByTime(6000));
+
+        expect(await screen.findByText("Não foi possível excluir a conta fixa.")).toBeInTheDocument();
+        expect(screen.queryByText("Texto do servidor.")).not.toBeInTheDocument();
+        expect(rows()).toEqual(["Luz (Enel)", "Aluguel Residencial"]);
+      });
+
+      it("drops the card with its last bill and Desfazer brings it back", async () => {
+        show([BILLS_OF_MONTH[1]], EDITING);
+        await loaded();
+
+        const user = await remove("Aluguel Residencial");
+
+        await screen.findByText("Conta fixa excluída");
+        expect(screen.queryByRole("region", { name: "Contas a pagar" })).not.toBeInTheDocument();
+        await user.click(screen.getByRole("button", { name: "Desfazer" }));
+        expect(await loaded()).toBeInTheDocument();
+        expect(rows()).toEqual(["Aluguel Residencial"]);
+      });
     });
   });
 

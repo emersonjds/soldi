@@ -9,13 +9,22 @@ import { toast } from "sonner";
 
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { type BillOfMonth, billTitle, payDateFor, usePayBill, useUnpayBill } from "@/entities/bill/bill-queries";
+import {
+  type Bill,
+  type BillOfMonth,
+  billTitle,
+  payDateFor,
+  useBills,
+  usePayBill,
+  useUnpayBill,
+} from "@/entities/bill/bill-queries";
 import { BillStatus } from "@/entities/bill/bill-status";
 import { billKey } from "@/entities/month/forecast-alert";
 import { ALL_BILLS_PAID, dueDays, nextDue } from "@/entities/month/schedule";
 import { useTransactions } from "@/entities/transaction/transaction-queries";
 import { TransactionSheet } from "@/features/add-transaction/transaction-sheet";
 import { FaturaSheet } from "@/features/card-fatura/fatura-sheet";
+import { EditBillSheet, useArchiveLater } from "@/features/edit-bill/edit-bill-sheet";
 import { PayBillSheet } from "@/features/pay-bill/pay-bill-sheet";
 import { cn } from "@/lib/utils";
 import { problemMessage, type Schemas } from "@/shared/api/client";
@@ -187,7 +196,7 @@ const Row = ({
   onPay,
   onUnpay,
   onAdjust,
-  onOpenFatura,
+  onOpenName,
   busy,
 }: {
   bill: BillOfMonth;
@@ -196,8 +205,8 @@ const Row = ({
   onPay: () => void;
   onUnpay: () => void;
   onAdjust: () => void;
-  /** SOL-119: a card's name area opens its fatura. */
-  onOpenFatura?: () => void;
+  /** SOL-119: a card's name area opens its fatura; SOL-153: any other bill's opens Editar conta, disabled while unset. */
+  onOpenName?: () => void;
   busy: boolean;
 }) => {
   const currency = useCurrency();
@@ -258,19 +267,16 @@ const Row = ({
       )}
     >
       <RoundCheck bill={bill} label={label} onToggle={bill.paid ? onUnpay : onPay} busy={busy} />
-      {onOpenFatura ? (
-        <button
-          type="button"
-          aria-label={`Ver ${label}`}
-          onClick={onOpenFatura}
-          className="flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-lg text-left focus-visible:outline-2 focus-visible:outline-ring sm:gap-3"
-        >
-          {name}
-          <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-        </button>
-      ) : (
-        name
-      )}
+      <button
+        type="button"
+        aria-label={`${bill.is_card ? "Ver" : "Editar"} ${label}`}
+        onClick={onOpenName}
+        disabled={!onOpenName}
+        className="flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-lg text-left focus-visible:outline-2 focus-visible:outline-ring sm:gap-3"
+      >
+        {name}
+        <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+      </button>
       {bill.paid ? (
         amount
       ) : (
@@ -299,12 +305,20 @@ export const BillsOfMonth = ({ view, className }: { view: Schemas["MonthView"]; 
   const [sheetOpen, setSheetOpen] = useState(false);
   const [fatura, setFatura] = useState<BillOfMonth>();
   const [faturaOpen, setFaturaOpen] = useState(false);
+  const [editing, setEditing] = useState<Bill>();
+  const [editOpen, setEditOpen] = useState(false);
+  const [hidden, setHidden] = useState<string[]>([]);
+  const saved = useBills({ includeInactive: true });
+  const archiveLater = useArchiveLater(
+    (id) => setHidden((ids) => [...ids, id]),
+    (id) => setHidden((ids) => ids.filter((each) => each !== id)),
+  );
   const pay = usePayBill();
   const unpay = useUnpayBill();
   const currency = useCurrency();
   const transactions = useTransactions(view.month);
   const paidOn = new Map(transactions.data?.map((transaction) => [transaction.id, transaction.date]));
-  const bills = view.bills_of_month;
+  const bills = view.bills_of_month.filter((bill) => !hidden.includes(bill.bill_id));
   const day = chosen?.month === view.month ? chosen.date : null;
   const shown = bills.filter((bill) => day === null || bill.due_date === day);
   const late = overdueOf(bills);
@@ -344,6 +358,20 @@ export const BillsOfMonth = ({ view, className }: { view: Schemas["MonthView"]; 
     if (date) setClosed([]);
   };
 
+  const openName = (bill: BillOfMonth) => {
+    if (bill.is_card)
+      return () => {
+        setFatura(bill);
+        setFaturaOpen(true);
+      };
+    const found = saved.data?.find((each) => each.id === bill.bill_id);
+    if (!found) return undefined;
+    return () => {
+      setEditing(found);
+      setEditOpen(true);
+    };
+  };
+
   if (bills.length === 0) return null;
 
   const list = (rows: BillOfMonth[], label?: string) => (
@@ -357,14 +385,7 @@ export const BillsOfMonth = ({ view, className }: { view: Schemas["MonthView"]; 
           onPay={() => payNow(bill)}
           onUnpay={() => undo(bill)}
           onAdjust={() => adjust(bill)}
-          onOpenFatura={
-            bill.is_card
-              ? () => {
-                  setFatura(bill);
-                  setFaturaOpen(true);
-                }
-              : undefined
-          }
+          onOpenName={openName(bill)}
           busy={pay.isPending || unpay.isPending}
         />
       ))}
@@ -468,6 +489,7 @@ export const BillsOfMonth = ({ view, className }: { view: Schemas["MonthView"]; 
         open={sheetOpen}
         onOpenChange={setSheetOpen}
       />
+      <EditBillSheet open={editOpen} onOpenChange={setEditOpen} bill={editing} onArchive={archiveLater} />
       <FaturaSheet
         bill={fatura}
         open={faturaOpen}
