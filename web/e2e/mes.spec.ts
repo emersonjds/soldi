@@ -67,7 +67,7 @@ test("a bill from onboarding shows under Contas a pagar, pays from the round che
   const bills = page.getByRole("region", { name: "Contas a pagar" });
   const bill = bills.getByRole("listitem", { name: "Aluguel" });
   await expect(bill).toContainText("R$ 300,00");
-  await expect(bills).toContainText("0 de 1 pagas");
+  await expect(bills).toContainText("0 de 1 paga");
   await expect(hero).toContainText(/Projetado no fim do mês\s*R\$\s700,00/);
 
   const chip = bills.getByRole("radio", { name: "dia 28, 1 conta a pagar" });
@@ -78,7 +78,7 @@ test("a bill from onboarding shows under Contas a pagar, pays from the round che
 
   await bill.getByRole("button", { name: "Marcar Aluguel como paga" }).click();
   await expect(bill.getByRole("button", { name: "Desmarcar Aluguel" })).toHaveAttribute("aria-pressed", "true");
-  await expect(bills).toContainText("1 de 1 pagas");
+  await expect(bills).toContainText("1 de 1 paga");
   await expect(hero).toContainText("R$ 700,00");
 
   await bill.getByRole("button", { name: "Desmarcar Aluguel" }).click();
@@ -359,4 +359,93 @@ test("Mês follows the mobile frame's order at 375, a stack and a 2-column rail 
     await expect(page.getByRole("img", { name: /^Entradas|^Saídas/ })).toHaveCount(0);
     await expectNoClipped(page);
   }
+});
+
+test("Contas a pagar groups the month by kind with the paid count, pays and undoes, edits from the name and Excluir has Desfazer (SOL-153)", async ({
+  page,
+  request,
+}) => {
+  await requireServer(request);
+  test.setTimeout(90_000);
+
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto("/criar-conta");
+  await page.getByLabel("E-mail").fill(`e2e-groups-${Date.now()}@example.com`);
+  await page.getByLabel("Senha").fill("uma-senha-bem-longa");
+  await page.getByRole("button", { name: "Criar conta" }).click();
+  await page.getByRole("button", { name: "Continuar" }).click();
+  await page.getByLabel("Saldo de hoje").fill("1.000,00");
+  await page.getByRole("button", { name: "Continuar" }).click();
+  await page.getByRole("button", { name: "Pular por agora" }).click();
+  await page.getByRole("button", { name: "Ver meu mês" }).click();
+  await page.getByRole("button", { name: "Pular" }).click();
+  await page
+    .getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ })
+    .getByRole("button", { name: "Fechar" })
+    .click();
+
+  // The server's São Paulo calendar, not the runner's clock.
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
+  const categories: { id: string; kind: string; is_savings: boolean }[] = await (
+    await page.request.get("/api/categories")
+  ).json();
+  const category = categories.find((each) => each.kind === "bill" && !each.is_savings);
+  for (const data of [
+    { name: "Internet da casa de praia em Ubatuba SP", amount: "99999.99" },
+    { name: "Luz", amount: "180.00", variable: true },
+  ]) {
+    const created = await page.request.post("/api/bills", {
+      data: { ...data, due_day: Number(today.slice(8)), category_id: category?.id },
+    });
+    expect(created.ok()).toBe(true);
+  }
+
+  await page.goto("/mes");
+  const bills = page.getByRole("region", { name: "Contas a pagar" });
+  const title = bills.getByRole("heading", { level: 2 });
+  const fixed = bills.getByRole("button", { name: /^Valor fixo/ });
+  await expect(title).toContainText("0 de 2 pagas");
+  await expect(fixed).toHaveAttribute("aria-expanded", "true");
+  await expect(fixed).toContainText(/0 de 1 paga · falta R\$\s99\.999,99/);
+  await expect(bills.getByRole("button", { name: /^Valor variável/ })).toContainText(/falta ≈ R\$\s180,00/);
+  await expect(bills.getByRole("link", { name: "Gerenciar contas fixas" })).toHaveAttribute("href", "/ajustes/contas");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await expectNoClipped(page);
+
+  const internet = bills.getByRole("listitem", { name: "Internet da casa de praia em Ubatuba SP" });
+  await internet.getByRole("button", { name: "Pagar Internet da casa de praia em Ubatuba SP" }).click();
+  await expect(fixed).toContainText("1 de 1 paga");
+  await expect(fixed).toHaveAttribute("aria-expanded", "true");
+  await expect(title).toContainText("1 de 2 pagas");
+  await internet.getByRole("button", { name: "Pago, Internet da casa de praia em Ubatuba SP" }).click();
+  await expect(page.getByText("Pagamento desfeito")).toBeVisible();
+  await expect(title).toContainText("0 de 2 pagas");
+
+  await bills.getByRole("button", { name: "Editar Internet da casa de praia em Ubatuba SP" }).click();
+  const sheet = page.getByRole("dialog", { name: "Editar conta" });
+  await sheet.getByLabel("Nome da conta fixa").fill("Internet");
+  await sheet.getByRole("button", { name: "Salvar Conta Fixa" }).click();
+  await expect(page.getByText("Conta salva")).toBeVisible();
+  const renamed = bills.getByRole("listitem", { name: "Internet", exact: true });
+  await expect(renamed).toBeVisible();
+
+  await bills.getByRole("button", { name: "Editar Internet", exact: true }).click();
+  await sheet.getByRole("button", { name: "Excluir conta fixa" }).click();
+  await expect(page.getByText("Conta fixa excluída")).toBeVisible();
+  await expect(renamed).toBeHidden();
+  await expect(title).toContainText("0 de 1 paga");
+  await page.getByRole("button", { name: "Desfazer" }).click();
+  await expect(renamed).toBeVisible();
+  await expect(title).toContainText("0 de 2 pagas");
+
+  await bills.getByRole("button", { name: "Editar Internet", exact: true }).click();
+  const deleted = page.waitForResponse(
+    (response) => response.request().method() === "DELETE" && response.url().includes("/api/bills/"),
+  );
+  await sheet.getByRole("button", { name: "Excluir conta fixa" }).click();
+  await page.mouse.move(0, 0);
+  expect((await deleted).ok()).toBe(true);
+  await page.reload();
+  await expect(title).toContainText("0 de 1 paga");
+  await expect(bills.getByRole("listitem", { name: "Internet", exact: true })).toHaveCount(0);
 });
