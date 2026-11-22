@@ -114,11 +114,16 @@ describe("Contas a pagar", () => {
     show();
     await loaded();
 
-    expect(card()).toHaveTextContent("Contas do Mês");
-    expect(card()).toHaveTextContent("2 obrigações cadastradas");
+    expect(card()).toHaveTextContent("Contas a pagar");
+    expect(card()).not.toHaveTextContent("Contas do Mês");
+    expect(card()).not.toHaveTextContent("obrigações");
     expect(card()).toHaveTextContent("0 de 2 pagas");
-    expect(card()).toHaveTextContent("Próxima: dia 10 · R$ 2.259,56");
-    expect(within(card()).getByRole("link", { name: "Ver todas" })).toHaveAttribute("href", "/ajustes/contas");
+    expect(card()).toHaveTextContent("1 vencida Próxima: dia 10 · R$ 2.259,56");
+    expect(within(card()).queryByRole("link", { name: "Ver todas" })).not.toBeInTheDocument();
+    const manage = within(card()).getByRole("link", { name: "Gerenciar contas fixas" });
+    expect(manage).toHaveAttribute("href", "/ajustes/contas");
+    expect(manage).toHaveClass("min-h-11");
+    expect(within(card()).queryByRole("heading", { level: 3 })).not.toBeInTheDocument();
 
     const rent = rowOf("Aluguel Residencial");
     expect(rent).toHaveTextContent("Vence dia 10/11");
@@ -433,14 +438,15 @@ describe("Contas a pagar", () => {
     await loaded();
 
     expect(card()).toHaveTextContent("Todas as contas do mês pagas");
-    expect(card()).toHaveTextContent("1 de 1 pagas");
+    expect(card()).toHaveTextContent("1 de 1 paga");
+    expect(card()).not.toHaveTextContent("1 de 1 pagas");
     expect(rowOf("Aluguel Residencial")).toHaveTextContent("Pago");
   });
 
   it("counts a single bill in the singular", async () => {
     show([{ ...BILLS_OF_MONTH[1], due_date: "2026-11-05" }]);
     await loaded();
-    expect(card()).toHaveTextContent("1 obrigação cadastrada");
+    expect(card()).toHaveTextContent("0 de 1 paga");
     expect(card()).toHaveTextContent("Próxima: dia 05 · R$ 2.259,56");
   });
 
@@ -536,6 +542,147 @@ describe("Contas a pagar", () => {
       await loaded();
       expect(within(rowOf("Inglês")).getByText("Inglês")).toHaveTextContent(/^Inglês$/);
       expect(rowOf("Inglês")).not.toHaveTextContent("·");
+    });
+  });
+
+  describe("groups by kind of amount (SOL-153)", () => {
+    const AGUA: Schemas["BillOfMonth"] = {
+      ...BILLS_OF_MONTH[1],
+      bill_id: "b-agua",
+      name: "Água",
+      amount: "430.00",
+      due_date: "2026-11-25",
+      variable: true,
+    };
+    const PARCELADO = { ...BILLS_OF_MONTH[1], installment: 2, installments: 6 };
+    const PORTO = { ...FATURA, due_date: "2026-11-12" };
+    const MIXED = [BILLS_OF_MONTH[0], PARCELADO, PORTO, AGUA];
+
+    const headers = () =>
+      within(card())
+        .queryAllByRole("heading", { level: 3 })
+        .map((heading) => within(heading).getByRole("button"));
+    const text = (element: Element) => element.textContent?.replace(/\s+/g, " ");
+    const header = (name: string) => within(card()).getByRole("button", { name: new RegExp(`^${name}`) });
+    const group = (name: string) => within(card()).getByRole("list", { name });
+
+    it("opens Valor fixo, Valor variável and Faturas de cartão, in that order, each with its count and what is left", async () => {
+      show(MIXED);
+      await loaded();
+
+      expect(headers().map(text)).toEqual([
+        "Valor fixo0 de 2 pagas · falta R$ 2.543,66 · 1 vencida",
+        "Valor variável0 de 1 paga · falta ≈ R$ 430,00",
+        "Faturas de cartão0 de 1 paga · falta R$ 450,00",
+      ]);
+      for (const button of headers()) {
+        expect(button).toHaveAttribute("aria-expanded", "true");
+        expect(button).toHaveClass("min-h-11");
+      }
+      expect(card()).toHaveTextContent("0 de 4 pagas");
+      expect(
+        within(group("Valor fixo"))
+          .getAllByRole("listitem")
+          .map((row) => row.getAttribute("aria-label")),
+      ).toEqual(["Luz (Enel)", "Aluguel Residencial"]);
+      expect(within(group("Valor variável")).getByRole("listitem", { name: "Água" })).toBeInTheDocument();
+      expect(within(group("Faturas de cartão")).getByRole("listitem", { name: "Fatura Porto" })).toBeInTheDocument();
+    });
+
+    it("hides a group's rows when its header closes and keeps its summary", async () => {
+      show(MIXED);
+      await loaded();
+
+      await userEvent.click(header("Valor fixo"));
+
+      expect(header("Valor fixo")).toHaveAttribute("aria-expanded", "false");
+      expect(header("Valor fixo")).toHaveTextContent("0 de 2 pagas · falta R$ 2.543,66 · 1 vencida");
+      expect(within(card()).queryByRole("listitem", { name: "Aluguel Residencial" })).not.toBeInTheDocument();
+      expect(rowOf("Água")).toBeInTheDocument();
+    });
+
+    it("counts October's carried rent in Valor fixo and in the subtitle as overdue (D17)", async () => {
+      show([CARRIED_ALUGUEL, ...BILLS_OF_MONTH, AGUA]);
+      await loaded();
+
+      expect(header("Valor fixo")).toHaveTextContent("0 de 3 pagas · falta R$ 4.803,22 · 2 vencidas");
+      expect(
+        within(group("Valor fixo")).getByRole("listitem", { name: "Aluguel Residencial de outubro" }),
+      ).toBeInTheDocument();
+      expect(card()).toHaveTextContent("2 vencidas Próxima: dia 10 · R$ 2.259,56");
+      expect(card()).toHaveTextContent("0 de 4 pagas");
+    });
+
+    it("keeps a group open with a tick once its last bill is paid, and the round check undoes it", async () => {
+      const { serverHas } = show(
+        [PAID_RENT, { ...BILLS_OF_MONTH[1], bill_id: BILL_LUZ.id, name: "Luz (Enel)" }, AGUA],
+        {
+          [`POST /api/bills/${BILL_LUZ.id}/pay`]: { status: 201, body: PAYMENT },
+          [`DELETE /api/bills/${BILL_LUZ.id}/pay`]: { status: 204 },
+        },
+      );
+      await loaded();
+      const paidLuz = {
+        ...BILLS_OF_MONTH[1],
+        bill_id: BILL_LUZ.id,
+        name: "Luz (Enel)",
+        paid: true,
+        transaction_id: "t2",
+      };
+      serverHas([PAID_RENT, paidLuz, AGUA]);
+
+      await userEvent.click(within(rowOf("Luz (Enel)")).getByRole("button", { name: /^Marcar/ }));
+
+      await waitFor(() => expect(header("Valor fixo")).toHaveTextContent("Valor fixo2 de 2 pagas"));
+      expect(header("Valor fixo")).not.toHaveTextContent("falta");
+      expect(within(header("Valor fixo")).getByText("2 de 2 pagas").closest("span")).toHaveClass("text-income-text");
+      expect(header("Valor fixo")).toHaveAttribute("aria-expanded", "true");
+      expect(card()).toHaveTextContent("2 de 3 pagas");
+
+      serverHas([PAID_RENT, { ...paidLuz, paid: false, transaction_id: null }, AGUA]);
+      await waitFor(() =>
+        expect(within(rowOf("Luz (Enel)")).getByRole("button", { name: /^Desmarcar/ })).toBeEnabled(),
+      );
+      await userEvent.click(within(rowOf("Luz (Enel)")).getByRole("button", { name: /^Desmarcar/ }));
+
+      expect(await screen.findByText("Pagamento desfeito")).toBeInTheDocument();
+      await waitFor(() => expect(header("Valor fixo")).toHaveTextContent("1 de 2 pagas · falta R$ 2.259,56"));
+      expect(card()).toHaveTextContent("1 de 3 pagas");
+    });
+
+    it("lists one kind of bill flat, with no group header", async () => {
+      show([AGUA, { ...AGUA, bill_id: "b-gas", name: "Gás" }]);
+      await loaded();
+
+      expect(headers()).toEqual([]);
+      expect(rows()).toEqual(["Água", "Gás"]);
+      expect(card()).toHaveTextContent("0 de 2 pagas");
+    });
+
+    it("opens every group with a match for a chosen day, hides the rest and restores them on a second tap", async () => {
+      show(MIXED);
+      await loaded();
+      await userEvent.click(header("Valor variável"));
+      expect(header("Valor variável")).toHaveAttribute("aria-expanded", "false");
+
+      const day = within(chips()).getByRole("radio", { name: "dia 25, 1 conta a pagar" });
+      await userEvent.click(day);
+
+      expect(headers().map(text)).toEqual(["Valor variável0 de 1 paga · falta ≈ R$ 430,00"]);
+      expect(header("Valor variável")).toHaveAttribute("aria-expanded", "true");
+      expect(rows()).toEqual(["Água"]);
+      expect(card()).toHaveTextContent("0 de 4 pagas");
+
+      await userEvent.click(day);
+      expect(headers()).toHaveLength(3);
+      expect(rows()).toEqual(["Luz (Enel)", "Aluguel Residencial", "Água", "Fatura Porto"]);
+    });
+
+    it("keeps a large amount left on its own unbroken fragment", async () => {
+      show([{ ...BILLS_OF_MONTH[1], amount: "99999.99" }, AGUA]);
+      await loaded();
+
+      expect(within(header("Valor fixo")).getByText("· falta R$ 99.999,99")).toHaveClass("whitespace-nowrap");
     });
   });
 
