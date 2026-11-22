@@ -241,7 +241,7 @@ test("Lançamentos shows only bills under Contas, and Lançar picks from a row o
 
   const ledger = page.getByRole("region", { name: "Lançamentos" });
   await expect(ledger.getByRole("button", { name: /Casa/ })).toContainText("R$ 23.456,78");
-  await ledger.getByRole("radio", { name: "Contas" }).click();
+  await ledger.getByRole("radio", { name: "Contas fixas" }).click();
   await expect(ledger.getByRole("button", { name: /Lazer/ })).toBeHidden();
   await expect(ledger.getByRole("button", { name: /Casa/ })).toBeVisible();
   for (const width of [375, 1024, 1280, 1440]) {
@@ -457,4 +457,87 @@ test("Contas a pagar groups the month by kind with the paid count, pays and undo
   await page.reload();
   await expect(title).toContainText("0 de 1 paga");
   await expect(bills.getByRole("listitem", { name: "Internet", exact: true })).toHaveCount(0);
+});
+
+test("Lançamentos shows the whole month and splits Contas fixas from Valor variável, keeping each day's projection (SOL-154)", async ({
+  page,
+  request,
+}) => {
+  await requireServer(request);
+  test.setTimeout(90_000);
+
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto("/criar-conta");
+  await page.getByLabel("E-mail").fill(`e2e-ledger-${Date.now()}@example.com`);
+  await page.getByLabel("Senha").fill("uma-senha-bem-longa");
+  await page.getByRole("button", { name: "Criar conta" }).click();
+  await page.getByRole("button", { name: "Continuar" }).click();
+  await page.getByLabel("Saldo de hoje").fill("1.000,00");
+  await page.getByRole("button", { name: "Continuar" }).click();
+  await page.getByRole("button", { name: "Pular por agora" }).click();
+  await page.getByRole("button", { name: "Ver meu mês" }).click();
+  await page.getByRole("button", { name: "Pular" }).click();
+  await page
+    .getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ })
+    .getByRole("button", { name: "Fechar" })
+    .click();
+
+  // The server's São Paulo calendar, not the runner's clock.
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
+  const api = page.request;
+  expect((await api.patch("/api/settings", { data: { opening_date: `${today.slice(0, 7)}-01` } })).ok()).toBe(true);
+  const categories: { id: string; kind: string; is_savings: boolean }[] = await (
+    await api.get("/api/categories")
+  ).json();
+  const daily = categories.find((each) => each.kind === "daily");
+  const bill = categories.find((each) => each.kind === "bill" && !each.is_savings);
+  const pastDays = Array.from(
+    { length: Math.min(Number(today.slice(8)) - 1, 9) },
+    (_, index) => `${today.slice(0, 8)}${String(index + 1).padStart(2, "0")}`,
+  );
+  for (const date of pastDays) {
+    const created = await api.post("/api/transactions", {
+      data: { date, amount: "10.00", kind: "daily", category_id: daily?.id, note: `Feira ${date}` },
+    });
+    expect(created.ok()).toBe(true);
+  }
+  const ids: Record<string, string> = {};
+  for (const data of [
+    { name: "Internet da casa de praia em Ubatuba SP", amount: "99999.99" },
+    { name: "Luz", amount: "180.00", variable: true },
+    { name: "Gás", amount: "90.00", variable: true },
+  ]) {
+    const created = await api.post("/api/bills", {
+      data: { ...data, due_day: Number(today.slice(8)), category_id: bill?.id },
+    });
+    expect(created.ok()).toBe(true);
+    ids[data.name] = (await created.json()).id;
+  }
+  expect((await api.post(`/api/bills/${ids.Luz}/pay`, { data: { date: today, amount: "175.40" } })).ok()).toBe(true);
+
+  await page.goto("/mes");
+  const ledger = page.getByRole("region", { name: "Lançamentos" });
+  await expect(ledger.getByRole("button", { name: /Feira/ })).toHaveCount(pastDays.length);
+  await expect(ledger.getByRole("button", { name: /Ver o mês inteiro|Mostrar menos/ })).toHaveCount(0);
+  const header = ledger.locator(`#dia-${today}`).getByRole("heading", { level: 3 });
+  const projection = await header.textContent();
+
+  await ledger.getByRole("radio", { name: "Contas fixas" }).click();
+  await expect(ledger.getByRole("listitem", { name: "Internet da casa de praia em Ubatuba SP" })).toBeVisible();
+  await expect(ledger.getByRole("listitem", { name: "Gás" })).toHaveCount(0);
+  await expect(ledger.getByRole("button", { name: /R\$\s175,40/ })).toHaveCount(0);
+  await expect(ledger.getByRole("button", { name: /Feira/ })).toHaveCount(0);
+  await expect(header).toHaveText(projection ?? "");
+  await expectNoClipped(page);
+
+  await ledger.getByRole("radio", { name: "Valor variável" }).click();
+  await expect(ledger.getByRole("listitem", { name: "Gás" })).toBeVisible();
+  await expect(ledger.getByRole("button", { name: /R\$\s175,40/ })).toBeVisible();
+  await expect(ledger.getByRole("listitem", { name: "Internet da casa de praia em Ubatuba SP" })).toHaveCount(0);
+  await expect(header).toHaveText(projection ?? "");
+  for (const width of [375, 1024, 1280, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await expectNoClipped(page);
+  }
 });
