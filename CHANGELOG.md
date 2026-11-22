@@ -7,6 +7,18 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.64.1
+
+> Headline: a recurring Conta always saves
+
+### Web
+
+- Lançar: Salvar on a Conta with Recorrente on Sempre opens Nova conta, the same as Criar como Conta Fixa, instead of doing nothing; where no conta fixa can be made it says to pick how many times (SOL-149).
+
+### Server
+
+- url 2.5.9 for RUSTSEC-2026-0592; chrono and chrono-tz unmaintained advisories recorded until SOL-151 moves off them (SOL-150).
+
 ## 0.64.0
 
 > Headline: subcategories on the phone

@@ -244,7 +244,8 @@ const TransactionForm = ({
 
   const save = (confirmed = false) => {
     const valid = fields();
-    if (!valid || refused) return;
+    if (!valid) return;
+    if (refused) return onConvert && convert();
     // D33: asked here, before onSave closes the sheet and this dialog with it.
     if (series && draft.scope === "all" && !confirmed) return setAsking(true);
     onSave(valid, series ? draft.scope : undefined, moving);
@@ -498,6 +499,11 @@ const TransactionForm = ({
             <p className="flex items-center gap-2 text-muted-foreground text-sm">
               <Lightbulb aria-hidden className="size-4 shrink-0" />
               {`Repete ${openLine}, sem data para parar.`}
+            </p>
+          )}
+          {submitted && refused && !onConvert && (
+            <p role="alert" className="text-destructive text-sm">
+              Uma conta sem fim é uma conta fixa. Escolha quantas vezes.
             </p>
           )}
           {resizeNote && (
