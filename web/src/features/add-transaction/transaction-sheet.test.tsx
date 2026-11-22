@@ -1219,6 +1219,92 @@ describe("TransactionSheet", () => {
     expect(screen.queryByRole("button", { name: "Criar como Conta Fixa" })).not.toBeInTheDocument();
   });
 
+  describe("Criar como Conta Fixa on a series member (SOL-152)", () => {
+    const SERIES_HINT =
+      "Os lançamentos desta série até este mês viram pagamentos desta conta. Os dos próximos meses saem da lista: a conta passa a prever cada mês.";
+    const SERIES: Schemas["TransactionSeries"] = {
+      id: "s",
+      position: 8,
+      total: 24,
+      last_date: "2028-04-01",
+      every: "month",
+      open_ended: false,
+    };
+    const PORTO_MEMBER: Schemas["Transaction"] = { ...ALUGUEL_ROW, note: "Porto", date: "2026-10-01", series: SERIES };
+    const member = (series: Partial<Schemas["TransactionSeries"]>, date = PORTO_MEMBER.date) => ({
+      ...PORTO_MEMBER,
+      date,
+      series: { ...SERIES, ...series },
+    });
+    const convertWith = async (transaction: Schemas["Transaction"], replies = {}) => {
+      const sheet = vi.fn(billSheet);
+      const { requests } = setup({ transaction, billSheet: sheet }, replies);
+      await userEvent.click(await screen.findByRole("button", { name: "Criar como Conta Fixa" }));
+      return { requests, props: sheet.mock.lastCall?.[0] };
+    };
+
+    it("offers Criar como Conta Fixa on a monthly Conta series member, with the series hint and a Parcelado prefill", async () => {
+      const { requests, props } = await convertWith(PORTO_MEMBER, {
+        "POST /api/bills": { status: 201, body: BILL_ALUGUEL },
+      });
+
+      expect(props?.hint).toBe(SERIES_HINT);
+      expect(props?.prefill).toEqual({
+        name: "Porto",
+        amount: "1200.00",
+        due_day: 1,
+        category_id: ALUGUEL.id,
+        installments: 24,
+        last_month: "2028-04-01",
+      });
+      await userEvent.click(screen.getByRole("button", { name: "Criar conta" }));
+
+      expect(await screen.findByText("Conta fixa criada")).toBeInTheDocument();
+      const posts = requests.filter((request) => request.method === "POST");
+      expect(posts).toHaveLength(1);
+      expect(new URL(posts[0].url).pathname).toBe("/api/bills");
+      expect(new URL(posts[0].url).searchParams.get("transaction_id")).toBe(PORTO_MEMBER.id);
+    });
+
+    it("prefills a Fixo when the series ends this month", async () => {
+      const { props } = await convertWith(member({ last_date: "2026-11-01" }));
+
+      expect(props?.prefill).toEqual({ name: "Porto", amount: "1200.00", due_day: 1, category_id: ALUGUEL.id });
+    });
+
+    it("takes the larger day when the last member sits clamped on its month's last day", async () => {
+      const { props } = await convertWith(member({ last_date: "2027-02-28" }, "2026-10-31"));
+
+      expect(props?.prefill).toMatchObject({ due_day: 31, installments: 24, last_month: "2027-02-01" });
+    });
+
+    it.each([
+      ["a weekly member", member({ every: "week" })],
+      ["a yearly member", member({ every: "year" })],
+      ["a bill payment", { ...ALUGUEL_ROW, recurring_bill_id: BILL_ALUGUEL.id }],
+      ["a resgate", { ...ALUGUEL_ROW, cofrinho_id: "c1000000-0000-4000-8000-000000000001" }],
+    ])("offers no Criar como Conta Fixa on %s", async (_, transaction) => {
+      setup({ transaction, billSheet });
+
+      expect(await screen.findByLabelText("Observação")).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Criar como Conta Fixa" })).not.toBeInTheDocument();
+    });
+
+    it("says a series with two entries in one month cannot become a conta fixa", async () => {
+      await convertWith(PORTO_MEMBER, {
+        "POST /api/bills": {
+          status: 422,
+          body: { ...problem(422, "Shared."), type: "urn:soldi:error:series-shared-month" },
+        },
+      });
+      await userEvent.click(screen.getByRole("button", { name: "Criar conta" }));
+
+      expect(
+        await screen.findByText("Esta série tem dois lançamentos no mesmo mês. Exclua um deles e tente de novo."),
+      ).toBeInTheDocument();
+    });
+  });
+
   it("saves on Enter in Valor", async () => {
     const { sent } = setup();
     await screen.findByRole("radiogroup", { name: "Categoria" });

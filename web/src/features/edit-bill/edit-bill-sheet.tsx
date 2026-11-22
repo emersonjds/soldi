@@ -105,9 +105,9 @@ const emptyDraft: Draft = {
   variable: false,
 };
 
-const currentOf = (bill?: Bill) => {
-  if (!bill?.installments || !bill.last_month) return "1";
-  const current = installmentOf(firstMonth(todayISO(), bill.due_day), bill.last_month, bill.installments);
+const currentOf = (from: { due_day: number; installments?: number | null; last_month?: string | null }) => {
+  if (!from.installments || !from.last_month) return "1";
+  const current = installmentOf(firstMonth(todayISO(), from.due_day), from.last_month, from.installments);
   return String(current ?? 1);
 };
 
@@ -122,9 +122,9 @@ const draftOf = (bill?: Bill, prefill?: Schemas["CreateBill"]): Draft => {
     card: from.closing_day != null,
     categoryId: from.category_id ?? undefined,
     active: bill?.active ?? true,
-    parcelado: bill?.installments != null,
-    installments: bill?.installments ? String(bill.installments) : "",
-    current: currentOf(bill),
+    parcelado: from.installments != null,
+    installments: from.installments ? String(from.installments) : "",
+    current: currentOf(from),
     variable: from.variable ?? false,
   };
 };
@@ -195,7 +195,7 @@ export const BillForm = ({
     if (!draft.parcelado) return onSave({ ...fields, amount, ...variable });
     if (!lastMonth) return;
     const initial = draftOf(bill, prefill);
-    const changed = draft.installments !== initial.installments || draft.current !== initial.current;
+    const changed = !bill || draft.installments !== initial.installments || draft.current !== initial.current;
     onSave({ ...fields, amount, ...variable, ...(changed && { installments: count, last_month: lastMonth }) });
   };
 
@@ -233,9 +233,9 @@ export const BillForm = ({
         />
         {errors.name && <FieldError>{errors.name}</FieldError>}
       </Field>
-      {!prefill && (!bill || (bill.closing_day == null && bill.installments == null)) && (
+      {(!bill || (bill.closing_day == null && bill.installments == null)) && (
         <div className="grid gap-2 sm:grid-cols-2">
-          {!bill && (
+          {!bill && !prefill && (
             <label
               htmlFor="bill-card-switch"
               className="flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-xl bg-muted px-4 py-2"
@@ -512,10 +512,12 @@ type EditBillSheetProps = {
   prefill?: Schemas["CreateBill"];
   /** Takes over saving a new bill. */
   onCreate?: (fields: Schemas["CreateBill"]) => void;
+  /** A line above the form. */
+  hint?: string;
 };
 
 /** Add or edit a recurring bill: nome, valor, dia 1–31, categoria and, when editing, Ativa; a new one may be a card (D28), which has Fecha dia instead of valor and no pause. */
-export const EditBillSheet = ({ open, onOpenChange, bill, onArchive, prefill, onCreate }: EditBillSheetProps) => {
+export const EditBillSheet = ({ open, onOpenChange, bill, onArchive, prefill, onCreate, hint }: EditBillSheetProps) => {
   const save = useSaveBill(bill, onCreate);
 
   return (
@@ -525,6 +527,7 @@ export const EditBillSheet = ({ open, onOpenChange, bill, onArchive, prefill, on
       title={bill ? "Editar conta" : "Nova conta"}
       description="Uma conta que se repete todo mês."
     >
+      {hint && <p className="rounded-xl bg-secondary px-4 py-3 font-medium text-primary text-sm">{hint}</p>}
       <BillForm
         key={bill?.id ?? "new"}
         bill={bill}
