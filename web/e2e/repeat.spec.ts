@@ -431,3 +431,38 @@ test("a Diário on a card with Recorrente Sempre lands in the faturas ahead", as
     page.getByRole("region", { name: "Contas a pagar" }).getByRole("listitem", { name: /Nubank/ }),
   ).toContainText("R$ 39,90");
 });
+
+test("a future Conta on Recorrente Sempre becomes a conta fixa paid on its day, counted once", async ({
+  page,
+  request,
+}) => {
+  await requireServer(request);
+  test.setTimeout(90_000);
+  await signUp(page, "future-conta");
+  const due = dayFrom(3);
+  const month = due.slice(0, 7);
+  expect((await page.request.patch("/api/settings", { data: { opening_date: `${monthFrom(0)}-01` } })).ok()).toBe(true);
+
+  await page.getByRole("navigation", { name: "Navegação principal" }).getByRole("button", { name: "Lançar" }).click();
+  const launch = page.getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ });
+  await launch.getByRole("radio", { name: "Conta" }).click();
+  await launch.getByLabel("Valor").fill("177,31");
+  await launch.getByLabel("Observação").fill("Gás");
+  await pickDate(launch, "Outra data", due);
+  await launch.getByRole("switch", { name: "Recorrente" }).click();
+  await launch.getByRole("button", { name: "Salvar" }).click();
+  const sheet = page.getByRole("dialog", { name: "Nova conta" });
+  await sheet.getByRole("button", { name: "Salvar Conta Fixa" }).click();
+  await expect(page.getByText("Conta fixa criada")).toBeVisible();
+
+  const view = await (await page.request.get(`/api/months/${month}`)).json();
+  expect(view.bills_of_month).toMatchObject([{ name: "Gás", paid: true, lands_on: null }]);
+  const day = view.days.find((found: { date: string }) => found.date === due);
+  expect(day.projected_balance).toBe("822.69");
+
+  await page.goto(`/mes?m=${month}`);
+  await expect(page.getByRole("region", { name: "Contas a pagar" })).toContainText("1 de 1 pagas");
+  const ledger = page.getByRole("region", { name: "Lançamentos" });
+  await expect(ledger.locator(`#dia-${due}`).getByText("Gás")).toHaveCount(1);
+  await expect(ledger.getByText("Conta fixa · a pagar")).toHaveCount(0);
+});
