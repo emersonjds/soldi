@@ -7,6 +7,14 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.64.1
+
+> Headline: a recurring Conta always saves
+
+### Web
+
+- Lançar: Salvar on a Conta with Recorrente on Sempre opens Nova conta, the same as Criar como Conta Fixa, instead of doing nothing; where no conta fixa can be made it says to pick how many times (SOL-149).
+
 ## 0.64.0
 
 > Headline: subcategories on the phone
