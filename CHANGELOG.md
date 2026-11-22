@@ -7,6 +7,14 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.64.2
+
+> Headline: a conta fixa made from a future entry is covered by a test
+
+### Web
+
+- An e2e converts a future-dated Conta on Recorrente Sempre into a conta fixa and checks it is paid on its day, listed once and taken once by the projection (SOL-155). No change to the app.
+
 ## 0.64.1
 
 > Headline: a recurring Conta always saves
