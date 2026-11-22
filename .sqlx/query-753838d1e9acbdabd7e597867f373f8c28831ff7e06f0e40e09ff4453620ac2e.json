@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, category_id, name, amount, due_day,\n                  (last_month IS NULL OR installments IS NOT NULL) AS \"active!\", closing_day,\n                  last_month, installments\n         FROM recurring_bills\n         WHERE user_id = $1 AND id = $2 AND archived_at IS NULL",
+  "query": "SELECT id, category_id, name, amount, due_day,\n                  (last_month IS NULL OR installments IS NOT NULL) AS \"active!\", closing_day,\n                  last_month, installments, variable\n         FROM recurring_bills\n         WHERE user_id = $1 AND id = $2 AND archived_at IS NULL",
   "describe": {
     "columns": [
       {
@@ -96,6 +96,17 @@
             "name": "installments"
           }
         }
+      },
+      {
+        "ordinal": 9,
+        "name": "variable",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "recurring_bills",
+            "name": "variable"
+          }
+        }
       }
     ],
     "parameters": {
@@ -113,8 +124,9 @@
       null,
       true,
       true,
-      true
+      true,
+      false
     ]
   },
-  "hash": "3cc6f00554aa275210bf3f48e4e027d9de0b438a721f74158eeced061ab43153"
+  "hash": "753838d1e9acbdabd7e597867f373f8c28831ff7e06f0e40e09ff4453620ac2e"
 }

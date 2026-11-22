@@ -448,7 +448,7 @@
             }
           },
           "422": {
-            "description": "Name not 1 to 100 characters, amount not above zero or with more than two places, missing on a conta fixa or present on a card (`amount`), `closing_day` not 1 to 31, due day not 1 to 31, `category_id` missing on a conta fixa, not one of the caller's active bill categories or, on a card, `Economia` or a cofrinho, `installments` not 2 to 60, missing with `last_month` or on a card, `last_month` missing with `installments`, not a month's first day or not from this month to `installments` months ahead, or `cannot-become-bill` when the entry is not a `bill` entry, already a bill's payment, a resgate or a series member; `category_id` when a card has none and a subcategory or cofrinho holds the name `Cartão`, or the card group sits under `Economia`; `palette-full` when a card needs a new card group and all 24 bill colors are taken",
+            "description": "Name not 1 to 100 characters, amount not above zero or with more than two places, missing on a conta fixa or present on a card (`amount`), `closing_day` not 1 to 31, due day not 1 to 31, `category_id` missing on a conta fixa, not one of the caller's active bill categories or, on a card, `Economia` or a cofrinho, `installments` not 2 to 60, missing with `last_month` or on a card, `last_month` missing with `installments`, not a month's first day or not from this month to `installments` months ahead, `variable` on a card, or `cannot-become-bill` when the entry is not a `bill` entry, already a bill's payment, a resgate or a series member; `category_id` when a card has none and a subcategory or cofrinho holds the name `Cartão`, or the card group sits under `Economia`; `palette-full` when a card needs a new card group and all 24 bill colors are taken",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -581,7 +581,7 @@
             }
           },
           "422": {
-            "description": "Same rules as create, on the bill after the change; `closing_day` on a conta fixa, `active: false` on a card, `active` on a parcelado bill or with `installments`/`last_month`; `installments` or `last_month` on a card, sent apart, or `last_month` before the latest paid month; `fatura-paid` when a card's `closing_day` changes while a fatura from this month on is paid (D30b)",
+            "description": "Same rules as create, on the bill after the change; `closing_day` on a conta fixa, `active: false` on a card, `active` on a parcelado bill or with `installments`/`last_month`; `installments` or `last_month` on a card, sent apart, or `last_month` before the latest paid month; `variable` on a card; `fatura-paid` when a card's `closing_day` changes while a fatura from this month on is paid (D30b)",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -2631,7 +2631,8 @@
           "category_id",
           "name",
           "due_day",
-          "active"
+          "active",
+          "variable"
         ],
         "properties": {
           "active": {
@@ -2683,6 +2684,10 @@
           },
           "name": {
             "type": "string"
+          },
+          "variable": {
+            "type": "boolean",
+            "description": "The amount is an estimate that changes every month (D44); never on a card."
           }
         }
       },
@@ -2698,7 +2703,8 @@
           "due_date",
           "paid",
           "overdue",
-          "is_card"
+          "is_card",
+          "variable"
         ],
         "properties": {
           "amount": {
@@ -2763,6 +2769,10 @@
               "null"
             ],
             "format": "uuid"
+          },
+          "variable": {
+            "type": "boolean",
+            "description": "The conta fixa's amount is an estimate (D44); false on a card."
           }
         }
       },
@@ -3256,6 +3266,10 @@
           "name": {
             "type": "string",
             "description": "1 to 100 characters."
+          },
+          "variable": {
+            "type": "boolean",
+            "description": "The amount is an estimate that changes every month (D44). Not on a card."
           }
         },
         "additionalProperties": false
@@ -4254,6 +4268,13 @@
               "string",
               "null"
             ]
+          },
+          "variable": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Marks the amount as an estimate (D44). Not on a card."
           }
         },
         "additionalProperties": false

@@ -43,6 +43,7 @@ async fn bills_list_only_the_callers_bills(pool: PgPool) {
         closing_day: None,
         installments: None,
         last_month: None,
+        variable: false,
     };
     soldi_server::bills::repo::insert_all(&mut conn, user_id(&ana).await, &[bill])
         .await
@@ -126,6 +127,56 @@ async fn a_created_bill_is_listed_by_due_day(pool: PgPool) {
     let (_, listed) = ana.get("/api/bills").await;
     assert_eq!(listed[0], created);
     assert_eq!(listed[1]["name"], "Luz");
+}
+
+#[sqlx::test]
+async fn sol152_a_conta_fixa_keeps_variable_and_a_card_refuses_it(pool: PgPool) {
+    let ana = TestApp::signed_in(pool, "ana@example.com").await;
+    ana.open_at("0", &this_month().to_string()).await;
+    let light = category_id(&ana, "Luz").await;
+
+    let luz = create(
+        &ana,
+        json!({ "name": "Luz", "amount": "180", "due_day": 25, "category_id": light, "variable": true }),
+    )
+    .await;
+    let fixed = create(
+        &ana,
+        json!({ "name": "Psicóloga", "amount": "300", "due_day": 10, "category_id": light }),
+    )
+    .await;
+
+    assert_eq!(
+        (&luz["variable"], &fixed["variable"]),
+        (&json!(true), &json!(false))
+    );
+    let (_, listed) = ana.get("/api/bills").await;
+    assert_eq!(listed[1]["variable"], true);
+    let (_, view) = ana
+        .get(&format!("/api/months/{}", this_month().format("%Y-%m")))
+        .await;
+    let row = view["bills_of_month"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| row["bill_id"] == luz["id"])
+        .unwrap();
+    assert_eq!(row["variable"], true);
+    let (status, patched) = ana
+        .patch(&bill_uri(&luz), json!({ "variable": false }))
+        .await;
+    assert_eq!(
+        (status, &patched["variable"]),
+        (StatusCode::OK, &json!(false))
+    );
+    let (status, problem) = ana
+        .post(
+            "/api/bills",
+            json!({ "name": "Porto", "due_day": 10, "closing_day": 3, "variable": true }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(problem["errors"][0]["field"], "variable");
 }
 
 #[sqlx::test]
@@ -1585,6 +1636,7 @@ async fn sol140_inserting_onboarding_bills_without_a_category_is_a_bug(pool: PgP
         closing_day: None,
         installments: None,
         last_month: None,
+        variable: false,
     };
     let mut conn = pool.acquire().await.unwrap();
     let _ = soldi_server::bills::repo::insert_all(

@@ -182,6 +182,7 @@ pub async fn update(
             last_month: patch
                 .last_month
                 .or(current.installments.and(current.last_month)),
+            variable: patch.variable.unwrap_or(current.variable),
         },
         "",
     )?;

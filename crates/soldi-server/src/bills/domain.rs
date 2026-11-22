@@ -34,6 +34,12 @@ pub fn check(bill: CreateBill, prefix: &str) -> Result<CreateBill, AppError> {
         }
         (None, Some(amount)) => Some(check_money(&field("amount"), amount)?),
     };
+    if bill.variable && bill.closing_day.is_some() {
+        return Err(AppError::invalid(
+            &field("variable"),
+            "a card's fatura already varies",
+        ));
+    }
     if bill.closing_day.is_none() && bill.category_id.is_none() {
         return Err(AppError::invalid(&field("category_id"), "is required"));
     }
@@ -156,6 +162,7 @@ mod tests {
             closing_day: None,
             installments: None,
             last_month: None,
+            variable: false,
         }
     }
 
@@ -241,6 +248,23 @@ mod tests {
         );
         let card = uncategorized(card(None, 3));
         assert_eq!(check(card.clone(), "").unwrap(), card);
+    }
+
+    #[test]
+    fn d44_a_card_is_never_variable() {
+        let variable = |bill: CreateBill| CreateBill {
+            variable: true,
+            ..bill
+        };
+        assert!(
+            check(variable(bill("Luz", "180", 25)), "")
+                .unwrap()
+                .variable
+        );
+        assert_eq!(
+            field(check(variable(card(None, 3)), "bills[0].")),
+            "bills[0].variable"
+        );
     }
 
     #[test]

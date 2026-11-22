@@ -695,6 +695,7 @@ mod tests {
                 closing_day: None,
                 installments: None,
                 last_month: None,
+                variable: false,
             },
         )
         .await

@@ -39,6 +39,7 @@ pub struct MonthBill {
     pub active_since: NaiveDate,
     pub last_month: Option<NaiveDate>,
     pub installments: Option<i16>,
+    pub variable: bool,
 }
 
 /// A bill's entry and its date.
@@ -376,6 +377,7 @@ pub fn month_view(input: MonthInput) -> MonthView {
             is_card: late.bill.closing_day.is_some(),
             installment: installment_in(late.bill, late.due_date),
             installments: late.bill.installments,
+            variable: late.bill.variable,
         });
     let own = bills.iter().filter_map(|bill| {
         let payment = payments
@@ -407,6 +409,7 @@ pub fn month_view(input: MonthInput) -> MonthView {
             is_card,
             installment: installment_in(bill, due_date),
             installments: bill.installments,
+            variable: bill.variable,
         })
     });
     let bills_of_month: Vec<BillOfMonth> = carried.chain(own).collect();
@@ -675,6 +678,7 @@ mod tests {
             active_since: date("2026-01-01"),
             last_month: None,
             installments: None,
+            variable: false,
         }
     }
 
@@ -960,6 +964,7 @@ mod tests {
                 is_card: false,
                 installment: None,
                 installments: None,
+                variable: false,
             }]
         );
     }
