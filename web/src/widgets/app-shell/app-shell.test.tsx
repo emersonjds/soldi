@@ -132,7 +132,7 @@ describe("AppShell", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   });
 
-  it("hands Transformar em conta fixa to the bill sheet", async () => {
+  it("hands Conta fixa to the bill sheet", async () => {
     signedIn({ "GET /api/categories": { status: 200, body: CATEGORIES } });
     renderWithQuery(<AppShell>conteúdo</AppShell>);
 
@@ -140,7 +140,8 @@ describe("AppShell", () => {
     await userEvent.click(within(tabs).getByRole("button", { name: "Lançar" }));
     await userEvent.click(await screen.findByRole("radio", { name: "Conta" }));
     await userEvent.type(screen.getByLabelText(/^Valor d/), "12");
-    await userEvent.click(await screen.findByRole("button", { name: "Criar como Conta Fixa" }));
+    await userEvent.click(await screen.findByRole("switch", { name: "Conta fixa" }));
+    await userEvent.click(screen.getByRole("button", { name: "Salvar Lançamento" }));
 
     expect(await screen.findByRole("dialog", { name: "Nova conta" })).toBeInTheDocument();
   });
