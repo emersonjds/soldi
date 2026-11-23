@@ -487,13 +487,16 @@ export const useSaveBill = (bill?: Bill, onCreate?: (fields: Schemas["CreateBill
   const create = useCreateBill();
   const update = useUpdateBill();
   return ({ active, ...fields }: Fields) => {
-    const feedback = {
-      onSuccess: () => toast.success(savedMessage(bill, fields.installments)),
-      onError: (error: Error) => toast.error(problemMessage(error) ?? "Não foi possível salvar a conta."),
-    };
-    if (bill) return update.mutate({ id: bill.id, ...fields, ...(active !== bill.active && { active }) }, feedback);
+    // The host may unmount the sheet on close; mutate's own callbacks would not run.
+    const feedback = (saving: Promise<unknown>) =>
+      void saving.then(
+        () => toast.success(savedMessage(bill, fields.installments)),
+        (error: Error) => toast.error(problemMessage(error) ?? "Não foi possível salvar a conta."),
+      );
+    if (bill)
+      return feedback(update.mutateAsync({ id: bill.id, ...fields, ...(active !== bill.active && { active }) }));
     if (onCreate) return onCreate(fields);
-    create.mutate(fields, feedback);
+    feedback(create.mutateAsync(fields));
   };
 };
 

@@ -144,14 +144,14 @@ describe("EditBillSheet switches a conta between fixa and parcelada (SOL-161)", 
 
   const FIES: Schemas["Bill"] = { ...BILL_ALUGUEL, name: "Fies", installments: 3, last_month: "2027-01-01" };
 
-  const edit = async (bill: Schemas["Bill"], onArchive?: (bill: Schemas["Bill"]) => void) => {
+  const edit = async (bill: Schemas["Bill"]) => {
     const requests = stubApi({
       "GET /api/categories": { status: 200, body: CATEGORIES },
       [`PATCH /api/bills/${bill.id}`]: { status: 200, body: bill },
     });
     renderWithQuery(
       <>
-        <EditBillSheet open onOpenChange={vi.fn()} bill={bill} onArchive={onArchive} />
+        <EditBillSheet open onOpenChange={vi.fn()} bill={bill} />
         <Toaster />
       </>,
     );
@@ -216,6 +216,29 @@ describe("EditBillSheet switches a conta between fixa and parcelada (SOL-161)", 
     const { form } = await edit({ ...BILL_ALUGUEL, name: "Porto", amount: null, closing_day: 3 });
 
     expect(within(form).queryByRole("switch", { name: "Parcelado" })).not.toBeInTheDocument();
+  });
+
+  it("still says so when its host unmounts the sheet on close, as Editar conta on a payment does", async () => {
+    stubApi({
+      "GET /api/categories": { status: 200, body: CATEGORIES },
+      [`PATCH /api/bills/${FIES.id}`]: { status: 200, body: FIES },
+    });
+    const Host = () => {
+      const [open, setOpen] = useState(true);
+      return (
+        <>
+          {open && <EditBillSheet open onOpenChange={setOpen} bill={FIES} />}
+          <Toaster />
+        </>
+      );
+    };
+    renderWithQuery(<Host />);
+
+    const form = await screen.findByRole("dialog", { name: "Editar conta" });
+    await userEvent.click(within(form).getByRole("switch", { name: "Parcelado" }));
+    await userEvent.click(within(form).getByRole("button", { name: "Salvar Conta Fixa" }));
+
+    expect(await screen.findByText("Agora é uma conta fixa")).toBeInTheDocument();
   });
 
   it("offers no Excluir without onArchive", async () => {
