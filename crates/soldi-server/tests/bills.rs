@@ -555,6 +555,7 @@ async fn sol161_a_parcelada_ending_this_month_owes_next_month(pool: PgPool) {
 #[sqlx::test]
 async fn sol161_an_ended_parcelada_owes_from_today(pool: PgPool) {
     let ana = TestApp::signed_in(pool.clone(), "ana@example.com").await;
+    ana.open_at("1000", "2026-01-01").await;
     let internet = category_id(&ana, "Internet").await;
     let plan = create(&ana, fies(internet, this_month() + chrono::Months::new(2))).await;
     let uri = bill_uri(&plan);
@@ -584,6 +585,20 @@ async fn sol161_an_ended_parcelada_owes_from_today(pool: PgPool) {
         (&json!(null), &json!(null), &json!(true))
     );
     assert_eq!(active_since(&pool).await, soldi_server::today_sao_paulo());
+    let (_, last) = ana
+        .get(&format!("/api/months/{}", month_text(previous_month())))
+        .await;
+    assert_eq!(
+        (
+            &last["bills_of_month"][0]["overdue"],
+            &last["bills_of_month"][0]["lands_on"]
+        ),
+        (&json!(false), &json!(null))
+    );
+    assert_eq!(
+        bill_ids_in(&ana, this_month() + chrono::Months::new(1)).await,
+        vec![(fixa["id"].clone(), false)]
+    );
 }
 
 #[sqlx::test]
