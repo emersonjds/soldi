@@ -211,7 +211,7 @@ describe("Mês", () => {
     await within(await screen.findByRole("region", { name: "Lançamentos" })).findByRole("button", {
       name: /Compras da semana/,
     });
-    expect(ledger()).toHaveClass("lg:grid-cols-[auto_1fr]");
+    expect(ledger()).toHaveClass("lg:grid-cols-[auto_1fr_auto]");
     expect(filter()).toHaveClass("grid", "w-full", "grid-cols-2", "lg:flex", "lg:w-fit");
     const segments = within(filter()).getAllByRole("radio");
     expect(segments.map((segment) => segment.textContent)).toEqual([
@@ -1075,6 +1075,42 @@ describe("Mês", () => {
     fireEvent.click(first);
     expect(document.getElementById("dia-2026-11-23")).toHaveFocus();
     expect(within(filter()).getByRole("radio", { name: "Todos" })).toHaveAttribute("aria-checked", "true");
+  });
+
+  it("collapses Lançamentos to its title from the chevron and keeps it closed on the next visit (SOL-158)", async () => {
+    open();
+    await within(await screen.findByRole("region", { name: "Lançamentos" })).findByRole("button", {
+      name: /Compras da semana/,
+    });
+    const toggle = within(ledger()).getByRole("button", { name: "Lançamentos" });
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(toggle).toHaveClass("size-11");
+
+    await userEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(within(ledger()).getByRole("heading", { name: "Lançamentos" })).toBeInTheDocument();
+    expect(within(ledger()).queryByRole("radiogroup", { name: "Filtrar lançamentos" })).not.toBeInTheDocument();
+    expect(within(ledger()).queryByRole("button", { name: /Compras da semana/ })).not.toBeInTheDocument();
+    expect(localStorage.getItem("soldi:open:ledger")).toBe("closed");
+  });
+
+  it("opens a closed Lançamentos to jump to a red day without changing the remembered choice (SOL-158)", async () => {
+    localStorage.setItem("soldi:open:ledger", "closed");
+    open({
+      "GET /api/months/2026-11": { status: 200, body: FORECAST_MONTH },
+      "GET /api/transactions": { status: 200, body: FORECAST_TRANSACTIONS },
+    });
+    const first = await screen.findByRole("button", { name: "Ver o dia 23" });
+    const toggle = await within(await screen.findByRole("region", { name: "Lançamentos" })).findByRole("button", {
+      name: "Lançamentos",
+    });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(document.getElementById("dia-2026-11-23")).toBeNull();
+
+    fireEvent.click(first);
+    expect(document.getElementById("dia-2026-11-23")).toHaveFocus();
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(localStorage.getItem("soldi:open:ledger")).toBe("closed");
   });
 
   it("goes back to Todos when the month changes, and again on returning to the month left filtered", async () => {

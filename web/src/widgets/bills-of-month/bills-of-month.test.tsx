@@ -1042,3 +1042,59 @@ describe("Contas a pagar", () => {
     });
   });
 });
+
+describe("Contas a pagar collapses (SOL-158)", () => {
+  beforeEach(() => {
+    window.innerWidth = 375;
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 10, 5, 12));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("starts open and collapses from the chevron to the title, the paid count and the next bill, remembering it", async () => {
+    show();
+    await loaded();
+    const toggle = within(card()).getByRole("button", { name: "Contas a pagar" });
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(toggle).toHaveClass("size-11");
+    expect(rowOf("Aluguel Residencial")).toBeInTheDocument();
+
+    await userEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(card()).toHaveTextContent("0 de 2 pagas");
+    expect(card()).toHaveTextContent("1 vencida Próxima: dia 10 · R$ 2.259,56");
+    expect(within(card()).queryByRole("listitem")).not.toBeInTheDocument();
+    expect(within(card()).queryByRole("radiogroup", { name: "Filtrar por dia" })).not.toBeInTheDocument();
+    expect(within(card()).queryByRole("link", { name: "Gerenciar contas fixas" })).not.toBeInTheDocument();
+    expect(localStorage.getItem("soldi:open:bills")).toBe("closed");
+  });
+
+  it("opens collapsed when the choice was closed, and opens again from the chevron", async () => {
+    localStorage.setItem("soldi:open:bills", "closed");
+    show();
+    await loaded();
+    expect(within(card()).queryByRole("listitem")).not.toBeInTheDocument();
+
+    await userEvent.click(within(card()).getByRole("button", { name: "Contas a pagar" }));
+    expect(rowOf("Aluguel Residencial")).toBeInTheDocument();
+    expect(localStorage.getItem("soldi:open:bills")).toBe("open");
+  });
+
+  it("starts open and still toggles when the storage is blocked", async () => {
+    const blocked = () => {
+      throw new Error("blocked");
+    };
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(blocked);
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(blocked);
+    show();
+    await loaded();
+    const toggle = within(card()).getByRole("button", { name: "Contas a pagar" });
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+
+    await userEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+  });
+});

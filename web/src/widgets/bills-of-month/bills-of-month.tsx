@@ -32,9 +32,11 @@ import { type Currency, useCurrency } from "@/shared/lib/currency";
 import { addMonths, dayMonth, monthAbbrev, monthName, shortDay, todayISO } from "@/shared/lib/date";
 import { formatMoney } from "@/shared/lib/money";
 import { cents, fromCents } from "@/shared/lib/tier";
+import { useStoredOpen } from "@/shared/lib/use-stored-open";
 import { CategoryIcon } from "@/shared/ui/category-icon";
 import { DashCard } from "@/shared/ui/dash-card";
 import { Money } from "@/shared/ui/money";
+import { SectionToggle } from "@/shared/ui/section-toggle";
 
 /** `05` in the viewed month, `10/10` for a bill carried from an earlier one (D17). */
 const chipDay = (date: string, month: string) => (date.startsWith(month) ? date.slice(8) : dayMonth(date));
@@ -305,6 +307,7 @@ const Row = ({
 export const BillsOfMonth = ({ view, className }: { view: Schemas["MonthView"]; className?: string }) => {
   const [chosen, setChosen] = useState<{ month: string; date: string } | null>(null);
   const [closed, setClosed] = useState<Kind[]>([]);
+  const expanded = useStoredOpen("bills");
   const [adjusting, setAdjusting] = useState<BillOfMonth>();
   const [sheetOpen, setSheetOpen] = useState(false);
   const [fatura, setFatura] = useState<BillOfMonth>();
@@ -413,6 +416,7 @@ export const BillsOfMonth = ({ view, className }: { view: Schemas["MonthView"]; 
         </span>
       }
       label="Contas a pagar"
+      trailing={<SectionToggle open={expanded.open} onOpenChange={expanded.choose} label="Contas a pagar" />}
       className={className}
     >
       <div className="flex flex-col gap-4">
@@ -424,72 +428,76 @@ export const BillsOfMonth = ({ view, className }: { view: Schemas["MonthView"]; 
           )}
           {upcoming && <span className="whitespace-nowrap">{upcoming}</span>}
         </p>
-        <ToggleGroup
-          type="single"
-          value={day ?? ""}
-          onValueChange={choose}
-          aria-label="Filtrar por dia"
-          className="hidden min-w-0 overflow-x-auto py-0.5 lg:flex"
-        >
-          {dueDays(bills).map(({ date, unpaid }) => (
-            <ToggleGroupItem
-              key={date}
-              value={date}
-              aria-label={`dia ${chipDay(date, view.month)}, ${unpaidLabel(unpaid)}`}
-              className="h-11 gap-1.5 rounded-full! border border-border px-4 font-medium text-base data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
+        {expanded.open && (
+          <>
+            <ToggleGroup
+              type="single"
+              value={day ?? ""}
+              onValueChange={choose}
+              aria-label="Filtrar por dia"
+              className="hidden min-w-0 overflow-x-auto py-0.5 lg:flex"
             >
-              dia {chipDay(date, view.month)}
-              {unpaid > 0 && (
-                <span aria-hidden className="flex gap-0.5">
-                  {Array.from({ length: unpaid }, (_, index) => (
-                    <span
-                      // biome-ignore lint/suspicious/noArrayIndexKey: identical dots, never reordered.
-                      key={index}
-                      data-testid="unpaid-dot"
-                      className="size-1.5 rounded-full bg-current"
-                    />
-                  ))}
-                </span>
-              )}
-            </ToggleGroupItem>
-          ))}
-        </ToggleGroup>
-        {grouped
-          ? GROUPS.map(({ kind, name }) => {
-              const rows = shown.filter((bill) => kindOf(bill) === kind);
-              if (rows.length === 0) return null;
-              return (
-                <Collapsible
-                  key={kind}
-                  open={!closed.includes(kind)}
-                  onOpenChange={(open) =>
-                    setClosed((kinds) => (open ? kinds.filter((each) => each !== kind) : [...kinds, kind]))
-                  }
-                  className="flex flex-col gap-1"
+              {dueDays(bills).map(({ date, unpaid }) => (
+                <ToggleGroupItem
+                  key={date}
+                  value={date}
+                  aria-label={`dia ${chipDay(date, view.month)}, ${unpaidLabel(unpaid)}`}
+                  className="h-11 gap-1.5 rounded-full! border border-border px-4 font-medium text-base data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
                 >
-                  <h3>
-                    <CollapsibleTrigger className="group/trigger flex min-h-11 w-full flex-col items-start gap-0.5 rounded-lg py-1 text-left text-sm focus-visible:outline-2 focus-visible:outline-ring">
-                      <span className="flex w-full items-center justify-between gap-2 font-medium text-base">
-                        {name}
-                        <ChevronDown
-                          className="size-4 shrink-0 text-muted-foreground group-data-[state=open]/trigger:rotate-180 motion-safe:transition-transform motion-safe:duration-150"
-                          aria-hidden
+                  dia {chipDay(date, view.month)}
+                  {unpaid > 0 && (
+                    <span aria-hidden className="flex gap-0.5">
+                      {Array.from({ length: unpaid }, (_, index) => (
+                        <span
+                          // biome-ignore lint/suspicious/noArrayIndexKey: identical dots, never reordered.
+                          key={index}
+                          data-testid="unpaid-dot"
+                          className="size-1.5 rounded-full bg-current"
                         />
-                      </span>
-                      <Summary bills={bills.filter((bill) => kindOf(bill) === kind)} currency={currency} />
-                    </CollapsibleTrigger>
-                  </h3>
-                  <CollapsibleContent>{list(rows, name)}</CollapsibleContent>
-                </Collapsible>
-              );
-            })
-          : list(shown)}
-        <Link
-          href="/ajustes/contas"
-          className="inline-flex min-h-11 items-center self-start rounded-lg font-medium text-primary text-sm hover:underline focus-visible:outline-2 focus-visible:outline-ring"
-        >
-          Gerenciar contas fixas
-        </Link>
+                      ))}
+                    </span>
+                  )}
+                </ToggleGroupItem>
+              ))}
+            </ToggleGroup>
+            {grouped
+              ? GROUPS.map(({ kind, name }) => {
+                  const rows = shown.filter((bill) => kindOf(bill) === kind);
+                  if (rows.length === 0) return null;
+                  return (
+                    <Collapsible
+                      key={kind}
+                      open={!closed.includes(kind)}
+                      onOpenChange={(open) =>
+                        setClosed((kinds) => (open ? kinds.filter((each) => each !== kind) : [...kinds, kind]))
+                      }
+                      className="flex flex-col gap-1"
+                    >
+                      <h3>
+                        <CollapsibleTrigger className="group/trigger flex min-h-11 w-full flex-col items-start gap-0.5 rounded-lg py-1 text-left text-sm focus-visible:outline-2 focus-visible:outline-ring">
+                          <span className="flex w-full items-center justify-between gap-2 font-medium text-base">
+                            {name}
+                            <ChevronDown
+                              className="size-4 shrink-0 text-muted-foreground group-data-[state=open]/trigger:rotate-180 motion-safe:transition-transform motion-safe:duration-150"
+                              aria-hidden
+                            />
+                          </span>
+                          <Summary bills={bills.filter((bill) => kindOf(bill) === kind)} currency={currency} />
+                        </CollapsibleTrigger>
+                      </h3>
+                      <CollapsibleContent>{list(rows, name)}</CollapsibleContent>
+                    </Collapsible>
+                  );
+                })
+              : list(shown)}
+            <Link
+              href="/ajustes/contas"
+              className="inline-flex min-h-11 items-center self-start rounded-lg font-medium text-primary text-sm hover:underline focus-visible:outline-2 focus-visible:outline-ring"
+            >
+              Gerenciar contas fixas
+            </Link>
+          </>
+        )}
       </div>
 
       <PayBillSheet

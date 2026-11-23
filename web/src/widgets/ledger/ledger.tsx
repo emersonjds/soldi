@@ -29,6 +29,7 @@ import { dayMonth, monthName, shortDay, todayISO, yesterdayISO } from "@/shared/
 import { TIER_STYLE } from "@/shared/lib/tier";
 import { CategoryIcon } from "@/shared/ui/category-icon";
 import { Money } from "@/shared/ui/money";
+import { SectionToggle } from "@/shared/ui/section-toggle";
 import { TierPill } from "@/shared/ui/tier-pill";
 
 const KIND_LABEL: Record<Schemas["CategoryKind"], string> = { income: "Entrada", bill: "Saída", daily: "Diário" };
@@ -193,6 +194,8 @@ type LedgerProps = {
   /** SOL-154 §2; the page owns it so a jump can reset it before it scrolls. */
   filter: LedgerFilter;
   onFilterChange: (filter: LedgerFilter) => void;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   className?: string;
 };
 
@@ -207,6 +210,8 @@ export const Ledger = ({
   causes = new Set<string>(),
   filter,
   onFilterChange,
+  open: expanded,
+  onOpenChange,
   className,
 }: LedgerProps) => {
   const categories = useQuery(categoriesQuery).data;
@@ -279,72 +284,84 @@ export const Ledger = ({
     <section
       aria-labelledby="ledger-title"
       className={cn(
-        "flex flex-col gap-2 rounded-2xl bg-card p-4 shadow-sm lg:grid lg:grid-cols-[auto_1fr] lg:items-center lg:gap-x-4 lg:p-6",
+        "flex flex-col gap-2 rounded-2xl bg-card p-4 shadow-sm lg:grid lg:grid-cols-[auto_1fr_auto] lg:items-center lg:gap-x-4 lg:p-6",
         className,
       )}
     >
-      <h2 id="ledger-title" className="font-semibold text-lg leading-6">
-        Lançamentos
-      </h2>
-      <ToggleGroup
-        type="single"
-        spacing={0}
-        value={filter}
-        onValueChange={(value: LedgerFilter | "") => value && onFilterChange(value)}
-        aria-label="Filtrar lançamentos"
-        className="mb-2 grid w-full grid-cols-2 rounded-xl bg-muted p-1 lg:mb-0 lg:flex lg:w-fit lg:justify-self-start"
-      >
-        {FILTERS.map((option) => (
-          <ToggleGroupItem
-            key={option.value}
-            value={option.value}
-            className="min-h-11 rounded-lg! px-4 font-medium text-base text-muted-foreground data-[state=on]:bg-card data-[state=on]:text-primary data-[state=on]:shadow-sm"
-          >
-            {option.label}
-          </ToggleGroupItem>
-        ))}
-      </ToggleGroup>
-      <div className="flex flex-col gap-2 lg:col-span-2 lg:row-start-2">
-        {groups.length === 0 && (
-          <p className="px-2 py-8 text-center text-muted-foreground">
-            {FILTERS.find((option) => option.value === filter)?.empty}
-          </p>
-        )}
-        {groups.map(({ day, entries, due }) => (
-          <div
-            key={day.date}
-            id={`dia-${day.date}`}
-            tabIndex={-1}
-            className={cn("scroll-mt-28 rounded-xl", highlight === day.date && "ring-2 ring-expense")}
-          >
-            <h3 className="sticky top-14 z-10 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 rounded-lg bg-muted px-3 py-2 font-semibold text-muted-foreground text-sm lg:top-0">
-              {dayLabel(day)}
-              <span className="flex items-center gap-1.5">
-                <span className="font-medium">{day.is_future ? "Projeção:" : "Saldo ao final:"}</span>
-                <Money
-                  amount={day.projected_balance}
-                  className={cn("font-bold", TIER_STYLE[day.projected_tier].label)}
-                />
-                <TierPill tier={day.projected_tier} forecast={!day.is_future && isForecast(day)} size="sm" />
-              </span>
-            </h3>
-            <ul className={cn("flex flex-col", day.is_future && "opacity-60")}>
-              {entries.map((transaction) => (
-                <Row
-                  key={transaction.id}
-                  entry={describe(transaction)}
-                  transaction={transaction}
-                  cause={causes.has(transaction.id)}
-                  onOpen={() => open(transaction)}
-                />
-              ))}
-              {due.map((bill) => (
-                <DueRow key={billKey(bill)} bill={bill} month={view.month} cause={causes.has(billKey(bill))} />
-              ))}
-            </ul>
-          </div>
-        ))}
+      <div className="flex items-center justify-between gap-2 lg:contents">
+        <h2 id="ledger-title" className="font-semibold text-lg leading-6">
+          Lançamentos
+        </h2>
+        <SectionToggle
+          open={expanded}
+          onOpenChange={onOpenChange}
+          label="Lançamentos"
+          className="lg:col-start-3 lg:row-start-1"
+        />
       </div>
+      {expanded && (
+        <>
+          <ToggleGroup
+            type="single"
+            spacing={0}
+            value={filter}
+            onValueChange={(value: LedgerFilter | "") => value && onFilterChange(value)}
+            aria-label="Filtrar lançamentos"
+            className="mb-2 grid w-full grid-cols-2 rounded-xl bg-muted p-1 lg:mb-0 lg:flex lg:w-fit lg:justify-self-start"
+          >
+            {FILTERS.map((option) => (
+              <ToggleGroupItem
+                key={option.value}
+                value={option.value}
+                className="min-h-11 rounded-lg! px-4 font-medium text-base text-muted-foreground data-[state=on]:bg-card data-[state=on]:text-primary data-[state=on]:shadow-sm"
+              >
+                {option.label}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+          <div className="flex flex-col gap-2 lg:col-span-3 lg:row-start-2">
+            {groups.length === 0 && (
+              <p className="px-2 py-8 text-center text-muted-foreground">
+                {FILTERS.find((option) => option.value === filter)?.empty}
+              </p>
+            )}
+            {groups.map(({ day, entries, due }) => (
+              <div
+                key={day.date}
+                id={`dia-${day.date}`}
+                tabIndex={-1}
+                className={cn("scroll-mt-28 rounded-xl", highlight === day.date && "ring-2 ring-expense")}
+              >
+                <h3 className="sticky top-14 z-10 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 rounded-lg bg-muted px-3 py-2 font-semibold text-muted-foreground text-sm lg:top-0">
+                  {dayLabel(day)}
+                  <span className="flex items-center gap-1.5">
+                    <span className="font-medium">{day.is_future ? "Projeção:" : "Saldo ao final:"}</span>
+                    <Money
+                      amount={day.projected_balance}
+                      className={cn("font-bold", TIER_STYLE[day.projected_tier].label)}
+                    />
+                    <TierPill tier={day.projected_tier} forecast={!day.is_future && isForecast(day)} size="sm" />
+                  </span>
+                </h3>
+                <ul className={cn("flex flex-col", day.is_future && "opacity-60")}>
+                  {entries.map((transaction) => (
+                    <Row
+                      key={transaction.id}
+                      entry={describe(transaction)}
+                      transaction={transaction}
+                      cause={causes.has(transaction.id)}
+                      onOpen={() => open(transaction)}
+                    />
+                  ))}
+                  {due.map((bill) => (
+                    <DueRow key={billKey(bill)} bill={bill} month={view.month} cause={causes.has(billKey(bill))} />
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
 
       <Sheet open={acting} onOpenChange={setActing}>
         <SheetContent
