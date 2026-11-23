@@ -50,8 +50,31 @@ const isSaved = ({ kind, category }: Transaction, categories: Schemas["Category"
   kind === "bill" &&
   (category.is_savings || categories.some((each) => each.id === category.parent_id && each.is_savings));
 
+type Due = Schemas["BillOfMonth"];
+
+/** The same words as Contas a pagar (SOL-153). */
+const billKind = ({ is_card, installment, installments }: Due) => {
+  if (is_card) return "Fatura";
+  if (!installments) return "Conta fixa";
+  return installment === installments ? "Última parcela" : `Parcela ${installment}/${installments}`;
+};
+
+/** Without the month's row, the payment date cannot tell which parcela was paid (D35). */
+const paidCaption = (transaction: Transaction, billsOfMonth: Due[], bills: Schemas["Bill"][] = []) => {
+  const row = billsOfMonth.find(({ transaction_id }) => transaction_id === transaction.id);
+  if (row) return `${billKind(row)} · paga`;
+  const bill = bills.find(({ id }) => id === transaction.recurring_bill_id);
+  if (bill?.closing_day != null) return "Fatura · paga";
+  return bill?.installments ? "Conta parcelada · paga" : "Conta fixa · paga";
+};
+
 /** `Economia › Reserva` with `Guardado` for money put away, `Resgate › Reserva` with `Resgatado` for money taken back. */
-const entryOf = (transaction: Transaction, categories: Schemas["Category"][] = []): Entry => {
+const entryOf = (
+  transaction: Transaction,
+  categories: Schemas["Category"][] = [],
+  billsOfMonth: Due[],
+  bills?: Schemas["Bill"][],
+): Entry => {
   const { category } = transaction;
   const byId = (id?: string | null) => categories.find((each) => each.id === id);
   if (transaction.kind === "income" && category.is_savings) {
@@ -60,6 +83,8 @@ const entryOf = (transaction: Transaction, categories: Schemas["Category"][] = [
   }
   const label = categoryLabel(category, categories);
   if (isSaved(transaction, categories)) return { label, caption: "Guardado" };
+  if (transaction.kind === "bill" && transaction.recurring_bill_id)
+    return { label, caption: paidCaption(transaction, billsOfMonth, bills) };
   return { label, caption: KIND_LABEL[transaction.kind] };
 };
 
@@ -69,7 +94,6 @@ const titleOf = (transaction: Transaction, entry: Entry) => transaction.note || 
 const addsToBalance = (transaction: Transaction) => transaction.kind === "income";
 
 type Day = Schemas["Day"];
-type Due = Schemas["BillOfMonth"];
 
 /** Days with entries or an unpaid bill landed on them, newest first. */
 // ponytail: days × entries scan, 31 days a month.
@@ -89,10 +113,13 @@ const isForecast = (day: Day) => day.is_future || day.projected_balance !== day.
 
 const Cause = () => <span className="text-expense text-xs">Motivo da queda</span>;
 
-const dueCaption = (bill: Due, month: string) => {
-  if (!bill.due_date.startsWith(month)) return `Conta fixa · venceu em ${monthName(bill.due_date, month)}`;
-  return bill.overdue ? `Conta fixa · venceu dia ${dayMonth(bill.due_date)}` : "Conta fixa · a pagar";
+const dueStatus = (bill: Due, month: string) => {
+  if (!bill.due_date.startsWith(month)) return `venceu em ${monthName(bill.due_date, month)}`;
+  return bill.overdue ? `venceu dia ${dayMonth(bill.due_date)}` : "a pagar";
 };
+
+const dueCaption = (bill: Due, month: string) =>
+  `${billKind(bill)} · ${dueStatus(bill, month)}${bill.variable ? " · valor variável" : ""}`;
 
 const DueRow = ({ bill, month, cause }: { bill: Due; month: string; cause: boolean }) => (
   <li
@@ -125,7 +152,7 @@ const Row = ({ transaction, entry, cause, onOpen }: RowProps) => (
       <CategoryIcon icon={transaction.category.icon} color={transaction.category.color} />
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="truncate font-medium text-base">{titleOf(transaction, entry)}</span>
-        <span className="flex items-center gap-1 text-muted-foreground text-xs">
+        <span className="flex flex-wrap items-center gap-1 text-muted-foreground text-xs">
           {entry.caption}
           {entry.card && (
             <span className="flex min-w-0 items-center gap-1">
@@ -218,7 +245,7 @@ export const Ledger = ({
   const cards = useCards({ includeInactive: true }).data;
   const bills = useBills({ includeInactive: true }).data;
   const describe = (transaction: Transaction): Entry => ({
-    ...entryOf(transaction, categories),
+    ...entryOf(transaction, categories, view.bills_of_month, bills),
     card: cards?.find(({ id }) => id === transaction.card_id)?.name,
   });
   const [selected, setSelected] = useState<Transaction>();
