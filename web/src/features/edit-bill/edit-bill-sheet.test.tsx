@@ -131,6 +131,100 @@ describe("EditBillSheet removal (SOL-153)", () => {
   });
 });
 
+describe("EditBillSheet switches a conta between fixa and parcelada (SOL-161)", () => {
+  beforeEach(() => {
+    window.innerWidth = 375;
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 10, 5, 12));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const FIES: Schemas["Bill"] = { ...BILL_ALUGUEL, name: "Fies", installments: 3, last_month: "2027-01-01" };
+
+  const edit = async (bill: Schemas["Bill"], onArchive?: (bill: Schemas["Bill"]) => void) => {
+    const requests = stubApi({
+      "GET /api/categories": { status: 200, body: CATEGORIES },
+      [`PATCH /api/bills/${bill.id}`]: { status: 200, body: bill },
+    });
+    renderWithQuery(
+      <>
+        <EditBillSheet open onOpenChange={vi.fn()} bill={bill} onArchive={onArchive} />
+        <Toaster />
+      </>,
+    );
+    const form = await screen.findByRole("dialog", { name: "Editar conta" });
+    const save = async () => {
+      await userEvent.click(within(form).getByRole("button", { name: "Salvar Conta Fixa" }));
+      await waitFor(() => expect(requests.some((request) => request.method === "PATCH")).toBe(true));
+      return requests.find((request) => request.method === "PATCH")?.json();
+    };
+    return { form, save };
+  };
+
+  it("turns a parcelada into a conta fixa: Parcelado off, the helper, no Ativa, both plan keys null", async () => {
+    const { form, save } = await edit(FIES);
+
+    const parcelado = within(form).getByRole("switch", { name: "Parcelado" });
+    expect(parcelado).toBeChecked();
+    await userEvent.click(parcelado);
+
+    expect(
+      within(form).getByText("Vira conta fixa: todo mês, sem fim. Os pagamentos feitos ficam como estão."),
+    ).toBeInTheDocument();
+    expect(within(form).queryByRole("switch", { name: "Ativa" })).not.toBeInTheDocument();
+    const body = await save();
+    expect(body).toMatchObject({ installments: null, last_month: null });
+    expect(body).not.toHaveProperty("active");
+    expect(await screen.findByText("Agora é uma conta fixa")).toBeInTheDocument();
+  });
+
+  it("sends no plan keys on a parcelada switched off and on again", async () => {
+    const { form, save } = await edit(FIES);
+
+    await userEvent.click(within(form).getByRole("switch", { name: "Parcelado" }));
+    await userEvent.click(within(form).getByRole("switch", { name: "Parcelado" }));
+    const body = await save();
+
+    expect(body).not.toHaveProperty("installments");
+    expect(body).not.toHaveProperty("last_month");
+    expect(await screen.findByText("Conta salva")).toBeInTheDocument();
+  });
+
+  it("never sends null for a fixa saved as is", async () => {
+    const { save } = await edit(BILL_ALUGUEL);
+
+    const body = await save();
+
+    expect(body).not.toHaveProperty("installments");
+    expect(body).not.toHaveProperty("last_month");
+  });
+
+  it("turns a fixa into a parcelada and says so", async () => {
+    const { form, save } = await edit(BILL_ALUGUEL);
+
+    await userEvent.click(within(form).getByRole("switch", { name: "Parcelado" }));
+    await userEvent.type(within(form).getByLabelText("Quantas parcelas"), "3");
+
+    expect(await save()).toMatchObject({ installments: 3 });
+    expect(await screen.findByText("Agora é uma conta parcelada")).toBeInTheDocument();
+  });
+
+  it("shows no Parcelado on a card", async () => {
+    const { form } = await edit({ ...BILL_ALUGUEL, name: "Porto", amount: null, closing_day: 3 });
+
+    expect(within(form).queryByRole("switch", { name: "Parcelado" })).not.toBeInTheDocument();
+  });
+
+  it("offers no Excluir without onArchive", async () => {
+    const { form } = await edit(FIES);
+
+    expect(within(form).queryByRole("button", { name: "Excluir conta fixa" })).not.toBeInTheDocument();
+  });
+});
+
 describe("useArchiveLater (SOL-153)", () => {
   beforeEach(() => {
     vi.useFakeTimers({ shouldAdvanceTime: true, toFake: ["Date", "setTimeout", "clearTimeout"] });

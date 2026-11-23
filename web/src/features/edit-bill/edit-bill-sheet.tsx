@@ -147,7 +147,8 @@ export const BillForm = ({
   /** A line above the form, by Parcelado. */
   hint?: (parcelado: boolean) => string;
   onSave: (fields: Fields) => void;
-  onArchive: (bill: Bill) => void;
+  /** Absent: no Excluir. */
+  onArchive?: (bill: Bill) => void;
   /** In a sheet: the buttons stick to its bottom. */
   pinned?: boolean;
   autoFocus?: boolean;
@@ -172,6 +173,7 @@ export const BillForm = ({
   const planTouched = draft.installments !== initial.installments || draft.current !== initial.current;
   // D44: an untouched prefill keeps the series' last month, which the form cannot work out once its due day passed.
   const endMonth = (!bill && !planTouched && prefill?.last_month) || lastMonth;
+  const dropping = bill?.installments != null && !draft.parcelado;
   const dayError = "Escolha um dia de 1 a 31.";
   const errors = {
     name: submitted && !name ? "Informe o nome." : undefined,
@@ -202,7 +204,8 @@ export const BillForm = ({
       return;
     }
     if (!amount) return;
-    if (!draft.parcelado) return onSave({ ...fields, amount, ...variable });
+    if (!draft.parcelado)
+      return onSave({ ...fields, amount, ...variable, ...(dropping && { installments: null, last_month: null }) });
     if (!lastMonth) return;
     const changed = !bill || planTouched;
     onSave({ ...fields, amount, ...variable, ...(changed && { installments: count, last_month: endMonth }) });
@@ -245,7 +248,7 @@ export const BillForm = ({
         />
         {errors.name && <FieldError>{errors.name}</FieldError>}
       </Field>
-      {(!bill || (bill.closing_day == null && bill.installments == null)) && (
+      {(!bill || bill.closing_day == null) && (
         <div className="grid gap-2 sm:grid-cols-2">
           {!bill && !prefill && (
             <label
@@ -267,8 +270,15 @@ export const BillForm = ({
             htmlFor="bill-parcelado-switch"
             className="flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-xl bg-muted px-4 py-2"
           >
-            <span id="bill-parcelado" className="font-medium text-base">
-              Parcelado
+            <span className="flex flex-col">
+              <span id="bill-parcelado" className="font-medium text-base">
+                Parcelado
+              </span>
+              {dropping && (
+                <span className="text-muted-foreground text-xs">
+                  Vira conta fixa: todo mês, sem fim. Os pagamentos feitos ficam como estão.
+                </span>
+              )}
             </span>
             <Switch
               id="bill-parcelado-switch"
@@ -417,7 +427,7 @@ export const BillForm = ({
           <span className="ml-auto text-muted-foreground text-xs">{draft.parcelado ? "Parcelado" : "Fixo"}</span>
         </span>
       </div>
-      {bill && !draft.card && !draft.parcelado && (
+      {bill && !draft.card && !draft.parcelado && bill.installments == null && (
         <label
           htmlFor="bill-active-switch"
           className="flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-xl bg-muted px-4"
@@ -440,7 +450,7 @@ export const BillForm = ({
           />
         </label>
       )}
-      {bill && (
+      {bill && onArchive && (
         <div className="flex flex-col items-center gap-1">
           <Button
             type="button"
@@ -465,13 +475,20 @@ export const BillForm = ({
   );
 };
 
+const savedMessage = (bill?: Bill, installments?: number | null) => {
+  if (!bill) return "Conta salva";
+  if (installments === null) return "Agora é uma conta fixa";
+  if (installments && bill.installments == null) return "Agora é uma conta parcelada";
+  return "Conta salva";
+};
+
 /** Saves the form's fields as a new bill or into `bill`, with a toast either way. */
 export const useSaveBill = (bill?: Bill, onCreate?: (fields: Schemas["CreateBill"]) => void) => {
   const create = useCreateBill();
   const update = useUpdateBill();
   return ({ active, ...fields }: Fields) => {
     const feedback = {
-      onSuccess: () => toast.success("Conta salva"),
+      onSuccess: () => toast.success(savedMessage(bill, fields.installments)),
       onError: (error: Error) => toast.error(problemMessage(error) ?? "Não foi possível salvar a conta."),
     };
     if (bill) return update.mutate({ id: bill.id, ...fields, ...(active !== bill.active && { active }) }, feedback);
@@ -601,10 +618,13 @@ export const EditBillSheet = ({
           onOpenChange(false);
           save(fields);
         }}
-        onArchive={(archived) => {
-          onOpenChange(false);
-          onArchive?.(archived);
-        }}
+        onArchive={
+          onArchive &&
+          ((archived) => {
+            onOpenChange(false);
+            onArchive(archived);
+          })
+        }
       />
     </ResponsiveSheet>
   );

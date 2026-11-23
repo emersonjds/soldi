@@ -62,8 +62,18 @@ const DESCRIPTION = "Cadastre uma movimentação pontual ou recorrente";
 
 type SheetProps = Parameters<typeof TransactionSheet>[0];
 
-/** Stands in for the host's bill sheet: saves the prefill as is, without its plan when Parcelado opens off. */
-const billSheet: NonNullable<SheetProps["billSheet"]> = ({ prefill, parcelado, onCreate }) => {
+/** Stands in for the host's bill sheet: names the conta it edits; saves a prefill as is, without its plan when Parcelado opens off. */
+const billSheet: NonNullable<SheetProps["billSheet"]> = ({ bill, prefill, parcelado, onOpenChange, onCreate }) => {
+  if (bill)
+    return (
+      <>
+        <p>{`Editar conta ${bill.name}`}</p>
+        <button type="button" onClick={() => onOpenChange(false)}>
+          Fechar conta
+        </button>
+      </>
+    );
+  if (!prefill || !onCreate) return null;
   const { installments: _installments, last_month: _lastMonth, ...fixed } = prefill;
   return (
     <button type="button" onClick={() => onCreate(parcelado === false ? fixed : prefill)}>
@@ -674,11 +684,59 @@ describe("TransactionSheet", () => {
     expect(await screen.findByText("2 lançamentos criados")).toBeInTheDocument();
   });
 
-  it("offers no Repetir for a bill payment, saying why", async () => {
-    setup({ transaction: { ...ALUGUEL_ROW, recurring_bill_id: "b1" } });
+  describe("Editar conta on a bill payment (SOL-161)", () => {
+    const PAYMENT = { ...ALUGUEL_ROW, recurring_bill_id: BILL_ALUGUEL.id };
+    const PORTO_CARD: Schemas["Bill"] = {
+      ...BILL_ALUGUEL,
+      id: "b1000000-0000-4000-8000-000000000009",
+      name: "Porto",
+      amount: null,
+      closing_day: 3,
+    };
+    const bills = (body: Schemas["Bill"][]) => ({
+      "GET /api/bills": { status: 200, body },
+    });
 
-    expect(await screen.findByText("Já é uma conta fixa recorrente.")).toBeInTheDocument();
-    expect(screen.queryByRole("switch", { name: "Recorrente" })).not.toBeInTheDocument();
+    it("offers Editar conta instead of Repetir and opens the conta in the bill sheet", async () => {
+      setup({ transaction: PAYMENT, billSheet }, bills([BILL_ALUGUEL]));
+
+      const edit = await screen.findByRole("button", { name: "Editar conta" });
+      await waitFor(() => expect(edit).toBeEnabled());
+      expect(screen.queryByRole("switch", { name: "Recorrente" })).not.toBeInTheDocument();
+      await userEvent.click(edit);
+
+      expect(await screen.findByText(`Editar conta ${BILL_ALUGUEL.name}`)).toBeInTheDocument();
+      expect(screen.getByRole("dialog", { name: "Editar lançamento" })).toBeInTheDocument();
+      await userEvent.click(screen.getByRole("button", { name: "Fechar conta" }));
+      expect(screen.queryByText(`Editar conta ${BILL_ALUGUEL.name}`)).not.toBeInTheDocument();
+    });
+
+    it("names a card's payment Editar cartão", async () => {
+      setup({ transaction: { ...PAYMENT, recurring_bill_id: PORTO_CARD.id }, billSheet }, bills([PORTO_CARD]));
+
+      expect(await screen.findByRole("button", { name: "Editar cartão" })).toBeInTheDocument();
+    });
+
+    it("says the conta was deleted when the list no longer holds it", async () => {
+      setup({ transaction: PAYMENT, billSheet }, bills([]));
+
+      expect(await screen.findByText("A conta deste pagamento foi excluída.")).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Editar conta" })).not.toBeInTheDocument();
+    });
+
+    it("keeps the button disabled while the contas load or fail to load", async () => {
+      setup({ transaction: PAYMENT, billSheet }, { "GET /api/bills": { status: 500, body: problem(500, "Erro.") } });
+
+      expect(await screen.findByRole("button", { name: "Editar conta" })).toBeDisabled();
+    });
+
+    it("offers nothing without a bill sheet host", async () => {
+      setup({ transaction: PAYMENT }, bills([BILL_ALUGUEL]));
+
+      await screen.findByRole("dialog", { name: "Editar lançamento" });
+      expect(screen.queryByRole("button", { name: "Editar conta" })).not.toBeInTheDocument();
+      expect(screen.queryByText("A conta deste pagamento foi excluída.")).not.toBeInTheDocument();
+    });
   });
 
   it("keeps a bill payment a Saída: no Tipo to pick, and a refused kind says why", async () => {
@@ -705,11 +763,12 @@ describe("TransactionSheet", () => {
   });
 
   it("offers no Repetir for a resgate", async () => {
-    setup({ transaction: { ...TRANSACTIONS[2], cofrinho_id: "c1" } });
+    setup({ transaction: { ...TRANSACTIONS[2], cofrinho_id: "c1" }, billSheet });
 
     expect(await screen.findByRole("dialog", { name: "Editar lançamento" })).toBeInTheDocument();
     expect(screen.queryByRole("switch", { name: "Recorrente" })).not.toBeInTheDocument();
-    expect(screen.queryByText("Já é uma conta fixa recorrente.")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Editar conta" })).not.toBeInTheDocument();
+    expect(screen.queryByText("A conta deste pagamento foi excluída.")).not.toBeInTheDocument();
   });
 
   it("edits a series member as Stitch draws it: chip, title, the member, Escopo first, then value, duration and day", async () => {
