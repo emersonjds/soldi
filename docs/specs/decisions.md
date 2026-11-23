@@ -455,3 +455,9 @@ Detail: `docs/specs/cards/SOL-160.md`.
 ## D46 — A conta switches between fixa and parcelada both ways (2026-11-23, owner + SOL-161; extends D35, D44, D45)
 
 `PATCH /api/bills/{id}` with `installments: null` and `last_month: null` turns a parcelada into a conta fixa with no end; absent keys still keep the plan and values still set it. It writes what Retomar writes: `last_month` NULL, and `active_since` moves to today only when the plan ended before this month (D17). Payments are never touched. Only a parcelada drops a plan (422 `validation` on `installments`), never with `active`. Fixa → parcelada is unchanged, a paused fixa included. The web shows Parcelado on a parcelada and offers "Editar conta" on a payment entry. Trade-offs: an ended parcelada restarts today, so a parcela it left unpaid no longer shows as overdue (as with Retomar); a fixa → parcelada → fixa round trip owes the fixa's own months again. Rejected: a `parcelado` bool, `installments: 0`, a plan endpoint. Detail: `docs/specs/cards/SOL-161.md`.
+
+## D47 — Lançar's monthly Parcelado on a Conta is a conta parcelada (2026-11-23, owner + SOL-162; extends D35, D45)
+
+A new or standalone Conta with Parcelado, Mensal and an entry in this month or the next one saves the entry, then creates a `recurring_bills` parcelada linked to it (R8): `amount` = the typed parcela, `installments` = N, `last_month` = entry month + N − Começa na parcela. Weekly, yearly, past-month and later dates keep D14's series. Card purchases in parcelas are untouched. Trade-off: the result depends on frequency and date; the caption says when it is a conta.
+
+Detail: `docs/specs/cards/SOL-162.md`.
