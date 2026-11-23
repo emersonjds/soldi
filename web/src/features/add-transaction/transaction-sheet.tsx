@@ -49,7 +49,7 @@ import { useIsLg } from "@/hooks/use-lg";
 import { cn } from "@/lib/utils";
 import { ApiError, problemMessage, type Schemas } from "@/shared/api/client";
 import { useCurrency } from "@/shared/lib/currency";
-import { isoWeekStart, lastDay, monthAbbrev, todayISO, weekdayName } from "@/shared/lib/date";
+import { addMonths, isoWeekStart, lastDay, monthAbbrev, todayISO, weekdayName } from "@/shared/lib/date";
 import { formatMoney, positiveAmount } from "@/shared/lib/money";
 import { cents, fromCents } from "@/shared/lib/tier";
 import { AmountKeypad, useKeypad } from "@/shared/ui/amount-keypad";
@@ -193,6 +193,7 @@ const TransactionForm = ({
   initial,
   transaction,
   onSave,
+  onParcelada,
   onConvert,
   onEditBill,
   onDiscard,
@@ -203,6 +204,8 @@ const TransactionForm = ({
   transaction?: Transaction;
   /** `moving`: Este e os próximos moves the series to a new day. */
   onSave: (fields: NewTransaction, scope?: Scope, moving?: boolean) => void;
+  /** D47: the entry, then the conta parcelada linked to it. */
+  onParcelada: (fields: NewTransaction, bill: BillPrefill) => void;
   onDiscard: () => void;
   /** Absent: no Transformar em conta. `parcelado`: the kind picked. */
   onConvert?: (source: Source, parcelado: boolean) => void;
@@ -250,6 +253,11 @@ const TransactionForm = ({
   const counted = (draft.repeat && !refused) || Boolean(series);
   // SOL-156: a new or standalone Conta counts parcelas, never Sempre.
   const parcelado = draft.kind === "bill" && !series;
+  // D47: `check_plan` takes a plan starting this month or the next; any other stays a series (D14).
+  const ahead = monthsBetween(todayISO(), draft.date);
+  const conta = parcelado && counting && every === "month" && ahead >= 0 && ahead <= 1;
+  const parcela = offset ? first : 1;
+  const lastMonth = addMonths(draft.date.slice(0, 7), months - parcela);
   const unit = UNITS[every];
   const weekly = every === "week";
   // D20, D32: a move keeps each member in its own month (its own ISO week when weekly).
@@ -274,6 +282,7 @@ const TransactionForm = ({
   const money = (value: number) => formatMoney(fromCents(value), currency);
 
   let amountLabel = draft.kind === "income" ? "Valor da entrada" : "Valor do gasto";
+  if (parcelado && counting) amountLabel = "Valor da parcela";
   if (series) amountLabel = "Valor por parcela";
   let dateLegendClass = isLg ? "sr-only" : undefined;
   if (series) dateLegendClass = caption;
@@ -288,12 +297,12 @@ const TransactionForm = ({
   const set = (patch: Partial<Draft>) => setDraft((current) => ({ ...current, ...patch }));
 
   /** `repeat` false: the plain entry, for a conta fixa. */
-  const fields = (repeat = draft.repeat): NewTransaction | undefined => {
+  const fields = (repeat = draft.repeat && !conta): NewTransaction | undefined => {
     setSubmitted(true);
     const counts = repeat && counting;
     if (!amount || !category || periodChanged) return;
-    if ((counts || resizing) && !monthsValid) return;
-    if (counts && starting && !firstValid) return;
+    if ((counting || resizing) && !monthsValid) return;
+    if (starting && !firstValid) return;
     const note = draft.note.trim();
     const parcelas = counts && offset;
     let repeatMonths = resized;
@@ -320,6 +329,7 @@ const TransactionForm = ({
     const valid = fields();
     if (!valid) return;
     if (refused) return convert();
+    if (conta) return onParcelada(valid, { ...prefillOf(valid), installments: months, last_month: `${lastMonth}-01` });
     // D33: asked here, before onSave closes the sheet and this dialog with it.
     if (series && draft.scope === "all" && !confirmed) return setAsking(true);
     onSave(valid, series ? draft.scope : undefined, moving);
@@ -595,6 +605,13 @@ const TransactionForm = ({
               {`${amount ? `${written}× de ${formatMoney(amount, currency)} · ` : ""}${repeatSummary(every, draft.date, written)}`}
             </p>
           )}
+          {conta && monthsValid && (
+            <p className="text-muted-foreground text-sm">
+              {parcela === months
+                ? "Vira uma conta parcelada: este lançamento paga a última parcela."
+                : `Vira uma conta parcelada: este lançamento paga a parcela ${parcela} e as próximas ficam em Contas a pagar até ${monthAbbrev(lastMonth)}.`}
+            </p>
+          )}
           {draft.repeat && openEnded && (
             <p className="flex items-center gap-2 text-muted-foreground text-sm">
               <Lightbulb aria-hidden className="size-4 shrink-0" />
@@ -859,25 +876,31 @@ export const TransactionSheet = ({
     );
   };
 
-  // Lançar posts the entry first; Editar links the one that exists.
+  // Lançar posts the entry first, Editar's conta parcelada patches it first (D47); a stored one is linked as it is.
   const convert = async (source: Source, bill: BillPrefill) => {
     onOpenChange(false);
     let transactionId: string;
     try {
-      transactionId = "id" in source ? source.id : (await create.mutateAsync(source)).id;
+      if ("id" in source) transactionId = source.id;
+      else if (transaction) {
+        const { category: _category, ...patch } = source;
+        await update.mutateAsync({ id: transaction.id, ...patch });
+        transactionId = transaction.id;
+      } else transactionId = (await create.mutateAsync(source)).id;
     } catch {
       return failed();
     }
+    const refused = (error: Error) => {
+      if ("id" in source) return problemMessage(error) ?? "Não foi possível criar a conta fixa.";
+      if (bill.installments)
+        return "O lançamento foi salvo, mas a conta parcelada não foi criada. Tente de novo em Editar.";
+      return "Lançado, mas a conta fixa não foi criada.";
+    };
     createBill.mutate(
       { ...bill, transactionId },
       {
         onSuccess: () => toast.success(bill.installments ? "Conta parcelada criada" : "Conta fixa criada"),
-        onError: (error) =>
-          toast.error(
-            transaction
-              ? (problemMessage(error) ?? "Não foi possível criar a conta fixa.")
-              : "Lançado, mas a conta fixa não foi criada.",
-          ),
+        onError: (error) => toast.error(refused(error)),
       },
     );
   };
@@ -939,6 +962,7 @@ export const TransactionSheet = ({
         initial={initial}
         transaction={transaction}
         onSave={save}
+        onParcelada={(fields, bill) => void convert(fields, bill)}
         onConvert={billSheet && ((source, parcelado) => setConverting({ source, parcelado }))}
         onEditBill={billSheet && setEditingBill}
         onDiscard={() => onOpenChange(false)}
