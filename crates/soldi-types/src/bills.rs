@@ -82,12 +82,15 @@ pub struct UpdateBill {
     #[schema(minimum = 1, maximum = 31)]
     pub closing_day: Option<i16>,
     /// Sent with `last_month`; turns a conta fixa parcelado or edits its parcelas. Not on a card.
-    #[serde(default)]
-    #[schema(minimum = 2, maximum = 60)]
-    pub installments: Option<i16>,
-    /// Sent with `installments`; not before the latest paid month.
-    #[serde(default)]
-    pub last_month: Option<chrono::NaiveDate>,
+    /// `null` with `"last_month": null` turns a parcelado bill into a conta fixa with no end (D46).
+    #[serde(default, deserialize_with = "crate::nullable_field")]
+    #[schema(value_type = Option<i16>, nullable, minimum = 2, maximum = 60)]
+    pub installments: Option<Option<i16>>,
+    /// Sent with `installments`; not before the latest paid month. `null` only with
+    /// `"installments": null`.
+    #[serde(default, deserialize_with = "crate::nullable_field")]
+    #[schema(value_type = Option<chrono::NaiveDate>, nullable)]
+    pub last_month: Option<Option<chrono::NaiveDate>>,
     /// Marks the amount as an estimate (D44). Not on a card.
     #[serde(default)]
     pub variable: Option<bool>,

@@ -15,6 +15,7 @@ import {
   Lightbulb,
   type LucideIcon,
   NotebookPen,
+  Pencil,
   ReceiptText,
   Repeat,
   Save,
@@ -30,7 +31,7 @@ import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { monthsBetween } from "@/entities/bill/bill-plan";
-import { type BillPrefill, useCards, useCreateBill } from "@/entities/bill/bill-queries";
+import { type Bill, type BillPrefill, useBills, useCards, useCreateBill } from "@/entities/bill/bill-queries";
 import { CategoryChips, useCategoryChips } from "@/entities/category/category-chips";
 import { useSettings } from "@/entities/settings/settings-query";
 import { ScopeRadio } from "@/entities/transaction/scope-radio";
@@ -166,11 +167,34 @@ const prefillOf = (source: Source): BillPrefill => {
   };
 };
 
+const kindButton = "h-auto min-h-12 min-w-0 flex-1 whitespace-normal text-base";
+
+/** SOL-161: a payment opens its conta; the list leaves archived ones out. */
+const PaidBill = ({ billId, onEdit }: { billId: string; onEdit: (bill: Bill) => void }) => {
+  const bills = useBills({ includeInactive: true });
+  const bill = bills.data?.find((each) => each.id === billId);
+  if (bills.data && !bill)
+    return <p className="text-muted-foreground text-sm">A conta deste pagamento foi excluída.</p>;
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      className={kindButton}
+      disabled={!bill}
+      onClick={() => bill && onEdit(bill)}
+    >
+      <Pencil aria-hidden />
+      {bill?.closing_day != null ? "Editar cartão" : "Editar conta"}
+    </Button>
+  );
+};
+
 const TransactionForm = ({
   initial,
   transaction,
   onSave,
   onConvert,
+  onEditBill,
   onDiscard,
   onDelete,
   onOpenEnded,
@@ -182,6 +206,8 @@ const TransactionForm = ({
   onDiscard: () => void;
   /** Absent: no Transformar em conta. `parcelado`: the kind picked. */
   onConvert?: (source: Source, parcelado: boolean) => void;
+  /** Absent: a payment offers no Editar conta. */
+  onEditBill?: (bill: Bill) => void;
   /** Excluir da Série...; absent, not offered. */
   onDelete?: () => void;
   /** Parar recorrência (`false`) or Tornar sem fim (`true`) on a series member. */
@@ -320,7 +346,6 @@ const TransactionForm = ({
     const source = transaction ?? fields(false);
     if (source) onConvert?.(source, parcelado);
   };
-  const kindButton = "h-auto min-h-12 min-w-0 flex-1 whitespace-normal text-base";
 
   const amountField = (
     <div className="flex flex-col gap-1">
@@ -420,8 +445,8 @@ const TransactionForm = ({
       )}
     </div>
   );
-  const recurringNote = transaction?.recurring_bill_id && (
-    <p className="text-muted-foreground text-sm">Já é uma conta fixa recorrente.</p>
+  const paidBill = transaction?.recurring_bill_id && onEditBill && (
+    <PaidBill billId={transaction.recurring_bill_id} onEdit={onEditBill} />
   );
   const repeatSwitch = (id: string, Icon: LucideIcon, label: string, checked: boolean, preset = "always") => (
     <label
@@ -655,7 +680,7 @@ const TransactionForm = ({
           {categoryField}
           {cardField}
           {noteField}
-          {recurringNote}
+          {paidBill}
         </>
       ) : (
         <>
@@ -693,7 +718,7 @@ const TransactionForm = ({
           {cardField}
           {dateField}
           {noteField}
-          {recurringNote}
+          {paidBill}
           {monthsField}
         </>
       )}
@@ -752,11 +777,13 @@ type TransactionSheetProps = {
   onDelete?: () => void;
   /** The bill sheet that Transformar em conta opens; absent, it is not offered. */
   billSheet?: (props: {
-    prefill: BillPrefill;
+    /** Given: the sheet edits it (Editar conta on a payment). */
+    bill?: Bill;
+    prefill?: BillPrefill;
     parcelado?: boolean;
     hint?: (parcelado: boolean) => string;
     onOpenChange: (open: boolean) => void;
-    onCreate: (bill: BillPrefill) => void;
+    onCreate?: (bill: BillPrefill) => void;
   }) => ReactNode;
 };
 
@@ -776,6 +803,7 @@ export const TransactionSheet = ({
   const update = useUpdateTransaction();
   const createBill = useCreateBill();
   const [converting, setConverting] = useState<{ source: Source; parcelado: boolean }>();
+  const [editingBill, setEditingBill] = useState<Bill>();
   const isLg = useIsLg();
   const failed = () => toast.error("Não foi possível salvar o lançamento.");
   let title = isLg ? "Novo Lançamento" : "Novo Registro";
@@ -912,6 +940,7 @@ export const TransactionSheet = ({
         transaction={transaction}
         onSave={save}
         onConvert={billSheet && ((source, parcelado) => setConverting({ source, parcelado }))}
+        onEditBill={billSheet && setEditingBill}
         onDiscard={() => onOpenChange(false)}
         onOpenEnded={
           transaction?.series && (transaction.series.open_ended || transaction.kind !== "bill")
@@ -937,6 +966,7 @@ export const TransactionSheet = ({
           onOpenChange: (open) => open || setConverting(undefined),
           onCreate: (bill) => void convert(converting.source, bill),
         })}
+      {editingBill && billSheet?.({ bill: editingBill, onOpenChange: (open) => open || setEditingBill(undefined) })}
     </ResponsiveSheet>
   );
 };

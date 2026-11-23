@@ -130,6 +130,36 @@ pub fn check_plan(
     Ok(())
 }
 
+/// What a patch does to a bill's parcelas (D46).
+#[derive(Debug, PartialEq, Eq)]
+pub enum PlanPatch {
+    Keep,
+    Drop,
+    Set {
+        installments: i16,
+        last_month: NaiveDate,
+    },
+}
+
+/// D46: both absent keep the plan, both `null` drop it, both values set it.
+pub fn plan_patch(
+    installments: Option<Option<i16>>,
+    last_month: Option<Option<NaiveDate>>,
+) -> Result<PlanPatch, AppError> {
+    match (installments, last_month) {
+        (None, None) => Ok(PlanPatch::Keep),
+        (Some(None), Some(None)) => Ok(PlanPatch::Drop),
+        (Some(Some(installments)), Some(Some(last_month))) => Ok(PlanPatch::Set {
+            installments,
+            last_month,
+        }),
+        _ => Err(AppError::invalid(
+            "last_month",
+            "send installments and last_month together",
+        )),
+    }
+}
+
 /// D35: the parcela `month` holds when parcela `installments` falls in `last_month`.
 pub fn installment_of(month: NaiveDate, last_month: NaiveDate, installments: i16) -> Option<i16> {
     let k = i32::from(installments) - (month_index(last_month) - month_index(month));
@@ -351,6 +381,34 @@ mod tests {
                 field(check_plan(6, d(last), november)),
                 "last_month",
                 "{last}"
+            );
+        }
+    }
+
+    #[test]
+    fn sol161_null_installments_and_last_month_drop_the_plan() {
+        let last = d("2027-01-01");
+        assert_eq!(plan_patch(None, None).unwrap(), PlanPatch::Keep);
+        assert_eq!(
+            plan_patch(Some(Some(6)), Some(Some(last))).unwrap(),
+            PlanPatch::Set {
+                installments: 6,
+                last_month: last
+            }
+        );
+        assert_eq!(plan_patch(Some(None), Some(None)).unwrap(), PlanPatch::Drop);
+        for (installments, last_month) in [
+            (Some(Some(6)), None),
+            (None, Some(Some(last))),
+            (Some(None), None),
+            (None, Some(None)),
+            (Some(Some(6)), Some(None)),
+            (Some(None), Some(Some(last))),
+        ] {
+            assert_eq!(
+                field(plan_patch(installments, last_month)),
+                "last_month",
+                "{installments:?} {last_month:?}"
             );
         }
     }

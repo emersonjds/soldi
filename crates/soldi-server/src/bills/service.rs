@@ -5,6 +5,7 @@ use soldi_types::transactions::{CreateTransaction, Transaction};
 use sqlx::{PgConnection, PgPool};
 use uuid::Uuid;
 
+use super::domain::PlanPatch;
 use super::{domain, repo};
 use crate::error::AppError;
 use crate::extract::CurrentUser;
@@ -205,6 +206,21 @@ pub async fn update(
             "a card has no pause; delete it instead",
         ));
     }
+    let plan = domain::plan_patch(patch.installments, patch.last_month)?;
+    let (installments, set) = match plan {
+        PlanPatch::Keep => (current.installments, None),
+        PlanPatch::Drop if current.installments.is_none() => {
+            return Err(AppError::invalid(
+                "installments",
+                "only a parcelado bill drops its parcelas",
+            ));
+        }
+        PlanPatch::Drop => (None, None),
+        PlanPatch::Set {
+            installments,
+            last_month,
+        } => (Some(installments), Some(last_month)),
+    };
     let category_id = patch.category_id.unwrap_or(current.category_id);
     let next = domain::check(
         CreateBill {
@@ -213,10 +229,8 @@ pub async fn update(
             due_day: patch.due_day.unwrap_or(current.due_day),
             category_id: Some(category_id),
             closing_day: patch.closing_day.or(current.closing_day),
-            installments: patch.installments.or(current.installments),
-            last_month: patch
-                .last_month
-                .or(current.installments.and(current.last_month)),
+            installments,
+            last_month: set.or(installments.and(current.last_month)),
             variable: patch.variable.unwrap_or(current.variable),
         },
         "",
@@ -235,32 +249,27 @@ pub async fn update(
     {
         return Err(domain::fatura_paid());
     }
-    let plan = if patch.installments.is_some() || patch.last_month.is_some() {
-        let (Some(n), Some(last)) = (patch.installments, patch.last_month) else {
-            return Err(AppError::invalid(
-                "last_month",
-                "send installments and last_month together",
-            ));
-        };
-        domain::check_plan(n, last, this_month)?;
+    if let PlanPatch::Set {
+        installments,
+        last_month,
+    } = plan
+    {
+        domain::check_plan(installments, last_month, this_month)?;
         if repo::last_paid(&mut conn, user.id, id)
             .await?
-            .is_some_and(|paid| last < first_of(paid))
+            .is_some_and(|paid| last_month < first_of(paid))
         {
             return Err(AppError::invalid("last_month", "must keep the paid months"));
         }
-        Some(last)
-    } else {
-        None
-    };
-    if (current.installments.is_some() || plan.is_some()) && patch.active.is_some() {
+    }
+    if (current.installments.is_some() || plan != PlanPatch::Keep) && patch.active.is_some() {
         return Err(AppError::invalid(
             "active",
             "a parcelado bill ends on its last parcela",
         ));
     }
     // D35: Parar keeps this month and any month paid ahead; Retomar after the end restarts D17,
-    // and so does a plan on a stopped Fixo.
+    // and so does a plan on a stopped Fixo or a dropped plan (D46).
     let ended = current.last_month.is_some_and(|last| last < this_month);
     let (last_month, restart) = match patch.active {
         Some(false) if current.active => {
@@ -274,11 +283,17 @@ pub async fn update(
             check_bill_kind(&mut conn, user, category_id).await?;
             (None, ended)
         }
-        None if plan.is_some() && !current.active => {
+        None if set.is_some() && !current.active => {
             check_bill_kind(&mut conn, user, category_id).await?;
-            (plan, ended)
+            (set, ended)
         }
-        _ => (plan.or(current.last_month), false),
+        None if plan == PlanPatch::Drop => {
+            if ended {
+                check_bill_kind(&mut conn, user, category_id).await?;
+            }
+            (None, ended)
+        }
+        _ => (set.or(current.last_month), false),
     };
     repo::update(&mut conn, user.id, id, &next, last_month, restart)
         .await?

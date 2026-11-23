@@ -802,7 +802,7 @@ describe("Contas fixas", () => {
         within(sheet)
           .getAllByRole("switch")
           .map((each) => each.getAttribute("id")),
-      ).toEqual(["bill-variable-switch"]);
+      ).toEqual(["bill-parcelado-switch", "bill-variable-switch"]);
       expect(within(sheet).getByLabelText("Quantas parcelas")).toHaveValue("6");
       expect(within(sheet).getByLabelText("Parcela atual")).toHaveValue("5");
       expect(within(sheet).getByText("Parcela 5/6 em nov/26 · termina em dez/26")).toBeInTheDocument();
