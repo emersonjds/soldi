@@ -3,6 +3,8 @@ import { expect, type Page, test } from "@playwright/test";
 import { expectNoClipped } from "./clipped";
 import { requireServer } from "./server";
 
+const SHOTS = process.env.E2E_SHOTS;
+
 test("a new user logs a Diário in three taps and sees it with the day balance", async ({ page, request }) => {
   await requireServer(request);
 
@@ -539,5 +541,92 @@ test("Lançamentos shows the whole month and splits Contas fixas from Valor vari
     await page.setViewportSize({ width, height: 900 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await expectNoClipped(page);
+  }
+});
+
+test("Contas a pagar and Lançamentos collapse from their chevron and stay that way after a reload (SOL-158)", async ({
+  page,
+  request,
+}) => {
+  await requireServer(request);
+  test.setTimeout(90_000);
+
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto("/criar-conta");
+  await page.getByLabel("E-mail").fill(`e2e-collapse-${Date.now()}@example.com`);
+  await page.getByLabel("Senha").fill("uma-senha-bem-longa");
+  await page.getByRole("button", { name: "Criar conta" }).click();
+  await page.getByRole("button", { name: "Continuar" }).click();
+  await page.getByLabel("Saldo de hoje").fill("1.000,00");
+  await page.getByRole("button", { name: "Continuar" }).click();
+  await page.getByRole("button", { name: "Pular por agora" }).click();
+  await page.getByRole("button", { name: "Ver meu mês" }).click();
+  await page.getByRole("button", { name: "Pular" }).click();
+  await page
+    .getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ })
+    .getByRole("button", { name: "Fechar" })
+    .click();
+
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
+  const api = page.request;
+  const categories: { id: string; kind: string; is_savings: boolean }[] = await (
+    await api.get("/api/categories")
+  ).json();
+  const daily = categories.find((each) => each.kind === "daily");
+  const bill = categories.find((each) => each.kind === "bill" && !each.is_savings);
+  expect(
+    (
+      await api.post("/api/transactions", {
+        data: { date: today, amount: "48.90", kind: "daily", category_id: daily?.id, note: "Feira" },
+      })
+    ).ok(),
+  ).toBe(true);
+  expect(
+    (
+      await api.post("/api/bills", {
+        data: {
+          name: "Internet da casa de praia em Ubatuba SP",
+          amount: "99999.99",
+          due_day: 28,
+          category_id: bill?.id,
+        },
+      })
+    ).ok(),
+  ).toBe(true);
+
+  await page.goto("/mes");
+  const bills = page.getByRole("region", { name: "Contas a pagar" });
+  const ledger = page.getByRole("region", { name: "Lançamentos" });
+  await expect(ledger.getByRole("button", { name: /Feira/ })).toBeVisible();
+  const billsToggle = bills.getByRole("button", { name: "Contas a pagar" });
+  const ledgerToggle = ledger.getByRole("button", { name: "Lançamentos" });
+  await expect(billsToggle).toHaveAttribute("aria-expanded", "true");
+
+  await billsToggle.click();
+  await ledgerToggle.click();
+  await page.reload();
+  await expect(bills).toContainText("0 de 1 paga");
+  await expect(billsToggle).toHaveAttribute("aria-expanded", "false");
+  await expect(ledgerToggle).toHaveAttribute("aria-expanded", "false");
+  await expect(bills.getByRole("listitem")).toHaveCount(0);
+  await expect(ledger.getByRole("button", { name: /Feira/ })).toHaveCount(0);
+
+  for (const state of ["fechado", "aberto"]) {
+    for (const width of [375, 1024, 1280, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+      await expectNoClipped(page);
+      if (SHOTS)
+        await page.screenshot({
+          path: `${SHOTS}/collapse-${state}-${width}.png`,
+          fullPage: true,
+          animations: "disabled",
+        });
+    }
+    if (state === "fechado") {
+      await billsToggle.click();
+      await ledgerToggle.click();
+      await expect(ledger.getByRole("button", { name: /Feira/ })).toBeVisible();
+    }
   }
 });
