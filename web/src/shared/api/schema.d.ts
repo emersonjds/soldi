@@ -1205,11 +1205,13 @@ export interface components {
             /**
              * Format: int32
              * @description Sent with `last_month`; turns a conta fixa parcelado or edits its parcelas. Not on a card.
+             *     `null` with `"last_month": null` turns a parcelado bill into a conta fixa with no end (D46).
              */
             installments?: number | null;
             /**
              * Format: date
-             * @description Sent with `installments`; not before the latest paid month.
+             * @description Sent with `installments`; not before the latest paid month. `null` only with
+             *     `"installments": null`.
              */
             last_month?: string | null;
             name?: string | null;
@@ -1874,7 +1876,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Same rules as create, on the bill after the change; `closing_day` on a conta fixa, `active: false` on a card, `active` on a parcelado bill or with `installments`/`last_month`; `installments` or `last_month` on a card, sent apart, or `last_month` before the latest paid month; `variable` on a card; `fatura-paid` when a card's `closing_day` changes while a fatura from this month on is paid (D30b) */
+            /** @description Same rules as create, on the bill after the change; `closing_day` on a conta fixa, `active: false` on a card, `active` on a parcelado bill or with `installments`/`last_month`; `installments` or `last_month` on a card, sent apart or as a value with a `null`, or `last_month` before the latest paid month; both `null` on a bill without parcelas (`installments`); `variable` on a card; `fatura-paid` when a card's `closing_day` changes while a fatura from this month on is paid (D30b) */
             422: {
                 headers: {
                     [name: string]: unknown;
