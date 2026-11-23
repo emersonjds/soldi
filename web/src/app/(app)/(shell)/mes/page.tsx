@@ -13,6 +13,7 @@ import { TransactionSheet } from "@/features/add-transaction/transaction-sheet";
 import { EditBillSheet } from "@/features/edit-bill/edit-bill-sheet";
 import { monthParam } from "@/shared/lib/date";
 import { replaceUrl } from "@/shared/lib/url";
+import { useStoredOpen } from "@/shared/lib/use-stored-open";
 import { PageError } from "@/shared/ui/page-state";
 import { ShellMonthSwitcher } from "@/widgets/app-shell/app-shell";
 import { BillsOfMonth } from "@/widgets/bills-of-month/bills-of-month";
@@ -33,6 +34,7 @@ const MonthScreen = () => {
   const [hint, setHint] = useState(fromTour);
   const [highlight, setHighlight] = useState<{ date: string } | null>(null);
   const [filter, setFilter] = useState<LedgerFilter>("all");
+  const ledgerOpen = useStoredOpen("ledger");
   const [filterMonth, setFilterMonth] = useState(month);
   if (filterMonth !== month) {
     setFilterMonth(month);
@@ -63,7 +65,10 @@ const MonthScreen = () => {
   const monthFailed = view.isError && !view.data;
   const entriesFailed = transactions.isError && !entries;
   const jump = (date: string) => {
-    flushSync(() => setFilter("all"));
+    flushSync(() => {
+      setFilter("all");
+      ledgerOpen.reveal();
+    });
     const group = document.getElementById(`dia-${date}`);
     group?.scrollIntoView({ block: "start" });
     group?.focus({ preventScroll: true });
@@ -110,6 +115,8 @@ const MonthScreen = () => {
               causes={causes}
               filter={filter}
               onFilterChange={setFilter}
+              open={ledgerOpen.open}
+              onOpenChange={ledgerOpen.choose}
               className="max-lg:order-3"
             />
           )}
