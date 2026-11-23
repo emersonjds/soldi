@@ -13,6 +13,7 @@ export const DashCard = ({
   className,
   label,
   icon,
+  trailing,
 }: {
   title: ReactNode;
   /** Drawn before the title, out of its name. */
@@ -20,6 +21,8 @@ export const DashCard = ({
   /** The region's name when `title` is not plain text. */
   label?: string;
   action?: { href: string; label: string; arrow?: boolean };
+  /** Drawn at the right of the header in place of `action`, such as a `SectionToggle`. */
+  trailing?: ReactNode;
   children: ReactNode;
   className?: string;
 }) => {
@@ -47,6 +50,7 @@ export const DashCard = ({
             </Link>
           </CardAction>
         )}
+        {trailing && !action && <CardAction className="self-center">{trailing}</CardAction>}
       </CardHeader>
       <CardContent>{children}</CardContent>
     </Card>

@@ -7,6 +7,13 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.66.0
+
+> Headline: fold away Contas a pagar and Lançamentos
+
+### Web
+- Contas a pagar and Lançamentos on Mês get a chevron at the right of their header that collapses or expands the card. The choice is kept in this browser, per card, so they open the way the person left them; both start open. Collapsed Contas a pagar keeps the paid count and the next bill; Ver o dia in the red-day alert opens Lançamentos for that visit without changing the choice (SOL-158).
+
 ## 0.65.0
 
 > Headline: contas mensais, fixed or variable, and the whole month at a glance
