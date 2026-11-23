@@ -13,10 +13,13 @@ import { EditBillSheet, useArchiveLater } from "./edit-bill-sheet";
 
 const PORTO = { name: "Porto", amount: "1200.00", category_id: ALUGUEL.id };
 
-const create = (prefill: Schemas["CreateBill"]) => {
+const create = (
+  prefill: Schemas["CreateBill"],
+  props: Partial<Pick<Parameters<typeof EditBillSheet>[0], "parcelado" | "hint">> = {},
+) => {
   stubApi({ "GET /api/categories": { status: 200, body: CATEGORIES } });
   const onCreate = vi.fn();
-  renderWithQuery(<EditBillSheet open onOpenChange={vi.fn()} prefill={prefill} onCreate={onCreate} />);
+  renderWithQuery(<EditBillSheet open onOpenChange={vi.fn()} prefill={prefill} onCreate={onCreate} {...props} />);
   return onCreate;
 };
 
@@ -62,6 +65,38 @@ describe("EditBillSheet with a series prefill (SOL-152)", () => {
     await userEvent.click(within(form).getByRole("button", { name: "Salvar Conta Fixa" }));
 
     expect(onCreate).toHaveBeenCalledWith({ ...PORTO, due_day: 1, installments: 9, last_month: "2027-06-01" });
+  });
+
+  it("opens with Parcelado off when told to, keeping the plan for the switch, and posts no plan", async () => {
+    const onCreate = create({ ...PORTO, due_day: 5, installments: 3, last_month: "2027-01-01" }, { parcelado: false });
+
+    const form = await sheet();
+    expect(within(form).getByRole("switch", { name: "Parcelado" })).not.toBeChecked();
+    expect(within(form).queryByLabelText("Quantas parcelas")).not.toBeInTheDocument();
+    await userEvent.click(within(form).getByRole("button", { name: "Salvar Conta Fixa" }));
+
+    expect(onCreate).toHaveBeenLastCalledWith({ ...PORTO, due_day: 5 });
+    await userEvent.click(within(form).getByRole("switch", { name: "Parcelado" }));
+    expect(within(form).getByLabelText("Quantas parcelas")).toHaveValue("3");
+    expect(within(form).getByLabelText("Parcela atual")).toHaveValue("1");
+    expect(within(form).getByText("Parcela 1/3 em nov/26 · termina em jan/27")).toBeInTheDocument();
+    await userEvent.click(within(form).getByRole("button", { name: "Salvar Conta Fixa" }));
+
+    expect(onCreate).toHaveBeenLastCalledWith({ ...PORTO, due_day: 5, installments: 3, last_month: "2027-01-01" });
+  });
+
+  it("swaps the hint with the Parcelado switch", async () => {
+    create(
+      { ...PORTO, due_day: 1, installments: 9, last_month: "2026-11-01" },
+      { parcelado: true, hint: (parcelado) => (parcelado ? "Parcelada." : "Fixa.") },
+    );
+
+    const form = await sheet();
+    expect(within(form).getByText("Parcelada.")).toBeInTheDocument();
+    await userEvent.click(within(form).getByRole("switch", { name: "Parcelado" }));
+
+    expect(within(form).getByText("Fixa.")).toBeInTheDocument();
+    expect(within(form).queryByText("Parcelada.")).not.toBeInTheDocument();
   });
 });
 

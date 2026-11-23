@@ -515,14 +515,14 @@ test("a 24x Conta series from three months ago becomes a variable conta fixa; pa
   await page.getByRole("dialog", { name: "Porto" }).getByRole("button", { name: "Editar" }).click();
   await page
     .getByRole("dialog", { name: "Editar Lançamento Recorrente" })
-    .getByRole("button", { name: "Criar como Conta Fixa" })
+    .getByRole("button", { name: "Conta parcelada" })
     .click();
   const sheet = page.getByRole("dialog", { name: "Nova conta" });
   await expect(sheet).toContainText("Os lançamentos desta série até este mês viram pagamentos desta conta.");
   await expect(sheet.getByRole("switch", { name: "Parcelado" })).toBeChecked();
   await sheet.getByRole("switch", { name: "Valor varia todo mês" }).click();
   await sheet.getByRole("button", { name: "Salvar Conta Fixa" }).click();
-  await expect(page.getByText("Conta fixa criada")).toBeVisible();
+  await expect(page.getByText("Conta parcelada criada")).toBeVisible();
 
   await page.goto(`/mes?m=${monthFrom(0)}`);
   const thisMonth = page.getByRole("region", { name: "Contas a pagar" }).getByRole("listitem", { name: "Porto" });
@@ -534,5 +534,68 @@ test("a 24x Conta series from three months ago becomes a variable conta fixa; pa
   await expect(nextMonth).toContainText("valor variável");
 
   expect(await totalsOf(past)).toEqual(before);
+  expect(await (await api.get(`/api/transactions?month=${monthFrom(1)}`)).json()).toEqual([]);
+});
+
+test("a 2-member Conta series starting this month becomes a conta fixa with no end", async ({ page, request }) => {
+  await requireServer(request);
+  test.setTimeout(90_000);
+  await signUpByApi(page, "series-fixa");
+  const api = page.request;
+  const categories: { id: string; kind: string; is_savings: boolean }[] = await (
+    await api.get("/api/categories")
+  ).json();
+  const billCategory = categories.find((category) => category.kind === "bill" && !category.is_savings);
+  const created = await api.post("/api/transactions", {
+    data: {
+      date: `${monthFrom(0)}-01`,
+      amount: "2339.68",
+      kind: "bill",
+      category_id: billCategory?.id,
+      note: "Financiamento",
+      repeat_months: 2,
+    },
+  });
+  expect(created.ok()).toBe(true);
+
+  await page.goto(`/mes?m=${monthFrom(0)}`);
+  await page
+    .getByRole("region", { name: "Lançamentos" })
+    .getByRole("button", { name: /^Financiamento/ })
+    .click();
+  await page.getByRole("dialog", { name: "Financiamento" }).getByRole("button", { name: "Editar" }).click();
+  const edit = page.getByRole("dialog", { name: "Editar Lançamento Recorrente" });
+  const fixa = edit.getByRole("button", { name: "Conta fixa" });
+  const parcelada = edit.getByRole("button", { name: "Conta parcelada" });
+  for (const width of [1440, 375]) {
+    await page.setViewportSize({ width, height: 812 });
+    // The sheet becomes a dialog across 1024 px and remounts.
+    await expect(async () => {
+      await fixa.scrollIntoViewIfNeeded({ timeout: 1000 });
+      const [left, right] = [await fixa.boundingBox(), await parcelada.boundingBox()];
+      expect(left && right && Math.abs(left.y - right.y) < 1 && left.x < right.x).toBe(true);
+      expect(Math.min(left?.height ?? 0, right?.height ?? 0)).toBeGreaterThanOrEqual(44);
+    }).toPass();
+    expect(await fixa.evaluate((button) => getComputedStyle(button).fontSize)).toBe("16px");
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await expectNoClipped(page);
+  }
+  await fixa.click();
+  const sheet = page.getByRole("dialog", { name: "Nova conta" });
+  await expect(sheet.getByRole("switch", { name: "Parcelado" })).not.toBeChecked();
+  await expect(sheet).toContainText("Os dos próximos meses saem da lista: a conta fixa prevê todo mês, sem fim.");
+  await sheet.getByRole("button", { name: "Salvar Conta Fixa" }).click();
+  await expect(page.getByText("Conta fixa criada")).toBeVisible();
+
+  for (const month of [monthFrom(0), monthFrom(3)]) {
+    await page.goto(`/mes?m=${month}`);
+    const bill = page.getByRole("region", { name: "Contas a pagar" }).getByRole("listitem", { name: "Financiamento" });
+    await expect(bill).toContainText("R$ 2.339,68");
+    await expect(bill).not.toContainText("termina em");
+  }
+  await page.goto(`/mes?m=${monthFrom(0)}`);
+  await expect(
+    page.getByRole("region", { name: "Lançamentos" }).getByRole("button", { name: /^Financiamento/ }),
+  ).toContainText("Conta fixa · paga");
   expect(await (await api.get(`/api/transactions?month=${monthFrom(1)}`)).json()).toEqual([]);
 });

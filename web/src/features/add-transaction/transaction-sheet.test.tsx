@@ -62,12 +62,15 @@ const DESCRIPTION = "Cadastre uma movimentação pontual ou recorrente";
 
 type SheetProps = Parameters<typeof TransactionSheet>[0];
 
-/** Stands in for the host's bill sheet: saves the prefill as is. */
-const billSheet: NonNullable<SheetProps["billSheet"]> = ({ prefill, onCreate }) => (
-  <button type="button" onClick={() => onCreate(prefill)}>
-    Criar conta
-  </button>
-);
+/** Stands in for the host's bill sheet: saves the prefill as is, without its plan when Parcelado opens off. */
+const billSheet: NonNullable<SheetProps["billSheet"]> = ({ prefill, parcelado, onCreate }) => {
+  const { installments: _installments, last_month: _lastMonth, ...fixed } = prefill;
+  return (
+    <button type="button" onClick={() => onCreate(parcelado === false ? fixed : prefill)}>
+      Criar conta
+    </button>
+  );
+};
 
 const setup = (props: Partial<SheetProps> = {}, replies = {}) => {
   const requests = stubApi({
@@ -1216,12 +1219,17 @@ describe("TransactionSheet", () => {
     await userEvent.click(await screen.findByRole("radio", { name: "Conta" }));
     expect(screen.getByRole("switch", { name: "Parcelado" })).toBeInTheDocument();
     expect(screen.queryByRole("switch", { name: "Conta fixa" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Criar como Conta Fixa" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Transformar em conta")).not.toBeInTheDocument();
   });
 
-  describe("Criar como Conta Fixa on a series member (SOL-152)", () => {
-    const SERIES_HINT =
-      "Os lançamentos desta série até este mês viram pagamentos desta conta. Os dos próximos meses saem da lista: a conta passa a prever cada mês.";
+  describe("Transformar em conta on a series member (SOL-152, SOL-160)", () => {
+    const FIXA_AHEAD =
+      "Os lançamentos desta série até este mês viram pagamentos desta conta. Os dos próximos meses saem da lista: a conta fixa prevê todo mês, sem fim.";
+    const FIXA_NOW =
+      "Os lançamentos desta série viram pagamentos desta conta. Daqui em diante, a conta fixa prevê todo mês, sem fim.";
+    const PARCELADA_AHEAD =
+      "Os lançamentos desta série até este mês viram pagamentos desta conta. Os dos próximos meses saem da lista: a conta prevê cada parcela até abr/28.";
+    const PARCELADA_NOW = "Os lançamentos desta série viram pagamentos desta conta. A última parcela é deste mês.";
     const SERIES: Schemas["TransactionSeries"] = {
       id: "s",
       position: 8,
@@ -1231,63 +1239,110 @@ describe("TransactionSheet", () => {
       open_ended: false,
     };
     const PORTO_MEMBER: Schemas["Transaction"] = { ...ALUGUEL_ROW, note: "Porto", date: "2026-10-01", series: SERIES };
+    const PLAN = {
+      name: "Porto",
+      amount: "1200.00",
+      due_day: 1,
+      category_id: ALUGUEL.id,
+      installments: 26,
+      last_month: "2028-04-01",
+    };
     const member = (series: Partial<Schemas["TransactionSeries"]>, date = PORTO_MEMBER.date) => ({
       ...PORTO_MEMBER,
       date,
       series: { ...SERIES, ...series },
     });
-    const convertWith = async (transaction: Schemas["Transaction"], replies = {}) => {
+    const convertWith = async (transaction: Schemas["Transaction"], replies = {}, kind = "Conta parcelada") => {
       const sheet = vi.fn(billSheet);
       const { requests } = setup({ transaction, billSheet: sheet }, replies);
-      await userEvent.click(await screen.findByRole("button", { name: "Criar como Conta Fixa" }));
-      return { requests, props: sheet.mock.lastCall?.[0] };
+      await userEvent.click(await screen.findByRole("button", { name: kind }));
+      const bills = async () => {
+        const posts = requests.filter((request) => request.method === "POST");
+        expect(posts).toHaveLength(1);
+        expect(new URL(posts[0].url).pathname).toBe("/api/bills");
+        expect(new URL(posts[0].url).searchParams.get("transaction_id")).toBe(PORTO_MEMBER.id);
+        return posts[0].json();
+      };
+      return { bills, props: sheet.mock.lastCall?.[0] };
     };
+    const created = { "POST /api/bills": { status: 201, body: BILL_ALUGUEL } };
 
-    it("keeps a Conta series member's edit as it was: Quantas vezes with Sempre, Ciclo Atual, the link, no new switch", async () => {
+    it("offers Conta fixa and Conta parcelada under Quantas vezes, with the end month; no link, no new switch", async () => {
       setup({ transaction: PORTO_MEMBER, billSheet });
 
       const counts = await screen.findByRole("radiogroup", { name: "Quantas vezes" });
       expect(within(counts).getByRole("radio", { name: "Sempre" })).toBeDisabled();
       expect(screen.getByRole("button", { name: "Ciclo Atual" })).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: "Criar como Conta Fixa" })).toBeInTheDocument();
+      expect(screen.getByText("Transformar em conta")).toBeInTheDocument();
+      for (const name of ["Conta fixa", "Conta parcelada"])
+        expect(screen.getByRole("button", { name })).toHaveClass("min-h-12", "text-base");
+      expect(screen.getByText("Fixa: todo mês, sem fim. Parcelada: termina em abr/28.")).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Criar como Conta Fixa" })).not.toBeInTheDocument();
       for (const name of ["Conta fixa", "Parcelado", "Recorrente"])
         expect(screen.queryByRole("switch", { name })).not.toBeInTheDocument();
     });
 
-    it("offers Criar como Conta Fixa on a monthly Conta series member, with the series hint and a Parcelado prefill", async () => {
-      const { requests, props } = await convertWith(PORTO_MEMBER, {
-        "POST /api/bills": { status: 201, body: BILL_ALUGUEL },
-      });
+    it("opens Conta fixa with Parcelado off and the plan kept for the switch, posting no plan", async () => {
+      const { bills, props } = await convertWith(PORTO_MEMBER, created, "Conta fixa");
 
-      expect(props?.hint).toBe(SERIES_HINT);
-      expect(props?.prefill).toEqual({
-        name: "Porto",
-        amount: "1200.00",
-        due_day: 1,
-        category_id: ALUGUEL.id,
-        installments: 26,
-        last_month: "2028-04-01",
-      });
+      expect(props?.parcelado).toBe(false);
+      expect(props?.prefill).toEqual(PLAN);
+      expect(props?.hint?.(false)).toBe(FIXA_AHEAD);
+      expect(props?.hint?.(true)).toBe(PARCELADA_AHEAD);
       await userEvent.click(screen.getByRole("button", { name: "Criar conta" }));
 
       expect(await screen.findByText("Conta fixa criada")).toBeInTheDocument();
-      const posts = requests.filter((request) => request.method === "POST");
-      expect(posts).toHaveLength(1);
-      expect(new URL(posts[0].url).pathname).toBe("/api/bills");
-      expect(new URL(posts[0].url).searchParams.get("transaction_id")).toBe(PORTO_MEMBER.id);
+      expect(await bills()).toEqual({ name: "Porto", amount: "1200.00", due_day: 1, category_id: ALUGUEL.id });
     });
 
-    it("prefills a Parcelado ending this month when the series' last member is this month", async () => {
+    it("opens Conta parcelada with Parcelado on and the series' plan, posting it", async () => {
+      const { bills, props } = await convertWith(PORTO_MEMBER, created);
+
+      expect(props?.parcelado).toBe(true);
+      expect(props?.prefill).toEqual(PLAN);
+      expect(props?.hint?.(true)).toBe(PARCELADA_AHEAD);
+      expect(props?.hint?.(false)).toBe(FIXA_AHEAD);
+      await userEvent.click(screen.getByRole("button", { name: "Criar conta" }));
+
+      expect(await screen.findByText("Conta parcelada criada")).toBeInTheDocument();
+      expect(await bills()).toEqual(PLAN);
+    });
+
+    it("offers both on a series ending this month, with the hints of a last month", async () => {
       const { props } = await convertWith(member({ last_date: "2026-11-01", total: 9 }));
 
-      expect(props?.prefill).toEqual({
-        name: "Porto",
-        amount: "1200.00",
-        due_day: 1,
-        category_id: ALUGUEL.id,
-        installments: 9,
-        last_month: "2026-11-01",
-      });
+      expect(props?.prefill).toEqual({ ...PLAN, installments: 9, last_month: "2026-11-01" });
+      expect(props?.hint?.(true)).toBe(PARCELADA_NOW);
+      expect(props?.hint?.(false)).toBe(FIXA_NOW);
+    });
+
+    it("shows both buttons on a series ending this month", async () => {
+      setup({ transaction: member({ last_date: "2026-11-01", total: 9 }), billSheet });
+
+      expect(await screen.findByRole("button", { name: "Conta fixa" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Conta parcelada" })).toBeInTheDocument();
+      expect(screen.getByText("Fixa: todo mês, sem fim. Parcelada: termina em nov/26.")).toBeInTheDocument();
+    });
+
+    it("offers only Conta fixa on a series that ended before this month, posting no plan", async () => {
+      const transaction = member({ last_date: "2026-10-01", total: 8 });
+      const sheet = vi.fn(billSheet);
+      const { requests } = setup({ transaction, billSheet: sheet }, created);
+
+      expect(
+        await screen.findByText("A série terminou em out/26. Como conta fixa, volta a prever todo mês."),
+      ).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Conta parcelada" })).not.toBeInTheDocument();
+      await userEvent.click(screen.getByRole("button", { name: "Conta fixa" }));
+      const props = sheet.mock.lastCall?.[0];
+      expect(props?.parcelado).toBe(false);
+      expect(props?.prefill).toEqual({ name: "Porto", amount: "1200.00", due_day: 1, category_id: ALUGUEL.id });
+      expect(props?.hint?.(false)).toBe(FIXA_NOW);
+      await userEvent.click(screen.getByRole("button", { name: "Criar conta" }));
+
+      expect(await screen.findByText("Conta fixa criada")).toBeInTheDocument();
+      const post = requests.find((request) => request.method === "POST");
+      expect(await post?.json()).toEqual({ name: "Porto", amount: "1200.00", due_day: 1, category_id: ALUGUEL.id });
     });
 
     it("prefills the series' month span when deleted members leave its total short", async () => {
@@ -1305,14 +1360,24 @@ describe("TransactionSheet", () => {
     it.each([
       ["a weekly member", member({ every: "week" })],
       ["a yearly member", member({ every: "year" })],
-      ["a series that ended last month", member({ last_date: "2026-10-01", total: 8 })],
-      ["a bill payment", { ...ALUGUEL_ROW, recurring_bill_id: BILL_ALUGUEL.id }],
-      ["a resgate", { ...ALUGUEL_ROW, cofrinho_id: "c1000000-0000-4000-8000-000000000001" }],
-    ])("offers no Criar como Conta Fixa on %s", async (_, transaction) => {
+      ["a bill payment", { ...PORTO_MEMBER, recurring_bill_id: BILL_ALUGUEL.id }],
+      ["a resgate", { ...PORTO_MEMBER, cofrinho_id: "c1000000-0000-4000-8000-000000000001" }],
+      ["a card spend", { ...PORTO_MEMBER, card_id: BILL_ALUGUEL.id }],
+      ["a Diário series", { ...PORTO_MEMBER, kind: "daily" as const }],
+      ["an Entrada series", { ...PORTO_MEMBER, kind: "income" as const }],
+    ])("offers no Transformar em conta on %s", async (_, transaction) => {
       setup({ transaction, billSheet });
 
       expect(await screen.findByLabelText("Observação")).toBeInTheDocument();
-      expect(screen.queryByRole("button", { name: "Criar como Conta Fixa" })).not.toBeInTheDocument();
+      expect(screen.queryByText("Transformar em conta")).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Conta fixa" })).not.toBeInTheDocument();
+    });
+
+    it("offers no Transformar em conta without a bill sheet host", async () => {
+      setup({ transaction: PORTO_MEMBER });
+
+      expect(await screen.findByLabelText("Observação")).toBeInTheDocument();
+      expect(screen.queryByText("Transformar em conta")).not.toBeInTheDocument();
     });
 
     it("says a series with two entries in one month cannot become a conta fixa", async () => {
@@ -1327,6 +1392,14 @@ describe("TransactionSheet", () => {
       expect(
         await screen.findByText("Esta série tem dois lançamentos no mesmo mês. Exclua um deles e tente de novo."),
       ).toBeInTheDocument();
+    });
+
+    it("says only that the conta was not created on any other refusal, never the server's text", async () => {
+      await convertWith(PORTO_MEMBER, { "POST /api/bills": { status: 422, body: problem(422, "Server says no.") } });
+      await userEvent.click(screen.getByRole("button", { name: "Criar conta" }));
+
+      expect(await screen.findByText("Não foi possível criar a conta fixa.")).toBeInTheDocument();
+      expect(screen.queryByText(/Server says no/)).not.toBeInTheDocument();
     });
   });
 

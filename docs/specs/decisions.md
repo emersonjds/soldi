@@ -445,3 +445,9 @@ Rejected:
 - a variable amount computed from past payments (D16: never guessed).
 
 Detail: `docs/specs/cards/SOL-152.md`, plan `docs/specs/plans/SOL-152.md`.
+
+## D45 — A series member converts to the kind the person picks (2026-11-23, owner + SOL-160; amends D44)
+
+On a monthly Conta series member, the person picks **Conta fixa** or **Conta parcelada** before Nova conta opens. A Conta fixa body (no `installments`, no `last_month`) is now allowed for a bounded series, because the person chose it: the conta owes every month after the series' last member. D44 rejected that only as a default the web chose by itself. A series that ended before this month may convert to a Conta fixa: all its members become payments and nothing is deleted. A parcelada keeps D44's prefill. The server is unchanged. Trade-off: Próximos meses after the series' end now owe the conta, which is the person's explicit choice.
+
+Detail: `docs/specs/cards/SOL-160.md`.
