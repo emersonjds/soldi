@@ -159,3 +159,68 @@ test("a parcelado conta fixa shows its parcela each month and leaves after the l
   await page.waitForLoadState("networkidle");
   await expect(fies).toHaveCount(0);
 });
+
+test("a parcelada becomes a conta fixa from its payment's Editar conta (SOL-161)", async ({ page, request }) => {
+  await requireServer(request);
+  test.setTimeout(90_000);
+  // The server's São Paulo calendar, not the runner's clock.
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
+  const month = (offset: number) => {
+    const date = new Date(Date.UTC(Number(today.slice(0, 4)), Number(today.slice(5, 7)) - 1 + offset, 1));
+    return date.toISOString().slice(0, 7);
+  };
+  const api = page.request;
+  await api.post("/api/auth/sign-up", {
+    data: { email: `e2e-fixa-${Date.now()}@example.com`, password: "uma-senha-bem-longa" },
+  });
+  await api.post("/api/onboarding", { data: { opening_balance: "1000.00", opening_date: `${month(0)}-01` } });
+  await api.post("/api/me/tour-seen");
+  const categories: { id: string; kind: string; is_savings: boolean }[] = await (
+    await api.get("/api/categories")
+  ).json();
+  const category = categories.find((each) => each.kind === "bill" && !each.is_savings);
+  const created = await api.post("/api/bills", {
+    data: {
+      name: "Fies",
+      amount: "500.00",
+      due_day: 28,
+      category_id: category?.id,
+      installments: 3,
+      last_month: `${month(1)}-01`,
+    },
+  });
+  expect(created.ok()).toBe(true);
+  const { id } = await created.json();
+  const paid = await api.post(`/api/bills/${id}/pay?month=${month(0)}`, { data: { date: today, amount: "500.00" } });
+  expect(paid.ok()).toBe(true);
+  await page.setViewportSize({ width: 375, height: 812 });
+
+  const fies = page.getByRole("region", { name: "Contas a pagar" }).getByRole("listitem", { name: /^Fies/ });
+  await page.goto(`/mes?m=${month(2)}`);
+  await expect(page.getByRole("region", { name: "Saldo hoje" })).toBeVisible();
+  await page.waitForLoadState("networkidle");
+  await expect(fies).toHaveCount(0);
+
+  await page.goto("/mes");
+  await page
+    .getByRole("region", { name: "Lançamentos" })
+    .getByRole("button", { name: /R\$\s500,00/ })
+    .click();
+  await page.getByRole("button", { name: "Editar", exact: true }).click();
+  await page.getByRole("button", { name: "Editar conta" }).click();
+  const sheet = page.getByRole("dialog", { name: "Editar conta" });
+  await sheet.getByRole("switch", { name: "Parcelado" }).click();
+  await expect(
+    sheet.getByText("Vira conta fixa: todo mês, sem fim. Os pagamentos feitos ficam como estão."),
+  ).toBeVisible();
+  await expectNoClipped(page);
+  await sheet.getByRole("button", { name: "Salvar Conta Fixa" }).click();
+  await expect(page.getByText("Agora é uma conta fixa")).toBeVisible();
+
+  await page.goto(`/mes?m=${month(1)}`);
+  await expect(fies).toBeVisible();
+  await expect(fies).not.toContainText("termina em");
+  await page.goto(`/mes?m=${month(2)}`);
+  await expect(fies).toBeVisible();
+  await expectNoClipped(page);
+});
