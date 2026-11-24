@@ -1,8 +1,10 @@
-import { QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { useBills, useCards } from "@/entities/bill/bill-queries";
+import { categoriesQuery } from "@/entities/category/categories-query";
 import { useMonth } from "@/entities/month/month-query";
 import { useTransactions } from "@/entities/transaction/transaction-queries";
 import type { Schemas } from "@/shared/api/client";
@@ -256,6 +258,94 @@ describe("Planilha day detail", () => {
   });
 });
 
+/** Waits for November's entries: before them a money cell only opens the detail. */
+const ready = (client: ReturnType<typeof show>["client"]) =>
+  waitFor(() => expect(client.getQueryState(["transactions", "2026-11"])?.status).toBe("success"));
+
+describe("Planilha cell actions (SOL-171)", () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 10, 5, 12));
+  });
+  afterEach(() => vi.useRealTimers());
+
+  it("A4: opens Lançar on a '-' with the column's kind and the row's date, then gives focus back to the day", async () => {
+    const { client } = show({ "GET /api/bills": { status: 200, body: [] } });
+    await ready(client);
+
+    await userEvent.click((await row("Domingo, 1 de novembro")).cells[1]);
+    const income = await screen.findByRole("dialog", { name: /^Novo/ });
+    expect(within(income).getByRole("radio", { name: "Entrada" })).toBeChecked();
+    expect(within(income).getByRole("button", { name: /01\/11\/2026/ })).toBeInTheDocument();
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => expect(screen.getByRole("button", { name: "Domingo, 1 de novembro" })).toHaveFocus());
+
+    await userEvent.click((await row("Quarta-feira, 11 de novembro")).cells[2]);
+    const bill = await screen.findByRole("dialog", { name: /^Novo/ });
+    expect(within(bill).getByRole("radio", { name: "Conta" })).toBeChecked();
+    expect(await within(bill).findByRole("switch", { name: "Conta fixa" })).toBeInTheDocument();
+    expect(within(bill).getByRole("button", { name: /11\/11\/2026/ })).toBeInTheDocument();
+    await userEvent.keyboard("{Escape}");
+
+    await userEvent.click((await row("Quarta-feira, 11 de novembro")).cells[3]);
+    expect(
+      within(await screen.findByRole("dialog", { name: /^Novo/ })).getByRole("radio", { name: "Diário" }),
+    ).toBeChecked();
+  });
+
+  it("A5: opens Lista's Editar / Excluir on a cell that is exactly one lançamento, a paid conta included", async () => {
+    const { client } = show();
+    await ready(client);
+
+    await userEvent.click((await row("Quarta-feira, 4 de novembro")).cells[3]);
+    const feira = await screen.findByRole("dialog", { name: "Feira" });
+    expect(within(feira).getByRole("button", { name: "Editar" })).toBeInTheDocument();
+    expect(within(feira).getByRole("button", { name: "Excluir" })).toBeInTheDocument();
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => expect(screen.getByRole("button", { name: "Quarta-feira, 4 de novembro" })).toHaveFocus());
+
+    await userEvent.click((await row("Terça-feira, 3 de novembro")).cells[2]);
+    expect(await screen.findByRole("dialog", { name: "Luz" })).toHaveTextContent("Conta fixa · paga");
+  });
+
+  it("A6/A8/A9: opens the detail on a cell summing several entries, an unpaid conta or a card spend under a '-'", async () => {
+    const { client } = show({
+      "GET /api/transactions": { status: 200, body: [...ENTRIES, ...CARD_SPENDS] },
+      "GET /api/bills": { status: 200, body: [CARD] },
+    });
+    await ready(client);
+
+    await userEvent.click((await row("Segunda-feira, 2 de novembro")).cells[1]);
+    expect(await screen.findByRole("dialog")).toHaveAccessibleName("2 nov");
+    await userEvent.click(screen.getByRole("button", { name: "Close" }));
+
+    await userEvent.click((await row("Quinta-feira, 5 de novembro, hoje")).cells[2]);
+    expect(await screen.findByRole("dialog")).toHaveAccessibleName("Hoje, 5 nov");
+    await userEvent.click(screen.getByRole("button", { name: "Close" }));
+
+    await userEvent.click((await row("Domingo, 1 de novembro")).cells[3]);
+    expect(await screen.findByRole("dialog")).toHaveAccessibleName("1 nov");
+  });
+
+  it("A14: opens the detail, never Lançar, while the entries cannot be read", async () => {
+    show({ "GET /api/transactions": { status: 500, body: problem(500, "boom") } });
+
+    await userEvent.click((await row("Domingo, 1 de novembro")).cells[1]);
+
+    const detail = await screen.findByRole("dialog");
+    expect(detail).toHaveAccessibleName("1 nov");
+  });
+
+  it("opens the detail, never Lançar, on a day before the opening date", async () => {
+    const { client } = show({}, "2026-11-03");
+    await ready(client);
+
+    await userEvent.click((await row("Domingo, 1 de novembro")).cells[2]);
+
+    expect(await screen.findByRole("dialog")).toHaveTextContent("Este dia é anterior ao seu saldo inicial.");
+  });
+});
+
 /** ESTIMATE_MONTH's typed Diário ahead, plus a card spend on the 7th kept out of the total. */
 const AHEAD: Schemas["Transaction"][] = [
   ...ENTRIES,
@@ -480,11 +570,38 @@ describe("Planilha day detail with a fine pointer", () => {
     expect(screen.getByRole("button", { name: "Domingo, 1 de novembro" })).toHaveFocus();
   });
 
+  it("A12: pins a hover popover on a click on the day, closes it on a second, and a money cell trades it for its action", async () => {
+    await loaded();
+    const tr = rowOf("Quarta-feira, 4 de novembro");
+    const day = screen.getByRole("button", { name: "Quarta-feira, 4 de novembro" });
+    fireEvent.pointerEnter(tr);
+    wait(300);
+    const popover = screen.getByRole("dialog");
+
+    fireEvent.click(day);
+    wait(0);
+    expect(screen.getByRole("dialog")).toBe(popover);
+    expect(popover.contains(document.activeElement)).toBe(true);
+    fireEvent.click(day);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+    fireEvent.pointerEnter(tr);
+    wait(300);
+    fireEvent.click(tr.cells[3]);
+    wait(0);
+
+    expect(document.querySelector('[data-slot="popover-content"]')).toBeNull();
+    expect(screen.getByRole("dialog")).toHaveAccessibleName("Feira");
+  });
+
   it("drops a pending hover when the planilha goes", async () => {
     const { client, rerender } = await loaded();
     const Kept = () => {
       useMonth("2026-11");
       useTransactions("2026-11");
+      useQuery(categoriesQuery);
+      useBills({ includeInactive: true });
+      useCards({ includeInactive: true });
       return null;
     };
     const before = vi.getTimerCount();

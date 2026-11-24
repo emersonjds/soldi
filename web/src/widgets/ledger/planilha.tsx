@@ -1,6 +1,15 @@
 "use client";
 
-import { type KeyboardEvent, useCallback, useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from "react";
+import {
+  type KeyboardEvent,
+  type MouseEvent,
+  useCallback,
+  useEffect,
+  useEffectEvent,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { CalendarCheck, TriangleAlert } from "lucide-react";
@@ -16,9 +25,11 @@ import { useMonth } from "@/entities/month/month-query";
 import { activeEstimate } from "@/entities/settings/daily-estimate";
 import { useSettings } from "@/entities/settings/settings-query";
 import { type Transaction, useTransactions } from "@/entities/transaction/transaction-queries";
+import { TransactionSheet } from "@/features/add-transaction/transaction-sheet";
+import { EditBillSheet } from "@/features/edit-bill/edit-bill-sheet";
 import { cn } from "@/lib/utils";
 import { hasProblem, type Schemas } from "@/shared/api/client";
-import { useCurrency } from "@/shared/lib/currency";
+import { type Currency, useCurrency } from "@/shared/lib/currency";
 import { addMonths, lastDay, monthName, todayISO, weekdayName } from "@/shared/lib/date";
 import { toInput } from "@/shared/lib/money";
 import { cents, TIER_LABEL, TIER_ORDER, TIER_STYLE } from "@/shared/lib/tier";
@@ -30,11 +41,18 @@ import { monthLabel } from "@/shared/ui/month-switcher";
 import { PageError } from "@/shared/ui/page-state";
 import { TierPill } from "@/shared/ui/tier-pill";
 
-import { titleOf } from "./entry-actions";
+import { type Entry, titleOf, useEntryActions } from "./entry-actions";
 import { DayBalance, dayLabel, dueCaption, entryOf, estimateCaption, isForecast } from "./ledger";
 import { type PlanilhaRow, planilhaMonths, planilhaRows, sum } from "./planilha-rows";
 
 const COLUMNS = ["Data", "Entrada", "Saída", "Diário", "Saldo"];
+
+type Column = "Entrada" | "Saída" | "Diário";
+
+const KIND_OF: Record<Column, Schemas["CategoryKind"]> = { Entrada: "income", Saída: "bill", Diário: "daily" };
+
+const isMoney = (column?: string): column is Column =>
+  column === "Entrada" || column === "Saída" || column === "Diário";
 
 /** P8: Excel's gridlines, each cell drawing its bottom and right edges; the Data column also its left. */
 const LINES = "border-border border-b border-r";
@@ -67,40 +85,44 @@ const dayName = (date: string, today: string) => {
 
 type Entries = ReturnType<typeof useTransactions>;
 
-/** `estimate`: the Diário previsto, never a Lançamento (SOL-164 S9). */
-type Item = { key: string; title: string; caption: string; amount: string; estimate?: boolean };
+/** `estimate`: the Diário previsto, never a Lançamento (SOL-164 S9); `transaction`: a lançamento; `due`: an unpaid conta. */
+type Item = {
+  key: string;
+  title: string;
+  caption: string;
+  amount: string;
+  estimate?: boolean;
+  transaction?: Transaction;
+  entry?: Entry;
+  due?: Schemas["BillOfMonth"];
+};
 
-const itemOf =
-  (view: Schemas["MonthView"], categories?: Schemas["Category"][], bills?: Schemas["Bill"][]) =>
-  (transaction: Transaction): Item => {
-    const entry = entryOf(transaction, categories, view.bills_of_month, bills);
-    return {
-      key: transaction.id,
-      title: titleOf(transaction, entry),
-      caption: entry.caption,
-      amount: transaction.amount,
-    };
-  };
+type Group = { name: Column; income: boolean; items: Item[]; total: string | null };
 
-/** Spec SOL-163 §9: the day's items under the planilha's columns, read-only. */
-const DayDetail = ({
-  row,
-  view,
-  entries,
-  estimate,
-}: {
-  row: PlanilhaRow;
-  view: Schemas["MonthView"];
-  entries: Entries;
-  estimate?: string | null;
-}) => {
-  const categories = useQuery(categoriesQuery).data;
-  const bills = useBills({ includeInactive: true }).data;
-  const cards = useCards({ includeInactive: true }).data;
-  const currency = useCurrency();
-  if (!row.day) return <p className="text-muted-foreground">Este dia é anterior ao seu saldo inicial.</p>;
+type Lookup = {
+  categories?: Schemas["Category"][];
+  bills?: Schemas["Bill"][];
+  cards?: Schemas["Bill"][];
+  currency: Currency;
+};
+
+const useLookup = (): Lookup => ({
+  categories: useQuery(categoriesQuery).data,
+  bills: useBills({ includeInactive: true }).data,
+  cards: useCards({ includeInactive: true }).data,
+  currency: useCurrency(),
+});
+
+/** The day's items under the planilha's columns, all three groups, empty ones included; the cell and the detail read the same. */
+const groupsOf = (
+  row: PlanilhaRow,
+  view: Schemas["MonthView"],
+  transactions: Transaction[] | undefined,
+  estimate: string | null | undefined,
+  { categories, bills, cards, currency }: Lookup,
+): Group[] => {
   const previsto: Item[] =
-    estimate && cents(row.day.previsto) > 0
+    estimate && row.day && cents(row.day.previsto) > 0
       ? [
           {
             key: previstoKey(row.date),
@@ -112,8 +134,18 @@ const DayDetail = ({
         ]
       : [];
   const ofKind = (kind: Schemas["CategoryKind"]) =>
-    (entries.data ?? []).filter((transaction) => transaction.date === row.date && transaction.kind === kind);
-  const item = itemOf(view, categories, bills);
+    (transactions ?? []).filter((transaction) => transaction.date === row.date && transaction.kind === kind);
+  const item = (transaction: Transaction): Item => {
+    const entry = entryOf(transaction, categories, view.bills_of_month, bills);
+    return {
+      key: transaction.id,
+      title: titleOf(transaction, entry),
+      caption: entry.caption,
+      amount: transaction.amount,
+      transaction,
+      entry,
+    };
+  };
   const spends = ofKind("daily")
     .filter((transaction) => !transaction.card_id)
     .map(item);
@@ -132,10 +164,11 @@ const DayDetail = ({
       title: bill.name,
       caption: dueCaption(bill, view.month),
       amount: bill.amount,
+      due: bill,
     })),
   ];
   const incomes = ofKind("income").map(item);
-  const groups = [
+  return [
     { name: "Entrada", income: true, items: incomes, total: total(incomes) },
     { name: "Saída", income: false, items: outflows, total: total(outflows) },
     {
@@ -144,7 +177,25 @@ const DayDetail = ({
       items: [...spends, ...previsto, ...onCard],
       total: total([...spends, ...previsto]),
     },
-  ].filter(({ items }) => items.length > 0);
+  ];
+};
+
+/** Spec SOL-163 §9: the day's items under the planilha's columns, read-only. */
+const DayDetail = ({
+  row,
+  view,
+  entries,
+  estimate,
+}: {
+  row: PlanilhaRow;
+  view: Schemas["MonthView"];
+  entries: Entries;
+  estimate?: string | null;
+}) => {
+  const lookup = useLookup();
+  if (!row.day) return <p className="text-muted-foreground">Este dia é anterior ao seu saldo inicial.</p>;
+  const groups = groupsOf(row, view, entries.data, estimate, lookup).filter(({ items }) => items.length > 0);
+  const previsto = groups.some(({ items }) => items.some((item) => item.estimate));
 
   return (
     <>
@@ -165,7 +216,7 @@ const DayDetail = ({
           </ul>
         </section>
       ))}
-      {previsto.length > 0 && (
+      {previsto && (
         <MonthLink
           href="/ajustes#diario-previsto"
           className="text-primary focus-visible:outline-ring inline-flex min-h-11 items-center self-start text-sm font-medium hover:underline focus-visible:outline-2"
@@ -208,7 +259,43 @@ const move = (event: KeyboardEvent<HTMLButtonElement>, date: string) => {
   if (month !== date.slice(0, 7)) next?.scrollIntoView({ block: "nearest", inline: "start" });
 };
 
+/** What a cell or the detail does, owned by the Planilha (SOL-171 P2–P5); `date`: the day to give focus back to. */
+type Act = {
+  lookup: Lookup;
+  create: (kind: Schemas["CategoryKind"], date: string) => void;
+  entry: (transaction: Transaction, entry: Entry, date: string) => void;
+};
+
+/** P2: a cell's own action, or none when it opens the detail. */
+const cellAction = (
+  column: Column,
+  row: PlanilhaRow,
+  view: Schemas["MonthView"],
+  entries: Entries,
+  estimate: string | null | undefined,
+  act: Act,
+) => {
+  const { day, date } = row;
+  if (!day || !entries.data) return undefined;
+  const items = (
+    groupsOf(row, view, entries.data, estimate, act.lookup).find(({ name }) => name === column)?.items ?? []
+  ).filter((item) => !item.estimate);
+  if (items.length === 0) return () => act.create(KIND_OF[column], date);
+  const [only] = items;
+  const shown = {
+    Entrada: row.income,
+    Saída: row.outflow,
+    Diário: cents(day.previsto) > 0 && estimate ? row.daily : day.daily,
+  }[column];
+  if (items.length > 1 || !only.transaction || !only.entry || only.transaction.id.startsWith("optimistic-"))
+    return undefined;
+  if (cents(only.amount) !== cents(shown)) return undefined;
+  const { transaction, entry } = only;
+  return () => act.entry(transaction, entry, date);
+};
+
 type RowProps = {
+  act: Act;
   row: PlanilhaRow;
   today: string;
   view: Schemas["MonthView"];
@@ -229,13 +316,16 @@ const FINE_POINTER = "(hover: hover) and (pointer: fine)";
 /** `hover`: the popover a resting pointer opened, which leaves focus where it is. */
 type Shown = "hover" | "popover" | "sheet" | null;
 
-const Row = ({ row, today, view, entries, stop, onFocus, ringed, claim, estimate }: RowProps) => {
+const Row = ({ act, row, today, view, entries, stop, onFocus, ringed, claim, estimate }: RowProps) => {
   const { date, day, income, outflow, daily, landed } = row;
   const estimated = Boolean(estimate) && cents(day?.previsto ?? "0.00") > 0;
   const [shown, setShown] = useState<Shown>(null);
+  /** The group a money cell's click asked the detail to focus. */
+  const [group, setGroup] = useState<Column>();
   const tr = useRef<HTMLTableRowElement>(null);
   const button = useRef<HTMLButtonElement>(null);
   const content = useRef<HTMLDivElement>(null);
+  const sheet = useRef<HTMLDivElement>(null);
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const weekend = ["sábado", "domingo"].includes(weekdayName(date));
   const ahead = day?.is_future && "italic text-muted-foreground";
@@ -251,11 +341,37 @@ const Row = ({ row, today, view, entries, stop, onFocus, ringed, claim, estimate
   }, [claim, date]);
   useEffect(() => () => clearTimeout(timer.current), []);
 
-  const open = () => {
+  /** P5: into the group a money cell asked for, else the first control; the container when it has none. */
+  const focusIn = (container: HTMLElement | null, column?: Column) =>
+    (
+      container?.querySelector<HTMLElement>(column ? `[aria-label="${column}"] button` : "button, a[href]") ?? container
+    )?.focus();
+
+  const open = (event: MouseEvent<HTMLTableRowElement>) => {
     clearTimeout(timer.current);
+    const column = COLUMNS[event.target instanceof Element ? (event.target.closest("td")?.cellIndex ?? 0) : 0];
+    if (isMoney(column)) {
+      const action = cellAction(column, row, view, entries, estimate, act);
+      if (action) {
+        setShown(null);
+        return action();
+      }
+    }
+    const asked = isMoney(column) ? column : undefined;
+    setGroup(asked);
+    if (shown === "hover" || (asked && floating)) {
+      setShown("popover");
+      return focusIn(content.current, asked);
+    }
     if (!floating) return setShown(fine() ? "popover" : "sheet");
     setShown(null);
     button.current?.focus();
+  };
+  const autoFocus = (event: Event, container: HTMLElement | null) => {
+    if (shown === "hover") return event.preventDefault();
+    if (!group) return;
+    event.preventDefault();
+    focusIn(container, group);
   };
   const hold = () => {
     clearTimeout(timer.current);
@@ -340,7 +456,7 @@ const Row = ({ row, today, view, entries, stop, onFocus, ringed, claim, estimate
         ref={content}
         aria-label={title}
         align="start"
-        onOpenAutoFocus={(event) => shown === "hover" && event.preventDefault()}
+        onOpenAutoFocus={(event) => autoFocus(event, content.current)}
         onCloseAutoFocus={(event) => event.preventDefault()}
         onEscapeKeyDown={() => button.current?.focus()}
         onInteractOutside={(event) => {
@@ -355,7 +471,9 @@ const Row = ({ row, today, view, entries, stop, onFocus, ringed, claim, estimate
       </PopoverContent>
       <Sheet open={shown === "sheet"} onOpenChange={close}>
         <SheetContent
+          ref={sheet}
           side="bottom"
+          onOpenAutoFocus={(event) => autoFocus(event, sheet.current)}
           aria-describedby={undefined}
           onCloseAutoFocus={(event) => {
             event.preventDefault();
@@ -384,13 +502,13 @@ const SkeletonBody = ({ month }: { month: string }) => (
   </tbody>
 );
 
-type MonthProps = Pick<RowProps, "today" | "claim" | "estimate"> & {
+type MonthProps = Pick<RowProps, "act" | "today" | "claim" | "estimate"> & {
   month: string;
   openingDate: string;
   highlight: string | null;
 };
 
-const MonthBody = ({ month, today, openingDate, highlight, claim, estimate }: MonthProps) => {
+const MonthBody = ({ act, month, today, openingDate, highlight, claim, estimate }: MonthProps) => {
   const view = useMonth(month);
   const entries = useTransactions(month);
   const [stop, setStop] = useState(today.startsWith(month) ? today : `${month}-01`);
@@ -400,6 +518,7 @@ const MonthBody = ({ month, today, openingDate, highlight, claim, estimate }: Mo
         {planilhaRows(view.data, openingDate).map((row) => (
           <Row
             key={row.date}
+            act={act}
             row={row}
             today={today}
             view={view.data}
@@ -429,7 +548,7 @@ const MonthBody = ({ month, today, openingDate, highlight, claim, estimate }: Mo
   );
 };
 
-const MonthBlock = ({ month, today, openingDate, highlight, claim, estimate }: MonthProps) => {
+const MonthBlock = ({ act, month, today, openingDate, highlight, claim, estimate }: MonthProps) => {
   const [near, setNear] = useState(false);
   const label = monthLabel(month);
 
@@ -474,6 +593,7 @@ const MonthBlock = ({ month, today, openingDate, highlight, claim, estimate }: M
       </thead>
       {near ? (
         <MonthBody
+          act={act}
           month={month}
           today={today}
           openingDate={openingDate}
@@ -570,6 +690,25 @@ export const Planilha = ({
     return document.activeElement === document.body || document.activeElement === asked.from;
   }, []);
 
+  /** The day whose cell or detail opened a sheet: focus goes back to it when the sheet closes (P5). */
+  const back = useRef<string>(null);
+  const giveBack = () => back.current && focusDay(back.current);
+  const entryActions = useEntryActions(giveBack);
+  const [creating, setCreating] = useState(false);
+  const [draft, setDraft] = useState<{ kind: Schemas["CategoryKind"]; date: string }>({ kind: "daily", date: today });
+  const act: Act = {
+    lookup: useLookup(),
+    create: (kind, date) => {
+      back.current = date;
+      setDraft({ kind, date });
+      setCreating(true);
+    },
+    entry: (transaction, entry, date) => {
+      back.current = date;
+      entryActions.open(transaction, entry);
+    },
+  };
+
   const jump = useEffectEvent((date: string) => {
     if (scroller.current) rowOf(scroller.current, date)?.scrollIntoView({ block: "center", inline: "start" });
     focusDay(date);
@@ -606,6 +745,7 @@ export const Planilha = ({
         {months.map((each) => (
           <MonthBlock
             key={each}
+            act={act}
             month={each}
             today={today}
             openingDate={openingDate}
@@ -622,6 +762,18 @@ export const Planilha = ({
         ))}
       </div>
       {estimate && <EstimateNote estimate={estimate} />}
+      {entryActions.actions}
+      <TransactionSheet
+        open={creating}
+        onOpenChange={setCreating}
+        initialKind={draft.kind}
+        initialDate={draft.date}
+        billSheet={(props) => <EditBillSheet open {...props} />}
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          giveBack();
+        }}
+      />
     </div>
   );
 };
