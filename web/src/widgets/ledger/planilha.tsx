@@ -152,7 +152,7 @@ const DayDetail = ({
       {previsto.length > 0 && (
         <MonthLink
           href="/ajustes#diario-previsto"
-          className="text-primary inline-flex min-h-11 items-center self-start text-sm font-medium hover:underline focus-visible:outline-2"
+          className="text-primary inline-flex min-h-11 items-center self-start text-sm font-medium hover:underline focus-visible:outline-2 focus-visible:outline-ring"
         >
           Ajustar Diário previsto
         </MonthLink>

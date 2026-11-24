@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useId, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { ChevronRight, CreditCard, Pencil, Trash2 } from "lucide-react";
@@ -124,7 +124,11 @@ export const DayBalance = ({ day }: { day: Day }) => (
   </span>
 );
 
-const Cause = () => <span className="text-expense text-xs">Motivo da queda</span>;
+const Cause = ({ id }: { id?: string }) => (
+  <span id={id} className="text-expense text-xs">
+    Motivo da queda
+  </span>
+);
 
 const dueStatus = (bill: Due, month: string) => {
   if (!bill.due_date.startsWith(month)) return `venceu em ${monthName(bill.due_date, month)}`;
@@ -162,21 +166,25 @@ export const estimateCaption = (estimate: string, day: Day, currency: Currency) 
 /** SOL-164 S7/S9: the day's Diário previsto, last in its list; never a Lançamento, so it opens the setting. */
 const EstimateLine = ({ day, estimate, cause }: { day: Day; estimate: string; cause: boolean }) => {
   const currency = useCurrency();
+  const id = useId();
   return (
     <li>
       <MonthLink
         href="/ajustes#diario-previsto"
         aria-label={`Diário previsto, ${formatMoney(day.previsto, currency)}, estimativa. Ajustar Diário previsto`}
+        aria-describedby={cause ? `${id}-caption ${id}-cause` : `${id}-caption`}
         className="hover:bg-muted focus-visible:outline-ring flex min-h-16 w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition-colors focus-visible:outline-2"
       >
         <EstimateIcon />
         <span className="flex min-w-0 flex-1 flex-col">
           <span className="truncate text-base font-medium italic">Diário previsto</span>
-          <span className="text-muted-foreground text-xs break-words">{estimateCaption(estimate, day, currency)}</span>
+          <span id={`${id}-caption`} className="text-muted-foreground text-xs break-words">
+            {estimateCaption(estimate, day, currency)}
+          </span>
         </span>
         <span className="flex flex-col items-end gap-0.5">
           <Money amount={day.previsto} outflow className="text-base font-bold italic" />
-          {cause && <Cause />}
+          {cause && <Cause id={`${id}-cause`} />}
         </span>
         <ChevronRight aria-hidden className="text-muted-foreground size-4 shrink-0" />
       </MonthLink>

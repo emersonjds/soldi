@@ -154,7 +154,7 @@ export const DailyEstimateForm = ({ settings }: { settings: Schemas["Settings"] 
                 <Button
                   type="button"
                   variant="link"
-                  className="min-h-11 px-0 text-base"
+                  className="min-h-11 min-w-11 px-0 text-base"
                   onClick={() => setDraft(hint.amount)}
                 >
                   Usar

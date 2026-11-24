@@ -243,7 +243,9 @@ describe("DailyEstimateForm, value saved", () => {
 
   it("offers Usar when the saved value differs from the suggestion", async () => {
     open(ON);
-    await userEvent.click(await screen.findByRole("button", { name: "Usar" }));
+    const usar = await screen.findByRole("button", { name: "Usar" });
+    expect(usar).toHaveClass("min-w-11");
+    await userEvent.click(usar);
 
     expect(field()).toHaveValue("36,30");
     expect(salvar()).toBeEnabled();

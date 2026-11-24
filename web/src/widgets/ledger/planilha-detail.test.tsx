@@ -321,9 +321,8 @@ describe("Planilha Diário previsto (SOL-164)", () => {
     expect(detail).not.toHaveTextContent("Nada previsto para este dia.");
     const link = within(detail).getByRole("link", { name: "Ajustar Diário previsto" });
     expect(link).toHaveAttribute("href", "/ajustes#diario-previsto");
-    expect(link).toHaveClass("min-h-11", "text-primary");
+    expect(link).toHaveClass("min-h-11", "text-primary", "focus-visible:outline-ring");
   });
-
   it("S8: puts the estimate after the typed cash Diário and before the card spend, outside the fatura", async () => {
     show(ESTIMATED, "2026-03-10", "50.00");
 

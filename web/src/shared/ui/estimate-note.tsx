@@ -11,7 +11,7 @@ import { MonthLink } from "./month-link";
 export const EstimateNote = ({ estimate }: { estimate: string }) => (
   <MonthLink
     href="/ajustes#diario-previsto"
-    className="text-muted-foreground inline-flex min-h-11 items-center gap-1 text-xs hover:underline focus-visible:outline-2"
+    className="text-muted-foreground inline-flex min-h-11 items-center gap-1 text-xs hover:underline focus-visible:outline-2 focus-visible:outline-ring"
   >
     Inclui Diário previsto de {formatMoney(estimate, useCurrency())}/dia
     <ChevronRight aria-hidden className="size-3.5 shrink-0" />

@@ -379,6 +379,7 @@ describe("Ledger Diário previsto (SOL-164)", () => {
     expect(link.querySelector(".border-dashed")).not.toBeNull();
     expect(link.querySelector(".lucide-chevron-right")).not.toBeNull();
     expect(link).not.toHaveTextContent("Motivo da queda");
+    expect(link).toHaveAccessibleDescription(/^Estimativa de R\$\s50,00\/dia, menos R\$\s20,00 lançados$/);
   });
 
   it("A11: adds no day group for a future day with nothing listed", () => {
@@ -407,6 +408,9 @@ describe("Ledger Diário previsto (SOL-164)", () => {
     show({ causes: new Set([`previsto@${on}`]) });
 
     expect(line()).toHaveTextContent("Motivo da queda");
+    expect(line()).toHaveAccessibleDescription(
+      /^Estimativa de R\$\s50,00\/dia, menos R\$\s20,00 lançados Motivo da queda$/,
+    );
   });
 
   it("captions a day with nothing typed by the rate alone", () => {

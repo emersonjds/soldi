@@ -17,7 +17,7 @@ describe("EstimateNote", () => {
 
     const link = screen.getByRole("link", { name: /^Inclui Diário previsto de R\$\s50,00\/dia$/ });
     expect(link).toHaveAttribute("href", "/ajustes?m=2026-12#diario-previsto");
-    expect(link).toHaveClass("min-h-11");
+    expect(link).toHaveClass("min-h-11", "focus-visible:outline-ring");
   });
 
   it("shows the rate in the chosen currency", () => {
