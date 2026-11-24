@@ -89,12 +89,16 @@ test("Lançamentos switches to the planilha, remembers it, shows a day's entries
   // One month in view and its neighbour on each side.
   expect(fetched.size).toBeLessThanOrEqual(3);
 
-  for (const width of [375, 1024, 1280, 1440]) {
+  for (const [width, shown] of [
+    [375, 1],
+    [1024, 2],
+    [1280, 2],
+    [1440, 3],
+  ]) {
     await page.setViewportSize({ width, height: 900 });
     expect(await page.evaluate(() => (document.scrollingElement?.scrollWidth ?? 0) <= window.innerWidth)).toBe(true);
     await expectNoClipped(page);
-    if (width === 375) await expect.poll(() => monthsInView(page)).toBe(1);
-    if (width === 1440) await expect.poll(() => monthsInView(page)).toBe(3);
+    await expect.poll(() => monthsInView(page)).toBe(shown);
   }
 
   fetched.clear();

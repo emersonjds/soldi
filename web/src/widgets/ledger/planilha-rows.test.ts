@@ -21,6 +21,10 @@ describe("planilhaMonths", () => {
     expect(months[0]).toBe("2025-11");
     expect(months).toContain("2026-01");
   });
+
+  it("keeps the opening month when the opening is past today's month + 11", () => {
+    expect(planilhaMonths("2026-11-05", "2027-12-01")).toEqual(["2027-12"]);
+  });
 });
 
 describe("planilhaRows", () => {

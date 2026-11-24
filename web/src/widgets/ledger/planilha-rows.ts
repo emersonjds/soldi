@@ -2,12 +2,13 @@ import type { Schemas } from "@/shared/api/client";
 import { addMonths, lastDay } from "@/shared/lib/date";
 import { cents, fromCents } from "@/shared/lib/tier";
 
-/** Spec SOL-163 §5: `max(opening month, today's month − 12)` to today's month + 11, as `YYYY-MM`. */
+/** Spec SOL-163 §5: `max(opening month, today's month − 12)` to today's month + 11, as `YYYY-MM`; at least the opening month. */
 export const planilhaMonths = (today: string, openingDate: string) => {
   const current = today.slice(0, 7);
   const [, first] = [addMonths(current, -12), openingDate.slice(0, 7)].sort();
+  const [, last] = [first, addMonths(current, 11)].sort();
   const months: string[] = [];
-  for (let month = first; month <= addMonths(current, 11); month = addMonths(month, 1)) months.push(month);
+  for (let month = first; month <= last; month = addMonths(month, 1)) months.push(month);
   return months;
 };
 

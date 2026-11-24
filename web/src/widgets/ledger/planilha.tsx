@@ -41,7 +41,7 @@ const amountOf = (amount: string) => (cents(amount) === 0 ? null : toInput(amoun
 
 const dayName = (date: string, today: string) => {
   const weekday = weekdayName(date);
-  const name = `${weekday[0].toUpperCase()}${weekday.slice(1)}, ${Number(date.slice(8))} de ${monthName(date, date)}`;
+  const name = `${weekday[0].toUpperCase()}${weekday.slice(1)}, ${Number(date.slice(8))} de ${monthName(date, today)}`;
   return date === today ? `${name}, hoje` : name;
 };
 
@@ -173,6 +173,7 @@ type Shown = "hover" | "popover" | "sheet" | null;
 const Row = ({ row, today, view, entries, stop, onFocus, ringed, claim }: RowProps) => {
   const { date, day, income, outflow, landed } = row;
   const [shown, setShown] = useState<Shown>(null);
+  const tr = useRef<HTMLTableRowElement>(null);
   const button = useRef<HTMLButtonElement>(null);
   const content = useRef<HTMLDivElement>(null);
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -182,14 +183,18 @@ const Row = ({ row, today, view, entries, stop, onFocus, ringed, claim }: RowPro
   const fine = () => window.matchMedia(FINE_POINTER).matches;
   const hasItems = landed.length > 0 || Boolean(entries.data?.some((transaction) => transaction.date === date));
   const close = (next: boolean) => next || setShown(null);
+  const floating = shown === "hover" || shown === "popover";
 
   useEffect(() => {
     if (claim(date)) button.current?.focus({ preventScroll: true });
   }, [claim, date]);
+  useEffect(() => () => clearTimeout(timer.current), []);
 
   const open = () => {
     clearTimeout(timer.current);
-    setShown(fine() ? "popover" : "sheet");
+    if (!floating) return setShown(fine() ? "popover" : "sheet");
+    setShown(null);
+    button.current?.focus();
   };
   const hold = () => {
     clearTimeout(timer.current);
@@ -197,7 +202,7 @@ const Row = ({ row, today, view, entries, stop, onFocus, ringed, claim }: RowPro
   };
   const release = () => {
     clearTimeout(timer.current);
-    if (shown !== "hover" && shown !== "popover") return;
+    if (!floating) return;
     timer.current = setTimeout(() => {
       if (content.current?.contains(document.activeElement)) button.current?.focus();
       setShown(null);
@@ -205,9 +210,10 @@ const Row = ({ row, today, view, entries, stop, onFocus, ringed, claim }: RowPro
   };
 
   return (
-    <Popover open={shown === "hover" || shown === "popover"} onOpenChange={close}>
+    <Popover open={floating} onOpenChange={close}>
       <PopoverAnchor asChild>
         <tr
+          ref={tr}
           onClick={open}
           onPointerEnter={hold}
           onPointerLeave={release}
@@ -273,6 +279,9 @@ const Row = ({ row, today, view, entries, stop, onFocus, ringed, claim }: RowPro
         onOpenAutoFocus={(event) => shown === "hover" && event.preventDefault()}
         onCloseAutoFocus={(event) => event.preventDefault()}
         onEscapeKeyDown={() => button.current?.focus()}
+        onInteractOutside={(event) => {
+          if (event.target instanceof Node && tr.current?.contains(event.target)) event.preventDefault();
+        }}
         onPointerEnter={hold}
         onPointerLeave={release}
         className="w-80 max-w-[calc(100vw-2rem)] gap-3 p-4"

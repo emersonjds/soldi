@@ -1,7 +1,10 @@
+import { QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { useMonth } from "@/entities/month/month-query";
+import { useTransactions } from "@/entities/transaction/transaction-queries";
 import type { Schemas } from "@/shared/api/client";
 import { stubIntersection } from "@/test/intersection";
 import { renderWithQuery } from "@/test/render";
@@ -80,10 +83,11 @@ const REPLIES: Record<string, Reply> = {
 const show = (replies: Record<string, Reply> = {}, openingDate = "2026-03-10") => {
   const requests = stubApi({ ...REPLIES, ...replies });
   const intersection = stubIntersection();
-  const { client } = renderWithQuery(<Planilha today="2026-11-05" openingDate={openingDate} />);
+  const { client, rerender } = renderWithQuery(<Planilha today="2026-11-05" openingDate={openingDate} />);
   intersection.show(screen.getByRole("table", { name: "Novembro 2026" }));
   return {
     client,
+    rerender,
     transactions: () =>
       requests.flatMap(({ url }) =>
         new URL(url).pathname === "/api/transactions" ? [new URL(url).searchParams.get("month")] : [],
@@ -261,11 +265,12 @@ describe("Planilha day detail with a fine pointer", () => {
 
   /** Waits for November's entries, then takes over the clock. */
   const loaded = async () => {
-    const { client } = show();
+    const shown = show();
     await screen.findByRole("button", { name: "Segunda-feira, 2 de novembro" });
-    await waitFor(() => expect(client.getQueryState(["transactions", "2026-11"])?.status).toBe("success"));
+    await waitFor(() => expect(shown.client.getQueryState(["transactions", "2026-11"])?.status).toBe("success"));
     vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
     vi.setSystemTime(new Date(2026, 10, 5, 12));
+    return shown;
   };
 
   const rowOf = (name: string) => {
@@ -347,5 +352,37 @@ describe("Planilha day detail with a fine pointer", () => {
 
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Quinta-feira, 5 de novembro, hoje" })).toHaveFocus();
+  });
+
+  it("closes on a click on the row of the open popover, without opening it again", async () => {
+    show();
+    await screen.findByRole("button", { name: "Domingo, 1 de novembro" });
+    await userEvent.click(rowOf("Domingo, 1 de novembro").cells[4]);
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+
+    await userEvent.click(rowOf("Domingo, 1 de novembro").cells[4]);
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Domingo, 1 de novembro" })).toHaveFocus();
+  });
+
+  it("drops a pending hover when the planilha goes", async () => {
+    const { client, rerender } = await loaded();
+    const Kept = () => {
+      useMonth("2026-11");
+      useTransactions("2026-11");
+      return null;
+    };
+    const before = vi.getTimerCount();
+    fireEvent.pointerEnter(rowOf("Segunda-feira, 2 de novembro"));
+    expect(vi.getTimerCount()).toBe(before + 1);
+
+    rerender(
+      <QueryClientProvider client={client}>
+        <Kept />
+      </QueryClientProvider>,
+    );
+
+    expect(vi.getTimerCount()).toBe(before);
   });
 });

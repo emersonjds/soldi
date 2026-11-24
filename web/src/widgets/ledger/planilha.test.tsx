@@ -183,6 +183,14 @@ describe("Planilha", () => {
 
     expect(intersection.observers[0].options.rootMargin).toBe("0px 400px");
   });
+
+  it("names a day of another year with its year", async () => {
+    show({
+      "GET /api/months/2027-01": { status: 200, body: { ...PLANILHA_MONTH, month: "2027-01", days: [] } },
+    }).reveal("Janeiro 2027");
+
+    expect(await screen.findByRole("button", { name: "Sexta-feira, 1 de janeiro de 2027" })).toBeInTheDocument();
+  });
 });
 
 describe("Planilha keyboard", () => {
@@ -235,16 +243,16 @@ describe("Planilha keyboard", () => {
     });
     reveal("Janeiro 2027");
     reveal("Fevereiro 2027");
-    await screen.findByRole("button", { name: "Domingo, 28 de fevereiro" });
-    focus("Domingo, 31 de janeiro");
+    await screen.findByRole("button", { name: "Domingo, 28 de fevereiro de 2027" });
+    focus("Domingo, 31 de janeiro de 2027");
 
     await userEvent.keyboard("{ArrowRight}");
 
-    expect(day("Domingo, 28 de fevereiro")).toHaveFocus();
+    expect(day("Domingo, 28 de fevereiro de 2027")).toHaveFocus();
     expect(scroll).toHaveBeenLastCalledWith({ block: "nearest", inline: "start" });
-    expect(scroll.mock.contexts.at(-1)).toBe(day("Domingo, 28 de fevereiro"));
+    expect(scroll.mock.contexts.at(-1)).toBe(day("Domingo, 28 de fevereiro de 2027"));
     await userEvent.keyboard("{ArrowLeft}");
-    expect(day("Quinta-feira, 28 de janeiro")).toHaveFocus();
+    expect(day("Quinta-feira, 28 de janeiro de 2027")).toHaveFocus();
   });
 
   it("keeps the focus where it is when the next month has not loaded yet", async () => {
