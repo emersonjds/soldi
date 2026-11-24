@@ -43,6 +43,9 @@ export const SETTINGS: Schemas["Settings"] = {
   tier_zero: "0.00",
   tier_yellow: "1000.00",
   tier_green: "2000.00",
+  savings_target_pct: null,
+  daily_estimate: null,
+  daily_estimate_on: false,
 };
 
 export const signedIn = (replies: Record<string, Reply> = {}, user: Schemas["User"] = ANA) =>
@@ -135,6 +138,7 @@ const day = (date: string, balance: string, tier: Schemas["Tier"], rest: Partial
   withdrawn: "0.00",
   bills: "0.00",
   daily: "0.00",
+  previsto: "0.00",
   balance,
   tier,
   projected_balance: balance,

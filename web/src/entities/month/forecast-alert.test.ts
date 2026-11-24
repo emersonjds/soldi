@@ -16,6 +16,7 @@ const day = (
   withdrawn: "0.00",
   bills: "0.00",
   daily: "0.00",
+  previsto: "0.00",
   balance: projected,
   tier,
   projected_balance: projected,

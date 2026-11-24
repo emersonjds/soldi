@@ -4,7 +4,22 @@ import { describe, expect, it } from "vitest";
 import { renderHookWithQuery } from "@/test/render";
 import { MONTH, problem, SAVINGS_YEAR, SETTINGS, stubApi } from "@/test/stub-api";
 
-import { useSettings, useUpdateSettings } from "./settings-query";
+import { useSettings, useSuggestion, useUpdateSettings } from "./settings-query";
+
+describe("daily estimate suggestion", () => {
+  it("loads the suggestion and keeps none as null", async () => {
+    const suggestion = { amount: "36.30", from: "2026-08-20", to: "2026-10-31" };
+    stubApi({ "GET /api/settings/daily-estimate-suggestion": { status: 200, body: suggestion } });
+    const { result } = renderHookWithQuery(() => useSuggestion());
+    await waitFor(() => expect(result.current.data).toEqual(suggestion));
+
+    stubApi({ "GET /api/settings/daily-estimate-suggestion": { status: 200, body: null } });
+    const none = renderHookWithQuery(() => useSuggestion());
+    await waitFor(() => expect(none.result.current.isSuccess).toBe(true));
+    expect(none.result.current.data).toBeNull();
+    expect(none.client.getQueryCache().find({ queryKey: ["month", "daily-estimate-suggestion"] })).toBeDefined();
+  });
+});
 
 describe("settings", () => {
   it("loads the settings", async () => {
