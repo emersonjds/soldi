@@ -133,6 +133,7 @@ const MonthScreen = () => {
               onOpenChange={ledgerOpen.choose}
               planilha={planilha.open ? <PlanilhaView month={month} highlight={highlight?.date ?? null} /> : undefined}
               onPlanilhaChange={planilha.choose}
+              estimate={estimate}
               className="max-lg:order-3"
             />
           )}

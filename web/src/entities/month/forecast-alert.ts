@@ -25,7 +25,10 @@ export const billKey = (bill: Schemas["BillOfMonth"]) => `${bill.bill_id}@${bill
 
 const RANK = { bill: 1, daily: 2 } as const;
 
-/** The day's largest outflow, only when its projected balance fell from the day before; ties go conta fixa, Saída, Diário, then list order. */
+/** The Lista line of a day's Diário previsto (SOL-164 S11). */
+export const previstoKey = (date: string) => `previsto@${date}`;
+
+/** The day's largest outflow, only when its projected balance fell from the day before; ties go conta fixa, Saída, Diário, Diário previsto, then list order. */
 export const causeOf = (
   date: string,
   days: Day[],
@@ -43,6 +46,9 @@ export const causeOf = (
         ? [{ id: transaction.id, amount: cents(transaction.amount), rank: RANK[transaction.kind] }]
         : [],
     ),
+    ...(index >= 0 && cents(days[index].previsto) > 0
+      ? [{ id: previstoKey(date), amount: cents(days[index].previsto), rank: 3 }]
+      : []),
   ];
   const [largest] = outflows.sort((a, b) => b.amount - a.amount || a.rank - b.rank);
   return largest ? largest.id : null;

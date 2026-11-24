@@ -330,3 +330,89 @@ describe("Ledger view switch (SOL-163)", () => {
     expect(screen.getByRole("region", { name: "Lançamentos" })).toBeInTheDocument();
   });
 });
+
+describe("Ledger Diário previsto (SOL-164)", () => {
+  const [mercado, aluguel] = TRANSACTIONS;
+  const on = "2026-11-30";
+  const typed = { ...mercado, id: "typed", date: on, amount: "20.00" };
+  const paid = { ...aluguel, id: "paid", date: on, amount: "100.00" };
+  const ahead = (daily: string, previsto: string) => ({
+    ...MONTH,
+    bills_of_month: [],
+    days: MONTH.days.map((each) => {
+      if (each.date === on) return { ...each, daily, previsto };
+      return each.date === "2026-11-29" ? { ...each, previsto: "50.00" } : each;
+    }),
+  });
+  type Setup = { daily?: string; previsto?: string; filter?: LedgerFilter; causes?: Set<string> };
+  const show = ({ daily = "20.00", previsto = "30.00", filter = "all", causes = new Set() }: Setup) => {
+    stubApi({
+      "GET /api/categories": { status: 200, body: WITH_COFRINHOS },
+      "GET /api/bills?include_inactive=true": { status: 200, body: [] },
+    });
+    renderWithQuery(
+      <Ledger
+        view={ahead(daily, previsto)}
+        transactions={[typed, paid]}
+        estimate="50.00"
+        causes={causes}
+        filter={filter}
+        onFilterChange={vi.fn()}
+        open
+        onOpenChange={vi.fn()}
+      />,
+    );
+  };
+  const line = () =>
+    screen.queryByRole("link", { name: /^Diário previsto, R\$\s30,00, estimativa\. Ajustar Diário previsto$/ });
+  const group = () => document.getElementById(`dia-${on}`) as HTMLElement;
+
+  it("A11: lists the estimate last on a future day already shown, as a link to the setting", () => {
+    show({});
+
+    const link = line() as HTMLElement;
+    expect(within(group()).getAllByRole("listitem").at(-1)).toContainElement(link);
+    expect(link).toHaveAttribute("href", "/ajustes#diario-previsto");
+    expect(link).toHaveClass("min-h-16");
+    expect(within(link).getByText("Diário previsto")).toHaveClass("italic");
+    expect(link).toHaveTextContent(/Estimativa de R\$\s50,00\/dia, menos R\$\s20,00 lançados/);
+    expect(link.querySelector(".border-dashed")).not.toBeNull();
+    expect(link.querySelector(".lucide-chevron-right")).not.toBeNull();
+    expect(link).not.toHaveTextContent("Motivo da queda");
+  });
+
+  it("A11: adds no day group for a future day with nothing listed", () => {
+    show({});
+
+    expect(document.getElementById("dia-2026-11-29")).toBeNull();
+  });
+
+  it("S13: shows no line once the typed Diário reaches the estimate", () => {
+    show({ daily: "80.00", previsto: "0.00" });
+
+    expect(screen.queryByText("Diário previsto")).not.toBeInTheDocument();
+  });
+
+  it("S7: shows the line under Diário and hides it under Contas fixas", () => {
+    show({ filter: "daily" });
+    expect(line()).toBeInTheDocument();
+    cleanup();
+
+    show({ filter: "fixed" });
+    expect(group()).toBeInTheDocument();
+    expect(line()).not.toBeInTheDocument();
+  });
+
+  it("S11: captions the line Motivo da queda when it is the day's cause", () => {
+    show({ causes: new Set([`previsto@${on}`]) });
+
+    expect(line()).toHaveTextContent("Motivo da queda");
+  });
+
+  it("captions a day with nothing typed by the rate alone", () => {
+    show({ daily: "0.00", previsto: "50.00" });
+
+    const link = screen.getByRole("link", { name: /^Diário previsto, R\$\s50,00/ });
+    expect(within(link).getByText(/^Estimativa/)).toHaveTextContent(/^Estimativa de R\$\s50,00\/dia$/);
+  });
+});

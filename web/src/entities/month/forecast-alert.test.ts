@@ -85,6 +85,18 @@ describe("causeOf", () => {
     expect(causeOf(on, [], [diario, saida, entrada], [])).toBe("saida");
   });
 
+  it("S11: counts the day's Diário previsto, after a Diário on ties", () => {
+    const [, feira] = FORECAST_TRANSACTIONS;
+    const on = "2026-11-12";
+    const diario = { ...feira, id: "diario", date: on, amount: "100.00" };
+    const ahead = (previsto: string) => [{ ...day(on, "-700.00", "red"), previsto }];
+
+    expect(causeOf(on, ahead("100.00"), [diario], [])).toBe("diario");
+    expect(causeOf(on, ahead("100.01"), [diario], [])).toBe(`previsto@${on}`);
+    expect(causeOf(on, ahead("50.00"), [], [])).toBe(`previsto@${on}`);
+    expect(causeOf(on, ahead("0.00"), [], [])).toBeNull();
+  });
+
   it("has no cause on a day without outflow", () => {
     expect(causeOf("2026-11-10", FORECAST_MONTH.days, FORECAST_TRANSACTIONS, FORECAST_MONTH.bills_of_month)).toBeNull();
   });

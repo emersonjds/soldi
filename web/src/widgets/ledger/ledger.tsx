@@ -3,7 +3,7 @@
 import { type ReactNode, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
-import { CreditCard, Pencil, Trash2 } from "lucide-react";
+import { ChevronRight, CreditCard, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,7 @@ import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useBills, useCards } from "@/entities/bill/bill-queries";
 import { categoriesQuery, categoryLabel } from "@/entities/category/categories-query";
-import { billKey } from "@/entities/month/forecast-alert";
+import { billKey, previstoKey } from "@/entities/month/forecast-alert";
 import { ScopeRadio } from "@/entities/transaction/scope-radio";
 import { SeriesAllDialog } from "@/entities/transaction/series-all-dialog";
 import { OPEN_LABEL } from "@/entities/transaction/series-step";
@@ -25,10 +25,14 @@ import { TransactionSheet } from "@/features/add-transaction/transaction-sheet";
 import { EditBillSheet } from "@/features/edit-bill/edit-bill-sheet";
 import { cn } from "@/lib/utils";
 import { problemMessage, type Schemas } from "@/shared/api/client";
+import { type Currency, useCurrency } from "@/shared/lib/currency";
 import { dayMonth, monthName, shortDay, todayISO, yesterdayISO } from "@/shared/lib/date";
-import { TIER_STYLE } from "@/shared/lib/tier";
+import { formatMoney } from "@/shared/lib/money";
+import { cents, TIER_STYLE } from "@/shared/lib/tier";
 import { CategoryIcon } from "@/shared/ui/category-icon";
+import { EstimateIcon } from "@/shared/ui/estimate-icon";
 import { Money } from "@/shared/ui/money";
+import { MonthLink } from "@/shared/ui/month-link";
 import { SectionToggle } from "@/shared/ui/section-toggle";
 import { TierPill } from "@/shared/ui/tier-pill";
 
@@ -149,6 +153,37 @@ const DueRow = ({ bill, month, cause }: { bill: Due; month: string; cause: boole
   </li>
 );
 
+/** "Estimativa de R$ 50,00/dia", less the cash Diário typed for the day (SOL-164 Copy). */
+export const estimateCaption = (estimate: string, day: Day, currency: Currency) =>
+  `Estimativa de ${formatMoney(estimate, currency)}/dia${
+    cents(day.daily) > 0 ? `, menos ${formatMoney(day.daily, currency)} lançados` : ""
+  }`;
+
+/** SOL-164 S7/S9: the day's Diário previsto, last in its list; never a Lançamento, so it opens the setting. */
+const EstimateLine = ({ day, estimate, cause }: { day: Day; estimate: string; cause: boolean }) => {
+  const currency = useCurrency();
+  return (
+    <li>
+      <MonthLink
+        href="/ajustes#diario-previsto"
+        aria-label={`Diário previsto, ${formatMoney(day.previsto, currency)}, estimativa. Ajustar Diário previsto`}
+        className="hover:bg-muted focus-visible:outline-ring flex min-h-16 w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition-colors focus-visible:outline-2"
+      >
+        <EstimateIcon />
+        <span className="flex min-w-0 flex-1 flex-col">
+          <span className="truncate text-base font-medium italic">Diário previsto</span>
+          <span className="text-muted-foreground text-xs">{estimateCaption(estimate, day, currency)}</span>
+        </span>
+        <span className="flex flex-col items-end gap-0.5">
+          <Money amount={day.previsto} outflow className="text-base font-bold italic" />
+          {cause && <Cause />}
+        </span>
+        <ChevronRight aria-hidden className="text-muted-foreground size-4 shrink-0" />
+      </MonthLink>
+    </li>
+  );
+};
+
 type RowProps = { transaction: Transaction; entry: Entry; cause: boolean; onOpen: () => void };
 
 const Row = ({ transaction, entry, cause, onOpen }: RowProps) => (
@@ -235,6 +270,8 @@ type LedgerProps = {
   /** SOL-163: shown in place of the filters and the days; given = Planilha mode. */
   planilha?: ReactNode;
   onPlanilhaChange?: (planilha: boolean) => void;
+  /** The Diário previsto per day (SOL-164); absent when off. */
+  estimate?: string | null;
   className?: string;
 };
 
@@ -256,6 +293,7 @@ export const Ledger = ({
   onOpenChange,
   planilha,
   onPlanilhaChange,
+  estimate,
   className,
 }: LedgerProps) => {
   const categories = useQuery(categoriesQuery).data;
@@ -417,6 +455,9 @@ export const Ledger = ({
                 {due.map((bill) => (
                   <DueRow key={billKey(bill)} bill={bill} month={view.month} cause={causes.has(billKey(bill))} />
                 ))}
+                {estimate && shown("daily") && cents(day.previsto) > 0 && (
+                  <EstimateLine day={day} estimate={estimate} cause={causes.has(previstoKey(day.date))} />
+                )}
               </ul>
             </div>
           ))}
