@@ -11,6 +11,7 @@ import { useCurrency } from "@/shared/lib/currency";
 import { formatMoney } from "@/shared/lib/money";
 import { wholeShare } from "@/shared/lib/percent";
 import { cents, fromCents, TIER_STYLE, type Tier } from "@/shared/lib/tier";
+import { EstimateNote } from "@/shared/ui/estimate-note";
 import { Money } from "@/shared/ui/money";
 import { SplitBar } from "@/shared/ui/split-bar";
 import { ThermometerStrip } from "@/shared/ui/thermometer-strip";
@@ -63,7 +64,15 @@ const circle = "flex size-10 shrink-0 items-center justify-center rounded-full";
 const amount = "whitespace-nowrap font-bold text-sm leading-5 tracking-tight sm:text-base";
 
 /** Below 1024 only: Entradas, Saídas (bills + daily) and Projetado, overlapping the indigo hero. */
-const MonthSummary = ({ view, onLaunch }: { view: MonthView; onLaunch: (kind: "income" | "bill") => void }) => (
+const MonthSummary = ({
+  view,
+  onLaunch,
+  estimate,
+}: {
+  view: MonthView;
+  onLaunch: (kind: "income" | "bill") => void;
+  estimate?: string | null;
+}) => (
   <section
     aria-label="Resumo do mês"
     className="bg-card relative mx-2 -mt-10 grid grid-cols-3 gap-2 rounded-2xl p-4 shadow-sm sm:mx-4 lg:hidden"
@@ -108,6 +117,11 @@ const MonthSummary = ({ view, onLaunch }: { view: MonthView; onLaunch: (kind: "i
       <Money amount={view.projected_balance} className={amount} />
       <TierPill tier={view.projected_tier} size="sm" />
     </Figure>
+    {estimate && (
+      <div className="col-span-3 flex justify-center">
+        <EstimateNote estimate={estimate} />
+      </div>
+    )}
   </section>
 );
 
@@ -137,11 +151,14 @@ export const MonthHero = ({
   view,
   onLaunch,
   switcher,
+  estimate,
   className,
 }: {
   view: MonthView;
   onLaunch: (kind: "income" | "bill") => void;
   switcher?: ReactNode;
+  /** The Diário previsto the projection counts (SOL-164 S6); absent when it counts none. */
+  estimate?: string | null;
   className?: string;
 }) => {
   const first = useMe().data?.name.trim().split(/\s+/)[0] ?? "";
@@ -178,13 +195,14 @@ export const MonthHero = ({
             <div className="flex flex-col">
               <span className="text-muted-foreground text-xs leading-4 font-medium">Projetado no fim do mês</span>
               <Money amount={view.projected_balance} className="text-lg leading-7 font-bold" />
+              {estimate && <EstimateNote estimate={estimate} />}
             </div>
             <TierPill tier={view.projected_tier} size="sm" />
           </div>
         </div>
         <Split totals={view.totals} />
       </div>
-      <MonthSummary view={view} onLaunch={onLaunch} />
+      <MonthSummary view={view} onLaunch={onLaunch} estimate={estimate} />
     </section>
   );
 };
@@ -200,7 +218,15 @@ const WORD: Record<Tier, string> = {
 const share = "font-bold text-foreground";
 
 /** C2 (SOL-79 §2.5); absent on a month with no entrada and no saída (D25). */
-export const ThermometerCard = ({ view, className }: { view: MonthView; className?: string }) => {
+export const ThermometerCard = ({
+  view,
+  estimate,
+  className,
+}: {
+  view: MonthView;
+  estimate?: string | null;
+  className?: string;
+}) => {
   const currency = useCurrency();
   const { income, outflow, performance } = view.totals;
   const base = cents(income);
@@ -276,7 +302,7 @@ export const ThermometerCard = ({ view, className }: { view: MonthView; classNam
             <span>Nenhuma entrada ainda este mês.</span>
           )}{" "}
           <span>
-            Com as contas em aberto, o caixa fecha o mês no{" "}
+            Com as contas em aberto{estimate ? " e o Diário previsto" : ""}, o caixa fecha o mês no{" "}
             <strong className={cn("font-bold", TIER_STYLE[view.projected_tier].label)}>
               {WORD[view.projected_tier]}
             </strong>

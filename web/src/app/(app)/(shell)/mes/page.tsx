@@ -8,6 +8,8 @@ import { flushSync } from "react-dom";
 
 import { causeOf, forecastAlert, topOutflows } from "@/entities/month/forecast-alert";
 import { useMonth } from "@/entities/month/month-query";
+import { activeEstimate, includesEstimate } from "@/entities/settings/daily-estimate";
+import { useSettings } from "@/entities/settings/settings-query";
 import { useTransactions } from "@/entities/transaction/transaction-queries";
 import { TransactionSheet } from "@/features/add-transaction/transaction-sheet";
 import { EditBillSheet } from "@/features/edit-bill/edit-bill-sheet";
@@ -32,6 +34,7 @@ const MonthScreen = () => {
   const fromTour = search.get("lancar") === "1";
   const view = useMonth(month);
   const transactions = useTransactions(month);
+  const settings = useSettings();
   const [launching, setLaunching] = useState<"income" | "bill" | "daily" | null>(fromTour ? "income" : null);
   const [hint, setHint] = useState(fromTour);
   const [highlight, setHighlight] = useState<{ date: string } | null>(null);
@@ -56,6 +59,8 @@ const MonthScreen = () => {
   }, [highlight]);
 
   const entries = transactions.data;
+  const estimate =
+    settings.data && view.data && includesEstimate(settings.data, view.data) ? activeEstimate(settings.data) : null;
   const days = view.data?.days ?? [];
   const bills = view.data?.bills_of_month ?? [];
   const alert = forecastAlert(days);
@@ -105,6 +110,7 @@ const MonthScreen = () => {
               <MonthHero
                 view={view.data}
                 onLaunch={launch}
+                estimate={estimate}
                 switcher={<ShellMonthSwitcher pathname="/mes" tone="hero" />}
               />
               <BillsOfMonth view={view.data} className="max-lg:order-1" />
@@ -137,7 +143,7 @@ const MonthScreen = () => {
             !planilha.open && "xl:flex xl:flex-col xl:items-stretch",
           )}
         >
-          {view.data && <ThermometerCard view={view.data} className="max-lg:order-2" />}
+          {view.data && <ThermometerCard view={view.data} estimate={estimate} className="max-lg:order-2" />}
           <MonthsAhead
             viewing={month}
             onOpen={(next) => {
