@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { type KeyboardEvent, useRef, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { TriangleAlert } from "lucide-react";
@@ -15,7 +15,7 @@ import { useMonth } from "@/entities/month/month-query";
 import { type Transaction, useTransactions } from "@/entities/transaction/transaction-queries";
 import { cn } from "@/lib/utils";
 import { hasProblem, type Schemas } from "@/shared/api/client";
-import { lastDay, monthName, weekdayName } from "@/shared/lib/date";
+import { addMonths, lastDay, monthName, weekdayName } from "@/shared/lib/date";
 import { toInput } from "@/shared/lib/money";
 import { cents, TIER_LABEL, TIER_ORDER, TIER_STYLE } from "@/shared/lib/tier";
 import { Money } from "@/shared/ui/money";
@@ -116,14 +116,45 @@ const DayDetail = ({ row, view, entries }: { row: PlanilhaRow; view: Schemas["Mo
   );
 };
 
-type RowProps = { row: PlanilhaRow; today: string; view: Schemas["MonthView"]; entries: Entries };
+/** Spec SOL-163 §10: each key's target as `[month, day]`; a day past the month's end clamps to its last. */
+const MOVES: Record<string, (month: string, day: number) => [string, number]> = {
+  ArrowUp: (month, day) => [month, Math.max(day - 1, 1)],
+  ArrowDown: (month, day) => [month, day + 1],
+  Home: (month) => [month, 1],
+  End: (month) => [month, 31],
+  ArrowLeft: (month, day) => [addMonths(month, -1), day],
+  ArrowRight: (month, day) => [addMonths(month, 1), day],
+};
+
+/** A month still loading has no day buttons: the focus stays put. */
+const move = (event: KeyboardEvent<HTMLButtonElement>, date: string) => {
+  const step = MOVES[event.key];
+  if (!step) return;
+  event.preventDefault();
+  const [month, day] = step(date.slice(0, 7), Number(date.slice(8)));
+  const next = document.querySelector<HTMLElement>(
+    `[data-day="${month}-${String(Math.min(day, lastDay(month))).padStart(2, "0")}"]`,
+  );
+  next?.focus();
+  if (month !== date.slice(0, 7)) next?.scrollIntoView({ block: "nearest", inline: "start" });
+};
+
+type RowProps = {
+  row: PlanilhaRow;
+  today: string;
+  view: Schemas["MonthView"];
+  entries: Entries;
+  /** The month's one tab stop (roving tabindex). */
+  stop: boolean;
+  onFocus: () => void;
+};
 
 const FINE_POINTER = "(hover: hover) and (pointer: fine)";
 
 /** `hover`: the popover a resting pointer opened, which leaves focus where it is. */
 type Shown = "hover" | "popover" | "sheet" | null;
 
-const Row = ({ row, today, view, entries }: RowProps) => {
+const Row = ({ row, today, view, entries, stop, onFocus }: RowProps) => {
   const { date, day, income, outflow, landed } = row;
   const [shown, setShown] = useState<Shown>(null);
   const button = useRef<HTMLButtonElement>(null);
@@ -167,6 +198,10 @@ const Row = ({ row, today, view, entries }: RowProps) => {
             <button
               ref={button}
               type="button"
+              data-day={date}
+              tabIndex={stop ? 0 : -1}
+              onFocus={onFocus}
+              onKeyDown={(event) => move(event, date)}
               aria-label={dayName(date, today)}
               className="flex min-h-11 w-full items-center px-2"
             >
@@ -256,11 +291,20 @@ const SkeletonBody = ({ month }: { month: string }) => (
 const MonthBody = ({ month, today, openingDate }: { month: string; today: string; openingDate: string }) => {
   const view = useMonth(month);
   const entries = useTransactions(month);
+  const [stop, setStop] = useState(today.startsWith(month) ? today : `${month}-01`);
   if (view.isSuccess)
     return (
       <tbody>
         {planilhaRows(view.data, openingDate).map((row) => (
-          <Row key={row.date} row={row} today={today} view={view.data} entries={entries} />
+          <Row
+            key={row.date}
+            row={row}
+            today={today}
+            view={view.data}
+            entries={entries}
+            stop={row.date === stop}
+            onFocus={() => setStop(row.date)}
+          />
         ))}
       </tbody>
     );

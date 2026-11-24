@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -169,5 +169,88 @@ describe("Planilha", () => {
     expect(screen.getByText("Itálico: previsto")).toBeInTheDocument();
     for (const tier of ["Crítico", "Atenção", "Apertado", "Confortável", "Folga"])
       expect(screen.getByText(tier)).toBeInTheDocument();
+  });
+});
+
+describe("Planilha keyboard", () => {
+  const empty = (month: string): Reply => ({ status: 200, body: { ...PLANILHA_MONTH, month, days: [] } });
+  const stops = () =>
+    screen
+      .getAllByRole("button")
+      .filter((button) => button.tabIndex === 0)
+      .map((button) => button.getAttribute("aria-label"));
+  const day = (name: string) => screen.getByRole("button", { name });
+  const focus = (name: string) => act(() => day(name).focus());
+
+  it("gives each loaded month one tab stop, today in today's month and day 1 elsewhere, and Tab leaves the table", async () => {
+    const { reveal } = show({ "GET /api/months/2026-12": empty("2026-12") });
+    reveal("Novembro 2026");
+    reveal("Dezembro 2026");
+    await screen.findByRole("button", { name: "Terça-feira, 1 de dezembro" });
+    await screen.findByRole("button", { name: "Quinta-feira, 5 de novembro, hoje" });
+
+    expect(stops()).toEqual(["Quinta-feira, 5 de novembro, hoje", "Terça-feira, 1 de dezembro"]);
+
+    focus("Quinta-feira, 5 de novembro, hoje");
+    await userEvent.tab();
+    expect(day("Terça-feira, 1 de dezembro")).toHaveFocus();
+    await userEvent.tab({ shift: true });
+    expect(day("Quinta-feira, 5 de novembro, hoje")).toHaveFocus();
+  });
+
+  it("moves with ↑ ↓ Home End inside the month, and the tab stop follows the focus", async () => {
+    show().reveal("Novembro 2026");
+    await screen.findByRole("button", { name: "Quinta-feira, 5 de novembro, hoje" });
+    focus("Quinta-feira, 5 de novembro, hoje");
+
+    await userEvent.keyboard("{ArrowDown}");
+    expect(day("Sexta-feira, 6 de novembro")).toHaveFocus();
+    await userEvent.keyboard("{ArrowUp}{ArrowUp}");
+    expect(day("Quarta-feira, 4 de novembro")).toHaveFocus();
+    await userEvent.keyboard("{Home}{ArrowUp}");
+    expect(day("Domingo, 1 de novembro")).toHaveFocus();
+    await userEvent.keyboard("{End}{ArrowDown}");
+    expect(day("Segunda-feira, 30 de novembro")).toHaveFocus();
+    expect(stops()).toEqual(["Segunda-feira, 30 de novembro"]);
+  });
+
+  it("goes to the same day of the next month with →, clamped to its last day and scrolled into view, and back with ←", async () => {
+    const scroll = vi.spyOn(Element.prototype, "scrollIntoView");
+    const { reveal } = show({
+      "GET /api/months/2027-01": empty("2027-01"),
+      "GET /api/months/2027-02": empty("2027-02"),
+    });
+    reveal("Janeiro 2027");
+    reveal("Fevereiro 2027");
+    await screen.findByRole("button", { name: "Domingo, 28 de fevereiro" });
+    focus("Domingo, 31 de janeiro");
+
+    await userEvent.keyboard("{ArrowRight}");
+
+    expect(day("Domingo, 28 de fevereiro")).toHaveFocus();
+    expect(scroll).toHaveBeenLastCalledWith({ block: "nearest", inline: "start" });
+    expect(scroll.mock.contexts.at(-1)).toBe(day("Domingo, 28 de fevereiro"));
+    await userEvent.keyboard("{ArrowLeft}");
+    expect(day("Quinta-feira, 28 de janeiro")).toHaveFocus();
+  });
+
+  it("keeps the focus where it is when the next month has not loaded yet", async () => {
+    show().reveal("Novembro 2026");
+    await screen.findByRole("button", { name: "Quinta-feira, 5 de novembro, hoje" });
+    focus("Quinta-feira, 5 de novembro, hoje");
+
+    await userEvent.keyboard("{ArrowRight}{ArrowLeft}");
+
+    expect(day("Quinta-feira, 5 de novembro, hoje")).toHaveFocus();
+  });
+
+  it("opens the day's detail with Space", async () => {
+    show().reveal("Novembro 2026");
+    await screen.findByRole("button", { name: "Quinta-feira, 5 de novembro, hoje" });
+    focus("Quinta-feira, 5 de novembro, hoje");
+
+    await userEvent.keyboard(" ");
+
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
   });
 });
