@@ -7,6 +7,22 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.69.0
+
+> Headline: Diário previsto, an optional daily spending estimate in the projection
+
+### Server
+- Settings gain `daily_estimate` (R$ 0,01 to R$ 10.000,00 a day) and `daily_estimate_on`; turning it on needs a value, clearing the value turns it off (SOL-164, D49).
+- `GET /api/settings/daily-estimate-suggestion` suggests a value from the last three complete months of cash Diário (card spends excluded, D28), or nothing with under 28 days of history.
+- Each `Day` carries `previsto`: from tomorrow on, the estimate minus the Diário already typed for that day, never below zero. Projected balances, the month's Projetado and the forecast count it; real balances, totals and savings never do. Off, every number is exactly as before (D16).
+
+### Web
+- Ajustes has a "Diário previsto" section: one tap to turn it on with the suggested or a typed value, a switch, and Desfazer.
+- While on, Mês says so wherever a figure includes it ("Inclui Diário previsto de R$ 50,00/dia"): the hero's Projetado, Próximos meses, the planilha's legend and Posso comprar isso?. Lista shows a "Diário previsto" line on future days, the planilha adds it to the Diário cell and the day detail, and the red-day alert names it when it is the cause.
+
+### Tooling
+- `scripts/release.sh X.Y.Z "title"` bumps, opens and merges the release PR once CI is green, tags, deploys and checks the production version (SOL-168).
+
 ## 0.68.0
 
 > Headline: Modo planilha, every day of each month side by side like the Termômetro sheet
