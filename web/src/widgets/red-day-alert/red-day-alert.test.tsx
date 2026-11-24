@@ -57,6 +57,14 @@ describe("RedDayAlert", () => {
     );
   });
 
+  it("names the Diário previsto without a rate when the rate is unknown", () => {
+    render(<RedDayAlert alert={OWNER} outflows={[PREVISTO]} onJump={vi.fn()} />);
+
+    expect(text(within(banner()).getByRole("paragraph"))).toBe(
+      "Dia 23 fica no vermelho: -R$ 675,00. Diário previsto excede o saldo em caixa projetado.",
+    );
+  });
+
   it("names the other outflow first, whatever the order, next to the Diário previsto (E9)", () => {
     render(<RedDayAlert alert={OWNER} outflows={[PREVISTO, conta("Aluguel")]} estimate="50.00" onJump={vi.fn()} />);
 

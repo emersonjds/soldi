@@ -49,12 +49,18 @@ export const DailyEstimateForm = ({ settings }: { settings: Schemas["Settings"] 
   const change = (next: Change, message: string, undo: Change) =>
     save.mutate(next, {
       onSuccess: () => {
-        setDraft(null);
+        if ("daily_estimate" in next) setDraft(null);
         toast.success(message, {
           id: "estimate-undo",
           action: {
             label: "Desfazer",
-            onClick: () => save.mutate(undo, { onSuccess: () => setDraft(null), onError: failed }),
+            onClick: () =>
+              save.mutate(undo, {
+                onSuccess: () => {
+                  if ("daily_estimate" in undo) setDraft(null);
+                },
+                onError: failed,
+              }),
           },
         });
       },

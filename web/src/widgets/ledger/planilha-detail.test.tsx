@@ -323,6 +323,14 @@ describe("Planilha Diário previsto (SOL-164)", () => {
     expect(link).toHaveAttribute("href", "/ajustes#diario-previsto");
     expect(link).toHaveClass("min-h-11", "text-primary", "focus-visible:outline-ring");
   });
+
+  it("keeps a stale month's previsto out of the Diário cell while the estimate is off", async () => {
+    show(ESTIMATED);
+
+    expect((await row("Sábado, 7 de novembro")).cells[3]).toHaveTextContent(/^20,00$/);
+    expect((await row("Sexta-feira, 6 de novembro")).cells[3]).not.toHaveTextContent("inclui Diário previsto");
+  });
+
   it("S8: puts the estimate after the typed cash Diário and before the card spend, outside the fatura", async () => {
     show(ESTIMATED, "2026-03-10", "50.00");
 

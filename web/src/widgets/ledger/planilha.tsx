@@ -215,7 +215,7 @@ type Shown = "hover" | "popover" | "sheet" | null;
 
 const Row = ({ row, today, view, entries, stop, onFocus, ringed, claim, estimate }: RowProps) => {
   const { date, day, income, outflow, daily, landed } = row;
-  const estimated = cents(day?.previsto ?? "0.00") > 0;
+  const estimated = Boolean(estimate) && cents(day?.previsto ?? "0.00") > 0;
   const [shown, setShown] = useState<Shown>(null);
   const tr = useRef<HTMLTableRowElement>(null);
   const button = useRef<HTMLButtonElement>(null);
@@ -297,7 +297,7 @@ const Row = ({ row, today, view, entries, stop, onFocus, ringed, claim, estimate
                 {landed.length > 0 && <span className="sr-only"> inclui conta a pagar</span>}
               </td>
               <td className={cn(MONEY, ahead)}>
-                {amountOf(daily)}
+                {amountOf(estimated ? daily : day.daily)}
                 {estimated && <span className="sr-only"> inclui Diário previsto</span>}
               </td>
               <td

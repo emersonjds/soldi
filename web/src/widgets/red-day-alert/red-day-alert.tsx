@@ -11,7 +11,7 @@ const causeOf = (outflows: Outflow[], rate: string | null) => {
   if (outflows.some((outflow) => outflow.estimate))
     return other
       ? ` Conta de ${other} e Diário previsto excedem o saldo em caixa projetado.`
-      : ` Diário previsto (${rate}/dia) excede o saldo em caixa projetado.`;
+      : ` Diário previsto${rate ? ` (${rate}/dia)` : ""} excede o saldo em caixa projetado.`;
   const [first, second] = outflows.map((outflow) => outflow.name);
   if (second) return ` Contas de ${first} e ${second} previstas excedem o saldo em caixa projetado.`;
   return first ? ` Conta de ${first} prevista excede o saldo em caixa projetado.` : "";

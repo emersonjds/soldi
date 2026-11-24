@@ -210,6 +210,19 @@ describe("DailyEstimateForm, value saved", () => {
     expect(patches).toEqual([{ daily_estimate_on: false }, { daily_estimate_on: true }, { daily_estimate_on: false }]);
   });
 
+  it("keeps a typed unsaved value across a switch save", async () => {
+    open(ON);
+    await screen.findByText(SUGGESTION_LINE);
+    await retype("8000");
+
+    await userEvent.click(screen.getByRole("switch", { name: "Somar à projeção" }));
+    expect(await screen.findByText("Diário previsto desligado")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("switch", { name: "Somar à projeção" }));
+    expect(await screen.findByText("Diário previsto ligado")).toBeInTheDocument();
+
+    await waitFor(() => expect(field()).toHaveValue("80,00"));
+  });
+
   it("puts the switch back and says so when the save fails", async () => {
     let refuse: (response: Response) => void = () => undefined;
     open(ON, { patch: () => new Promise((resolve) => (refuse = resolve)) });

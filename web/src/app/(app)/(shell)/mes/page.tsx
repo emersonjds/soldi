@@ -96,7 +96,7 @@ const MonthScreen = () => {
             alert.firstRed.date,
             entries ?? [],
             bills,
-            estimate ? days.find((day) => day.date === alert.firstRed.date)?.previsto : undefined,
+            days.find((day) => day.date === alert.firstRed.date)?.previsto,
           )}
           estimate={estimate}
           onJump={jump}
