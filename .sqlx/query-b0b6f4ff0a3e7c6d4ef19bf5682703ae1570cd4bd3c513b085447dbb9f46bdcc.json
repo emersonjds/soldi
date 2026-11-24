@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT COALESCE(SUM(t.amount), 0) AS \"total!\"\n         FROM transactions t\n         LEFT JOIN recurring_bills b ON b.user_id = t.user_id AND b.id = t.card_id\n         WHERE t.user_id = $1 AND t.kind = 'daily' AND t.date BETWEEN $2 AND $3\n           AND b.closing_day IS NULL",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "total!",
+        "type_info": "Numeric",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Date",
+        "Date"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "b0b6f4ff0a3e7c6d4ef19bf5682703ae1570cd4bd3c513b085447dbb9f46bdcc"
+}

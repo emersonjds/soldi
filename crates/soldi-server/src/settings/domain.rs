@@ -1,7 +1,9 @@
-use rust_decimal::Decimal;
-use soldi_types::settings::{Settings, UpdateSettings};
+use chrono::{Months, NaiveDate};
+use rust_decimal::{Decimal, RoundingStrategy};
+use soldi_types::settings::{DailyEstimateSuggestion, Settings, UpdateSettings};
 
 use crate::error::AppError;
+use crate::months::domain::first_of;
 
 /// Fits `NUMERIC(12,2)` without rounding: at most two decimal places, under ten billion.
 pub fn check_money(field: &str, value: Decimal) -> Result<Decimal, AppError> {
@@ -38,6 +40,23 @@ pub fn check_estimate(value: Decimal) -> Result<Decimal, AppError> {
         ));
     }
     Ok(value)
+}
+
+/// R-S1, R-S3: the 3 calendar months before today's, from the opening date; none under 28 days.
+pub fn suggestion_window(today: NaiveDate, opening: NaiveDate) -> Option<(NaiveDate, NaiveDate)> {
+    let month = first_of(today);
+    let from = month.checked_sub_months(Months::new(3))?.max(opening);
+    let to = month.pred_opt()?;
+    ((to - from).num_days() + 1 >= 28).then_some((from, to))
+}
+
+/// R-S2..R-S4: the window's cash Diário per day, half-even; none when it could not be saved.
+pub fn suggest(total: Decimal, from: NaiveDate, to: NaiveDate) -> Option<DailyEstimateSuggestion> {
+    let days = Decimal::from((to - from).num_days() + 1);
+    let amount = (total / days).round_dp_with_strategy(2, RoundingStrategy::MidpointNearestEven);
+    check_estimate(amount)
+        .ok()
+        .map(|amount| DailyEstimateSuggestion { amount, from, to })
 }
 
 /// The thermometer's lower bounds, strictly increasing; the error names the upper of the
@@ -115,7 +134,7 @@ mod tests {
     use super::*;
     use chrono::NaiveDate;
     use rust_decimal::Decimal;
-    use soldi_types::settings::{Currency, Settings, UpdateSettings};
+    use soldi_types::settings::{Currency, DailyEstimateSuggestion, Settings, UpdateSettings};
 
     fn money(text: &str) -> Decimal {
         text.parse().unwrap()
@@ -210,6 +229,69 @@ mod tests {
         let again = apply(off, estimate(None, Some(true))).unwrap();
         assert_eq!(again.daily_estimate, Some(money("50.00")));
         assert!(again.daily_estimate_on);
+    }
+
+    fn day(text: &str) -> NaiveDate {
+        text.parse().unwrap()
+    }
+
+    fn suggested(total: &str, today: &str, opening: &str) -> Option<DailyEstimateSuggestion> {
+        let (from, to) = suggestion_window(day(today), day(opening))?;
+        suggest(money(total), from, to)
+    }
+
+    #[test]
+    fn e16_the_window_starts_at_the_opening_date() {
+        assert_eq!(
+            suggestion_window(day("2026-11-28"), day("2026-08-20")),
+            Some((day("2026-08-20"), day("2026-10-31")))
+        );
+        assert_eq!(
+            suggested("2650.00", "2026-11-28", "2026-08-20"),
+            Some(DailyEstimateSuggestion {
+                amount: money("36.30"),
+                from: day("2026-08-20"),
+                to: day("2026-10-31"),
+            })
+        );
+    }
+
+    #[test]
+    fn e17_half_even() {
+        let amount = |total| suggested(total, "2026-11-28", "2026-01-01").map(|s| s.amount);
+        assert_eq!(amount("4600.46"), Some(money("50.00")));
+        assert_eq!(amount("4601.38"), Some(money("50.02")));
+        assert_eq!(
+            suggested("4600.46", "2026-11-28", "2026-01-01").map(|s| (s.from, s.to)),
+            Some((day("2026-08-01"), day("2026-10-31")))
+        );
+    }
+
+    #[test]
+    fn e18_too_little_history() {
+        assert_eq!(
+            suggestion_window(day("2026-11-28"), day("2026-10-10")),
+            None
+        );
+        assert_eq!(
+            suggestion_window(day("2026-11-28"), day("2026-10-04")),
+            Some((day("2026-10-04"), day("2026-10-31")))
+        );
+        assert_eq!(
+            suggestion_window(day("2026-11-28"), day("2026-11-02")),
+            None
+        );
+    }
+
+    #[test]
+    fn e19_nothing_spent() {
+        assert_eq!(suggested("0", "2026-11-28", "2026-01-01"), None);
+    }
+
+    #[test]
+    fn x2_an_amount_that_cannot_be_saved() {
+        assert_eq!(suggested("0.10", "2026-11-28", "2026-01-01"), None);
+        assert_eq!(suggested("920000.92", "2026-11-28", "2026-01-01"), None);
     }
 
     #[test]

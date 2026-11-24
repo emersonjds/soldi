@@ -1,6 +1,7 @@
 mod common;
 
 use axum::http::StatusCode;
+use chrono::{Datelike, Days, NaiveDate};
 use common::TestApp;
 use serde_json::json;
 use sqlx::PgPool;
@@ -220,4 +221,78 @@ async fn p5_the_savings_target_is_a_percent_above_0_up_to_100(pool: PgPool) {
         .patch("/api/settings", json!({ "savings_target_pct": null }))
         .await;
     assert_eq!(cleared["savings_target_pct"], serde_json::Value::Null);
+}
+
+async fn log(user: &TestApp, date: NaiveDate, kind: &str, amount: &str, category: &str) {
+    let category_id = user.category_id(category).await;
+    let (status, created) = user
+        .post(
+            "/api/transactions",
+            json!({ "date": date, "amount": amount, "kind": kind, "category_id": category_id }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{created}");
+}
+
+#[sqlx::test]
+async fn r_s_the_suggestion_is_last_months_cash_diario_per_day(pool: PgPool) {
+    let ana = TestApp::signed_in(pool.clone(), "ana@example.com").await;
+    let bia = TestApp::signed_in(pool, "bia@example.com").await;
+    let today = soldi_server::today_sao_paulo();
+    let to = today.with_day(1).unwrap().pred_opt().unwrap();
+    let from = to - Days::new(29);
+    for user in [&ana, &bia] {
+        user.open_at("0", &from.to_string()).await;
+    }
+    log(&ana, from, "daily", "100.00", "Mercado").await;
+    log(&ana, to, "daily", "200.00", "Mercado").await;
+    log(&ana, to, "income", "1000.00", "Salário").await;
+    log(&ana, to, "bill", "5000.00", "Aluguel").await;
+    log(&ana, today, "daily", "50.00", "Mercado").await;
+    let category_id = ana.category_id("Cartão").await;
+    let (_, card) = ana
+        .post(
+            "/api/bills",
+            json!({ "name": "Nubank", "due_day": 10, "closing_day": 3, "category_id": category_id }),
+        )
+        .await;
+    let market = ana.category_id("Mercado").await;
+    let (status, spend) = ana
+        .post(
+            "/api/transactions",
+            json!({ "date": from, "amount": "900.00", "kind": "daily",
+                    "category_id": market, "card_id": card["id"] }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{spend}");
+    log(&bia, from, "daily", "700.00", "Mercado").await;
+
+    let (status, suggestion) = ana.get("/api/settings/daily-estimate-suggestion").await;
+
+    assert_eq!(status, StatusCode::OK, "{suggestion}");
+    assert_eq!(
+        suggestion,
+        json!({ "amount": "10.00", "from": from, "to": to })
+    );
+    assert_eq!(
+        bia.get("/api/settings/daily-estimate-suggestion").await.1["amount"],
+        "23.33"
+    );
+}
+
+#[sqlx::test]
+async fn r_s_a_fresh_user_gets_no_suggestion_and_it_needs_a_session(pool: PgPool) {
+    let user = TestApp::signed_in(pool.clone(), "ana@example.com").await;
+
+    let (status, suggestion) = user.get("/api/settings/daily-estimate-suggestion").await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(suggestion, serde_json::Value::Null);
+    assert_eq!(
+        TestApp::anonymous(pool)
+            .get("/api/settings/daily-estimate-suggestion")
+            .await
+            .0,
+        StatusCode::UNAUTHORIZED
+    );
 }

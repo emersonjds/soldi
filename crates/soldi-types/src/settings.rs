@@ -60,6 +60,19 @@ pub struct Settings {
     pub daily_estimate_on: bool,
 }
 
+/// R-S: the cash Diário (no card) from `from` to `to` divided by its days, half-even to cents;
+/// a pre-fill only, never stored.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+pub struct DailyEstimateSuggestion {
+    #[serde(serialize_with = "crate::money")]
+    #[schema(example = "36.30")]
+    pub amount: Decimal,
+    #[schema(example = "2026-08-20")]
+    pub from: NaiveDate,
+    #[schema(example = "2026-10-31")]
+    pub to: NaiveDate,
+}
+
 /// Absent fields stay as they are; `"savings_target_pct": null` clears the target.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]

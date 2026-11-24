@@ -1,3 +1,5 @@
+use chrono::NaiveDate;
+use rust_decimal::Decimal;
 use soldi_types::settings::{Currency, Settings};
 use sqlx::PgConnection;
 use uuid::Uuid;
@@ -22,6 +24,27 @@ pub async fn find(conn: &mut PgConnection, user_id: Uuid) -> Result<Settings, sq
                 daily_estimate_on
          FROM settings WHERE user_id = $1 FOR UPDATE"#,
         user_id
+    )
+    .fetch_one(&mut *conn)
+    .await
+}
+
+/// R-S2: the Diário from `from` to `to`, card spends out exactly like `flows_by_day` (D28).
+pub async fn cash_daily(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    from: NaiveDate,
+    to: NaiveDate,
+) -> Result<Decimal, sqlx::Error> {
+    sqlx::query_scalar!(
+        r#"SELECT COALESCE(SUM(t.amount), 0) AS "total!"
+         FROM transactions t
+         LEFT JOIN recurring_bills b ON b.user_id = t.user_id AND b.id = t.card_id
+         WHERE t.user_id = $1 AND t.kind = 'daily' AND t.date BETWEEN $2 AND $3
+           AND b.closing_day IS NULL"#,
+        user_id,
+        from,
+        to
     )
     .fetch_one(&mut *conn)
     .await
