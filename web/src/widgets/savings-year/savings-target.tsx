@@ -113,19 +113,19 @@ const TargetCard = ({ year, target }: { year: Year; target: Target }) => {
   const progress = target.progress_pct ?? "0";
   const pct = `${pctText(target.pct)}%`;
   return (
-    <section aria-labelledby={id} className="flex min-w-0 flex-col gap-3 rounded-2xl bg-card p-4 shadow-sm lg:p-6">
+    <section aria-labelledby={id} className="bg-card flex min-w-0 flex-col gap-3 rounded-2xl p-4 shadow-sm lg:p-6">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <span
           aria-hidden
-          className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary max-lg:hidden"
+          className="bg-primary/10 text-primary flex size-11 shrink-0 items-center justify-center rounded-xl max-lg:hidden"
         >
           <Flag className="size-5" />
         </span>
-        <h2 id={id} className="font-semibold text-lg leading-6">
+        <h2 id={id} className="text-lg leading-6 font-semibold">
           Meta Anual<span className={zero ? undefined : "lg:hidden"}> ({pct})</span>
         </h2>
         {!zero && (
-          <span className="rounded-full bg-primary/10 px-2.5 py-0.5 font-semibold text-primary text-sm tabular-nums lg:hidden">
+          <span className="bg-primary/10 text-primary rounded-full px-2.5 py-0.5 text-sm font-semibold tabular-nums lg:hidden">
             {formatPct(progress)} concluído
           </span>
         )}
@@ -134,7 +134,7 @@ const TargetCard = ({ year, target }: { year: Year; target: Target }) => {
             variant="ghost"
             size="icon"
             aria-label="Editar meta"
-            className="ml-auto size-11 shrink-0 rounded-full text-muted-foreground"
+            className="text-muted-foreground ml-auto size-11 shrink-0 rounded-full"
           >
             <Pencil className="size-5" />
           </Button>
@@ -147,10 +147,10 @@ const TargetCard = ({ year, target }: { year: Year; target: Target }) => {
           <p className="text-muted-foreground text-sm lg:hidden">
             <Money amount={year.saved_total} /> de <Money amount={target.amount} />
           </p>
-          <p className="flex flex-wrap items-center gap-x-2 font-semibold text-xl lg:text-2xl">
+          <p className="flex flex-wrap items-center gap-x-2 text-xl font-semibold lg:text-2xl">
             {target.done ? (
               <>
-                <Check aria-hidden className="size-5 text-income-text" />
+                <Check aria-hidden className="text-income-text size-5" />
                 Meta batida
               </>
             ) : (
@@ -164,7 +164,7 @@ const TargetCard = ({ year, target }: { year: Year; target: Target }) => {
               Alvo estratégico de {pct} sobre as entradas do ano até agora (<Money amount={target.amount} />
               ).
             </p>
-            <p className="font-semibold text-sm">Progresso atual ({formatPct(progress)})</p>
+            <p className="text-sm font-semibold">Progresso atual ({formatPct(progress)})</p>
             <Progress
               value={Math.min(Number(progress), 100)}
               aria-label="Progresso da meta anual"
@@ -191,7 +191,7 @@ export const SavingsTarget = ({ year }: { year: Year }) => {
         <TargetCard year={year} target={target} />
       ) : (
         <DialogTrigger asChild>
-          <Button variant="ghost" className="min-h-11 self-start text-base text-primary">
+          <Button variant="ghost" className="text-primary min-h-11 self-start text-base">
             <Flag aria-hidden className="size-5" />
             Definir meta anual
           </Button>

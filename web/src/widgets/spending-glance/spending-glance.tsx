@@ -18,7 +18,7 @@ export const SpendingGlance = ({ month, className }: { month: string; className?
   return (
     <DashCard
       title="Para Onde Vai"
-      icon={<PieChart aria-hidden className="size-5 text-primary" />}
+      icon={<PieChart aria-hidden className="text-primary size-5" />}
       action={{ href: `/para-onde-vai?m=${month}`, label: "Ver análise", arrow: true }}
       className={className}
     >
@@ -30,16 +30,16 @@ export const SpendingGlance = ({ month, className }: { month: string; className?
             .map((group) => (
               <li key={group.category_id} className="flex flex-col gap-1.5">
                 <span className="flex items-baseline justify-between gap-3">
-                  <span className="truncate font-medium text-base">{group.name}</span>
-                  <Money amount={group.amount} className="font-semibold text-sm" />
+                  <span className="truncate text-base font-medium">{group.name}</span>
+                  <Money amount={group.amount} className="text-sm font-semibold" />
                 </span>
-                <span aria-hidden className="h-2 overflow-hidden rounded-full bg-muted">
+                <span aria-hidden className="bg-muted h-2 overflow-hidden rounded-full">
                   <span
                     className={`block h-full rounded-full ${categoryBg(group.color)}`}
                     style={{ width: `${group.pct}%` }}
                   />
                 </span>
-                <span className="text-right text-muted-foreground text-xs tabular-nums">{formatPct(group.pct)}</span>
+                <span className="text-muted-foreground text-right text-xs tabular-nums">{formatPct(group.pct)}</span>
               </li>
             ))}
         </ul>

@@ -34,7 +34,7 @@ const PillButton = ({
     onClick={onClick}
     disabled={busy}
     className={cn(
-      "flex min-h-11 shrink-0 items-center rounded-full focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-60",
+      "focus-visible:outline-ring flex min-h-11 shrink-0 items-center rounded-full focus-visible:outline-2 disabled:opacity-60",
       className,
     )}
   >
@@ -78,7 +78,7 @@ export const BillStatus = ({
   if (bill.overdue)
     return (
       <>
-        <span className={cn(statusPill, "hidden bg-expense text-primary-foreground lg:inline-flex")}>Vencido</span>
+        <span className={cn(statusPill, "bg-expense text-primary-foreground hidden lg:inline-flex")}>Vencido</span>
         <PillButton
           label={`Pagar ${label}, vencida`}
           onClick={onPay}

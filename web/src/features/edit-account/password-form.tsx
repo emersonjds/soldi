@@ -60,7 +60,7 @@ export const PasswordForm = () => {
   };
 
   return (
-    <form noValidate onSubmit={submit} className="flex flex-col gap-4 rounded-2xl bg-card p-4 shadow-sm lg:p-6">
+    <form noValidate onSubmit={submit} className="bg-card flex flex-col gap-4 rounded-2xl p-4 shadow-sm lg:p-6">
       <Field className="gap-1.5" data-invalid={refused === "current"}>
         <FieldLabel htmlFor="current-password">Senha atual</FieldLabel>
         <Input

@@ -368,7 +368,7 @@ const TransactionForm = ({
         keypad={keypad}
       />
       {series && (
-        <p className="text-center text-muted-foreground text-sm">
+        <p className="text-muted-foreground text-center text-sm">
           {draft.scope === "this"
             ? "Novo valor aplicado só a esta cobrança."
             : "Novo valor monetário aplicado a partir desta cobrança."}
@@ -389,7 +389,7 @@ const TransactionForm = ({
   const cardField = draft.kind === "daily" && cards.length > 0 && (
     <Field className="gap-1.5">
       <FieldLabel htmlFor="transaction-card" className="flex items-center gap-2">
-        <CreditCard aria-hidden className="size-4 text-muted-foreground" />
+        <CreditCard aria-hidden className="text-muted-foreground size-4" />
         Cartão
       </FieldLabel>
       <NativeSelect
@@ -422,7 +422,7 @@ const TransactionForm = ({
         </p>
       )}
       {moving && !periodChanged && (
-        <p className="flex items-center gap-2 text-muted-foreground text-sm">
+        <p className="text-muted-foreground flex items-center gap-2 text-sm">
           <CalendarDays aria-hidden className="size-4 shrink-0" />
           {dayHelper}
         </p>
@@ -430,8 +430,8 @@ const TransactionForm = ({
     </div>
   );
   const noteField = (
-    <div className="flex items-center gap-2.5 rounded-xl bg-muted pl-3 focus-within:ring-3 focus-within:ring-ring/50">
-      <NotebookPen aria-hidden className="size-5 shrink-0 text-muted-foreground" />
+    <div className="bg-muted focus-within:ring-ring/50 flex items-center gap-2.5 rounded-xl pl-3 focus-within:ring-3">
+      <NotebookPen aria-hidden className="text-muted-foreground size-5 shrink-0" />
       <input
         aria-label="Observação"
         value={draft.note}
@@ -441,14 +441,14 @@ const TransactionForm = ({
         }}
         placeholder="Adicionar nota ou observação..."
         maxLength={200}
-        className="h-12 min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground"
+        className="placeholder:text-muted-foreground h-12 min-w-0 flex-1 bg-transparent text-base outline-none"
       />
       {draft.note && (
         <button
           type="button"
           aria-label="Limpar observação"
           onClick={() => set({ note: "" })}
-          className="flex size-11 shrink-0 items-center justify-center rounded-full text-muted-foreground focus-visible:outline-2 focus-visible:outline-ring"
+          className="text-muted-foreground focus-visible:outline-ring flex size-11 shrink-0 items-center justify-center rounded-full focus-visible:outline-2"
         >
           <CircleX aria-hidden className="size-5" />
         </button>
@@ -461,10 +461,10 @@ const TransactionForm = ({
   const repeatSwitch = (id: string, Icon: LucideIcon, label: string, checked: boolean, preset = "always") => (
     <label
       htmlFor={`${id}-switch`}
-      className="flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-xl bg-muted px-4"
+      className="bg-muted flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-xl px-4"
     >
-      <span id={id} className="flex items-center gap-2 font-medium text-base">
-        <Icon aria-hidden className="size-5 shrink-0 text-muted-foreground" />
+      <span id={id} className="flex items-center gap-2 text-base font-medium">
+        <Icon aria-hidden className="text-muted-foreground size-5 shrink-0" />
         {label}
       </span>
       <Switch
@@ -498,7 +498,7 @@ const TransactionForm = ({
           value={every}
           onValueChange={(picked: Every | "") => picked && set({ every: picked })}
           aria-label="Frequência"
-          className="grid w-full grid-cols-3 rounded-2xl bg-muted p-1"
+          className="bg-muted grid w-full grid-cols-3 rounded-2xl p-1"
         >
           {(["month", "week", "year"] as const).map((value) => (
             <ToggleGroupItem key={value} value={value} className={chip}>
@@ -517,7 +517,7 @@ const TransactionForm = ({
                 variant="ghost"
                 disabled={moved}
                 onClick={() => set({ preset: initial.preset, custom: initial.custom })}
-                className="h-11 px-3 font-medium text-primary text-sm"
+                className="text-primary h-11 px-3 text-sm font-medium"
               >
                 Ciclo Atual
               </Button>
@@ -530,7 +530,7 @@ const TransactionForm = ({
             onValueChange={(preset: string) => preset && set({ preset })}
             aria-label={parcelado ? "Quantas parcelas" : "Quantas vezes"}
             disabled={moved || series?.open_ended}
-            className="grid w-full grid-cols-3 rounded-2xl bg-muted p-1"
+            className="bg-muted grid w-full grid-cols-3 rounded-2xl p-1"
           >
             {(parcelado ? PRESETS.slice(1) : PRESETS).map((preset) => (
               <ToggleGroupItem
@@ -562,7 +562,7 @@ const TransactionForm = ({
                 onChange={(event) => set({ custom: event.target.value.replace(/\D/g, "").slice(0, 2) })}
                 aria-invalid={monthsError}
                 aria-describedby={monthsError ? "transaction-months-error" : undefined}
-                className="h-12 rounded-xl bg-muted text-base tabular-nums md:text-base"
+                className="bg-muted h-12 rounded-xl text-base tabular-nums md:text-base"
               />
               {monthsError && (
                 <p id="transaction-months-error" role="alert" className="text-destructive text-sm">
@@ -575,7 +575,7 @@ const TransactionForm = ({
             <button
               type="button"
               onClick={() => set({ starting: true })}
-              className="inline-flex min-h-11 items-center self-start font-semibold text-primary text-sm underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring"
+              className="text-primary focus-visible:outline-ring inline-flex min-h-11 items-center self-start text-sm font-semibold underline-offset-4 hover:underline focus-visible:outline-2"
             >
               Já começou em outra parcela?
             </button>
@@ -590,7 +590,7 @@ const TransactionForm = ({
                 onChange={(event) => set({ first: event.target.value.replace(/\D/g, "").slice(0, 2) })}
                 aria-invalid={firstError}
                 aria-describedby={firstError ? "transaction-first-error" : undefined}
-                className="h-12 rounded-xl bg-muted text-base tabular-nums md:text-base"
+                className="bg-muted h-12 rounded-xl text-base tabular-nums md:text-base"
               />
               {firstError && (
                 <p id="transaction-first-error" role="alert" className="text-destructive text-sm">
@@ -600,7 +600,7 @@ const TransactionForm = ({
             </Field>
           )}
           {counting && monthsValid && (
-            <p className="flex items-center gap-2 text-muted-foreground text-sm">
+            <p className="text-muted-foreground flex items-center gap-2 text-sm">
               <Lightbulb aria-hidden className="size-4 shrink-0" />
               {`${amount ? `${written}× de ${formatMoney(amount, currency)} · ` : ""}${repeatSummary(every, draft.date, written)}`}
             </p>
@@ -613,18 +613,18 @@ const TransactionForm = ({
             </p>
           )}
           {draft.repeat && openEnded && (
-            <p className="flex items-center gap-2 text-muted-foreground text-sm">
+            <p className="text-muted-foreground flex items-center gap-2 text-sm">
               <Lightbulb aria-hidden className="size-4 shrink-0" />
               {`Repete ${openLine}, sem data para parar.`}
             </p>
           )}
           {resizeNote && (
-            <p className="flex items-center gap-2 text-muted-foreground text-sm">
+            <p className="text-muted-foreground flex items-center gap-2 text-sm">
               <Lightbulb aria-hidden className="size-4 shrink-0" />
               {resizeNote}
             </p>
           )}
-          {saving && <p className="font-medium text-sm">{`Economia projetada de ${saving} no orçamento previsto.`}</p>}
+          {saving && <p className="text-sm font-medium">{`Economia projetada de ${saving} no orçamento previsto.`}</p>}
           {!series && every === "month" && day >= 29 && (
             <p className="text-muted-foreground text-xs">Em meses mais curtos, cai no último dia.</p>
           )}
@@ -661,7 +661,7 @@ const TransactionForm = ({
         <>
           <p className="text-muted-foreground text-sm">
             Você está editando a parcela {series.position} de {series.total}:{" "}
-            <span className="font-medium text-foreground">"{transaction.note ?? transaction.category.name}"</span> (
+            <span className="text-foreground font-medium">"{transaction.note ?? transaction.category.name}"</span> (
             {formatMoney(transaction.amount, currency)})
           </p>
           <ScopeRadio
@@ -716,7 +716,7 @@ const TransactionForm = ({
                 })
               }
               aria-label="Tipo"
-              className="grid w-full grid-cols-3 rounded-2xl bg-muted p-1"
+              className="bg-muted grid w-full grid-cols-3 rounded-2xl p-1"
             >
               {KINDS.map(({ value, label, icon: Icon }) => (
                 <ToggleGroupItem
@@ -747,7 +747,7 @@ const TransactionForm = ({
             <Button
               type="button"
               variant="ghost"
-              className="mr-auto h-12 text-base text-destructive hover:text-destructive lg:h-10 lg:gap-1.5 lg:px-2 lg:text-sm"
+              className="text-destructive hover:text-destructive mr-auto h-12 text-base lg:h-10 lg:gap-1.5 lg:px-2 lg:text-sm"
               onClick={onDelete}
             >
               <Trash2 aria-hidden />
@@ -944,7 +944,7 @@ export const TransactionSheet = ({
       title={title}
       eyebrow={
         transaction?.series && (
-          <p className="-mb-4 flex items-center gap-2 pr-12 font-medium text-primary text-sm">
+          <p className="text-primary -mb-4 flex items-center gap-2 pr-12 text-sm font-medium">
             <InfinityIcon aria-hidden className="size-4" />
             {transaction.series.open_ended
               ? `Lançamento recorrente, ${OPEN_LABEL[transaction.series.every].toLowerCase()}`
@@ -956,7 +956,7 @@ export const TransactionSheet = ({
       showDescription={!transaction}
       wide
     >
-      {hint && <p className="rounded-xl bg-secondary px-4 py-3 font-medium text-primary text-sm">{hint}</p>}
+      {hint && <p className="bg-secondary text-primary rounded-xl px-4 py-3 text-sm font-medium">{hint}</p>}
       <TransactionForm
         key={transaction?.id ?? `${initialKind}-${initialCategory?.id}-${initialDate}`}
         initial={initial}

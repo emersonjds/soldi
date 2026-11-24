@@ -68,7 +68,7 @@ export const Switcher = ({
       </button>
       <span
         aria-live="polite"
-        className="flex min-w-36 items-center justify-center gap-2 font-semibold text-base tabular-nums"
+        className="flex min-w-36 items-center justify-center gap-2 text-base font-semibold tabular-nums"
       >
         {label}
       </span>

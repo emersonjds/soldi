@@ -13,7 +13,7 @@ import { Money } from "@/shared/ui/money";
 import { PageError } from "@/shared/ui/page-state";
 
 const TITLE = "Cofrinhos";
-const ICON = <PiggyBank aria-hidden className="size-5 text-primary" />;
+const ICON = <PiggyBank aria-hidden className="text-primary size-5" />;
 
 /**
  * Stitch §2.9: `total_saved` and the two largest cofrinhos with a goal. Nothing while loading,
@@ -46,7 +46,7 @@ export const CofrinhosGlance = ({ className }: { className?: string }) => {
     >
       <div className="flex flex-col gap-4">
         <p className="flex flex-col gap-1">
-          <span className="font-semibold text-[11px] text-muted-foreground uppercase leading-4 tracking-[0.12em]">
+          <span className="text-muted-foreground text-[11px] leading-4 font-semibold tracking-[0.12em] uppercase">
             Total guardado
           </span>
           <Money amount={cofrinhos.data.total_saved} size="figure" />
@@ -57,13 +57,13 @@ export const CofrinhosGlance = ({ className }: { className?: string }) => {
             return (
               <li key={cofrinho.category_id} className="flex flex-col gap-2">
                 <span className="flex items-baseline justify-between gap-3">
-                  <span className="line-clamp-2 break-words font-medium text-base">{cofrinho.name}</span>
-                  <span className="font-semibold text-sm tabular-nums">
+                  <span className="line-clamp-2 text-base font-medium break-words">{cofrinho.name}</span>
+                  <span className="text-sm font-semibold tabular-nums">
                     {wholeShare(cents(cofrinho.balance), cents(target))}%
                   </span>
                 </span>
                 <CofrinhoBar cofrinho={cofrinho} />
-                <span className="flex justify-between gap-3 text-muted-foreground text-sm tabular-nums">
+                <span className="text-muted-foreground flex justify-between gap-3 text-sm tabular-nums">
                   <span>
                     {symbol} {formatWhole(cofrinho.balance)}
                   </span>

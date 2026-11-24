@@ -62,7 +62,7 @@ export const OpeningForm = ({ settings }: { settings: Schemas["Settings"] }) => 
   return (
     <div className="flex flex-col gap-4">
       <Field className="gap-2" data-invalid={invalid}>
-        <FieldLabel htmlFor="opening-balance" className="font-semibold text-sm">
+        <FieldLabel htmlFor="opening-balance" className="text-sm font-semibold">
           Saldo Inicial da Conta Corrente
         </FieldLabel>
         <AmountInput
@@ -71,7 +71,7 @@ export const OpeningForm = ({ settings }: { settings: Schemas["Settings"] }) => 
           value={amount}
           onValueChange={setAmount}
           onBlur={() => commit(amount, date)}
-          className="h-16 rounded-2xl bg-muted font-bold text-3xl tabular-nums md:text-3xl"
+          className="bg-muted h-16 rounded-2xl text-3xl font-bold tabular-nums md:text-3xl"
           aria-invalid={invalid}
         />
         {invalid ? (

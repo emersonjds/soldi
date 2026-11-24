@@ -26,13 +26,13 @@ export const RedDayAlert = ({
   return (
     <section
       aria-label="Alerta do mês"
-      className="flex flex-col items-start gap-3 rounded-xl bg-expense-soft p-4 shadow-sm md:flex-row md:items-center md:justify-between"
+      className="bg-expense-soft flex flex-col items-start gap-3 rounded-xl p-4 shadow-sm md:flex-row md:items-center md:justify-between"
     >
       <div className="flex items-center gap-3">
-        <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-expense text-background">
+        <span className="bg-expense text-background flex size-10 shrink-0 items-center justify-center rounded-full">
           <TriangleAlert className="size-5" aria-hidden />
         </span>
-        <p className="font-medium text-expense leading-6">
+        <p className="text-expense leading-6 font-medium">
           <span className="font-bold">
             {title}
             <span className="whitespace-nowrap">{formatMoney(balance, currency)}</span>.
@@ -43,7 +43,7 @@ export const RedDayAlert = ({
       <button
         type="button"
         onClick={() => onJump(date)}
-        className="ml-13 flex min-h-11 shrink-0 items-center gap-1.5 rounded-lg bg-card px-4 font-medium text-expense shadow-sm transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring md:ml-0"
+        className="bg-card text-expense hover:bg-muted focus-visible:outline-ring ml-13 flex min-h-11 shrink-0 items-center gap-1.5 rounded-lg px-4 font-medium shadow-sm transition-colors focus-visible:outline-2 md:ml-0"
       >
         {today ? "Ver hoje" : `Ver o dia ${day}`}
         <ArrowRight className="size-4" aria-hidden />

@@ -17,7 +17,7 @@ export const CurrencyStep = ({
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="font-bold text-[22px] leading-7">Qual moeda você usa?</h1>
+      <h1 className="text-[22px] leading-7 font-bold">Qual moeda você usa?</h1>
       <CurrencyPicker value={currency} onChange={setCurrency} />
       <BrandButton onClick={() => onNext(currency)}>Continuar</BrandButton>
     </div>

@@ -80,7 +80,7 @@ export const SignInForm = () => {
               {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
               <Link
                 href="/esqueci-senha"
-                className="inline-flex min-h-11 items-center self-end font-semibold text-primary text-sm"
+                className="text-primary inline-flex min-h-11 items-center self-end text-sm font-semibold"
               >
                 Esqueci minha senha
               </Link>
@@ -89,7 +89,7 @@ export const SignInForm = () => {
         />
       </FieldGroup>
       {signIn.isError && (
-        <p role="alert" className="rounded-xl bg-expense-soft px-4 py-3 font-medium text-sm text-tier-red-foreground">
+        <p role="alert" className="bg-expense-soft text-tier-red-foreground rounded-xl px-4 py-3 text-sm font-medium">
           {failure(signIn.error)}
         </p>
       )}

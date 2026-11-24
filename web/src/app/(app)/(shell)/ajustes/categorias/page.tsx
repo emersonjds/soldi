@@ -44,7 +44,7 @@ const CategoriasPage = () => (
         </BreadcrumbItem>
         <BreadcrumbSeparator />
         <BreadcrumbItem>
-          <BreadcrumbPage className="font-medium text-primary">Categorias</BreadcrumbPage>
+          <BreadcrumbPage className="text-primary font-medium">Categorias</BreadcrumbPage>
         </BreadcrumbItem>
       </BreadcrumbList>
     </Breadcrumb>

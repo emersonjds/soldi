@@ -69,7 +69,7 @@ const DeltaBadge = ({ delta_pct, previous }: { delta_pct?: string | null; previo
   return (
     <span
       className={cn(
-        "rounded-md px-1.5 font-semibold text-xs tabular-nums leading-5 lg:bg-transparent lg:px-0",
+        "rounded-md px-1.5 text-xs leading-5 font-semibold tabular-nums lg:bg-transparent lg:px-0",
         flat && "bg-muted text-muted-foreground",
         !flat && fell && "bg-income-soft text-tier-green-foreground",
         !flat && !fell && "bg-expense-soft text-tier-red-foreground",
@@ -144,7 +144,7 @@ const Composition = ({ groups, total, active, onSelect }: CompositionProps) => {
           <span className="lg:hidden">Total de saídas</span>
         </span>
         <Money amount={total} size="figure" className="text-[length:min(1.75rem,10cqi)]" />
-        <span className="flex items-center gap-1 font-semibold text-income-text text-sm max-lg:hidden">
+        <span className="text-income-text flex items-center gap-1 text-sm font-semibold max-lg:hidden">
           <Check aria-hidden className="size-4" />
           {groups.length} categorias
         </span>
@@ -160,7 +160,7 @@ const Composition = ({ groups, total, active, onSelect }: CompositionProps) => {
             >
               <span aria-hidden className={cn("size-2.5 shrink-0 rounded-full", categoryBg(group.color))} />
               <span className="min-w-0 flex-1 truncate text-sm">{group.name}</span>
-              <span className="font-semibold text-sm tabular-nums">{formatPct(group.pct)}</span>
+              <span className="text-sm font-semibold tabular-nums">{formatPct(group.pct)}</span>
             </button>
           </li>
         ))}
@@ -190,14 +190,14 @@ const TopFive = ({ groups }: { groups: Group[] }) => {
         {top.map((group, index) => (
           <li key={group.category_id} className={cn("flex flex-col gap-1.5", index === 4 && "max-lg:hidden")}>
             <span className="flex items-baseline gap-3 text-sm">
-              <span className="font-semibold text-muted-foreground tabular-nums max-lg:hidden">#{index + 1}</span>
+              <span className="text-muted-foreground font-semibold tabular-nums max-lg:hidden">#{index + 1}</span>
               <span className="min-w-0 flex-1 truncate font-medium">{group.name}</span>
               <span className="shrink-0 tabular-nums">
                 <Money amount={group.amount} className="font-semibold max-lg:hidden" />{" "}
                 <span className="text-muted-foreground">({formatPct(group.pct)})</span>
               </span>
             </span>
-            <span aria-hidden className="h-2 overflow-hidden rounded-full bg-muted">
+            <span aria-hidden className="bg-muted h-2 overflow-hidden rounded-full">
               <span
                 className={cn("block h-full rounded-full", categoryBg(group.color))}
                 style={{ width: `${group.pct}%` }}
@@ -236,21 +236,21 @@ const GroupRow = ({ group, shares, previous, open, picked, onOpen, onPick }: Gro
           className={cn(
             rowButton,
             "relative flex min-h-16 min-w-0 flex-1 items-center gap-3",
-            picked && "lg:before:absolute lg:before:inset-y-2 lg:before:left-0 lg:before:w-1 lg:before:bg-primary",
+            picked && "lg:before:bg-primary lg:before:absolute lg:before:inset-y-2 lg:before:left-0 lg:before:w-1",
           )}
         >
           <CategoryIcon icon={group.icon} color={group.color} />
           <span className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-3 gap-y-0.5">
             <span className="flex min-w-0 items-center gap-2">
-              <span className="truncate font-medium text-base">{group.name}</span>
+              <span className="truncate text-base font-medium">{group.name}</span>
               {picked && (
-                <span className="rounded-full bg-primary px-2 font-semibold text-primary-foreground text-xs leading-5 max-lg:hidden">
+                <span className="bg-primary text-primary-foreground rounded-full px-2 text-xs leading-5 font-semibold max-lg:hidden">
                   Ativo
                 </span>
               )}
             </span>
-            <Money amount={group.amount} className="font-bold text-base" />
-            <span className="col-span-2 flex flex-wrap items-center gap-x-2 text-muted-foreground text-sm tabular-nums">
+            <Money amount={group.amount} className="text-base font-bold" />
+            <span className="text-muted-foreground col-span-2 flex flex-wrap items-center gap-x-2 text-sm tabular-nums">
               {picked ? (
                 <>
                   <span className="text-primary max-lg:hidden">{formatPct(group.pct)} do total gasto</span>
@@ -265,7 +265,7 @@ const GroupRow = ({ group, shares, previous, open, picked, onOpen, onPick }: Gro
               <DeltaBadge delta_pct={group.delta_pct} previous={previous} />
             </span>
           </span>
-          {picked && <span aria-hidden className="size-2 shrink-0 rounded-full bg-primary lg:hidden" />}
+          {picked && <span aria-hidden className="bg-primary size-2 shrink-0 rounded-full lg:hidden" />}
         </button>
         {folds && (
           <button
@@ -274,14 +274,14 @@ const GroupRow = ({ group, shares, previous, open, picked, onOpen, onPick }: Gro
             aria-controls={listId}
             aria-label={`${open ? "Ocultar" : "Mostrar"} subcategorias de ${group.name}`}
             onClick={onOpen}
-            className="flex size-11 shrink-0 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"
+            className="text-muted-foreground hover:bg-muted focus-visible:outline-ring flex size-11 shrink-0 items-center justify-center rounded-xl transition-colors focus-visible:outline-2"
           >
             <ChevronDown aria-hidden className={cn("size-5 transition-transform", open && "rotate-180")} />
           </button>
         )}
       </div>
       {folds && (
-        <ul id={listId} hidden={!open} className="mt-1 ml-4 flex flex-col rounded-xl bg-muted/60 px-3 py-1 lg:ml-14">
+        <ul id={listId} hidden={!open} className="bg-muted/60 mt-1 ml-4 flex flex-col rounded-xl px-3 py-1 lg:ml-14">
           {children.map((child) => (
             <li
               key={child.category_id}
@@ -289,14 +289,14 @@ const GroupRow = ({ group, shares, previous, open, picked, onOpen, onPick }: Gro
             >
               <span aria-hidden className={cn("size-2 shrink-0 rounded-full", categoryBg(child.color))} />
               <span className="min-w-0 flex-1 truncate text-base">{child.name}</span>
-              <Money amount={child.amount} className="font-semibold text-base" />
+              <Money amount={child.amount} className="text-base font-semibold" />
             </li>
           ))}
           {own > 0 && (
-            <li className="flex min-h-11 items-center gap-2 text-muted-foreground">
-              <span aria-hidden className="size-2 shrink-0 rounded-full bg-muted-foreground/40" />
+            <li className="text-muted-foreground flex min-h-11 items-center gap-2">
+              <span aria-hidden className="bg-muted-foreground/40 size-2 shrink-0 rounded-full" />
               <span className="min-w-0 flex-1 truncate text-base">{group.name} (sem subcategoria)</span>
-              <Money amount={fromCents(own)} className="font-semibold text-base" />
+              <Money amount={fromCents(own)} className="text-base font-semibold" />
             </li>
           )}
         </ul>
@@ -317,18 +317,18 @@ type EntryRowProps = {
 const EntryRow = ({ entry, heading, note, status, reference, className }: EntryRowProps) => (
   <li className={cn("flex min-h-16 items-center gap-3 px-2 py-2", reference && "text-muted-foreground", className)}>
     {reference ? (
-      <span aria-hidden className="flex size-10 shrink-0 items-center justify-center rounded-full bg-muted">
+      <span aria-hidden className="bg-muted flex size-10 shrink-0 items-center justify-center rounded-full">
         <History className="size-5" />
       </span>
     ) : (
       <CategoryIcon icon={entry.category.icon} color={entry.category.color} />
     )}
     <span className="flex min-w-0 flex-1 flex-col">
-      <span className="truncate font-medium text-base">{heading}</span>
+      <span className="truncate text-base font-medium">{heading}</span>
       <span className="text-muted-foreground text-xs">{note}</span>
     </span>
     <span className="flex shrink-0 flex-col items-end">
-      <Money amount={entry.amount} outflow className={cn("font-bold text-base", !reference && "text-expense")} />
+      <Money amount={entry.amount} outflow className={cn("text-base font-bold", !reference && "text-expense")} />
       <span className="text-muted-foreground text-xs">{status}</span>
     </span>
   </li>
@@ -392,7 +392,7 @@ const CategoryEntries = ({ month, group, shares }: EntriesProps) => {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-muted-foreground text-sm">
           Total no recorte selecionado:{" "}
-          <Money amount={narrowed?.amount ?? group.amount} className="font-semibold text-foreground" />
+          <Money amount={narrowed?.amount ?? group.amount} className="text-foreground font-semibold" />
         </p>
         {children.length > 0 && (
           <Select value={sub} onValueChange={setSub}>
@@ -429,7 +429,7 @@ const CategoryEntries = ({ month, group, shares }: EntriesProps) => {
       {shown && !all && rows.length > 3 && (
         <Button
           variant="ghost"
-          className="h-auto min-h-11 w-full whitespace-normal text-base text-primary lg:hidden"
+          className="text-primary h-auto min-h-11 w-full text-base whitespace-normal lg:hidden"
           onClick={() => setAll(true)}
         >
           Ver todas as transações de {group.name}
@@ -437,7 +437,7 @@ const CategoryEntries = ({ month, group, shares }: EntriesProps) => {
         </Button>
       )}
       {category && (
-        <Button className="h-auto min-h-11 w-full whitespace-normal text-base" onClick={() => setAdding(true)}>
+        <Button className="h-auto min-h-11 w-full text-base whitespace-normal" onClick={() => setAdding(true)}>
           <Plus aria-hidden />
           Adicionar lançamento em {group.name}
         </Button>
@@ -459,18 +459,18 @@ type HeaderRowProps = { report: Report; groups: Group[]; picked?: string; onPick
 /** Desktop only: the page's pill, the month's outflow, the group select and the export. */
 const HeaderRow = ({ report, groups, picked, onPick }: HeaderRowProps) => (
   <div className="flex flex-wrap items-center gap-3 max-lg:hidden">
-    <h1 className="flex min-h-11 items-center gap-2 rounded-full bg-card px-4 font-semibold text-base shadow-sm">
-      <PieIcon aria-hidden className="size-4 text-primary" />
+    <h1 className="bg-card flex min-h-11 items-center gap-2 rounded-full px-4 text-base font-semibold shadow-sm">
+      <PieIcon aria-hidden className="text-primary size-4" />
       Para Onde Vai
     </h1>
-    <span aria-hidden className="h-6 w-px bg-border" />
+    <span aria-hidden className="bg-border h-6 w-px" />
     <p className="text-muted-foreground text-sm">Visão analítica de despesas e alocação de capital</p>
-    <span className="ml-auto flex min-h-11 items-center gap-2 rounded-full bg-expense-soft px-4 font-semibold text-sm text-tier-red-foreground">
-      <span aria-hidden className="size-2 rounded-full bg-expense" />
+    <span className="bg-expense-soft text-tier-red-foreground ml-auto flex min-h-11 items-center gap-2 rounded-full px-4 text-sm font-semibold">
+      <span aria-hidden className="bg-expense size-2 rounded-full" />
       Total Saídas: <Money amount={report.outflow_total} />
     </span>
     <Select value={picked ?? ALL} onValueChange={(value) => onPick(value === ALL ? undefined : value)}>
-      <SelectTrigger aria-label="Categoria" className="min-h-11 bg-card text-base">
+      <SelectTrigger aria-label="Categoria" className="bg-card min-h-11 text-base">
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
@@ -504,7 +504,7 @@ export const CategoryBreakdown = ({ month, group: asked }: { month: string; grou
 
   if (report.isError)
     return (
-      <div className="rounded-2xl bg-card shadow-sm">
+      <div className="bg-card rounded-2xl shadow-sm">
         <PageError message="Não foi possível carregar o mês por categoria." onRetry={() => report.refetch()} />
       </div>
     );
@@ -530,7 +530,7 @@ export const CategoryBreakdown = ({ month, group: asked }: { month: string; grou
     <div className="flex flex-col gap-6">
       <HeaderRow report={report.data} groups={groups} picked={picked} onPick={setPicked} />
       {groups.length === 0 ? (
-        <p className="py-8 text-center text-muted-foreground">Nenhum gasto neste mês ainda.</p>
+        <p className="text-muted-foreground py-8 text-center">Nenhum gasto neste mês ainda.</p>
       ) : (
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-2 xl:items-start">
           <div className="flex min-w-0 flex-col gap-6">
@@ -547,7 +547,7 @@ export const CategoryBreakdown = ({ month, group: asked }: { month: string; grou
                 {folding.length > 0 && (
                   <Button
                     variant="ghost"
-                    className="min-h-11 text-base text-primary max-lg:hidden"
+                    className="text-primary min-h-11 text-base max-lg:hidden"
                     onClick={() => setOpen(open.length > 0 ? [] : folding)}
                   >
                     {open.length > 0 ? "Recolher tudo" : "Expandir tudo"}

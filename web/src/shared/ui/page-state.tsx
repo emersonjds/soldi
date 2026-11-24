@@ -4,7 +4,7 @@ import { Spinner } from "@/components/ui/spinner";
 
 export const PageLoading = () => (
   <div className="flex min-h-40 flex-1 items-center justify-center">
-    <Spinner className="size-6 text-primary" aria-label="Carregando" />
+    <Spinner className="text-primary size-6" aria-label="Carregando" />
   </div>
 );
 

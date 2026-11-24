@@ -65,7 +65,7 @@ export const DeleteAccountButton = () => {
       <AlertDialogTrigger asChild>
         <Button
           variant="ghost"
-          className="h-11 gap-2 px-2 font-semibold text-base text-destructive hover:text-destructive"
+          className="text-destructive hover:text-destructive h-11 gap-2 px-2 text-base font-semibold"
         >
           <Ban aria-hidden className="size-5" />
           Excluir conta definitivamente

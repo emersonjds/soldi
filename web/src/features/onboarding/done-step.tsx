@@ -36,10 +36,10 @@ export const DoneStep = ({ onboarding, onBack }: { onboarding: Schemas["Onboardi
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col items-center gap-3 text-center">
-        <CircleCheck className="size-12 text-income" aria-hidden />
-        <h1 className="font-bold text-[22px] leading-7">Tudo pronto</h1>
+        <CircleCheck className="text-income size-12" aria-hidden />
+        <h1 className="text-[22px] leading-7 font-bold">Tudo pronto</h1>
         <p className="text-muted-foreground">Seu mês começa com</p>
-        <p className="font-bold text-[34px] tabular-nums leading-10 tracking-[-0.02em]">
+        <p className="text-[34px] leading-10 font-bold tracking-[-0.02em] tabular-nums">
           {formatMoney(onboarding.opening_balance, currency)}
         </p>
         <p className="text-muted-foreground">
@@ -49,7 +49,7 @@ export const DoneStep = ({ onboarding, onBack }: { onboarding: Schemas["Onboardi
         </p>
       </div>
       {save.isError && !hasStatus(save.error, 409) && (
-        <p role="alert" className="rounded-xl bg-expense-soft px-4 py-3 font-medium text-sm text-tier-red-foreground">
+        <p role="alert" className="bg-expense-soft text-tier-red-foreground rounded-xl px-4 py-3 text-sm font-medium">
           Não foi possível salvar. Tente de novo.
         </p>
       )}
@@ -61,7 +61,7 @@ export const DoneStep = ({ onboarding, onBack }: { onboarding: Schemas["Onboardi
         <Button
           type="button"
           variant="ghost"
-          className="min-h-11 text-base text-muted-foreground"
+          className="text-muted-foreground min-h-11 text-base"
           disabled={save.isPending}
           onClick={onBack}
         >

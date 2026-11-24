@@ -1,9 +1,12 @@
 import "@testing-library/jest-dom/vitest";
 
 import { cleanup } from "@testing-library/react";
+import { toast } from "sonner";
 import { afterAll, afterEach, vi } from "vitest";
 
+// sonner 2.0.8 keeps toasts in its module store across Toaster mounts; a test must not inherit the previous one's.
 afterEach(() => {
+  toast.dismiss();
   cleanup();
   localStorage.clear();
   vi.unstubAllGlobals();

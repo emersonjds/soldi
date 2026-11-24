@@ -85,7 +85,7 @@ export const IconPicker = ({
 
   return (
     <fieldset className="flex flex-col gap-2">
-      <legend className="mb-2 font-semibold text-sm">Ícone</legend>
+      <legend className="mb-2 text-sm font-semibold">Ícone</legend>
       <Input
         type="search"
         aria-label="Buscar ícone"
@@ -101,7 +101,7 @@ export const IconPicker = ({
         {shown.map((name) => (
           <label
             key={name}
-            className="group flex min-h-14 cursor-pointer items-center justify-center rounded-xl has-checked:bg-muted has-focus-visible:outline-2 has-focus-visible:outline-ring"
+            className="group has-checked:bg-muted has-focus-visible:outline-ring flex min-h-14 cursor-pointer items-center justify-center rounded-xl has-focus-visible:outline-2"
           >
             <input
               type="radio"
@@ -114,7 +114,7 @@ export const IconPicker = ({
             <CategoryIcon
               icon={name}
               color={color}
-              className="size-11 opacity-50 transition-opacity group-has-checked:opacity-100 group-has-checked:ring-2 group-has-checked:ring-primary group-has-checked:ring-offset-2 group-has-checked:ring-offset-muted"
+              className="group-has-checked:ring-primary group-has-checked:ring-offset-muted size-11 opacity-50 transition-opacity group-has-checked:opacity-100 group-has-checked:ring-2 group-has-checked:ring-offset-2"
             />
           </label>
         ))}
@@ -127,7 +127,7 @@ export const IconPicker = ({
         <button
           type="button"
           onClick={() => setLimit(limit + PAGE)}
-          className="min-h-11 rounded-xl font-semibold text-primary text-sm"
+          className="text-primary min-h-11 rounded-xl text-sm font-semibold"
         >
           Mais ícones
         </button>

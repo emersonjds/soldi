@@ -34,21 +34,21 @@ export const HeroAmount = ({
     <div className="flex flex-col items-center gap-1">
       <label
         htmlFor={id}
-        className="font-semibold text-[11px] text-muted-foreground uppercase leading-4 tracking-[0.12em]"
+        className="text-muted-foreground text-[11px] leading-4 font-semibold tracking-[0.12em] uppercase"
       >
         {label}
       </label>
       <div className="flex items-baseline justify-center gap-2">
-        <span aria-hidden className="font-bold text-2xl text-muted-foreground">
+        <span aria-hidden className="text-muted-foreground text-2xl font-bold">
           {currencySymbol(useCurrency())}
         </span>
         <div
           className={cn(
-            "grid w-48 overflow-hidden font-bold tabular-nums leading-10 tracking-[-0.02em] *:[grid-area:1/1]",
+            "grid w-48 overflow-hidden leading-10 font-bold tracking-[-0.02em] tabular-nums *:[grid-area:1/1]",
             sizeOf(shown),
           )}
         >
-          <span aria-hidden className="text-center text-foreground">
+          <span aria-hidden className="text-foreground text-center">
             {shown ? (
               shown.slice(0, shown.length - cents.length)
             ) : (
@@ -65,7 +65,7 @@ export const HeroAmount = ({
             inputMode={keypad ? "none" : "numeric"}
             aria-invalid={invalid}
             aria-describedby={invalid ? `${id}-error` : undefined}
-            className="w-full border-transparent border-b-2 bg-transparent text-center text-transparent caret-foreground outline-none placeholder:text-transparent focus:border-ring aria-invalid:border-destructive"
+            className="caret-foreground focus:border-ring aria-invalid:border-destructive w-full border-b-2 border-transparent bg-transparent text-center text-transparent outline-none placeholder:text-transparent"
           />
         </div>
       </div>

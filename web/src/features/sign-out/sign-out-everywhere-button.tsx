@@ -24,7 +24,7 @@ export const SignOutEverywhereButton = () => {
   return (
     <AlertDialog>
       <AlertDialogTrigger asChild>
-        <Button variant="link" className="min-h-11 px-0 text-muted-foreground text-sm" disabled={signOut.isPending}>
+        <Button variant="link" className="text-muted-foreground min-h-11 px-0 text-sm" disabled={signOut.isPending}>
           Sair de todos os aparelhos
         </Button>
       </AlertDialogTrigger>

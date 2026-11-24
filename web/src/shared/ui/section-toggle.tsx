@@ -20,7 +20,7 @@ export const SectionToggle = ({
     aria-expanded={open}
     onClick={() => onOpenChange(!open)}
     className={cn(
-      "-my-2.5 -mr-2 inline-flex size-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring",
+      "text-muted-foreground hover:bg-muted focus-visible:outline-ring -my-2.5 -mr-2 inline-flex size-11 shrink-0 items-center justify-center rounded-lg focus-visible:outline-2",
       className,
     )}
   >

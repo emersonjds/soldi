@@ -51,12 +51,12 @@ export const CategorySelect = ({
           setOpen(false);
         }}
         className={cn(
-          "min-h-12 gap-3 rounded-xl! px-3 text-base [&>svg:last-child]:size-5 [&>svg:last-child]:text-primary",
+          "[&>svg:last-child]:text-primary min-h-12 gap-3 rounded-xl! px-3 text-base [&>svg:last-child]:size-5",
           child ? "pl-5" : "mt-1 font-semibold first:mt-0",
         )}
       >
         {child && (
-          <span aria-hidden className="-mr-1 text-muted-foreground">
+          <span aria-hidden className="text-muted-foreground -mr-1">
             └
           </span>
         )}
@@ -78,7 +78,7 @@ export const CategorySelect = ({
         aria-haspopup="dialog"
         aria-expanded={open}
         onClick={() => setOpen(true)}
-        className="-mr-2 inline-flex min-h-11 items-center rounded-lg px-2 font-semibold text-primary text-sm underline-offset-4 outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50"
+        className="text-primary focus-visible:ring-ring/50 -mr-2 inline-flex min-h-11 items-center rounded-lg px-2 text-sm font-semibold underline-offset-4 outline-none hover:underline focus-visible:ring-3"
       >
         Ver todas
       </button>
@@ -90,15 +90,15 @@ export const CategorySelect = ({
         onCloseAutoFocus={onCloseAutoFocus}
       >
         <Command defaultValue={chosen && labelOf(chosen)} className="gap-3 rounded-none! bg-transparent p-0">
-          <div className="flex h-12 items-center gap-2 rounded-xl border border-input px-3 focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50">
-            <Search aria-hidden className="size-5 shrink-0 text-muted-foreground" />
+          <div className="border-input focus-within:border-ring focus-within:ring-ring/50 flex h-12 items-center gap-2 rounded-xl border px-3 focus-within:ring-3">
+            <Search aria-hidden className="text-muted-foreground size-5 shrink-0" />
             <CommandPrimitive.Input
               placeholder="Buscar categoria"
-              className="h-full min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground"
+              className="placeholder:text-muted-foreground h-full min-w-0 flex-1 bg-transparent text-base outline-none"
             />
           </div>
           <CommandList className="max-h-[55dvh]">
-            <CommandEmpty className="py-8 text-base text-muted-foreground">Nenhuma categoria encontrada.</CommandEmpty>
+            <CommandEmpty className="text-muted-foreground py-8 text-base">Nenhuma categoria encontrada.</CommandEmpty>
             {categories.map((category) => {
               if (!foreign(category))
                 return foreign(categories.find((each) => each.id === category.parent_id)) ? null : item(category);
@@ -111,7 +111,7 @@ export const CategorySelect = ({
                       <span className="min-w-0 flex-1 truncate">{category.name}</span>
                     </>
                   }
-                  className="mt-1 p-0 **:[[cmdk-group-heading]]:flex **:[[cmdk-group-heading]]:min-h-12 **:[[cmdk-group-heading]]:items-center **:[[cmdk-group-heading]]:gap-3 **:[[cmdk-group-heading]]:px-3 **:[[cmdk-group-heading]]:font-semibold **:[[cmdk-group-heading]]:text-base **:[[cmdk-group-heading]]:text-foreground"
+                  className="**:[[cmdk-group-heading]]:text-foreground mt-1 p-0 **:[[cmdk-group-heading]]:flex **:[[cmdk-group-heading]]:min-h-12 **:[[cmdk-group-heading]]:items-center **:[[cmdk-group-heading]]:gap-3 **:[[cmdk-group-heading]]:px-3 **:[[cmdk-group-heading]]:text-base **:[[cmdk-group-heading]]:font-semibold"
                 >
                   {categories.filter((child) => child.parent_id === category.id).map(item)}
                 </CommandGroup>
@@ -125,9 +125,9 @@ export const CategorySelect = ({
             setOpen(false);
             onCreate();
           }}
-          className="flex min-h-12 items-center gap-3 rounded-xl px-3 font-semibold text-base text-primary outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50"
+          className="text-primary hover:bg-muted focus-visible:ring-ring/50 flex min-h-12 items-center gap-3 rounded-xl px-3 text-base font-semibold outline-none focus-visible:ring-3"
         >
-          <span className="flex size-8 items-center justify-center rounded-full border-2 border-primary/40 border-dashed">
+          <span className="border-primary/40 flex size-8 items-center justify-center rounded-full border-2 border-dashed">
             <Plus aria-hidden className="size-4" />
           </span>
           Nova categoria
