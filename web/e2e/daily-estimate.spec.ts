@@ -30,8 +30,12 @@ const atEveryWidth = async (page: Page) => {
       (document.scrollingElement?.scrollWidth ?? 0) <= window.innerWidth
         ? []
         : [...document.querySelectorAll("body *")]
-            .filter((element) => element.getBoundingClientRect().right > window.innerWidth + 0.5)
-            .slice(-3)
+            .filter(
+              (element) =>
+                element.getBoundingClientRect().right > window.innerWidth + 0.5 &&
+                (element.parentElement?.getBoundingClientRect().right ?? 0) <= window.innerWidth + 0.5,
+            )
+            .slice(0, 4)
             .map((element) => `${element.tagName}.${element.className} "${element.textContent?.slice(0, 40)}"`),
     );
     expect(wider, `page wider than ${width}px`).toEqual([]);
