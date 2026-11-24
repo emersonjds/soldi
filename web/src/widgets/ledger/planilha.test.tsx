@@ -63,11 +63,22 @@ describe("Planilha", () => {
     expect(within(november).getAllByRole("row")).toHaveLength(32);
   });
 
-  it("fills each cell from the month view, blanks zeros and prints money without the symbol", async () => {
+  it("fills each cell from the month view, dashes a zero money cell and prints money without the symbol", async () => {
     show().reveal("Novembro 2026");
 
     const monday = await row("Segunda-feira, 2 de novembro");
-    expect(monday.cells.map((cell) => cell.textContent)).toEqual(["2", "350,00", "", "", "1.350,00 Confortável"]);
+    expect(monday.cells.map((cell) => cell.textContent)).toEqual([
+      "2",
+      "350,00",
+      "-sem valor",
+      "-sem valor",
+      "1.350,00 Confortável",
+    ]);
+    const dash = within(monday.cells[2]).getByText("-");
+    expect(dash).toHaveAttribute("aria-hidden", "true");
+    expect(dash).toHaveClass("text-muted-foreground");
+    expect(dash).not.toHaveClass("italic");
+    expect(within(monday.cells[2]).getByText("sem valor")).toHaveClass("sr-only");
     const tuesday = await row("Terça-feira, 10 de novembro");
     expect(tuesday.cells[2]).toHaveTextContent("1.850,00 inclui conta a pagar");
     expect(tuesday.cells[4]).toHaveTextContent("-1.150,00 Crítico");
@@ -118,6 +129,7 @@ describe("Planilha", () => {
     for (const name of ["Domingo, 1 de novembro", "Segunda-feira, 2 de novembro"]) {
       const { tr, cells } = await row(name);
       expect(cells.slice(1).map((cell) => cell.textContent)).toEqual(["", "", "", ""]);
+      for (const cell of cells) expect(cell).toHaveClass("border-b", "border-r");
       expect(tr).toHaveClass("text-muted-foreground");
     }
     expect((await row("Terça-feira, 3 de novembro")).cells[2]).toHaveTextContent("200,00");
@@ -158,6 +170,23 @@ describe("Planilha", () => {
     const october = screen.getByRole("table", { name: "Outubro 2026" });
     expect(await within(october).findByText("Este mês é anterior ao seu saldo inicial.")).toBeInTheDocument();
     expect(within(october).queryByRole("button", { name: "Tentar de novo" })).not.toBeInTheDocument();
+  });
+
+  it("draws light gridlines on every header and body cell, the skeleton rows included (SOL-171 A2)", async () => {
+    show().reveal("Novembro 2026");
+    const march = screen.getByRole("table", { name: "Março 2026" });
+    const lined = ["border-b", "border-r", "border-border"];
+
+    const [title, ...headers] = within(march).getAllByRole("columnheader");
+    expect(title).not.toHaveClass("border-b");
+    for (const header of headers) expect(header).toHaveClass(...lined, "border-t");
+    expect(headers[0]).toHaveClass("border-l", "min-w-11");
+    const skeleton = within(march).getAllByRole("cell")[0];
+    expect(skeleton).toHaveClass(...lined, "border-l", "h-11");
+
+    const { cells } = await row("Segunda-feira, 2 de novembro");
+    for (const cell of cells) expect(cell).toHaveClass(...lined);
+    expect(cells[0]).toHaveClass("border-l", "min-w-11");
   });
 
   it("keeps the columns and the legend in the sheet's words", () => {
@@ -326,7 +355,7 @@ describe("Planilha position and Ir pra hoje", () => {
 
     expect(last().to).toEqual({ left: 8 * TABLE, top: TODAY_TOP, behavior: "auto" });
     expect(last().on).toBe(scroller());
-    expect(screen.getByText("Valores em R$ · Toque num dia para ver o detalhe.")).toBeInTheDocument();
+    expect(screen.getByText("Valores em R$ · Toque num valor para lançar ou editar.")).toBeInTheDocument();
   });
 
   it("opens another month at its first day, and m outside the range at the nearest end", () => {
@@ -508,7 +537,7 @@ describe("PlanilhaView", () => {
     vi.stubGlobal("fetch", () => new Promise<Response>(() => undefined));
     renderWithQuery(<PlanilhaView month="2026-11" />);
 
-    expect(screen.getByText("Valores em R$ · Toque num dia para ver o detalhe.")).toBeInTheDocument();
+    expect(screen.getByText("Valores em R$ · Toque num valor para lançar ou editar.")).toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveTextContent("Carregando");
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
   });

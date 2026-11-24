@@ -35,13 +35,28 @@ import { type PlanilhaRow, planilhaMonths, planilhaRows, sum } from "./planilha-
 
 const COLUMNS = ["Data", "Entrada", "Saída", "Diário", "Saldo"];
 
-const MONEY = "whitespace-nowrap px-1.5 text-right";
+/** P8: Excel's gridlines, each cell drawing its bottom and right edges; the Data column also its left. */
+const LINES = "border-border border-b border-r";
+const DATA_LINES = "border-l min-w-11";
+
+const MONEY = cn(LINES, "whitespace-nowrap px-1.5 text-right");
 
 /** The weekend tint over the card, opaque for the sticky Data cell. */
 const WEEKEND_OPAQUE = "bg-[color-mix(in_oklab,var(--color-muted)_50%,var(--color-card))]";
 
-/** The sheet's number format: pt-BR, no symbol, a zero left blank. */
+/** The sheet's number format: pt-BR, no symbol. */
 const amountOf = (amount: string) => (cents(amount) === 0 ? null : toInput(amount));
+
+/** A money cell's value, a zero as a muted "-" a screen reader reads as "sem valor". */
+const cellOf = (amount: string) =>
+  amountOf(amount) ?? (
+    <>
+      <span aria-hidden className="text-muted-foreground">
+        -
+      </span>
+      <span className="sr-only">sem valor</span>
+    </>
+  );
 
 const dayName = (date: string, today: string) => {
   const weekday = weekdayName(date);
@@ -265,7 +280,7 @@ const Row = ({ row, today, view, entries, stop, onFocus, ringed, claim, estimate
           aria-current={date === today ? "date" : undefined}
           className={cn("cursor-pointer", weekend && "bg-muted/50", !day && "text-muted-foreground")}
         >
-          <td className={cn("sticky left-0 p-0", weekend ? WEEKEND_OPAQUE : "bg-card")}>
+          <td className={cn(LINES, DATA_LINES, "sticky left-0 p-0", weekend ? WEEKEND_OPAQUE : "bg-card")}>
             <button
               ref={button}
               type="button"
@@ -291,13 +306,13 @@ const Row = ({ row, today, view, entries, stop, onFocus, ringed, claim, estimate
           </td>
           {day ? (
             <>
-              <td className={cn(MONEY, ahead)}>{amountOf(income)}</td>
+              <td className={cn(MONEY, ahead)}>{cellOf(income)}</td>
               <td className={cn(MONEY, ahead, landed.length > 0 && "italic")}>
-                {amountOf(outflow)}
+                {cellOf(outflow)}
                 {landed.length > 0 && <span className="sr-only"> inclui conta a pagar</span>}
               </td>
               <td className={cn(MONEY, ahead)}>
-                {amountOf(estimated ? daily : day.daily)}
+                {cellOf(estimated ? daily : day.daily)}
                 {estimated && <span className="sr-only"> inclui Diário previsto</span>}
               </td>
               <td
@@ -312,10 +327,10 @@ const Row = ({ row, today, view, entries, stop, onFocus, ringed, claim, estimate
             </>
           ) : (
             <>
-              <td />
-              <td />
-              <td />
-              <td />
+              <td className={LINES} />
+              <td className={LINES} />
+              <td className={LINES} />
+              <td className={LINES} />
             </>
           )}
         </tr>
@@ -360,7 +375,7 @@ const SkeletonBody = ({ month }: { month: string }) => (
   <tbody aria-busy="true">
     {Array.from({ length: lastDay(month) }, (_, index) => `${month}-${index + 1}`).map((key) => (
       <tr key={key}>
-        <td colSpan={5} className="h-11 px-2">
+        <td colSpan={5} className={cn(LINES, "h-11 border-l px-2")}>
           <Skeleton className="h-4 w-full" />
         </td>
       </tr>
@@ -446,8 +461,9 @@ const MonthBlock = ({ month, today, openingDate, highlight, claim, estimate }: M
               key={column}
               scope="col"
               className={cn(
-                "text-muted-foreground bg-card border-b px-1.5 py-1 text-right font-medium",
-                column === "Data" && "sticky left-0 text-left",
+                LINES,
+                "text-muted-foreground bg-card border-t px-1.5 py-1 text-right font-medium",
+                column === "Data" && cn(DATA_LINES, "sticky left-0 text-left"),
               )}
             >
               {column}
@@ -474,7 +490,7 @@ const MonthBlock = ({ month, today, openingDate, highlight, claim, estimate }: M
 /** `away`: today is off the scroller's view, so the button shows; it keeps its space either way. */
 const Toolbar = ({ away, onToday }: { away: boolean; onToday?: () => void }) => (
   <div className="flex flex-wrap items-center justify-between gap-x-3">
-    <p className="text-muted-foreground text-sm">Valores em R$ · Toque num dia para ver o detalhe.</p>
+    <p className="text-muted-foreground text-sm">Valores em R$ · Toque num valor para lançar ou editar.</p>
     <Button
       variant="ghost"
       onClick={onToday}
