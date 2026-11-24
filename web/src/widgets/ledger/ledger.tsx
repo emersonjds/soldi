@@ -172,7 +172,7 @@ const EstimateLine = ({ day, estimate, cause }: { day: Day; estimate: string; ca
         <EstimateIcon />
         <span className="flex min-w-0 flex-1 flex-col">
           <span className="truncate text-base font-medium italic">Diário previsto</span>
-          <span className="text-muted-foreground text-xs">{estimateCaption(estimate, day, currency)}</span>
+          <span className="text-muted-foreground text-xs break-words">{estimateCaption(estimate, day, currency)}</span>
         </span>
         <span className="flex flex-col items-end gap-0.5">
           <Money amount={day.previsto} outflow className="text-base font-bold italic" />

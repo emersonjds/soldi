@@ -19,7 +19,9 @@ import { PageError } from "@/shared/ui/page-state";
 const Tile = ({ label, value, children }: { label: string; value: string; children?: ReactNode }) => (
   <div className="bg-muted flex min-w-0 flex-col items-start gap-1 rounded-2xl p-4">
     <span className="text-muted-foreground text-[11px] font-semibold tracking-[0.12em]">{label}</span>
-    <p className="max-w-full truncate text-base font-semibold">{value}</p>
+    <p title={value} className="max-w-full truncate text-base font-semibold">
+      {value}
+    </p>
     {children}
   </div>
 );
