@@ -1,4 +1,4 @@
-import { screen, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -57,9 +57,10 @@ const REPLIES: Record<string, Reply> = {
 const show = (replies: Record<string, Reply> = {}, openingDate = "2026-03-10") => {
   const requests = stubApi({ ...REPLIES, ...replies });
   const intersection = stubIntersection();
-  renderWithQuery(<Planilha today="2026-11-05" openingDate={openingDate} />);
+  const { client } = renderWithQuery(<Planilha today="2026-11-05" openingDate={openingDate} />);
   intersection.show(screen.getByRole("table", { name: "Novembro 2026" }));
   return {
+    client,
     transactions: () =>
       requests.flatMap(({ url }) =>
         new URL(url).pathname === "/api/transactions" ? [new URL(url).searchParams.get("month")] : [],
@@ -200,5 +201,106 @@ describe("Planilha day detail", () => {
 
     expect(await within(detail).findByText("Comida fora")).toBeInTheDocument();
     expect(within(detail).queryByText("Não foi possível carregar os lançamentos deste dia.")).not.toBeInTheDocument();
+  });
+});
+
+describe("Planilha day detail with a fine pointer", () => {
+  const media = window.matchMedia;
+  beforeEach(() => {
+    window.matchMedia = (query) => ({ ...media(query), matches: query === "(hover: hover) and (pointer: fine)" });
+  });
+  afterEach(() => {
+    window.matchMedia = media;
+    vi.useRealTimers();
+  });
+
+  /** Waits for November's entries, then takes over the clock. */
+  const loaded = async () => {
+    const { client } = show();
+    await screen.findByRole("button", { name: "Segunda-feira, 2 de novembro" });
+    await waitFor(() => expect(client.getQueryState(["transactions", "2026-11"])?.status).toBe("success"));
+    vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
+    vi.setSystemTime(new Date(2026, 10, 5, 12));
+  };
+
+  const rowOf = (name: string) => {
+    const tr = screen.getByRole("button", { name }).closest("tr");
+    if (!tr) throw new Error(`no row for ${name}`);
+    return tr;
+  };
+
+  const wait = (ms: number) => act(() => vi.advanceTimersByTime(ms));
+
+  it("opens the popover after a 300 ms hover on a day with entries or contas, never on an empty day", async () => {
+    await loaded();
+
+    fireEvent.pointerEnter(rowOf("Domingo, 1 de novembro"));
+    wait(1000);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    fireEvent.pointerLeave(rowOf("Domingo, 1 de novembro"));
+
+    fireEvent.pointerEnter(rowOf("Segunda-feira, 2 de novembro"));
+    wait(299);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    wait(1);
+    const popover = screen.getByRole("dialog");
+    expect(popover).toHaveAttribute("data-slot", "popover-content");
+    expect(popover).toHaveAccessibleName("2 nov");
+    expect(document.querySelector('[data-slot="sheet-content"]')).toBeNull();
+    expect(within(popover).getByText("Saldo ao final:")).toBeInTheDocument();
+  });
+
+  it("closes 150 ms after the pointer leaves both the row and the popover", async () => {
+    await loaded();
+    const tr = rowOf("Quinta-feira, 5 de novembro, hoje");
+    fireEvent.pointerEnter(tr);
+    wait(300);
+    const popover = screen.getByRole("dialog");
+
+    fireEvent.pointerLeave(tr);
+    wait(100);
+    fireEvent.pointerEnter(popover);
+    wait(500);
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+
+    fireEvent.pointerLeave(popover);
+    wait(149);
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    wait(1);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("opens on a click on any day, empty ones included, and Esc gives focus back to the day", async () => {
+    show();
+    await screen.findByRole("button", { name: "Domingo, 1 de novembro" });
+
+    await userEvent.click(rowOf("Domingo, 1 de novembro").cells[4]);
+    const past = await screen.findByRole("dialog");
+    expect(past).toHaveAttribute("data-slot", "popover-content");
+    expect(await within(past).findByText("Nada lançado neste dia.")).toBeInTheDocument();
+    await userEvent.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Domingo, 1 de novembro" })).toHaveFocus();
+
+    screen.getByRole("button", { name: "Quarta-feira, 11 de novembro" }).focus();
+    await userEvent.keyboard("{Enter}");
+    expect(await screen.findByText("Nada previsto para este dia.")).toBeInTheDocument();
+    await userEvent.keyboard("{Escape}");
+    expect(screen.getByRole("button", { name: "Quarta-feira, 11 de novembro" })).toHaveFocus();
+  });
+
+  it("gives focus back to the day when a clicked popover closes on pointer leave", async () => {
+    await loaded();
+    const tr = rowOf("Quinta-feira, 5 de novembro, hoje");
+    fireEvent.click(tr.cells[4]);
+    const popover = screen.getByRole("dialog");
+    wait(0);
+    expect(popover.contains(document.activeElement)).toBe(true);
+
+    fireEvent.pointerLeave(tr);
+    wait(150);
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Quinta-feira, 5 de novembro, hoje" })).toHaveFocus();
   });
 });

@@ -5,6 +5,7 @@ import { useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { TriangleAlert } from "lucide-react";
 
+import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useBills } from "@/entities/bill/bill-queries";
@@ -117,64 +118,111 @@ const DayDetail = ({ row, view, entries }: { row: PlanilhaRow; view: Schemas["Mo
 
 type RowProps = { row: PlanilhaRow; today: string; view: Schemas["MonthView"]; entries: Entries };
 
+const FINE_POINTER = "(hover: hover) and (pointer: fine)";
+
+/** `hover`: the popover a resting pointer opened, which leaves focus where it is. */
+type Shown = "hover" | "popover" | "sheet" | null;
+
 const Row = ({ row, today, view, entries }: RowProps) => {
   const { date, day, income, outflow, landed } = row;
-  const [open, setOpen] = useState(false);
+  const [shown, setShown] = useState<Shown>(null);
   const button = useRef<HTMLButtonElement>(null);
+  const content = useRef<HTMLDivElement>(null);
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const weekend = ["sábado", "domingo"].includes(weekdayName(date));
   const ahead = day?.is_future && "italic text-muted-foreground";
+  const title = dayLabel(day ?? { date, is_future: false });
+  const fine = () => window.matchMedia(FINE_POINTER).matches;
+  const hasItems = landed.length > 0 || Boolean(entries.data?.some((transaction) => transaction.date === date));
+  const close = (next: boolean) => next || setShown(null);
+
+  const open = () => {
+    clearTimeout(timer.current);
+    setShown(fine() ? "popover" : "sheet");
+  };
+  const hold = () => {
+    clearTimeout(timer.current);
+    if (!shown && hasItems && fine()) timer.current = setTimeout(() => setShown("hover"), 300);
+  };
+  const release = () => {
+    clearTimeout(timer.current);
+    if (shown !== "hover" && shown !== "popover") return;
+    timer.current = setTimeout(() => {
+      if (content.current?.contains(document.activeElement)) button.current?.focus();
+      setShown(null);
+    }, 150);
+  };
+
   return (
-    <>
-      <tr
-        onClick={() => setOpen(true)}
-        aria-current={date === today ? "date" : undefined}
-        className={cn("cursor-pointer", weekend && "bg-muted/50", !day && "text-muted-foreground")}
+    <Popover open={shown === "hover" || shown === "popover"} onOpenChange={close}>
+      <PopoverAnchor asChild>
+        <tr
+          onClick={open}
+          onPointerEnter={hold}
+          onPointerLeave={release}
+          aria-current={date === today ? "date" : undefined}
+          className={cn("cursor-pointer", weekend && "bg-muted/50", !day && "text-muted-foreground")}
+        >
+          <td className={cn("sticky left-0 p-0", weekend ? WEEKEND_OPAQUE : "bg-card")}>
+            <button
+              ref={button}
+              type="button"
+              aria-label={dayName(date, today)}
+              className="flex min-h-11 w-full items-center px-2"
+            >
+              <span
+                className={cn(
+                  "inline-flex size-7 items-center justify-center rounded-full",
+                  date === today && "bg-primary text-primary-foreground font-semibold",
+                )}
+              >
+                {Number(date.slice(8))}
+              </span>
+            </button>
+          </td>
+          {day ? (
+            <>
+              <td className={cn(MONEY, ahead)}>{amountOf(income)}</td>
+              <td className={cn(MONEY, ahead, landed.length > 0 && "italic")}>
+                {amountOf(outflow)}
+                {landed.length > 0 && <span className="sr-only"> inclui conta a pagar</span>}
+              </td>
+              <td className={cn(MONEY, ahead)}>{amountOf(day.daily)}</td>
+              <td
+                className={cn(MONEY, "font-semibold", TIER_STYLE[day.projected_tier].pill, isForecast(day) && "italic")}
+              >
+                {(day.projected_tier === "red" || day.projected_tier === "light_red") && (
+                  <TriangleAlert aria-hidden className="mr-1 inline size-[1em] align-[-0.125em]" />
+                )}
+                {toInput(day.projected_balance)}
+                <span className="sr-only"> {TIER_LABEL[day.projected_tier]}</span>
+              </td>
+            </>
+          ) : (
+            <>
+              <td />
+              <td />
+              <td />
+              <td />
+            </>
+          )}
+        </tr>
+      </PopoverAnchor>
+      <PopoverContent
+        ref={content}
+        aria-label={title}
+        align="start"
+        onOpenAutoFocus={(event) => shown === "hover" && event.preventDefault()}
+        onCloseAutoFocus={(event) => event.preventDefault()}
+        onEscapeKeyDown={() => button.current?.focus()}
+        onPointerEnter={hold}
+        onPointerLeave={release}
+        className="w-80 max-w-[calc(100vw-2rem)] gap-3 p-4"
       >
-        <td className={cn("sticky left-0 p-0", weekend ? WEEKEND_OPAQUE : "bg-card")}>
-          <button
-            ref={button}
-            type="button"
-            aria-label={dayName(date, today)}
-            className="flex min-h-11 w-full items-center px-2"
-          >
-            <span
-              className={cn(
-                "inline-flex size-7 items-center justify-center rounded-full",
-                date === today && "bg-primary text-primary-foreground font-semibold",
-              )}
-            >
-              {Number(date.slice(8))}
-            </span>
-          </button>
-        </td>
-        {day ? (
-          <>
-            <td className={cn(MONEY, ahead)}>{amountOf(income)}</td>
-            <td className={cn(MONEY, ahead, landed.length > 0 && "italic")}>
-              {amountOf(outflow)}
-              {landed.length > 0 && <span className="sr-only"> inclui conta a pagar</span>}
-            </td>
-            <td className={cn(MONEY, ahead)}>{amountOf(day.daily)}</td>
-            <td
-              className={cn(MONEY, "font-semibold", TIER_STYLE[day.projected_tier].pill, isForecast(day) && "italic")}
-            >
-              {(day.projected_tier === "red" || day.projected_tier === "light_red") && (
-                <TriangleAlert aria-hidden className="mr-1 inline size-[1em] align-[-0.125em]" />
-              )}
-              {toInput(day.projected_balance)}
-              <span className="sr-only"> {TIER_LABEL[day.projected_tier]}</span>
-            </td>
-          </>
-        ) : (
-          <>
-            <td />
-            <td />
-            <td />
-            <td />
-          </>
-        )}
-      </tr>
-      <Sheet open={open} onOpenChange={setOpen}>
+        <p className="text-base font-semibold">{title}</p>
+        <DayDetail row={row} view={view} entries={entries} />
+      </PopoverContent>
+      <Sheet open={shown === "sheet"} onOpenChange={close}>
         <SheetContent
           side="bottom"
           aria-describedby={undefined}
@@ -184,11 +232,11 @@ const Row = ({ row, today, view, entries }: RowProps) => {
           }}
           className="mx-auto max-h-[80dvh] max-w-lg gap-3 overflow-y-auto rounded-t-3xl px-4 pt-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))]"
         >
-          <SheetTitle className="pr-12 text-lg font-bold">{dayLabel(day ?? { date, is_future: false })}</SheetTitle>
+          <SheetTitle className="pr-12 text-lg font-bold">{title}</SheetTitle>
           <DayDetail row={row} view={view} entries={entries} />
         </SheetContent>
       </Sheet>
-    </>
+    </Popover>
   );
 };
 
