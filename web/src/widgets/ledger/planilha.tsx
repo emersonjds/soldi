@@ -150,6 +150,8 @@ type RowProps = {
   /** The month's one tab stop (roving tabindex). */
   stop: boolean;
   onFocus: () => void;
+  /** Spec §11: the day a RedDayAlert jump landed on. */
+  ringed: boolean;
 };
 
 const FINE_POINTER = "(hover: hover) and (pointer: fine)";
@@ -157,7 +159,7 @@ const FINE_POINTER = "(hover: hover) and (pointer: fine)";
 /** `hover`: the popover a resting pointer opened, which leaves focus where it is. */
 type Shown = "hover" | "popover" | "sheet" | null;
 
-const Row = ({ row, today, view, entries, stop, onFocus }: RowProps) => {
+const Row = ({ row, today, view, entries, stop, onFocus, ringed }: RowProps) => {
   const { date, day, income, outflow, landed } = row;
   const [shown, setShown] = useState<Shown>(null);
   const button = useRef<HTMLButtonElement>(null);
@@ -169,6 +171,11 @@ const Row = ({ row, today, view, entries, stop, onFocus }: RowProps) => {
   const fine = () => window.matchMedia(FINE_POINTER).matches;
   const hasItems = landed.length > 0 || Boolean(entries.data?.some((transaction) => transaction.date === date));
   const close = (next: boolean) => next || setShown(null);
+
+  // Also on mount: a jump can land before the day's month has loaded.
+  useEffect(() => {
+    if (ringed) button.current?.focus({ preventScroll: true });
+  }, [ringed]);
 
   const open = () => {
     clearTimeout(timer.current);
@@ -206,7 +213,10 @@ const Row = ({ row, today, view, entries, stop, onFocus }: RowProps) => {
               onFocus={onFocus}
               onKeyDown={(event) => move(event, date)}
               aria-label={dayName(date, today)}
-              className="flex min-h-11 w-full items-center px-2"
+              className={cn(
+                "flex min-h-11 w-full items-center px-2",
+                ringed && "ring-expense rounded-md ring-2 ring-inset",
+              )}
             >
               <span
                 className={cn(
@@ -291,7 +301,9 @@ const SkeletonBody = ({ month }: { month: string }) => (
   </tbody>
 );
 
-const MonthBody = ({ month, today, openingDate }: { month: string; today: string; openingDate: string }) => {
+type MonthProps = { month: string; today: string; openingDate: string; highlight: string | null };
+
+const MonthBody = ({ month, today, openingDate, highlight }: MonthProps) => {
   const view = useMonth(month);
   const entries = useTransactions(month);
   const [stop, setStop] = useState(today.startsWith(month) ? today : `${month}-01`);
@@ -307,6 +319,7 @@ const MonthBody = ({ month, today, openingDate }: { month: string; today: string
             entries={entries}
             stop={row.date === stop}
             onFocus={() => setStop(row.date)}
+            ringed={row.date === highlight}
           />
         ))}
       </tbody>
@@ -327,7 +340,7 @@ const MonthBody = ({ month, today, openingDate }: { month: string; today: string
   );
 };
 
-const MonthBlock = ({ month, today, openingDate }: { month: string; today: string; openingDate: string }) => {
+const MonthBlock = ({ month, today, openingDate, highlight }: MonthProps) => {
   const [near, setNear] = useState(false);
   const label = monthLabel(month);
 
@@ -369,7 +382,11 @@ const MonthBlock = ({ month, today, openingDate }: { month: string; today: strin
           ))}
         </tr>
       </thead>
-      {near ? <MonthBody month={month} today={today} openingDate={openingDate} /> : <SkeletonBody month={month} />}
+      {near ? (
+        <MonthBody month={month} today={today} openingDate={openingDate} highlight={highlight} />
+      ) : (
+        <SkeletonBody month={month} />
+      )}
     </table>
   );
 };
@@ -402,10 +419,12 @@ type PlanilhaProps = {
   openingDate: string;
   /** The URL month: the planilha opens there and follows it. */
   month?: string;
+  /** The day ringed after a jump from the RedDayAlert. */
+  highlight?: string | null;
 };
 
 /** Spec SOL-163 §3–§8: the month view as the owner's sheet, one table per month side by side. */
-export const Planilha = ({ today, openingDate, month = today.slice(0, 7) }: PlanilhaProps) => {
+export const Planilha = ({ today, openingDate, month = today.slice(0, 7), highlight = null }: PlanilhaProps) => {
   const scroller = useRef<HTMLDivElement>(null);
   const placed = useRef<string>(null);
   const [seen, setSeen] = useState(true);
@@ -430,6 +449,11 @@ export const Planilha = ({ today, openingDate, month = today.slice(0, 7) }: Plan
   useEffect(() => {
     follow(month);
   }, [month]);
+
+  useEffect(() => {
+    if (highlight && scroller.current)
+      rowOf(scroller.current, highlight)?.scrollIntoView({ block: "center", inline: "start" });
+  }, [highlight]);
 
   const track = () => {
     const box = scroller.current;
@@ -457,7 +481,7 @@ export const Planilha = ({ today, openingDate, month = today.slice(0, 7) }: Plan
         className="relative flex max-h-[80dvh] snap-x snap-mandatory gap-4 overflow-auto overscroll-x-contain"
       >
         {months.map((each) => (
-          <MonthBlock key={each} month={each} today={today} openingDate={openingDate} />
+          <MonthBlock key={each} month={each} today={today} openingDate={openingDate} highlight={highlight} />
         ))}
       </div>
       <div className="text-muted-foreground flex flex-wrap items-center gap-2 text-xs">
@@ -471,7 +495,7 @@ export const Planilha = ({ today, openingDate, month = today.slice(0, 7) }: Plan
 };
 
 /** Spec SOL-163 §2: the planilha in the Lançamentos slot, from the opening date in the settings. */
-export const PlanilhaView = ({ month }: { month: string }) => {
+export const PlanilhaView = ({ month, highlight }: Pick<PlanilhaProps, "highlight"> & { month: string }) => {
   const settings = useSettings();
   if (settings.isError)
     return <PageError message="Não foi possível carregar a planilha." onRetry={() => settings.refetch()} />;
@@ -485,5 +509,5 @@ export const PlanilhaView = ({ month }: { month: string }) => {
         </p>
       </div>
     );
-  return <Planilha today={todayISO()} openingDate={settings.data.opening_date} month={month} />;
+  return <Planilha today={todayISO()} openingDate={settings.data.opening_date} month={month} highlight={highlight} />;
 };

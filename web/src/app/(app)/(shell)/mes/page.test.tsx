@@ -7,6 +7,7 @@ import { Toaster } from "sonner";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Schemas } from "@/shared/api/client";
+import { stubIntersection } from "@/test/intersection";
 import { router, setSearch } from "@/test/next-navigation";
 import { renderWithQuery } from "@/test/render";
 import {
@@ -1223,6 +1224,27 @@ describe("Mês", () => {
 
       await waitFor(() => expect(scrollTo.mock.calls.length).toBeGreaterThan(calls));
       expect(scrollTo.mock.contexts.at(-1)).toBe(within(ledger()).getAllByRole("table")[0].parentElement);
+    });
+
+    it("jumps from the red-day banner to that day in the planilha, focused and ringed for 2 s (A14)", async () => {
+      localStorage.setItem("soldi:open:ledger-planilha", "open");
+      const intersection = stubIntersection();
+      open({
+        "GET /api/months/2026-11": { status: 200, body: FORECAST_MONTH },
+        "GET /api/transactions": { status: 200, body: FORECAST_TRANSACTIONS },
+      });
+      const first = await screen.findByRole("button", { name: "Ver o dia 23" });
+      intersection.show(await within(ledger()).findByRole("table", { name: "Novembro 2026" }));
+      const day = await within(ledger()).findByRole("button", { name: "Segunda-feira, 23 de novembro" });
+
+      vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
+      vi.setSystemTime(new Date(2026, 10, 5, 12));
+      fireEvent.click(first);
+
+      expect(day).toHaveFocus();
+      expect(day).toHaveClass("ring-expense", "ring-2");
+      act(() => vi.advanceTimersByTime(2000));
+      expect(day).not.toHaveClass("ring-2");
     });
   });
 

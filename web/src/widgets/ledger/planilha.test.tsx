@@ -375,6 +375,49 @@ describe("Planilha position and Ir pra hoje", () => {
   });
 });
 
+describe("Planilha jump to a day (A14)", () => {
+  const render = (highlight: string | null) => {
+    stubApi({ "GET /api/months/2026-11": { status: 200, body: PLANILHA_MONTH } });
+    const intersection = stubIntersection();
+    const ui = (day: string | null) => <Planilha today="2026-11-05" openingDate="2026-03-10" highlight={day} />;
+    const { client, rerender } = renderWithQuery(ui(highlight));
+    return {
+      reveal: () => intersection.show(screen.getByRole("table", { name: "Novembro 2026" })),
+      ring: (day: string | null) => rerender(<QueryClientProvider client={client}>{ui(day)}</QueryClientProvider>),
+    };
+  };
+  const tbody = () => screen.getByRole("table", { name: "Novembro 2026" }).querySelectorAll("tbody")[0];
+
+  it("scrolls to the day on both axes, focuses it and rings it", async () => {
+    const scroll = vi.spyOn(Element.prototype, "scrollIntoView");
+    const { reveal, ring } = render(null);
+    reveal();
+    const day = await screen.findByRole("button", { name: "Segunda-feira, 23 de novembro" });
+
+    ring("2026-11-23");
+
+    expect(scroll).toHaveBeenLastCalledWith({ block: "center", inline: "start" });
+    expect(scroll.mock.contexts.at(-1)).toBe(day.closest("tr"));
+    expect(day).toHaveFocus();
+    expect(day).toHaveClass("ring-expense", "ring-2");
+    ring(null);
+    expect(day).not.toHaveClass("ring-2");
+  });
+
+  it("scrolls to the day's skeleton row while its month loads, and focuses the day once it shows", async () => {
+    const scroll = vi.spyOn(Element.prototype, "scrollIntoView");
+    const { reveal } = render("2026-11-23");
+    expect(scroll.mock.contexts.at(-1)).toBe(tbody().rows[22]);
+    expect(tbody()).toHaveAttribute("aria-busy", "true");
+
+    reveal();
+
+    const day = await screen.findByRole("button", { name: "Segunda-feira, 23 de novembro" });
+    expect(day).toHaveFocus();
+    expect(day).toHaveClass("ring-expense");
+  });
+});
+
 describe("PlanilhaView", () => {
   it("shows the toolbar and a skeleton while the settings load", () => {
     stubApi({});

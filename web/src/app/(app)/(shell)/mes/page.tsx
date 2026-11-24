@@ -125,7 +125,7 @@ const MonthScreen = () => {
               onFilterChange={setFilter}
               open={ledgerOpen.open}
               onOpenChange={ledgerOpen.choose}
-              planilha={planilha.open ? <PlanilhaView month={month} /> : undefined}
+              planilha={planilha.open ? <PlanilhaView month={month} highlight={highlight?.date ?? null} /> : undefined}
               onPlanilhaChange={planilha.choose}
               className="max-lg:order-3"
             />
