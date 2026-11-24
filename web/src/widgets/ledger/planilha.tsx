@@ -1,10 +1,11 @@
 "use client";
 
-import { type KeyboardEvent, useRef, useState } from "react";
+import { type KeyboardEvent, useEffect, useEffectEvent, useRef, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
-import { TriangleAlert } from "lucide-react";
+import { CalendarCheck, TriangleAlert } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -19,6 +20,7 @@ import { hasProblem, type Schemas } from "@/shared/api/client";
 import { addMonths, lastDay, monthName, todayISO, weekdayName } from "@/shared/lib/date";
 import { toInput } from "@/shared/lib/money";
 import { cents, TIER_LABEL, TIER_ORDER, TIER_STYLE } from "@/shared/lib/tier";
+import { replaceUrl } from "@/shared/lib/url";
 import { Money } from "@/shared/ui/money";
 import { monthLabel } from "@/shared/ui/month-switcher";
 import { PageError } from "@/shared/ui/page-state";
@@ -342,6 +344,7 @@ const MonthBlock = ({ month, today, openingDate }: { month: string; today: strin
   return (
     <table
       ref={near ? undefined : watch}
+      data-month={month}
       aria-label={label}
       className="min-w-[100cqi] shrink-0 snap-start text-[length:clamp(0.75rem,3.6cqi,0.875rem)] tabular-nums @[40rem]:min-w-[calc((100cqi-1rem)/2)] @[64rem]:min-w-[calc((100cqi-2rem)/3)]"
     >
@@ -371,26 +374,116 @@ const MonthBlock = ({ month, today, openingDate }: { month: string; today: strin
   );
 };
 
-/** Spec SOL-163 §3–§8: the month view as the owner's sheet, one table per month side by side. */
-export const Planilha = ({ today, openingDate }: { today: string; openingDate: string }) => (
-  <div className="@container flex flex-col gap-3">
-    <div className="flex max-h-[80dvh] snap-x snap-mandatory gap-4 overflow-auto overscroll-x-contain">
-      {planilhaMonths(today, openingDate).map((month) => (
-        <MonthBlock key={month} month={month} today={today} openingDate={openingDate} />
-      ))}
-    </div>
-    <div className="text-muted-foreground flex flex-wrap items-center gap-2 text-xs">
-      <span className="italic">Itálico: previsto</span>
-      {TIER_ORDER.map((tier) => (
-        <TierPill key={tier} tier={tier} size="sm" />
-      ))}
-    </div>
+/** `away`: today is off the scroller's view, so the button shows; it keeps its space either way. */
+const Toolbar = ({ away, onToday }: { away: boolean; onToday?: () => void }) => (
+  <div className="flex flex-wrap items-center justify-between gap-x-3">
+    <p className="text-muted-foreground text-sm">Valores em R$ · Toque num dia para ver o detalhe.</p>
+    <Button
+      variant="ghost"
+      onClick={onToday}
+      aria-hidden={!away}
+      tabIndex={away ? undefined : -1}
+      className={cn("ml-auto min-h-11 text-base", !away && "invisible")}
+    >
+      <CalendarCheck aria-hidden />
+      Ir pra hoje
+    </Button>
   </div>
 );
 
+/** A day's row by position: the same in a loaded month and in its skeleton. */
+const rowOf = (scroller: HTMLElement, date: string) =>
+  scroller.querySelector<HTMLTableElement>(`[data-month="${date.slice(0, 7)}"]`)?.tBodies[0]?.rows[
+    Number(date.slice(8)) - 1
+  ];
+
+type PlanilhaProps = {
+  today: string;
+  openingDate: string;
+  /** The URL month: the planilha opens there and follows it. */
+  month?: string;
+};
+
+/** Spec SOL-163 §3–§8: the month view as the owner's sheet, one table per month side by side. */
+export const Planilha = ({ today, openingDate, month = today.slice(0, 7) }: PlanilhaProps) => {
+  const scroller = useRef<HTMLDivElement>(null);
+  const placed = useRef<string>(null);
+  const [seen, setSeen] = useState(true);
+  const months = planilhaMonths(today, openingDate);
+  const current = today.slice(0, 7);
+
+  /** Spec §5: `target`'s table at the start (clamped to the range), today's row centered; the page stays put. */
+  const place = (target: string, behavior: ScrollBehavior) => {
+    placed.current = target;
+    const box = scroller.current;
+    // The middle of the three: `target` clamped to the range.
+    const shown = [months[0], target, months[months.length - 1]].sort()[1];
+    const table = box?.querySelector<HTMLTableElement>(`[data-month="${shown}"]`);
+    if (!box || !table) return;
+    const row = shown === current ? rowOf(box, today) : undefined;
+    const top = row ? table.offsetTop + row.offsetTop - (box.clientHeight - row.offsetHeight) / 2 : 0;
+    box.scrollTo({ left: table.offsetLeft, top, behavior });
+  };
+  const follow = useEffectEvent((target: string) => {
+    if (placed.current !== target) place(target, "auto");
+  });
+  useEffect(() => {
+    follow(month);
+  }, [month]);
+
+  const track = () => {
+    const box = scroller.current;
+    const cell = box && rowOf(box, today)?.cells[0];
+    if (!box || !cell) return;
+    const inner = cell.getBoundingClientRect();
+    const outer = box.getBoundingClientRect();
+    setSeen(
+      inner.top >= outer.top && inner.bottom <= outer.bottom && inner.left >= outer.left && inner.right <= outer.right,
+    );
+  };
+
+  const goToday = () => {
+    replaceUrl(`?m=${current}`);
+    place(current, window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth");
+    scroller.current?.querySelector<HTMLElement>(`[data-day="${today}"]`)?.focus({ preventScroll: true });
+  };
+
+  return (
+    <div className="@container flex flex-col gap-3">
+      <Toolbar away={month !== current || !seen} onToday={goToday} />
+      <div
+        ref={scroller}
+        onScroll={track}
+        className="relative flex max-h-[80dvh] snap-x snap-mandatory gap-4 overflow-auto overscroll-x-contain"
+      >
+        {months.map((each) => (
+          <MonthBlock key={each} month={each} today={today} openingDate={openingDate} />
+        ))}
+      </div>
+      <div className="text-muted-foreground flex flex-wrap items-center gap-2 text-xs">
+        <span className="italic">Itálico: previsto</span>
+        {TIER_ORDER.map((tier) => (
+          <TierPill key={tier} tier={tier} size="sm" />
+        ))}
+      </div>
+    </div>
+  );
+};
+
 /** Spec SOL-163 §2: the planilha in the Lançamentos slot, from the opening date in the settings. */
-export const PlanilhaView = () => {
+export const PlanilhaView = ({ month }: { month: string }) => {
   const settings = useSettings();
-  if (!settings.data) return null;
-  return <Planilha today={todayISO()} openingDate={settings.data.opening_date} />;
+  if (settings.isError)
+    return <PageError message="Não foi possível carregar a planilha." onRetry={() => settings.refetch()} />;
+  if (!settings.data)
+    return (
+      <div className="flex flex-col gap-3">
+        <Toolbar away={false} />
+        <Skeleton className="h-[80dvh] w-full rounded-xl" />
+        <p role="status" className="sr-only">
+          Carregando
+        </p>
+      </div>
+    );
+  return <Planilha today={todayISO()} openingDate={settings.data.opening_date} month={month} />;
 };

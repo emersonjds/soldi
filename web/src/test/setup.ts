@@ -49,6 +49,9 @@ globalThis.ResizeObserver ??= class {
 // jsdom has no scrollIntoView; cmdk scrolls the highlighted option into view.
 Element.prototype.scrollIntoView ??= () => undefined;
 
+// jsdom has no Element.scrollTo; the planilha places its months with it.
+Element.prototype.scrollTo ??= () => undefined;
+
 // jsdom has no IntersectionObserver; the Ajustes sub-nav tracks the section in view with it.
 globalThis.IntersectionObserver ??= class {
   observe = () => undefined;

@@ -1210,6 +1210,20 @@ describe("Mês", () => {
       expect(within(ledger()).getByRole("button", { name: "Lançamentos" })).toHaveAttribute("aria-expanded", "true");
       expect(await within(ledger()).findAllByRole("table")).toHaveLength(12);
     });
+
+    it("scrolls the planilha to the month picked in the hero (A12)", async () => {
+      localStorage.setItem("soldi:open:ledger-planilha", "open");
+      const scrollTo = vi.spyOn(Element.prototype, "scrollTo");
+      open({ "GET /api/months/2026-12": { status: 200, body: { ...MONTH, month: "2026-12" } } });
+      await within(await screen.findByRole("region", { name: "Lançamentos" })).findAllByRole("table");
+      const calls = scrollTo.mock.calls.length;
+
+      setSearch("m=2026-12");
+      rerender(<QueryClientProvider client={client}>{page()}</QueryClientProvider>);
+
+      await waitFor(() => expect(scrollTo.mock.calls.length).toBeGreaterThan(calls));
+      expect(scrollTo.mock.contexts.at(-1)).toBe(within(ledger()).getAllByRole("table")[0].parentElement);
+    });
   });
 
   it("goes back to Todos when the month changes, and again on returning to the month left filtered", async () => {

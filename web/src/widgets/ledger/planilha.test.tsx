@@ -1,14 +1,15 @@
-import { act, screen, waitFor, within } from "@testing-library/react";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { Schemas } from "@/shared/api/client";
 import { TIER_STYLE } from "@/shared/lib/tier";
 import { stubIntersection } from "@/test/intersection";
 import { renderWithQuery } from "@/test/render";
-import { PLANILHA_MONTH, problem, stubApi } from "@/test/stub-api";
+import { PLANILHA_MONTH, problem, SETTINGS, stubApi } from "@/test/stub-api";
 
-import { Planilha } from "./planilha";
+import { Planilha, PlanilhaView } from "./planilha";
 
 vi.mock("next/navigation", () => import("@/test/next-navigation"));
 
@@ -68,7 +69,7 @@ describe("Planilha", () => {
     const tuesday = await row("Terça-feira, 10 de novembro");
     expect(tuesday.cells[2]).toHaveTextContent("1.850,00 inclui conta a pagar");
     expect(tuesday.cells[4]).toHaveTextContent("-1.150,00 Crítico");
-    expect(screen.queryByText(/R\$/)).not.toBeInTheDocument();
+    expect(within(screen.getByRole("table", { name: "Novembro 2026" })).queryByText(/R\$/)).not.toBeInTheDocument();
   });
 
   it("colors Saldo by tier, marks the red tiers with a glyph and names every tier for screen readers", async () => {
@@ -252,5 +253,156 @@ describe("Planilha keyboard", () => {
     await userEvent.keyboard(" ");
 
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
+  });
+});
+
+describe("Planilha position and Ir pra hoje", () => {
+  const ROW = 44;
+  const HEIGHT = 220;
+  const TABLE = 400;
+  /** Each table `TABLE` wide in a row, each row `ROW` tall, the scroller `HEIGHT` tall. */
+  const layout = () => {
+    vi.spyOn(HTMLElement.prototype, "offsetLeft", "get").mockImplementation(function (this: HTMLElement) {
+      return this instanceof HTMLTableElement ? [...document.querySelectorAll("table")].indexOf(this) * TABLE : 0;
+    });
+    vi.spyOn(HTMLElement.prototype, "offsetTop", "get").mockImplementation(function (this: HTMLElement) {
+      return this instanceof HTMLTableRowElement ? this.sectionRowIndex * ROW : 0;
+    });
+    vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(ROW);
+    vi.spyOn(Element.prototype, "clientHeight", "get").mockReturnValue(HEIGHT);
+    return vi.spyOn(Element.prototype, "scrollTo");
+  };
+  const place = (month: string, extra: Record<string, unknown> = {}) => {
+    const scrollTo = layout();
+    stubApi({ "GET /api/months/2026-11": { status: 200, body: PLANILHA_MONTH } });
+    const intersection = stubIntersection();
+    const ui = (shown: string) => <Planilha today="2026-11-05" openingDate="2026-03-10" month={shown} {...extra} />;
+    const { client, rerender } = renderWithQuery(ui(month));
+    const scroller = () => screen.getAllByRole("table")[0].parentElement as HTMLElement;
+    const last = () => ({ to: scrollTo.mock.lastCall?.[0], on: scrollTo.mock.contexts.at(-1) });
+    return {
+      scrollTo,
+      scroller,
+      last,
+      intersection,
+      change: (next: string) => rerender(<QueryClientProvider client={client}>{ui(next)}</QueryClientProvider>),
+    };
+  };
+  /** Today's row centered: 4 rows down, minus half the scroller less a row. */
+  const TODAY_TOP = 4 * ROW - (HEIGHT - ROW) / 2;
+  const goToday = () => screen.getByText("Ir pra hoje").closest("button") as HTMLElement;
+  const rect = (top: number) => ({ top, bottom: top + ROW, left: 0, right: 100 }) as DOMRect;
+
+  afterEach(() => window.history.replaceState(null, "", "/"));
+
+  it("opens at m, today's month at the start and today's row centered (A12)", () => {
+    const { last, scroller } = place("2026-11");
+
+    expect(last().to).toEqual({ left: 8 * TABLE, top: TODAY_TOP, behavior: "auto" });
+    expect(last().on).toBe(scroller());
+    expect(screen.getByText("Valores em R$ · Toque num dia para ver o detalhe.")).toBeInTheDocument();
+  });
+
+  it("opens another month at its first day, and m outside the range at the nearest end", () => {
+    expect(place("2027-02").last().to).toEqual({ left: 11 * TABLE, top: 0, behavior: "auto" });
+    cleanup();
+    expect(place("2025-01").last().to).toEqual({ left: 0, top: 0, behavior: "auto" });
+    cleanup();
+    expect(place("2028-05").last().to).toEqual({ left: 19 * TABLE, top: 0, behavior: "auto" });
+  });
+
+  it("follows a change of m, and scrolling the planilha leaves m alone (A12)", () => {
+    const { last, change, scroller, scrollTo } = place("2026-11");
+    const address = window.location.href;
+
+    change("2027-02");
+    expect(last().to).toEqual({ left: 11 * TABLE, top: 0, behavior: "auto" });
+    const calls = scrollTo.mock.calls.length;
+    change("2027-02");
+    expect(scrollTo.mock.calls).toHaveLength(calls);
+
+    fireEvent.scroll(scroller());
+    expect(window.location.href).toBe(address);
+  });
+
+  it("hides Ir pra hoje, keeping its space, while today's row is in view in today's month (A11)", async () => {
+    const { scroller, intersection } = place("2026-11");
+    intersection.show(screen.getByRole("table", { name: "Novembro 2026" }));
+    const today = await screen.findByRole("button", { name: "Quinta-feira, 5 de novembro, hoje" });
+    const cell = today.closest("td");
+    let todayTop = 100;
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (this: Element) {
+      if (this === scroller()) return { top: 0, bottom: HEIGHT, left: 0, right: TABLE } as DOMRect;
+      return this === cell ? rect(todayTop) : rect(0);
+    });
+
+    expect(goToday()).toHaveClass("invisible");
+    expect(goToday()).toHaveAttribute("aria-hidden", "true");
+    expect(screen.queryByRole("button", { name: "Ir pra hoje" })).not.toBeInTheDocument();
+
+    todayTop = HEIGHT - ROW / 2;
+    fireEvent.scroll(scroller());
+    expect(screen.getByRole("button", { name: "Ir pra hoje" })).not.toHaveClass("invisible");
+
+    todayTop = 100;
+    fireEvent.scroll(scroller());
+    expect(goToday()).toHaveClass("invisible");
+  });
+
+  it("shows Ir pra hoje when m is another month; it sets m to today's, scrolls today's row to the center and focuses it (A11)", async () => {
+    const { last, scroller, intersection } = place("2027-02");
+    intersection.show(screen.getByRole("table", { name: "Novembro 2026" }));
+    const today = await screen.findByRole("button", { name: "Quinta-feira, 5 de novembro, hoje" });
+
+    await userEvent.click(screen.getByRole("button", { name: "Ir pra hoje" }));
+
+    expect(window.location.search).toBe("?m=2026-11");
+    expect(last().to).toEqual({ left: 8 * TABLE, top: TODAY_TOP, behavior: "smooth" });
+    expect(last().on).toBe(scroller());
+    expect(today).toHaveFocus();
+    expect(screen.getByRole("button", { name: "Ir pra hoje" })).toHaveClass("min-h-11");
+  });
+
+  it("jumps to today without the smooth scroll when the person asks for reduced motion", async () => {
+    const { last } = place("2027-02");
+    vi.spyOn(window, "matchMedia").mockImplementation(
+      (query: string) => ({ matches: query === "(prefers-reduced-motion: reduce)" }) as MediaQueryList,
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "Ir pra hoje" }));
+
+    expect(last().to).toEqual({ left: 8 * TABLE, top: TODAY_TOP, behavior: "auto" });
+  });
+});
+
+describe("PlanilhaView", () => {
+  it("shows the toolbar and a skeleton while the settings load", () => {
+    stubApi({});
+    vi.stubGlobal("fetch", () => new Promise<Response>(() => undefined));
+    renderWithQuery(<PlanilhaView month="2026-11" />);
+
+    expect(screen.getByText("Valores em R$ · Toque num dia para ver o detalhe.")).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("Carregando");
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+  });
+
+  it("says the planilha could not load when the settings fail, and retries", async () => {
+    const requests = stubApi({ "GET /api/settings": { status: 500, body: problem(500, "Erro") } });
+    renderWithQuery(<PlanilhaView month="2026-11" />);
+
+    expect(await screen.findByText("Não foi possível carregar a planilha.")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Tentar de novo" }));
+    await waitFor(() => expect(requests.filter(({ url }) => url.endsWith("/api/settings"))).toHaveLength(2));
+  });
+
+  it("lays out the months from the opening date in the settings", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 10, 5, 12));
+    stubApi({ "GET /api/settings": { status: 200, body: SETTINGS } });
+    renderWithQuery(<PlanilhaView month="2026-11" />);
+
+    expect(await screen.findAllByRole("table")).toHaveLength(12);
+    expect(screen.getAllByRole("table")[0]).toHaveAccessibleName("Novembro 2026");
+    vi.useRealTimers();
   });
 });
