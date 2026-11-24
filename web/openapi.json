@@ -2166,7 +2166,7 @@
             }
           },
           "422": {
-            "description": "Money with more than two places, tiers out of order (names the upper tier of the first pair), an unknown field",
+            "description": "Money with more than two places, tiers out of order (names the upper tier of the first pair), a daily_estimate outside 0.01..10000.00, daily_estimate_on true without a value, an unknown field",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -2177,6 +2177,42 @@
           },
           "429": {
             "description": "Rate limited with the account's write budget; wait `Retry-After` seconds",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/settings/daily-estimate-suggestion": {
+      "get": {
+        "tags": [
+          "settings"
+        ],
+        "operationId": "get_suggestion",
+        "responses": {
+          "200": {
+            "description": "The last 3 complete months' cash Diário per day, from the opening date; null under 28 days of history, no cash Diário, or an amount that could not be saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/DailyEstimateSuggestion"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -3431,6 +3467,31 @@
           "EUR"
         ]
       },
+      "DailyEstimateSuggestion": {
+        "type": "object",
+        "description": "R-S: the cash Diário (no card) from `from` to `to` divided by its days, half-even to cents;\na pre-fill only, never stored.",
+        "required": [
+          "amount",
+          "from",
+          "to"
+        ],
+        "properties": {
+          "amount": {
+            "type": "string",
+            "example": "36.30"
+          },
+          "from": {
+            "type": "string",
+            "format": "date",
+            "example": "2026-08-20"
+          },
+          "to": {
+            "type": "string",
+            "format": "date",
+            "example": "2026-10-31"
+          }
+        }
+      },
       "Day": {
         "type": "object",
         "description": "One calendar day: what came in and went out, and the balance at its end. `income` leaves\nresgates out; `withdrawn` holds them, and the balance adds both.",
@@ -3959,11 +4020,25 @@
           "tier_zero",
           "tier_yellow",
           "tier_green",
-          "currency"
+          "currency",
+          "daily_estimate_on"
         ],
         "properties": {
           "currency": {
             "$ref": "#/components/schemas/Currency"
+          },
+          "daily_estimate": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "SOL-164: the Diário previsto per day the person declared, 0.01 to 10000.00; null when never set.",
+            "example": "50.00"
+          },
+          "daily_estimate_on": {
+            "type": "boolean",
+            "description": "When true (and only with a value), every future day on or after the opening date takes\n`max(daily_estimate − that day's cash Diário, 0)` in the projected balances (D49).",
+            "example": true
           },
           "opening_balance": {
             "type": "string"
@@ -4380,6 +4455,22 @@
                 "type": "null"
               }
             ]
+          },
+          "daily_estimate": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "0.01 to 10000.00, two places at most; null clears it and turns it off.",
+            "example": "50.00"
+          },
+          "daily_estimate_on": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "true needs a value saved or sent in the same patch.",
+            "example": true
           },
           "opening_balance": {
             "type": [
