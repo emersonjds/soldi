@@ -7,6 +7,11 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.67.1
+
+### Web
+- Contas a pagar no longer squeezes a long conta name to a few letters at 375: below 1024 px the parcela ("Parcela 3/12 · termina em ago/27") and "valor variável" sit on their own line under the name (SOL-165).
+
 ## 0.67.0
 
 > Headline: a conta is fixa or parcelada, and reads as one everywhere
