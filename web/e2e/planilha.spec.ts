@@ -58,6 +58,15 @@ test("Lançamentos switches to the planilha, remembers it, shows a day's entries
       })
     ).ok(),
   ).toBe(true);
+  // Six months of history: today's month opens away from scrollLeft 0.
+  const [year, month] = today.split("-").map(Number);
+  const opening = new Date(Date.UTC(year, month - 7, 1)).toISOString().slice(0, 10);
+  expect((await page.request.patch("/api/settings", { data: { opening_date: opening } })).ok()).toBe(true);
+  const fetched = new Set<string>();
+  page.on("request", (request) => {
+    const hit = new URL(request.url()).pathname.match(/^\/api\/months\/(\d{4}-\d{2})$/);
+    if (hit) fetched.add(hit[1]);
+  });
 
   await page.goto("/mes");
   const ledger = page.getByRole("region", { name: "Lançamentos" });
@@ -67,6 +76,7 @@ test("Lançamentos switches to the planilha, remembers it, shows a day's entries
   const address = page.url();
 
   await views.getByRole("radio", { name: "Planilha" }).click();
+  fetched.clear();
   await page.reload();
   await expect(views.getByRole("radio", { name: "Planilha" })).toHaveAttribute("aria-checked", "true");
   expect(page.url()).toBe(address);
@@ -75,6 +85,9 @@ test("Lançamentos switches to the planilha, remembers it, shows a day's entries
   await expect.poll(() => todayInView(page, today)).toBe(true);
   const goToday = ledger.getByRole("button", { name: "Ir pra hoje" });
   await expect(goToday).toHaveCount(0);
+  await page.waitForLoadState("networkidle");
+  // One month in view and its neighbour on each side.
+  expect(fetched.size).toBeLessThanOrEqual(3);
 
   for (const width of [375, 1024, 1280, 1440]) {
     await page.setViewportSize({ width, height: 900 });
@@ -83,6 +96,13 @@ test("Lançamentos switches to the planilha, remembers it, shows a day's entries
     if (width === 375) await expect.poll(() => monthsInView(page)).toBe(1);
     if (width === 1440) await expect.poll(() => monthsInView(page)).toBe(3);
   }
+
+  fetched.clear();
+  await page.reload();
+  await expect.poll(() => todayInView(page, today)).toBe(true);
+  await page.waitForLoadState("networkidle");
+  // Three months in view and a neighbour on each side.
+  expect(fetched.size).toBeLessThanOrEqual(5);
 
   await page.setViewportSize({ width: 375, height: 812 });
   await day.click();

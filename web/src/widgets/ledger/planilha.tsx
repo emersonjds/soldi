@@ -1,6 +1,6 @@
 "use client";
 
-import { type KeyboardEvent, useEffect, useEffectEvent, useRef, useState } from "react";
+import { type KeyboardEvent, useCallback, useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { CalendarCheck, TriangleAlert } from "lucide-react";
@@ -354,14 +354,14 @@ const MonthBlock = ({ month, today, openingDate, highlight }: MonthProps) => {
   const label = monthLabel(month);
 
   /** Fetches once the table comes within its own width of the scroller's view. */
-  const watch = (table: HTMLTableElement) => {
+  const watch = useCallback((table: HTMLTableElement) => {
     const observer = new IntersectionObserver((entries) => setNear(entries.some((entry) => entry.isIntersecting)), {
       root: table.parentElement,
       rootMargin: `0px ${table.offsetWidth}px`,
     });
     observer.observe(table);
     return () => observer.disconnect();
-  };
+  }, []);
 
   return (
     <table
@@ -455,7 +455,8 @@ export const Planilha = ({ today, openingDate, month = today.slice(0, 7), highli
   const follow = useEffectEvent((target: string) => {
     if (placed.current !== target) place(target, "auto");
   });
-  useEffect(() => {
+  // Before the months' observers first look: the blocks at scrollLeft 0 are not fetched.
+  useLayoutEffect(() => {
     follow(month);
   }, [month]);
 

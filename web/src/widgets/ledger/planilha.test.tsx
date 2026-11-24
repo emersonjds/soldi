@@ -1,3 +1,5 @@
+import { useLayoutEffect } from "react";
+
 import { QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -170,6 +172,16 @@ describe("Planilha", () => {
     expect(screen.getByText("Itálico: previsto")).toBeInTheDocument();
     for (const tier of ["Crítico", "Atenção", "Apertado", "Confortável", "Folga"])
       expect(screen.getByText(tier)).toBeInTheDocument();
+  });
+
+  it("looks ahead by the table's own width on each side", () => {
+    vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockImplementation(function (this: HTMLElement) {
+      return this instanceof HTMLTableElement ? 400 : 0;
+    });
+
+    const { intersection } = show();
+
+    expect(intersection.observers[0].options.rootMargin).toBe("0px 400px");
   });
 });
 
@@ -372,6 +384,37 @@ describe("Planilha position and Ir pra hoje", () => {
     await userEvent.click(screen.getByRole("button", { name: "Ir pra hoje" }));
 
     expect(last().to).toEqual({ left: 8 * TABLE, top: TODAY_TOP, behavior: "auto" });
+  });
+
+  it("places the planilha before the observers first look, so the months at the start are not fetched", () => {
+    const scrollTo = layout();
+    stubApi({});
+    stubIntersection();
+    let placed = -1;
+    const Probe = () => {
+      useLayoutEffect(() => {
+        placed = scrollTo.mock.calls.length;
+      });
+      return null;
+    };
+
+    renderWithQuery(
+      <>
+        <Planilha today="2026-11-05" openingDate="2026-03-10" month="2026-11" />
+        <Probe />
+      </>,
+    );
+
+    expect(placed).toBe(1);
+  });
+
+  it("watches each month once, across renders", () => {
+    const { change, intersection } = place("2026-11");
+    expect(intersection.observers).toHaveLength(20);
+
+    change("2027-02");
+
+    expect(intersection.observers).toHaveLength(20);
   });
 });
 
