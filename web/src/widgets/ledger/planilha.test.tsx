@@ -174,6 +174,12 @@ describe("Planilha", () => {
       expect(screen.getByText(tier)).toBeInTheDocument();
   });
 
+  it("marks its root so the shell drops the page cap while it is open", () => {
+    show();
+
+    expect(screen.getByRole("table", { name: "Março 2026" }).closest("[data-planilha]")).toHaveClass("@container");
+  });
+
   it("looks ahead by the table's own width on each side", () => {
     vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockImplementation(function (this: HTMLElement) {
       return this instanceof HTMLTableElement ? 400 : 0;
