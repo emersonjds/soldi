@@ -11,6 +11,7 @@ import { useMonth } from "@/entities/month/month-query";
 import { useTransactions } from "@/entities/transaction/transaction-queries";
 import { TransactionSheet } from "@/features/add-transaction/transaction-sheet";
 import { EditBillSheet } from "@/features/edit-bill/edit-bill-sheet";
+import { cn } from "@/lib/utils";
 import { monthParam } from "@/shared/lib/date";
 import { replaceUrl } from "@/shared/lib/url";
 import { useStoredOpen } from "@/shared/lib/use-stored-open";
@@ -19,6 +20,7 @@ import { ShellMonthSwitcher } from "@/widgets/app-shell/app-shell";
 import { BillsOfMonth } from "@/widgets/bills-of-month/bills-of-month";
 import { CofrinhosGlance } from "@/widgets/cofrinhos-glance/cofrinhos-glance";
 import { Ledger, type LedgerFilter } from "@/widgets/ledger/ledger";
+import { PlanilhaView } from "@/widgets/ledger/planilha";
 import { HeroSkeleton, MonthHero, ThermometerCard } from "@/widgets/month-overview/month-overview";
 import { MonthsAhead } from "@/widgets/months-ahead/months-ahead";
 import { RedDayAlert } from "@/widgets/red-day-alert/red-day-alert";
@@ -35,6 +37,7 @@ const MonthScreen = () => {
   const [highlight, setHighlight] = useState<{ date: string } | null>(null);
   const [filter, setFilter] = useState<LedgerFilter>("all");
   const ledgerOpen = useStoredOpen("ledger");
+  const planilha = useStoredOpen("ledger-planilha", false);
   const [filterMonth, setFilterMonth] = useState(month);
   if (filterMonth !== month) {
     setFilterMonth(month);
@@ -84,7 +87,12 @@ const MonthScreen = () => {
       {alert && (
         <RedDayAlert alert={alert} outflows={topOutflows(alert.firstRed.date, entries ?? [], bills)} onJump={jump} />
       )}
-      <div className="flex flex-col gap-4 lg:grid lg:gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] xl:items-start">
+      <div
+        className={cn(
+          "flex flex-col gap-4 lg:grid lg:gap-6",
+          !planilha.open && "xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] xl:items-start",
+        )}
+      >
         <div className="contents lg:flex lg:flex-col lg:gap-6">
           {monthFailed && (
             <section aria-label="Saldo hoje" className="bg-card rounded-3xl shadow-sm">
@@ -117,11 +125,18 @@ const MonthScreen = () => {
               onFilterChange={setFilter}
               open={ledgerOpen.open}
               onOpenChange={ledgerOpen.choose}
+              planilha={planilha.open ? <PlanilhaView /> : undefined}
+              onPlanilhaChange={planilha.choose}
               className="max-lg:order-3"
             />
           )}
         </div>
-        <div className="contents lg:grid lg:grid-cols-2 lg:items-start lg:gap-6 xl:flex xl:flex-col xl:items-stretch lg:[&>:last-child:nth-child(odd)]:col-span-2">
+        <div
+          className={cn(
+            "contents lg:grid lg:grid-cols-2 lg:items-start lg:gap-6 lg:[&>:last-child:nth-child(odd)]:col-span-2",
+            !planilha.open && "xl:flex xl:flex-col xl:items-stretch",
+          )}
+        >
           {view.data && <ThermometerCard view={view.data} className="max-lg:order-2" />}
           <MonthsAhead
             viewing={month}

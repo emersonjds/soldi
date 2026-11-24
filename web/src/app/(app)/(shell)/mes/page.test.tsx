@@ -1144,6 +1144,74 @@ describe("Mês", () => {
     expect(localStorage.getItem("soldi:open:ledger")).toBe("closed");
   });
 
+  describe("Modo planilha (SOL-163)", () => {
+    const views = () => within(ledger()).getByRole("radiogroup", { name: "Ver lançamentos como" });
+    const grid = () => ledger().parentElement?.parentElement;
+    const TWO_COLUMNS = "xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]";
+
+    it("opens on Lista with the two-column grid at xl when nothing is stored (A1, A15)", async () => {
+      open();
+      await within(await screen.findByRole("region", { name: "Lançamentos" })).findByRole("button", {
+        name: /Compras da semana/,
+      });
+
+      expect(within(views()).getByRole("radio", { name: "Lista" })).toHaveAttribute("aria-checked", "true");
+      expect(grid()).toHaveClass(TWO_COLUMNS, "xl:items-start");
+      expect(within(ledger()).queryByRole("table")).not.toBeInTheDocument();
+    });
+
+    it("switches to Planilha in the Lançamentos slot, remembered, the URL untouched, and Lista comes back on Todos (A2, A15)", async () => {
+      open();
+      await within(await screen.findByRole("region", { name: "Lançamentos" })).findByRole("button", {
+        name: /Compras da semana/,
+      });
+      const address = window.location.href;
+      await userEvent.click(within(filter()).getByRole("radio", { name: "Diário" }));
+
+      await userEvent.click(within(views()).getByRole("radio", { name: "Planilha" }));
+      expect(await within(ledger()).findAllByRole("table")).toHaveLength(12);
+      expect(within(ledger()).queryByRole("radiogroup", { name: "Filtrar lançamentos" })).not.toBeInTheDocument();
+      expect(localStorage.getItem("soldi:open:ledger-planilha")).toBe("open");
+      expect(grid()).not.toHaveClass(TWO_COLUMNS);
+      expect(grid()).not.toHaveClass("xl:items-start");
+      expect(window.location.href).toBe(address);
+      expect(router.replace).not.toHaveBeenCalled();
+
+      await userEvent.click(within(views()).getByRole("radio", { name: "Lista" }));
+      expect(within(filter()).getByRole("radio", { name: "Todos" })).toHaveAttribute("aria-checked", "true");
+      expect(localStorage.getItem("soldi:open:ledger-planilha")).toBe("closed");
+      expect(grid()).toHaveClass(TWO_COLUMNS);
+    });
+
+    it("opens on Planilha when it was chosen on an earlier visit, even for a month with no entries", async () => {
+      localStorage.setItem("soldi:open:ledger-planilha", "open");
+      open({
+        "GET /api/months/2026-11": { status: 200, body: { ...MONTH, bills_of_month: [] } },
+        "GET /api/transactions": { status: 200, body: [] },
+      });
+
+      expect(
+        await within(await screen.findByRole("region", { name: "Lançamentos" })).findAllByRole("table"),
+      ).toHaveLength(12);
+      expect(within(views()).getByRole("radio", { name: "Planilha" })).toHaveAttribute("aria-checked", "true");
+    });
+
+    it("opens a collapsed Lançamentos on Planilha when that view is chosen", async () => {
+      localStorage.setItem("soldi:open:ledger", "closed");
+      open();
+      await userEvent.click(
+        within(
+          await within(await screen.findByRole("region", { name: "Lançamentos" })).findByRole("radiogroup", {
+            name: "Ver lançamentos como",
+          }),
+        ).getByRole("radio", { name: "Planilha" }),
+      );
+
+      expect(within(ledger()).getByRole("button", { name: "Lançamentos" })).toHaveAttribute("aria-expanded", "true");
+      expect(await within(ledger()).findAllByRole("table")).toHaveLength(12);
+    });
+  });
+
   it("goes back to Todos when the month changes, and again on returning to the month left filtered", async () => {
     open({
       "GET /api/months/2026-12": { status: 200, body: { ...MONTH, month: "2026-12" } },

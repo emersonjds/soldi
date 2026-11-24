@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { CreditCard, Pencil, Trash2 } from "lucide-react";
@@ -232,8 +232,14 @@ type LedgerProps = {
   onFilterChange: (filter: LedgerFilter) => void;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** SOL-163: shown in place of the filters and the days; given = Planilha mode. */
+  planilha?: ReactNode;
+  onPlanilhaChange?: (planilha: boolean) => void;
   className?: string;
 };
+
+const VIEW_ITEM =
+  "text-muted-foreground data-[state=on]:bg-card data-[state=on]:text-primary min-h-11 rounded-lg! px-4 text-base font-medium data-[state=on]:shadow-sm";
 
 /**
  * `Lançamentos`: the whole month's entries grouped by day; a row opens Editar / Excluir,
@@ -248,6 +254,8 @@ export const Ledger = ({
   onFilterChange,
   open: expanded,
   onOpenChange,
+  planilha,
+  onPlanilhaChange,
   className,
 }: LedgerProps) => {
   const categories = useQuery(categoriesQuery).data;
@@ -314,7 +322,16 @@ export const Ledger = ({
     );
   };
 
-  if (!any) return null;
+  if (!any && !planilha) return null;
+
+  /** Tapping the view already pressed deselects it in Radix: it only opens the section. */
+  const chooseView = (value: string) => {
+    if (value) {
+      onPlanilhaChange?.(value === "planilha");
+      onFilterChange("all");
+    }
+    if (!expanded) onOpenChange(true);
+  };
 
   return (
     <section
@@ -335,26 +352,42 @@ export const Ledger = ({
           className="lg:col-start-3 lg:row-start-1"
         />
       </div>
-      {expanded && (
-        <>
+      <div className="flex flex-col gap-2 lg:col-start-2 lg:row-start-1 lg:flex-row lg:flex-wrap lg:items-center lg:gap-x-4">
+        <ToggleGroup
+          type="single"
+          spacing={0}
+          value={planilha ? "planilha" : "lista"}
+          onValueChange={chooseView}
+          aria-label="Ver lançamentos como"
+          className="bg-muted grid w-full grid-cols-2 rounded-xl p-1 lg:order-last lg:ml-auto lg:flex lg:w-fit"
+        >
+          <ToggleGroupItem value="lista" className={VIEW_ITEM}>
+            Lista
+          </ToggleGroupItem>
+          <ToggleGroupItem value="planilha" className={VIEW_ITEM}>
+            Planilha
+          </ToggleGroupItem>
+        </ToggleGroup>
+        {expanded && !planilha && (
           <ToggleGroup
             type="single"
             spacing={0}
             value={filter}
             onValueChange={(value: LedgerFilter | "") => value && onFilterChange(value)}
             aria-label="Filtrar lançamentos"
-            className="bg-muted mb-2 grid w-full grid-cols-2 rounded-xl p-1 lg:mb-0 lg:flex lg:w-fit lg:justify-self-start"
+            className="bg-muted mb-2 grid w-full grid-cols-2 rounded-xl p-1 lg:mb-0 lg:flex lg:w-fit"
           >
             {FILTERS.map((option) => (
-              <ToggleGroupItem
-                key={option.value}
-                value={option.value}
-                className="text-muted-foreground data-[state=on]:bg-card data-[state=on]:text-primary min-h-11 rounded-lg! px-4 text-base font-medium data-[state=on]:shadow-sm"
-              >
+              <ToggleGroupItem key={option.value} value={option.value} className={VIEW_ITEM}>
                 {option.label}
               </ToggleGroupItem>
             ))}
           </ToggleGroup>
+        )}
+      </div>
+      {expanded && planilha && <div className="min-w-0 lg:col-span-3 lg:row-start-2">{planilha}</div>}
+      {expanded && !planilha && (
+        <>
           <div className="flex flex-col gap-2 lg:col-span-3 lg:row-start-2">
             {groups.length === 0 && (
               <p className="text-muted-foreground px-2 py-8 text-center">

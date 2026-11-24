@@ -12,10 +12,11 @@ import { useBills } from "@/entities/bill/bill-queries";
 import { categoriesQuery } from "@/entities/category/categories-query";
 import { billKey } from "@/entities/month/forecast-alert";
 import { useMonth } from "@/entities/month/month-query";
+import { useSettings } from "@/entities/settings/settings-query";
 import { type Transaction, useTransactions } from "@/entities/transaction/transaction-queries";
 import { cn } from "@/lib/utils";
 import { hasProblem, type Schemas } from "@/shared/api/client";
-import { addMonths, lastDay, monthName, weekdayName } from "@/shared/lib/date";
+import { addMonths, lastDay, monthName, todayISO, weekdayName } from "@/shared/lib/date";
 import { toInput } from "@/shared/lib/money";
 import { cents, TIER_LABEL, TIER_ORDER, TIER_STYLE } from "@/shared/lib/tier";
 import { Money } from "@/shared/ui/money";
@@ -386,3 +387,10 @@ export const Planilha = ({ today, openingDate }: { today: string; openingDate: s
     </div>
   </div>
 );
+
+/** Spec SOL-163 §2: the planilha in the Lançamentos slot, from the opening date in the settings. */
+export const PlanilhaView = () => {
+  const settings = useSettings();
+  if (!settings.data) return null;
+  return <Planilha today={todayISO()} openingDate={settings.data.opening_date} />;
+};
