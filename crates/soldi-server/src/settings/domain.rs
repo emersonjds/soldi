@@ -1,7 +1,9 @@
-use rust_decimal::Decimal;
-use soldi_types::settings::{Settings, UpdateSettings};
+use chrono::{Months, NaiveDate};
+use rust_decimal::{Decimal, RoundingStrategy};
+use soldi_types::settings::{DailyEstimateSuggestion, Settings, UpdateSettings};
 
 use crate::error::AppError;
+use crate::months::domain::first_of;
 
 /// Fits `NUMERIC(12,2)` without rounding: at most two decimal places, under ten billion.
 pub fn check_money(field: &str, value: Decimal) -> Result<Decimal, AppError> {
@@ -24,6 +26,37 @@ fn check_target_pct(pct: Decimal) -> Result<Decimal, AppError> {
         ));
     }
     check_money("savings_target_pct", pct)
+}
+
+/// SOL-164 R-V: the Diário previsto per day, 0.01 to 10000.00, cents at most, never rounded.
+pub fn check_estimate(value: Decimal) -> Result<Decimal, AppError> {
+    if value < Decimal::new(1, 2)
+        || value > Decimal::new(1_000_000, 2)
+        || value.normalize().scale() > 2
+    {
+        return Err(AppError::invalid(
+            "daily_estimate",
+            "must be from 0.01 to 10000.00 with at most two decimal places",
+        ));
+    }
+    Ok(value)
+}
+
+/// R-S1, R-S3: the 3 calendar months before today's, from the opening date; none under 28 days.
+pub fn suggestion_window(today: NaiveDate, opening: NaiveDate) -> Option<(NaiveDate, NaiveDate)> {
+    let month = first_of(today);
+    let from = month.checked_sub_months(Months::new(3))?.max(opening);
+    let to = month.pred_opt()?;
+    ((to - from).num_days() + 1 >= 28).then_some((from, to))
+}
+
+/// R-S2..R-S4: the window's cash Diário per day, half-even; none when it could not be saved.
+pub fn suggest(total: Decimal, from: NaiveDate, to: NaiveDate) -> Option<DailyEstimateSuggestion> {
+    let days = Decimal::from((to - from).num_days() + 1);
+    let amount = (total / days).round_dp_with_strategy(2, RoundingStrategy::MidpointNearestEven);
+    check_estimate(amount)
+        .ok()
+        .map(|amount| DailyEstimateSuggestion { amount, from, to })
 }
 
 /// The thermometer's lower bounds, strictly increasing; the error names the upper of the
@@ -55,6 +88,19 @@ pub fn apply(current: Settings, patch: UpdateSettings) -> Result<Settings, AppEr
         Some(value) => check_money(field, value),
         None => Ok(current),
     };
+    let daily_estimate = match patch.daily_estimate {
+        Some(Some(value)) => Some(check_estimate(value)?),
+        Some(None) => None,
+        None => current.daily_estimate,
+    };
+    if patch.daily_estimate_on == Some(true) && daily_estimate.is_none() {
+        return Err(AppError::invalid(
+            "daily_estimate_on",
+            "needs a daily_estimate",
+        ));
+    }
+    let daily_estimate_on =
+        daily_estimate.is_some() && patch.daily_estimate_on.unwrap_or(current.daily_estimate_on);
     let next = Settings {
         opening_balance: money(
             "opening_balance",
@@ -71,6 +117,8 @@ pub fn apply(current: Settings, patch: UpdateSettings) -> Result<Settings, AppEr
             Some(pct) => pct.map(check_target_pct).transpose()?,
             None => current.savings_target_pct,
         },
+        daily_estimate,
+        daily_estimate_on,
     };
     check_tiers(
         next.tier_red,
@@ -86,7 +134,7 @@ mod tests {
     use super::*;
     use chrono::NaiveDate;
     use rust_decimal::Decimal;
-    use soldi_types::settings::{Currency, Settings, UpdateSettings};
+    use soldi_types::settings::{Currency, DailyEstimateSuggestion, Settings, UpdateSettings};
 
     fn money(text: &str) -> Decimal {
         text.parse().unwrap()
@@ -109,7 +157,148 @@ mod tests {
             tier_green: money("2000.00"),
             currency: Currency::Brl,
             savings_target_pct: None,
+            daily_estimate: None,
+            daily_estimate_on: false,
         }
+    }
+
+    fn estimate(value: Option<&str>, on: Option<bool>) -> UpdateSettings {
+        UpdateSettings {
+            daily_estimate: value.map(|text| Some(money(text))),
+            daily_estimate_on: on,
+            ..UpdateSettings::default()
+        }
+    }
+
+    #[test]
+    fn r_v_a_daily_estimate_is_0_01_to_10000_00_with_cents() {
+        for (text, stored) in [
+            ("50", "50.00"),
+            ("50.00", "50.00"),
+            ("0.01", "0.01"),
+            ("10000.00", "10000.00"),
+        ] {
+            let next = apply(defaults(), estimate(Some(text), None)).unwrap();
+            assert_eq!(next.daily_estimate, Some(money(stored)), "{text}");
+        }
+        for text in ["0", "0.00", "-5.00", "0.001", "50.005", "10000.01"] {
+            assert_eq!(
+                field(apply(defaults(), estimate(Some(text), None))),
+                "daily_estimate",
+                "{text}"
+            );
+        }
+    }
+
+    #[test]
+    fn r_v_on_needs_a_value() {
+        assert_eq!(
+            field(apply(defaults(), estimate(None, Some(true)))),
+            "daily_estimate_on"
+        );
+        let valued = apply(defaults(), estimate(Some("50.00"), None)).unwrap();
+        let null_and_on = UpdateSettings {
+            daily_estimate: Some(None),
+            daily_estimate_on: Some(true),
+            ..UpdateSettings::default()
+        };
+        assert_eq!(field(apply(valued, null_and_on)), "daily_estimate_on");
+        let both = apply(defaults(), estimate(Some("50.00"), Some(true))).unwrap();
+        assert_eq!(both.daily_estimate, Some(money("50.00")));
+        assert!(both.daily_estimate_on);
+    }
+
+    #[test]
+    fn r_v_clearing_the_value_turns_it_off() {
+        let on = apply(defaults(), estimate(Some("50.00"), Some(true))).unwrap();
+
+        let cleared = apply(
+            on,
+            UpdateSettings {
+                daily_estimate: Some(None),
+                ..UpdateSettings::default()
+            },
+        )
+        .unwrap();
+
+        assert_eq!(cleared.daily_estimate, None);
+        assert!(!cleared.daily_estimate_on);
+    }
+
+    #[test]
+    fn toggling_keeps_the_value() {
+        let on = apply(defaults(), estimate(Some("50.00"), Some(true))).unwrap();
+
+        let off = apply(on, estimate(None, Some(false))).unwrap();
+        assert_eq!(off.daily_estimate, Some(money("50.00")));
+        assert!(!off.daily_estimate_on);
+
+        let again = apply(off, estimate(None, Some(true))).unwrap();
+        assert_eq!(again.daily_estimate, Some(money("50.00")));
+        assert!(again.daily_estimate_on);
+    }
+
+    fn day(text: &str) -> NaiveDate {
+        text.parse().unwrap()
+    }
+
+    fn suggested(total: &str, today: &str, opening: &str) -> Option<DailyEstimateSuggestion> {
+        let (from, to) = suggestion_window(day(today), day(opening))?;
+        suggest(money(total), from, to)
+    }
+
+    #[test]
+    fn e16_the_window_starts_at_the_opening_date() {
+        assert_eq!(
+            suggestion_window(day("2026-11-28"), day("2026-08-20")),
+            Some((day("2026-08-20"), day("2026-10-31")))
+        );
+        assert_eq!(
+            suggested("2650.00", "2026-11-28", "2026-08-20"),
+            Some(DailyEstimateSuggestion {
+                amount: money("36.30"),
+                from: day("2026-08-20"),
+                to: day("2026-10-31"),
+            })
+        );
+    }
+
+    #[test]
+    fn e17_half_even() {
+        let amount = |total| suggested(total, "2026-11-28", "2026-01-01").map(|s| s.amount);
+        assert_eq!(amount("4600.46"), Some(money("50.00")));
+        assert_eq!(amount("4601.38"), Some(money("50.02")));
+        assert_eq!(
+            suggested("4600.46", "2026-11-28", "2026-01-01").map(|s| (s.from, s.to)),
+            Some((day("2026-08-01"), day("2026-10-31")))
+        );
+    }
+
+    #[test]
+    fn e18_too_little_history() {
+        assert_eq!(
+            suggestion_window(day("2026-11-28"), day("2026-10-10")),
+            None
+        );
+        assert_eq!(
+            suggestion_window(day("2026-11-28"), day("2026-10-04")),
+            Some((day("2026-10-04"), day("2026-10-31")))
+        );
+        assert_eq!(
+            suggestion_window(day("2026-11-28"), day("2026-11-02")),
+            None
+        );
+    }
+
+    #[test]
+    fn e19_nothing_spent() {
+        assert_eq!(suggested("0", "2026-11-28", "2026-01-01"), None);
+    }
+
+    #[test]
+    fn x2_an_amount_that_cannot_be_saved() {
+        assert_eq!(suggested("0.10", "2026-11-28", "2026-01-01"), None);
+        assert_eq!(suggested("920000.92", "2026-11-28", "2026-01-01"), None);
     }
 
     #[test]

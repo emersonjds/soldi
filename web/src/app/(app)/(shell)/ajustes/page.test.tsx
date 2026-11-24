@@ -20,6 +20,7 @@ const open = (replies: Record<string, Reply> = {}) => {
 
 const SECTIONS = [
   ["Termômetro & Limites", "termometro", "Calibragem do Termômetro Financeiro"],
+  ["Diário previsto", "diario-previsto", "Diário previsto"],
   ["Moeda & Saldo Inicial", "moeda", "Moeda & Saldo Inicial"],
   ["Organização (Contas)", "organizacao", "Organização (Contas)"],
   ["Gestão de Dados", "dados", "Gestão de Dados & Zona de Perigo"],

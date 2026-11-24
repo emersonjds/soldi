@@ -30,11 +30,17 @@ pub struct Day {
     pub bills: Decimal,
     #[serde(serialize_with = "crate::money")]
     pub daily: Decimal,
+    /// SOL-164 R1: the Diário previsto this day adds to the projection; 0 when off, today or
+    /// earlier, before the opening date, or when the cash Diário typed reaches the estimate.
+    #[serde(serialize_with = "crate::money")]
+    #[schema(example = "30.00")]
+    pub previsto: Decimal,
     #[serde(serialize_with = "crate::money")]
     pub balance: Decimal,
     pub tier: Tier,
-    /// `balance` minus the unpaid bills landed on or before this day (`BillOfMonth::lands_on`);
-    /// equal to `balance` before today and in a past month.
+    /// `balance` minus the unpaid bills landed on or before this day (`BillOfMonth::lands_on`)
+    /// and the Diário previsto of every future day up to it; equal to `balance` up to today and
+    /// in a past month.
     #[serde(serialize_with = "crate::money")]
     pub projected_balance: Decimal,
     pub projected_tier: Tier,
@@ -136,8 +142,9 @@ pub struct MonthSavings {
 
 /// `month` is `YYYY-MM`. `balance_today` is the balance at today, or at the month's last day
 /// when the month is past. `projected_balance` is, for the current and a future month, the last
-/// day's `projected_balance` (every unpaid bill landed, earlier months' included); for a past
-/// month, the balance at its end minus its unpaid `bills_of_month`.
+/// day's `projected_balance` (every unpaid bill landed, earlier months' included, and the Diário
+/// previsto of every future day up to it); for a past month, the balance at its end minus its
+/// unpaid `bills_of_month`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct MonthView {
     pub month: String,
@@ -153,7 +160,8 @@ pub struct MonthView {
     pub savings: MonthSavings,
 }
 
-/// One day ahead (D16): the balance with every unpaid bill landed, and its tier.
+/// One day ahead (D16): the balance with every unpaid bill landed and, when on, the Diário
+/// previsto of every future day up to it (D49), and its tier.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct ForecastDay {
     pub date: NaiveDate,
@@ -192,6 +200,7 @@ mod tests {
             withdrawn: "0".parse().unwrap(),
             bills: "300".parse().unwrap(),
             daily: "50.5".parse().unwrap(),
+            previsto: "0".parse().unwrap(),
             balance: "-1150".parse().unwrap(),
             tier: Tier::LightRed,
             projected_balance: "-1650".parse().unwrap(),
@@ -203,7 +212,7 @@ mod tests {
         assert_eq!(
             serde_json::to_value(&day).unwrap(),
             json!({
-                "date": "2026-11-03", "income": "0.00", "withdrawn": "0.00", "bills": "300.00", "daily": "50.50",
+                "date": "2026-11-03", "income": "0.00", "withdrawn": "0.00", "bills": "300.00", "daily": "50.50", "previsto": "0.00",
                 "balance": "-1150.00", "tier": "light_red", "projected_balance": "-1650.00", "projected_tier": "red", "is_today": true, "is_future": false
             })
         );

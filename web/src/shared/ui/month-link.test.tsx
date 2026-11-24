@@ -17,6 +17,13 @@ describe("MonthLink", () => {
     expect(screen.getByRole("link", { name: "Como funciona" })).toHaveAttribute("href", "/tour?replay=1&m=2026-12");
   });
 
+  it("keeps a #section after the query", () => {
+    setSearch("m=2026-12");
+    render(<MonthLink href="/ajustes#diario-previsto">Ajustes</MonthLink>);
+
+    expect(screen.getByRole("link", { name: "Ajustes" })).toHaveAttribute("href", "/ajustes?m=2026-12#diario-previsto");
+  });
+
   it.each(["", "m=garbage", "m=2026-13", "m=x%26lancar%3D1"])("drops ?m= when it is not a month (%s)", (query) => {
     setSearch(query);
     render(<MonthLink href="/mes">Mês</MonthLink>);

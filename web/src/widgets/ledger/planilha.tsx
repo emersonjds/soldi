@@ -11,22 +11,26 @@ import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useBills, useCards } from "@/entities/bill/bill-queries";
 import { categoriesQuery } from "@/entities/category/categories-query";
-import { billKey } from "@/entities/month/forecast-alert";
+import { billKey, previstoKey } from "@/entities/month/forecast-alert";
 import { useMonth } from "@/entities/month/month-query";
+import { activeEstimate } from "@/entities/settings/daily-estimate";
 import { useSettings } from "@/entities/settings/settings-query";
 import { type Transaction, useTransactions } from "@/entities/transaction/transaction-queries";
 import { cn } from "@/lib/utils";
 import { hasProblem, type Schemas } from "@/shared/api/client";
+import { useCurrency } from "@/shared/lib/currency";
 import { addMonths, lastDay, monthName, todayISO, weekdayName } from "@/shared/lib/date";
 import { toInput } from "@/shared/lib/money";
 import { cents, TIER_LABEL, TIER_ORDER, TIER_STYLE } from "@/shared/lib/tier";
 import { replaceUrl } from "@/shared/lib/url";
+import { EstimateNote } from "@/shared/ui/estimate-note";
 import { Money } from "@/shared/ui/money";
+import { MonthLink } from "@/shared/ui/month-link";
 import { monthLabel } from "@/shared/ui/month-switcher";
 import { PageError } from "@/shared/ui/page-state";
 import { TierPill } from "@/shared/ui/tier-pill";
 
-import { DayBalance, dayLabel, dueCaption, entryOf, isForecast, titleOf } from "./ledger";
+import { DayBalance, dayLabel, dueCaption, entryOf, estimateCaption, isForecast, titleOf } from "./ledger";
 import { type PlanilhaRow, planilhaMonths, planilhaRows, sum } from "./planilha-rows";
 
 const COLUMNS = ["Data", "Entrada", "Saída", "Diário", "Saldo"];
@@ -47,7 +51,8 @@ const dayName = (date: string, today: string) => {
 
 type Entries = ReturnType<typeof useTransactions>;
 
-type Item = { key: string; title: string; caption: string; amount: string };
+/** `estimate`: the Diário previsto, never a Lançamento (SOL-164 S9). */
+type Item = { key: string; title: string; caption: string; amount: string; estimate?: boolean };
 
 const itemOf =
   (view: Schemas["MonthView"], categories?: Schemas["Category"][], bills?: Schemas["Bill"][]) =>
@@ -62,11 +67,34 @@ const itemOf =
   };
 
 /** Spec SOL-163 §9: the day's items under the planilha's columns, read-only. */
-const DayDetail = ({ row, view, entries }: { row: PlanilhaRow; view: Schemas["MonthView"]; entries: Entries }) => {
+const DayDetail = ({
+  row,
+  view,
+  entries,
+  estimate,
+}: {
+  row: PlanilhaRow;
+  view: Schemas["MonthView"];
+  entries: Entries;
+  estimate?: string | null;
+}) => {
   const categories = useQuery(categoriesQuery).data;
   const bills = useBills({ includeInactive: true }).data;
   const cards = useCards({ includeInactive: true }).data;
+  const currency = useCurrency();
   if (!row.day) return <p className="text-muted-foreground">Este dia é anterior ao seu saldo inicial.</p>;
+  const previsto: Item[] =
+    estimate && cents(row.day.previsto) > 0
+      ? [
+          {
+            key: previstoKey(row.date),
+            title: "Diário previsto",
+            caption: estimateCaption(estimate, row.day, currency),
+            amount: row.day.previsto,
+            estimate: true,
+          },
+        ]
+      : [];
   const ofKind = (kind: Schemas["CategoryKind"]) =>
     (entries.data ?? []).filter((transaction) => transaction.date === row.date && transaction.kind === kind);
   const item = itemOf(view, categories, bills);
@@ -81,7 +109,7 @@ const DayDetail = ({ row, view, entries }: { row: PlanilhaRow; view: Schemas["Mo
       caption: `${cards?.find(({ id }) => id === transaction.card_id)?.name ?? "Cartão"} · na fatura`,
     }));
   const total = (items: Item[]) => (items.length > 0 ? sum(items.map(({ amount }) => amount)) : null);
-  const outflows = [
+  const outflows: Item[] = [
     ...ofKind("bill").map(item),
     ...row.landed.map((bill) => ({
       key: billKey(bill),
@@ -94,7 +122,12 @@ const DayDetail = ({ row, view, entries }: { row: PlanilhaRow; view: Schemas["Mo
   const groups = [
     { name: "Entrada", income: true, items: incomes, total: total(incomes) },
     { name: "Saída", income: false, items: outflows, total: total(outflows) },
-    { name: "Diário", income: false, items: [...spends, ...onCard], total: total(spends) },
+    {
+      name: "Diário",
+      income: false,
+      items: [...spends, ...previsto, ...onCard],
+      total: total([...spends, ...previsto]),
+    },
   ].filter(({ items }) => items.length > 0);
 
   return (
@@ -108,7 +141,7 @@ const DayDetail = ({ row, view, entries }: { row: PlanilhaRow; view: Schemas["Mo
           <ul className="flex flex-col gap-2">
             {items.map((item) => (
               <li key={item.key} className="grid grid-cols-[1fr_auto] gap-x-3">
-                <span className="text-base font-medium break-words">{item.title}</span>
+                <span className={cn("text-base font-medium break-words", item.estimate && "italic")}>{item.title}</span>
                 <Money amount={item.amount} income={income} outflow={!income} className="row-span-2 font-semibold" />
                 <span className="text-muted-foreground text-xs">{item.caption}</span>
               </li>
@@ -116,6 +149,14 @@ const DayDetail = ({ row, view, entries }: { row: PlanilhaRow; view: Schemas["Mo
           </ul>
         </section>
       ))}
+      {previsto.length > 0 && (
+        <MonthLink
+          href="/ajustes#diario-previsto"
+          className="text-primary focus-visible:outline-ring inline-flex min-h-11 items-center self-start text-sm font-medium hover:underline focus-visible:outline-2"
+        >
+          Ajustar Diário previsto
+        </MonthLink>
+      )}
       {entries.isSuccess && groups.length === 0 && (
         <p className="text-muted-foreground">
           {row.day.is_future ? "Nada previsto para este dia." : "Nada lançado neste dia."}
@@ -163,6 +204,8 @@ type RowProps = {
   ringed: boolean;
   /** Takes a focus asked for `date` before its month loaded; true when it is still the person's. */
   claim: (date: string) => boolean;
+  /** The Diário previsto per day (SOL-164); absent when off. */
+  estimate?: string | null;
 };
 
 const FINE_POINTER = "(hover: hover) and (pointer: fine)";
@@ -170,8 +213,9 @@ const FINE_POINTER = "(hover: hover) and (pointer: fine)";
 /** `hover`: the popover a resting pointer opened, which leaves focus where it is. */
 type Shown = "hover" | "popover" | "sheet" | null;
 
-const Row = ({ row, today, view, entries, stop, onFocus, ringed, claim }: RowProps) => {
-  const { date, day, income, outflow, landed } = row;
+const Row = ({ row, today, view, entries, stop, onFocus, ringed, claim, estimate }: RowProps) => {
+  const { date, day, income, outflow, daily, landed } = row;
+  const estimated = Boolean(estimate) && cents(day?.previsto ?? "0.00") > 0;
   const [shown, setShown] = useState<Shown>(null);
   const tr = useRef<HTMLTableRowElement>(null);
   const button = useRef<HTMLButtonElement>(null);
@@ -181,7 +225,8 @@ const Row = ({ row, today, view, entries, stop, onFocus, ringed, claim }: RowPro
   const ahead = day?.is_future && "italic text-muted-foreground";
   const title = dayLabel(day ?? { date, is_future: false });
   const fine = () => window.matchMedia(FINE_POINTER).matches;
-  const hasItems = landed.length > 0 || Boolean(entries.data?.some((transaction) => transaction.date === date));
+  const hasItems =
+    landed.length > 0 || estimated || Boolean(entries.data?.some((transaction) => transaction.date === date));
   const close = (next: boolean) => next || setShown(null);
   const floating = shown === "hover" || shown === "popover";
 
@@ -251,7 +296,10 @@ const Row = ({ row, today, view, entries, stop, onFocus, ringed, claim }: RowPro
                 {amountOf(outflow)}
                 {landed.length > 0 && <span className="sr-only"> inclui conta a pagar</span>}
               </td>
-              <td className={cn(MONEY, ahead)}>{amountOf(day.daily)}</td>
+              <td className={cn(MONEY, ahead)}>
+                {amountOf(estimated ? daily : day.daily)}
+                {estimated && <span className="sr-only"> inclui Diário previsto</span>}
+              </td>
               <td
                 className={cn(MONEY, "font-semibold", TIER_STYLE[day.projected_tier].pill, isForecast(day) && "italic")}
               >
@@ -287,7 +335,7 @@ const Row = ({ row, today, view, entries, stop, onFocus, ringed, claim }: RowPro
         className="w-80 max-w-[calc(100vw-2rem)] gap-3 p-4"
       >
         <p className="text-base font-semibold">{title}</p>
-        <DayDetail row={row} view={view} entries={entries} />
+        <DayDetail row={row} view={view} entries={entries} estimate={estimate} />
       </PopoverContent>
       <Sheet open={shown === "sheet"} onOpenChange={close}>
         <SheetContent
@@ -300,7 +348,7 @@ const Row = ({ row, today, view, entries, stop, onFocus, ringed, claim }: RowPro
           className="mx-auto max-h-[80dvh] max-w-lg gap-3 overflow-y-auto rounded-t-3xl px-4 pt-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))]"
         >
           <SheetTitle className="pr-12 text-lg font-bold">{title}</SheetTitle>
-          <DayDetail row={row} view={view} entries={entries} />
+          <DayDetail row={row} view={view} entries={entries} estimate={estimate} />
         </SheetContent>
       </Sheet>
     </Popover>
@@ -320,9 +368,13 @@ const SkeletonBody = ({ month }: { month: string }) => (
   </tbody>
 );
 
-type MonthProps = Pick<RowProps, "today" | "claim"> & { month: string; openingDate: string; highlight: string | null };
+type MonthProps = Pick<RowProps, "today" | "claim" | "estimate"> & {
+  month: string;
+  openingDate: string;
+  highlight: string | null;
+};
 
-const MonthBody = ({ month, today, openingDate, highlight, claim }: MonthProps) => {
+const MonthBody = ({ month, today, openingDate, highlight, claim, estimate }: MonthProps) => {
   const view = useMonth(month);
   const entries = useTransactions(month);
   const [stop, setStop] = useState(today.startsWith(month) ? today : `${month}-01`);
@@ -340,6 +392,7 @@ const MonthBody = ({ month, today, openingDate, highlight, claim }: MonthProps) 
             onFocus={() => setStop(row.date)}
             ringed={row.date === highlight}
             claim={claim}
+            estimate={estimate}
           />
         ))}
       </tbody>
@@ -360,7 +413,7 @@ const MonthBody = ({ month, today, openingDate, highlight, claim }: MonthProps) 
   );
 };
 
-const MonthBlock = ({ month, today, openingDate, highlight, claim }: MonthProps) => {
+const MonthBlock = ({ month, today, openingDate, highlight, claim, estimate }: MonthProps) => {
   const [near, setNear] = useState(false);
   const label = monthLabel(month);
 
@@ -403,7 +456,14 @@ const MonthBlock = ({ month, today, openingDate, highlight, claim }: MonthProps)
         </tr>
       </thead>
       {near ? (
-        <MonthBody month={month} today={today} openingDate={openingDate} highlight={highlight} claim={claim} />
+        <MonthBody
+          month={month}
+          today={today}
+          openingDate={openingDate}
+          highlight={highlight}
+          claim={claim}
+          estimate={estimate}
+        />
       ) : (
         <SkeletonBody month={month} />
       )}
@@ -441,10 +501,18 @@ type PlanilhaProps = {
   month?: string;
   /** The day ringed after a jump from the RedDayAlert. */
   highlight?: string | null;
+  /** The Diário previsto per day (SOL-164); absent when off. */
+  estimate?: string | null;
 };
 
 /** Spec SOL-163 §3–§8: the month view as the owner's sheet, one table per month side by side. */
-export const Planilha = ({ today, openingDate, month = today.slice(0, 7), highlight = null }: PlanilhaProps) => {
+export const Planilha = ({
+  today,
+  openingDate,
+  month = today.slice(0, 7),
+  highlight = null,
+  estimate,
+}: PlanilhaProps) => {
   const scroller = useRef<HTMLDivElement>(null);
   const placed = useRef<string>(null);
   const [seen, setSeen] = useState(true);
@@ -526,6 +594,7 @@ export const Planilha = ({ today, openingDate, month = today.slice(0, 7), highli
             openingDate={openingDate}
             highlight={highlight}
             claim={claim}
+            estimate={estimate}
           />
         ))}
       </div>
@@ -535,6 +604,7 @@ export const Planilha = ({ today, openingDate, month = today.slice(0, 7), highli
           <TierPill key={tier} tier={tier} size="sm" />
         ))}
       </div>
+      {estimate && <EstimateNote estimate={estimate} />}
     </div>
   );
 };
@@ -554,5 +624,13 @@ export const PlanilhaView = ({ month, highlight }: Pick<PlanilhaProps, "highligh
         </p>
       </div>
     );
-  return <Planilha today={todayISO()} openingDate={settings.data.opening_date} month={month} highlight={highlight} />;
+  return (
+    <Planilha
+      today={todayISO()}
+      openingDate={settings.data.opening_date}
+      month={month}
+      highlight={highlight}
+      estimate={activeEstimate(settings.data)}
+    />
+  );
 };

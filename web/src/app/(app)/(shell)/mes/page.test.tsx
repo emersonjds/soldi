@@ -27,6 +27,7 @@ import {
   MOVEMENTS,
   problem,
   REPORT,
+  SETTINGS,
   signedIn,
   TRANSACTIONS,
   WITH_COFRINHOS,
@@ -883,6 +884,44 @@ describe("Mês", () => {
       expect(body).not.toHaveProperty("last_month");
       expect(await screen.findByText("Conta fixa criada")).toBeInTheDocument();
     });
+  });
+
+  it("names the red day's Diário previsto with its rate when it is the cause (SOL-164 A14)", async () => {
+    open({
+      "GET /api/settings": { status: 200, body: { ...SETTINGS, daily_estimate: "50.00", daily_estimate_on: true } },
+      "GET /api/months/2026-11": {
+        status: 200,
+        body: {
+          ...FORECAST_MONTH,
+          bills_of_month: [],
+          days: FORECAST_MONTH.days.map((day) => (day.date === "2026-11-23" ? { ...day, previsto: "50.00" } : day)),
+        },
+      },
+      "GET /api/transactions": { status: 200, body: [] },
+    });
+
+    expect(await screen.findByRole("region", { name: "Alerta do mês" })).toHaveTextContent(
+      /^Dia 23 fica no vermelho: -R\$\s675,00\. Diário previsto \(R\$\s50,00\/dia\) excede o saldo em caixa projetado\.Ver o dia 23$/,
+    );
+  });
+
+  it("still names the red day's Diário previsto, without the rate, when the settings fail", async () => {
+    open({
+      "GET /api/settings": { status: 500, body: problem(500, "Falhou.") },
+      "GET /api/months/2026-11": {
+        status: 200,
+        body: {
+          ...FORECAST_MONTH,
+          bills_of_month: [],
+          days: FORECAST_MONTH.days.map((day) => (day.date === "2026-11-23" ? { ...day, previsto: "50.00" } : day)),
+        },
+      },
+      "GET /api/transactions": { status: 200, body: [] },
+    });
+
+    expect(await screen.findByRole("region", { name: "Alerta do mês" })).toHaveTextContent(
+      /^Dia 23 fica no vermelho: -R\$\s675,00\. Diário previsto excede o saldo em caixa projetado\.Ver o dia 23$/,
+    );
   });
 
   it("warns above the cards of the first red day and its two largest outflows; Ver o dia jumps, rings it for 2 s and names the cause", async () => {

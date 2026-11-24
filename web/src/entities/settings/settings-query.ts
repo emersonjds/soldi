@@ -9,6 +9,14 @@ export const settingsQuery = queryOptions({
 
 export const useSettings = () => useQuery(settingsQuery);
 
+/** Under `month` so every settings save refreshes it with the months. */
+export const suggestionQuery = queryOptions({
+  queryKey: ["month", "daily-estimate-suggestion"],
+  queryFn: async () => dataOrThrow(await api.GET("/api/settings/daily-estimate-suggestion")),
+});
+
+export const useSuggestion = () => useQuery(suggestionQuery);
+
 export const useUpdateSettings = () => {
   const client = useQueryClient();
   return useMutation({

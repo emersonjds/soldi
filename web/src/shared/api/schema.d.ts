@@ -500,6 +500,22 @@ export interface paths {
         patch: operations["update_settings"];
         trace?: never;
     };
+    "/api/settings/daily-estimate-suggestion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_suggestion"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/transactions": {
         parameters: {
             query?: never;
@@ -892,6 +908,24 @@ export interface components {
          */
         Currency: "BRL" | "USD" | "GBP" | "EUR";
         /**
+         * @description R-S: the cash Diário (no card) from `from` to `to` divided by its days, half-even to cents;
+         *     a pre-fill only, never stored.
+         */
+        DailyEstimateSuggestion: {
+            /** @example 36.30 */
+            amount: string;
+            /**
+             * Format: date
+             * @example 2026-08-20
+             */
+            from: string;
+            /**
+             * Format: date
+             * @example 2026-10-31
+             */
+            to: string;
+        };
+        /**
          * @description One calendar day: what came in and went out, and the balance at its end. `income` leaves
          *     resgates out; `withdrawn` holds them, and the balance adds both.
          */
@@ -905,8 +939,15 @@ export interface components {
             is_future: boolean;
             is_today: boolean;
             /**
-             * @description `balance` minus the unpaid bills landed on or before this day (`BillOfMonth::lands_on`);
-             *     equal to `balance` before today and in a past month.
+             * @description SOL-164 R1: the Diário previsto this day adds to the projection; 0 when off, today or
+             *     earlier, before the opening date, or when the cash Diário typed reaches the estimate.
+             * @example 30.00
+             */
+            previsto: string;
+            /**
+             * @description `balance` minus the unpaid bills landed on or before this day (`BillOfMonth::lands_on`)
+             *     and the Diário previsto of every future day up to it; equal to `balance` up to today and
+             *     in a past month.
              */
             projected_balance: string;
             projected_tier: components["schemas"]["Tier"];
@@ -940,7 +981,10 @@ export interface components {
             /** Format: date */
             today: string;
         };
-        /** @description One day ahead (D16): the balance with every unpaid bill landed, and its tier. */
+        /**
+         * @description One day ahead (D16): the balance with every unpaid bill landed and, when on, the Diário
+         *     previsto of every future day up to it (D49), and its tier.
+         */
         ForecastDay: {
             /** Format: date */
             date: string;
@@ -963,8 +1007,9 @@ export interface components {
         /**
          * @description `month` is `YYYY-MM`. `balance_today` is the balance at today, or at the month's last day
          *     when the month is past. `projected_balance` is, for the current and a future month, the last
-         *     day's `projected_balance` (every unpaid bill landed, earlier months' included); for a past
-         *     month, the balance at its end minus its unpaid `bills_of_month`.
+         *     day's `projected_balance` (every unpaid bill landed, earlier months' included, and the Diário
+         *     previsto of every future day up to it); for a past month, the balance at its end minus its
+         *     unpaid `bills_of_month`.
          */
         MonthView: {
             balance_today: string;
@@ -1092,11 +1137,22 @@ export interface components {
          */
         Settings: {
             currency: components["schemas"]["Currency"];
+            /**
+             * @description SOL-164: the Diário previsto per day the person declared, 0.01 to 10000.00; null when never set.
+             * @example 50.00
+             */
+            daily_estimate: string | null;
+            /**
+             * @description When true (and only with a value), every future day on or after the opening date takes
+             *     `max(daily_estimate − that day's cash Diário, 0)` in the projected balances (D49).
+             * @example true
+             */
+            daily_estimate_on: boolean;
             opening_balance: string;
             /** Format: date */
             opening_date: string;
             /** @example 20.00 */
-            savings_target_pct?: string | null;
+            savings_target_pct: string | null;
             tier_green: string;
             tier_red: string;
             tier_yellow: string;
@@ -1254,6 +1310,16 @@ export interface components {
         /** @description Absent fields stay as they are; `"savings_target_pct": null` clears the target. */
         UpdateSettings: {
             currency?: components["schemas"]["Currency"] | null;
+            /**
+             * @description 0.01 to 10000.00, two places at most; null clears it and turns it off.
+             * @example 50.00
+             */
+            daily_estimate?: string | null;
+            /**
+             * @description true needs a value saved or sent in the same patch.
+             * @example true
+             */
+            daily_estimate_on?: boolean | null;
             opening_balance?: string | null;
             /** Format: date */
             opening_date?: string | null;
@@ -3226,7 +3292,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Money with more than two places, tiers out of order (names the upper tier of the first pair), an unknown field */
+            /** @description Money with more than two places, tiers out of order (names the upper tier of the first pair), a daily_estimate outside 0.01..10000.00, daily_estimate_on true without a value, an unknown field */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -3237,6 +3303,34 @@ export interface operations {
             };
             /** @description Rate limited with the account's write budget; wait `Retry-After` seconds */
             429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    get_suggestion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The last 3 complete months' cash Diário per day, from the opening date; null under 28 days of history, no cash Diário, or an amount that could not be saved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DailyEstimateSuggestion"] | null;
+                };
+            };
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };

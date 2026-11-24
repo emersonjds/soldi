@@ -3,6 +3,7 @@
 import { useSearchParams } from "next/navigation";
 
 import {
+  CalendarClock,
   ChevronRight,
   CircleHelp,
   Coins,
@@ -26,6 +27,7 @@ import {
 import { APP_CONFIG } from "@/config/app-config";
 import { DeleteEntriesForm } from "@/features/delete-entries/delete-entries-form";
 import { CurrencyForm } from "@/features/edit-settings/currency-form";
+import { DailyEstimateForm } from "@/features/edit-settings/daily-estimate-form";
 import { OpeningForm } from "@/features/edit-settings/opening-form";
 import { ThermometerForm } from "@/features/edit-settings/thermometer-form";
 import { monthParam } from "@/shared/lib/date";
@@ -106,6 +108,14 @@ const AjustesPage = () => {
             badge={<LiveBadge />}
           >
             <WithSettings>{(settings) => <ThermometerForm settings={settings} />}</WithSettings>
+          </SettingsSection>
+          <SettingsSection
+            id="diario-previsto"
+            icon={CalendarClock}
+            title="Diário previsto"
+            subtitle="Uma estimativa do que você gasta por dia, para a projeção não ficar mais verde do que vai ser. Não vira lançamento e não entra nos relatórios."
+          >
+            <WithSettings>{(settings) => <DailyEstimateForm settings={settings} />}</WithSettings>
           </SettingsSection>
           <SettingsSection
             id="moeda"

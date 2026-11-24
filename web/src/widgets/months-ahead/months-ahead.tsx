@@ -7,7 +7,10 @@ import { ArrowRight, CalendarRange } from "lucide-react";
 import { useForecast } from "@/entities/forecast/forecast-query";
 import { MonthChips } from "@/entities/forecast/month-chips";
 import { isFlat, monthsAhead } from "@/entities/forecast/months-ahead";
+import { activeEstimate, includesEstimate } from "@/entities/settings/daily-estimate";
+import { useSettings } from "@/entities/settings/settings-query";
 import { cn } from "@/lib/utils";
+import { EstimateNote } from "@/shared/ui/estimate-note";
 
 type Props = { viewing: string; onOpen: (month: string) => void };
 
@@ -18,6 +21,9 @@ type MonthsAheadProps = Props & { className?: string };
  */
 export const MonthsAhead = ({ viewing, onOpen, className }: MonthsAheadProps) => {
   const forecast = useForecast();
+  const settings = useSettings().data;
+  const estimate =
+    settings && forecast.data && includesEstimate(settings, forecast.data) ? activeEstimate(settings) : null;
   const failed = forecast.isError && !forecast.data;
   if (!failed && (!forecast.data || isFlat(forecast.data))) return null;
   return (
@@ -41,7 +47,10 @@ export const MonthsAhead = ({ viewing, onOpen, className }: MonthsAheadProps) =>
         </Link>
       </div>
       {forecast.data ? (
-        <MonthChips months={monthsAhead(forecast.data, 12)} current={viewing} onOpen={onOpen} />
+        <div className="flex flex-col gap-1">
+          <MonthChips months={monthsAhead(forecast.data, 12)} current={viewing} onOpen={onOpen} />
+          {estimate && <EstimateNote estimate={estimate} />}
+        </div>
       ) : (
         <p className="text-muted-foreground flex flex-wrap items-center gap-x-2 text-sm">
           Não foi possível carregar.

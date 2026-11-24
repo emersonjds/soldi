@@ -583,3 +583,41 @@ async fn sol140_card_group_flags_the_active_top_level_fixa_cartao_once_per_user(
     .await;
     assert!(second.is_err());
 }
+
+#[sqlx::test(migrations = false)]
+async fn sol164_the_daily_estimate_starts_empty_and_off_and_on_needs_a_value(pool: PgPool) {
+    migrate_before(&pool, 31).await;
+    let ana = user(&pool, "ana@example.com").await;
+    sqlx::query("INSERT INTO settings (user_id, opening_date) VALUES ($1, '2026-11-05')")
+        .bind(ana)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    migrate_from(&pool, 31).await;
+
+    let estimate: (Option<rust_decimal::Decimal>, bool) =
+        sqlx::query_as("SELECT daily_estimate, daily_estimate_on FROM settings")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(estimate, (None, false));
+    let refused = sqlx::query("UPDATE settings SET daily_estimate_on = true")
+        .execute(&pool)
+        .await
+        .unwrap_err();
+    assert!(
+        refused
+            .to_string()
+            .contains("settings_daily_estimate_on_has_value"),
+        "{refused}"
+    );
+    let out_of_range = sqlx::query("UPDATE settings SET daily_estimate = 10000.01")
+        .execute(&pool)
+        .await
+        .unwrap_err();
+    assert_eq!(
+        out_of_range.as_database_error().unwrap().constraint(),
+        Some("settings_daily_estimate_check")
+    );
+}
