@@ -48,7 +48,7 @@ async fn the_sheets_first_days_come_back_with_balances_tiers_and_totals(pool: Pg
         view["days"][2],
         json!({
             "date": "2026-11-03", "income": "0.00", "withdrawn": "0.00", "bills": "300.00", "daily": "50.00",
-            "balance": "1150.00", "tier": "light_green",
+            "previsto": "0.00", "balance": "1150.00", "tier": "light_green",
             "projected_balance": "1150.00", "projected_tier": "light_green",
             "is_today": view["days"][2]["is_today"], "is_future": view["days"][2]["is_future"]
         })
@@ -579,6 +579,82 @@ async fn sol51_the_forecast_walks_twelve_months_of_the_callers_bills(pool: PgPoo
 
     let (status, _) = TestApp::anonymous(pool).get("/api/forecast").await;
     assert_eq!(status, StatusCode::UNAUTHORIZED);
+}
+
+#[sqlx::test]
+async fn sol164_the_callers_declared_estimate_counts_from_tomorrow_in_view_and_forecast(
+    pool: PgPool,
+) {
+    use chrono::{Datelike, Months};
+    let ana = TestApp::signed_in(pool, "ana@example.com").await;
+    let bia = ana.another_user("bia@example.com").await;
+    let today = soldi_server::today_sao_paulo();
+    let first = today.with_day(1).unwrap();
+    let next = first.checked_add_months(Months::new(1)).unwrap();
+    let last = first.checked_add_months(Months::new(11)).unwrap();
+    let path = |month: chrono::NaiveDate| format!("/api/months/{}", month.format("%Y-%m"));
+    open_at(&ana, "1000", &first.to_string()).await;
+    open_at(&bia, "1000", &first.to_string()).await;
+    log(&ana, &today.to_string(), "daily", "10", "Mercado").await;
+    let (_, off) = ana.get(&path(next)).await;
+    assert!(
+        off["days"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|day| day["previsto"] == "0.00" && day["projected_balance"] == "990.00")
+    );
+
+    let on = json!({ "daily_estimate": "50.00", "daily_estimate_on": true });
+    let (status, _) = bia.patch("/api/settings", on.clone()).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(ana.get(&path(next)).await.1, off);
+
+    let (status, _) = ana.patch("/api/settings", on).await;
+    assert_eq!(status, StatusCode::OK);
+    let (_, view) = ana.get(&path(next)).await;
+    let (_, this) = ana.get(&path(first)).await;
+    let this_days = this["days"].as_array().unwrap();
+    let today_row = this_days
+        .iter()
+        .find(|day| day["is_today"] == true)
+        .unwrap();
+    assert_eq!(
+        (&today_row["previsto"], &today_row["projected_balance"]),
+        (&json!("0.00"), &json!("990.00"))
+    );
+    let left = this_days
+        .iter()
+        .filter(|day| day["is_future"] == true)
+        .count();
+    let day_1 = &view["days"][0];
+    assert_eq!(day_1["previsto"], "50.00");
+    assert_eq!(day_1["balance"], "990.00");
+    assert_eq!(
+        day_1["projected_balance"],
+        format!("{}.00", 990 - 50 * (left as i64 + 1))
+    );
+    assert_eq!(view["totals"], off["totals"]);
+    assert_eq!(view["savings"], off["savings"]);
+    assert_eq!(view["balance_today"], off["balance_today"]);
+
+    let (_, forecast) = ana.get("/api/forecast").await;
+    let (_, end) = ana.get(&path(last)).await;
+    let days = forecast["days"].as_array().unwrap();
+    assert_eq!(days[0]["projected_balance"], "990.00");
+    assert_eq!(
+        days.last().unwrap()["projected_balance"],
+        end["days"].as_array().unwrap().last().unwrap()["projected_balance"]
+    );
+    assert_eq!(
+        end["projected_balance"],
+        days.last().unwrap()["projected_balance"]
+    );
+    let (_, theirs) = bia.get("/api/forecast").await;
+    assert_ne!(
+        theirs["days"].as_array().unwrap().last().unwrap()["projected_balance"],
+        "1000.00"
+    );
 }
 
 async fn card(user: &TestApp, name: &str) -> String {
