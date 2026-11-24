@@ -1,7 +1,7 @@
 mod common;
 
 use axum::http::StatusCode;
-use chrono::{Datelike, Days, NaiveDate};
+use chrono::{Datelike, Days, Months, NaiveDate};
 use common::TestApp;
 use serde_json::json;
 use sqlx::PgPool;
@@ -237,13 +237,22 @@ async fn log(user: &TestApp, date: NaiveDate, kind: &str, amount: &str, category
 #[sqlx::test]
 async fn r_s_the_suggestion_is_last_months_cash_diario_per_day(pool: PgPool) {
     let ana = TestApp::signed_in(pool.clone(), "ana@example.com").await;
-    let bia = TestApp::signed_in(pool, "bia@example.com").await;
+    let bia = TestApp::signed_in(pool.clone(), "bia@example.com").await;
+    let cia = TestApp::signed_in(pool.clone(), "cia@example.com").await;
     let today = soldi_server::today_sao_paulo();
-    let to = today.with_day(1).unwrap().pred_opt().unwrap();
+    let first = today.with_day(1).unwrap();
+    let to = first.pred_opt().unwrap();
     let from = to - Days::new(29);
     for user in [&ana, &bia] {
         user.open_at("0", &from.to_string()).await;
     }
+    let months_back = |n| first.checked_sub_months(Months::new(n)).unwrap();
+    let window_start = months_back(3);
+    cia.open_at("0", &months_back(5).to_string()).await;
+    log(&cia, months_back(4), "daily", "5000.00", "Mercado").await;
+    let window_days = (to - window_start).num_days() + 1;
+    let inside = format!("{}.00", window_days * 10);
+    log(&cia, window_start, "daily", &inside, "Mercado").await;
     log(&ana, from, "daily", "100.00", "Mercado").await;
     log(&ana, to, "daily", "200.00", "Mercado").await;
     log(&ana, to, "income", "1000.00", "Salário").await;
@@ -265,6 +274,23 @@ async fn r_s_the_suggestion_is_last_months_cash_diario_per_day(pool: PgPool) {
         )
         .await;
     assert_eq!(status, StatusCode::CREATED, "{spend}");
+    let light = ana.category_id("Luz").await;
+    let (_, bill) = ana
+        .post(
+            "/api/bills",
+            json!({ "name": "Luz", "amount": "120.00", "due_day": 5, "category_id": light }),
+        )
+        .await;
+    sqlx::query(
+        "INSERT INTO transactions (user_id, date, amount, kind, category_id, card_id)
+         SELECT id, $1, 300, 'daily', $2::uuid, $3::uuid FROM users WHERE email = 'ana@example.com'",
+    )
+    .bind(to)
+    .bind(&market)
+    .bind(bill["id"].as_str().unwrap())
+    .execute(&pool)
+    .await
+    .unwrap();
     log(&bia, from, "daily", "700.00", "Mercado").await;
 
     let (status, suggestion) = ana.get("/api/settings/daily-estimate-suggestion").await;
@@ -272,11 +298,23 @@ async fn r_s_the_suggestion_is_last_months_cash_diario_per_day(pool: PgPool) {
     assert_eq!(status, StatusCode::OK, "{suggestion}");
     assert_eq!(
         suggestion,
-        json!({ "amount": "10.00", "from": from, "to": to })
+        json!({ "amount": "20.00", "from": from, "to": to })
+    );
+    let archived = ana
+        .delete(&format!("/api/bills/{}", card["id"].as_str().unwrap()))
+        .await;
+    assert_eq!(archived.0, StatusCode::NO_CONTENT);
+    assert_eq!(
+        ana.get("/api/settings/daily-estimate-suggestion").await.1,
+        suggestion
     );
     assert_eq!(
         bia.get("/api/settings/daily-estimate-suggestion").await.1["amount"],
         "23.33"
+    );
+    assert_eq!(
+        cia.get("/api/settings/daily-estimate-suggestion").await.1,
+        json!({ "amount": "10.00", "from": window_start, "to": to })
     );
 }
 
