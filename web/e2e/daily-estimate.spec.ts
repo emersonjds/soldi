@@ -73,6 +73,7 @@ test("Diário previsto: off changes nothing; on from Ajustes it shows in the her
   // A1: never set.
   await page.goto(`/mes?m=${month}`);
   await expect(page.getByRole("region", { name: "Lançamentos" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Próximos meses" })).toBeVisible();
   await expect(page.getByText("Diário previsto")).toHaveCount(0);
 
   await page.goto("/ajustes");
@@ -133,6 +134,10 @@ test("Diário previsto: off changes nothing; on from Ajustes it shows in the her
     .first()
     .click();
   await expect(page).toHaveURL(new RegExp(`/ajustes\\?m=${month}#diario-previsto$`));
+  await expect(section).toBeInViewport();
+  await page.goBack();
+  await expect(page).toHaveURL(new RegExp(`/mes\\?m=${month}$`));
+  await page.goto("/ajustes");
   await expect(toggle).toBeVisible();
 
   // Off: the value stays, every screen reads as today's.
@@ -143,8 +148,22 @@ test("Diário previsto: off changes nothing; on from Ajustes it shows in the her
 
   await page.goto(`/mes?m=${month}`);
   await expect(ledger).toBeVisible();
+  await expect(ahead).toBeVisible();
   await expect(page.getByText("Diário previsto")).toHaveCount(0);
   expect(await totals()).toEqual(before);
+  await ledger
+    .getByRole("radiogroup", { name: "Ver lançamentos como" })
+    .getByRole("radio", { name: "Planilha" })
+    .click();
+  await expect(row).toContainText(/10,00/);
+  await expect(row).not.toContainText("inclui Diário previsto");
+
+  await page.goto("/posso-comprar");
+  await page.getByLabel("Valor total estimado").fill("1.200,00");
+  await page.getByRole("radio", { name: "6x" }).click();
+  await page.getByRole("button", { name: "Calcular Projeção" }).click();
+  await expect(page.getByRole("region", { name: "Veredito do orçamento" })).toBeVisible();
+  await expect(page.getByRole("link", { name: /^Inclui Diário previsto/ })).toHaveCount(0);
 });
 
 test("Diário previsto: the suggestion from three months of Diário turns it on (SOL-164 A5)", async ({
