@@ -387,42 +387,40 @@ export const Ledger = ({
       </div>
       {expanded && planilha && <div className="min-w-0 lg:col-span-3 lg:row-start-2">{planilha}</div>}
       {expanded && !planilha && (
-        <>
-          <div className="flex flex-col gap-2 lg:col-span-3 lg:row-start-2">
-            {groups.length === 0 && (
-              <p className="text-muted-foreground px-2 py-8 text-center">
-                {FILTERS.find((option) => option.value === filter)?.empty}
-              </p>
-            )}
-            {groups.map(({ day, entries, due }) => (
-              <div
-                key={day.date}
-                id={`dia-${day.date}`}
-                tabIndex={-1}
-                className={cn("scroll-mt-28 rounded-xl", highlight === day.date && "ring-expense ring-2")}
-              >
-                <h3 className="bg-muted text-muted-foreground sticky top-14 z-10 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 rounded-lg px-3 py-2 text-sm font-semibold lg:top-0">
-                  {dayLabel(day)}
-                  <DayBalance day={day} />
-                </h3>
-                <ul className={cn("flex flex-col", day.is_future && "opacity-60")}>
-                  {entries.map((transaction) => (
-                    <Row
-                      key={transaction.id}
-                      entry={entryFor(transaction)}
-                      transaction={transaction}
-                      cause={causes.has(transaction.id)}
-                      onOpen={() => open(transaction)}
-                    />
-                  ))}
-                  {due.map((bill) => (
-                    <DueRow key={billKey(bill)} bill={bill} month={view.month} cause={causes.has(billKey(bill))} />
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-        </>
+        <div className="flex flex-col gap-2 lg:col-span-3 lg:row-start-2">
+          {groups.length === 0 && (
+            <p className="text-muted-foreground px-2 py-8 text-center">
+              {FILTERS.find((option) => option.value === filter)?.empty}
+            </p>
+          )}
+          {groups.map(({ day, entries, due }) => (
+            <div
+              key={day.date}
+              id={`dia-${day.date}`}
+              tabIndex={-1}
+              className={cn("scroll-mt-28 rounded-xl", highlight === day.date && "ring-expense ring-2")}
+            >
+              <h3 className="bg-muted text-muted-foreground sticky top-14 z-10 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 rounded-lg px-3 py-2 text-sm font-semibold lg:top-0">
+                {dayLabel(day)}
+                <DayBalance day={day} />
+              </h3>
+              <ul className={cn("flex flex-col", day.is_future && "opacity-60")}>
+                {entries.map((transaction) => (
+                  <Row
+                    key={transaction.id}
+                    entry={entryFor(transaction)}
+                    transaction={transaction}
+                    cause={causes.has(transaction.id)}
+                    onOpen={() => open(transaction)}
+                  />
+                ))}
+                {due.map((bill) => (
+                  <DueRow key={billKey(bill)} bill={bill} month={view.month} cause={causes.has(billKey(bill))} />
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
       )}
 
       <Sheet open={acting} onOpenChange={setActing}>
