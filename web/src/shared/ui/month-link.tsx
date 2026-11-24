@@ -12,10 +12,11 @@ type LinkProps = ComponentProps<typeof Link> & { href: string };
 const KeptMonthLink = ({ href, ...props }: LinkProps) => {
   const month = useSearchParams().get("m");
   if (!isMonth(month)) return <Link href={href} {...props} />;
-  const [path, query] = href.split("?");
+  const [rest, hash] = href.split("#");
+  const [path, query] = rest.split("?");
   const params = new URLSearchParams(query);
   params.set("m", month);
-  return <Link href={`${path}?${params}`} {...props} />;
+  return <Link href={`${path}?${params}${hash === undefined ? "" : `#${hash}`}`} {...props} />;
 };
 
 /** A link that keeps the viewed month (`?m=`, D21) while moving between pages. */
