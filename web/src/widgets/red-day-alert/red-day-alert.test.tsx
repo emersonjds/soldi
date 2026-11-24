@@ -16,13 +16,17 @@ const TODAY: ForecastAlert = {
   lowest: { date: "2026-11-10", balance: "-675.00" },
 };
 
+const conta = (name: string) => ({ name, estimate: false });
+
+const PREVISTO = { name: "Diário previsto", estimate: true };
+
 const text = (element: HTMLElement) => element.textContent?.replace(/\s/g, " ");
 
 const banner = () => screen.getByRole("region", { name: "Alerta do mês" });
 
 describe("RedDayAlert", () => {
   it("names the first red day and its two largest outflows, with no worst-day line", () => {
-    render(<RedDayAlert alert={OWNER} outflows={["Cartão", "Seguro"]} onJump={vi.fn()} />);
+    render(<RedDayAlert alert={OWNER} outflows={[conta("Cartão"), conta("Seguro")]} onJump={vi.fn()} />);
 
     expect(text(within(banner()).getByRole("paragraph"))).toBe(
       "Dia 23 fica no vermelho: -R$ 675,00. Contas de Cartão e Seguro previstas excedem o saldo em caixa projetado.",
@@ -37,12 +41,28 @@ describe("RedDayAlert", () => {
   });
 
   it("says Hoje when today is red, in the singular with one outflow", () => {
-    render(<RedDayAlert alert={TODAY} outflows={["Aluguel"]} onJump={vi.fn()} />);
+    render(<RedDayAlert alert={TODAY} outflows={[conta("Aluguel")]} onJump={vi.fn()} />);
 
     expect(text(within(banner()).getByRole("paragraph"))).toBe(
       "Hoje está no vermelho: -R$ 675,00. Conta de Aluguel prevista excede o saldo em caixa projetado.",
     );
     expect(within(banner()).getByRole("button", { name: "Ver hoje" })).toBeInTheDocument();
+  });
+
+  it("names the Diário previsto with its rate when it is the only cause (E1)", () => {
+    render(<RedDayAlert alert={OWNER} outflows={[PREVISTO]} estimate="50.00" onJump={vi.fn()} />);
+
+    expect(text(within(banner()).getByRole("paragraph"))).toBe(
+      "Dia 23 fica no vermelho: -R$ 675,00. Diário previsto (R$ 50,00/dia) excede o saldo em caixa projetado.",
+    );
+  });
+
+  it("names the other outflow first, whatever the order, next to the Diário previsto (E9)", () => {
+    render(<RedDayAlert alert={OWNER} outflows={[PREVISTO, conta("Aluguel")]} estimate="50.00" onJump={vi.fn()} />);
+
+    expect(text(within(banner()).getByRole("paragraph"))).toBe(
+      "Dia 23 fica no vermelho: -R$ 675,00. Conta de Aluguel e Diário previsto excedem o saldo em caixa projetado.",
+    );
   });
 
   it("omits the cause when the day has no outflow", () => {

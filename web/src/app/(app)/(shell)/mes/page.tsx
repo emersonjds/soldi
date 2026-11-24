@@ -90,7 +90,17 @@ const MonthScreen = () => {
         {((!view.data && !monthFailed) || (!entries && !entriesFailed)) && "Carregando"}
       </p>
       {alert && (
-        <RedDayAlert alert={alert} outflows={topOutflows(alert.firstRed.date, entries ?? [], bills)} onJump={jump} />
+        <RedDayAlert
+          alert={alert}
+          outflows={topOutflows(
+            alert.firstRed.date,
+            entries ?? [],
+            bills,
+            estimate ? days.find((day) => day.date === alert.firstRed.date)?.previsto : undefined,
+          )}
+          estimate={estimate}
+          onJump={jump}
+        />
       )}
       <div
         className={cn(

@@ -4,19 +4,30 @@ import type { ForecastAlert } from "@/entities/month/forecast-alert";
 import { useCurrency } from "@/shared/lib/currency";
 import { formatMoney } from "@/shared/lib/money";
 
-const causeOf = ([first, second]: string[]) => {
+type Outflow = { name: string; estimate: boolean };
+
+const causeOf = (outflows: Outflow[], rate: string | null) => {
+  const other = outflows.find((outflow) => !outflow.estimate)?.name;
+  if (outflows.some((outflow) => outflow.estimate))
+    return other
+      ? ` Conta de ${other} e Diário previsto excedem o saldo em caixa projetado.`
+      : ` Diário previsto (${rate}/dia) excede o saldo em caixa projetado.`;
+  const [first, second] = outflows.map((outflow) => outflow.name);
   if (second) return ` Contas de ${first} e ${second} previstas excedem o saldo em caixa projetado.`;
   return first ? ` Conta de ${first} prevista excede o saldo em caixa projetado.` : "";
 };
 
-/** SOL-79 §2.2: the first red day ahead and its two largest `outflows`, full width above the cards; the button jumps to the day. */
+/** SOL-79 §2.2: the first red day ahead and its two largest `outflows` (SOL-164: the Diário previsto by its rate), full width above the cards; the button jumps to the day. */
 export const RedDayAlert = ({
   alert,
   outflows,
+  estimate = null,
   onJump,
 }: {
   alert: ForecastAlert;
-  outflows: string[];
+  outflows: Outflow[];
+  /** The Diário previsto's rate, named when it is a cause. */
+  estimate?: string | null;
   onJump: (date: string) => void;
 }) => {
   const currency = useCurrency();
@@ -37,7 +48,7 @@ export const RedDayAlert = ({
             {title}
             <span className="whitespace-nowrap">{formatMoney(balance, currency)}</span>.
           </span>
-          {causeOf(outflows)}
+          {causeOf(outflows, estimate && formatMoney(estimate, currency))}
         </p>
       </div>
       <button

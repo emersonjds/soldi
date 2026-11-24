@@ -19,6 +19,8 @@ import {
 
 import { PurchaseSimulator } from "./purchase-simulator";
 
+vi.mock("next/navigation", () => import("@/test/next-navigation"));
+
 const forecast = (march: string) =>
   forecastFixture("2026-11-10", "2026-11-10", "2027-10-31", [
     ["2026-11-10", "3000.00"],
@@ -132,6 +134,7 @@ describe("Posso comprar isso?", () => {
       ),
     ).toBeInTheDocument();
 
+    expect(verdict).not.toHaveTextContent("Diário previsto");
     expect(screen.getByRole("heading", { name: "Curva de Saldo Projetado (6 Meses)" })).toBeInTheDocument();
     expect(screen.getByText("Comparativo do saldo ao fechar cada mês")).toBeInTheDocument();
 
@@ -159,6 +162,33 @@ describe("Posso comprar isso?", () => {
       screen.getByRole("heading", { name: "Cabe no orçamento: nenhum mês fica no vermelho." }),
     ).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "O que você gostaria de fazer agora?" })).not.toBeInTheDocument();
+  });
+
+  it("with the Diário previsto on: the note under the verdict, the red day's previsto among the despesas (A16)", async () => {
+    setup({
+      "GET /api/settings": { status: 200, body: { ...SETTINGS, daily_estimate: "50.00", daily_estimate_on: true } },
+      "GET /api/months/2027-03": {
+        status: 200,
+        body: {
+          ...MARCH,
+          bills_of_month: [outflow("Luz", "80.00")],
+          days: [{ ...MONTH.days[0], date: "2027-03-15", previsto: "50.00" }],
+        },
+      },
+    });
+    await typeAmount("2400,00");
+    await userEvent.click(screen.getByRole("radio", { name: "6x" }));
+
+    const verdict = await calculate();
+    expect(
+      within(verdict).getByRole("link", { name: "Inclui Diário previsto de R$\u00a050,00/dia" }),
+    ).toBeInTheDocument();
+    expect(
+      await within(verdict).findByText(/com as despesas já agendadas \(Luz e Diário previsto\)/),
+    ).toBeInTheDocument();
+    const months = within(screen.getByRole("list", { name: /^Projeção Mensal/ })).getAllByRole("listitem");
+    expect(months[4]).toHaveTextContent(/Saldo Atual Original:R\$\s3\.000,00/);
+    expect(months[4]).toHaveTextContent("Parcela 5/6 (+ Luz/Diário previsto)");
   });
 
   it("offers the next count up to 12x only, and Criar Cofrinho opens Novo cofrinho with the name and the total", async () => {

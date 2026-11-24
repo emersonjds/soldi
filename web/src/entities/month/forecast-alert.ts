@@ -54,19 +54,26 @@ export const causeOf = (
   return largest ? largest.id : null;
 };
 
-/** The banner's cause (SOL-79 §2.2): the names of the day's two largest outflows, open bills landing on it and Saídas or Diários dated on it, by cents. */
-export const topOutflows = (date: string, transactions: Schemas["Transaction"][], bills: Schemas["BillOfMonth"][]) =>
+/** The banner's cause (SOL-79 §2.2): the names of the day's two largest outflows, open bills landing on it, Saídas or Diários dated on it and its Diário previsto, by cents. */
+export const topOutflows = (
+  date: string,
+  transactions: Schemas["Transaction"][],
+  bills: Schemas["BillOfMonth"][],
+  previsto = "0.00",
+) =>
   [
     ...bills
       .filter((bill) => !bill.paid && bill.lands_on === date)
-      .map((bill) => ({ name: bill.name, amount: cents(bill.amount) })),
+      .map((bill) => ({ name: bill.name, amount: cents(bill.amount), estimate: false })),
     ...transactions
       .filter((transaction) => transaction.date === date && transaction.kind !== "income")
       .map((transaction) => ({
         name: transaction.note || transaction.category.name,
         amount: cents(transaction.amount),
+        estimate: false,
       })),
+    ...(cents(previsto) > 0 ? [{ name: "Diário previsto", amount: cents(previsto), estimate: true }] : []),
   ]
     .sort((a, b) => b.amount - a.amount)
     .slice(0, 2)
-    .map(({ name }) => name);
+    .map(({ name, estimate }) => ({ name, estimate }));

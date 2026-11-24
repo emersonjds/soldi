@@ -3,12 +3,22 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { renderWithQuery } from "@/test/render";
-import { FORECAST, FORECAST_FLAT, FORECAST_LATE_OPENING, forecastFixture, problem, stubApi } from "@/test/stub-api";
+import {
+  FORECAST,
+  FORECAST_FLAT,
+  FORECAST_LATE_OPENING,
+  forecastFixture,
+  problem,
+  SETTINGS,
+  stubApi,
+} from "@/test/stub-api";
 
 import { MonthsAhead } from "./months-ahead";
 
-const show = (reply: { status: number; body?: unknown }) => {
-  const requests = stubApi({ "GET /api/forecast": reply });
+vi.mock("next/navigation", () => import("@/test/next-navigation"));
+
+const show = (reply: { status: number; body?: unknown }, settings = SETTINGS) => {
+  const requests = stubApi({ "GET /api/forecast": reply, "GET /api/settings": { status: 200, body: settings } });
   const onOpen = vi.fn();
   const { client } = renderWithQuery(<MonthsAhead viewing="2026-11" onOpen={onOpen} />);
   return { requests, onOpen, client };
@@ -107,5 +117,48 @@ describe("Próximos meses", () => {
     );
     expect(card()).toHaveTextContent("Não foi possível carregar.");
     expect(forecastCalls(requests).length).toBeGreaterThan(1);
+  });
+
+  describe("with the Diário previsto (SOL-164 A13)", () => {
+    const ON = { ...SETTINGS, daily_estimate: "50.00", daily_estimate_on: true };
+    const fromTomorrow = (count: number): [string, string][] =>
+      Array.from({ length: count }, (_, index) => [
+        new Date(Date.UTC(2026, 10, 29 + index)).toISOString().slice(0, 10),
+        (950 - 50 * index).toFixed(2),
+      ]);
+    const E1 = forecastFixture("2026-11-28", "2026-11-28", "2027-10-31", [
+      ["2026-11-28", "1000.00"],
+      ...fromTomorrow(33),
+    ]);
+
+    it("shows with nothing typed ahead: December ends red at -650,00, under the note", async () => {
+      show({ status: 200, body: E1 }, ON);
+
+      expect(
+        await within(await screen.findByRole("region")).findByRole("button", {
+          name: "dezembro de 2026: menor saldo -R$\u00a0650,00, Crítico",
+        }),
+      ).toBeInTheDocument();
+      expect(
+        await within(card()).findByRole("link", { name: "Inclui Diário previsto de R$\u00a050,00/dia" }),
+      ).toBeInTheDocument();
+    });
+
+    it("has no note when off", async () => {
+      const { client } = show({ status: 200, body: E1 }, { ...ON, daily_estimate_on: false });
+      await screen.findByRole("region", { name: "Próximos meses" });
+      await waitFor(() => expect(client.getQueryState(["settings"])?.status).toBe("success"));
+      expect(card()).not.toHaveTextContent("Diário previsto");
+    });
+
+    it("has no note when the forecast runs no day past today", async () => {
+      const { client } = show(
+        { status: 200, body: forecastFixture("2026-11-10", "2026-11-10", "2026-11-10", [["2026-11-10", "-800.00"]]) },
+        ON,
+      );
+      await screen.findByRole("region", { name: "Próximos meses" });
+      await waitFor(() => expect(client.getQueryState(["settings"])?.status).toBe("success"));
+      expect(card()).not.toHaveTextContent("Diário previsto");
+    });
   });
 });
