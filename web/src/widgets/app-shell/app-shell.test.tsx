@@ -38,6 +38,12 @@ describe("AppShell", () => {
     expect(screen.getByText("conteúdo")).toBeInTheDocument();
   });
 
+  it("caps the page width unless the planilha is inside it", () => {
+    renderWithQuery(<AppShell>conteúdo</AppShell>);
+
+    expect(screen.getByRole("main")).toHaveClass("max-w-6xl", "has-[[data-planilha]]:max-w-none");
+  });
+
   it("takes the sidebar logo and the app bar's ● Soldi to today's month", () => {
     setPathname("/ajustes/categorias");
     renderWithQuery(<AppShell>conteúdo</AppShell>);

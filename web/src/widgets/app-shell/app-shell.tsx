@@ -250,7 +250,7 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
               </Avatar>
             </Link>
           </header>
-          <main className="mx-auto w-full max-w-6xl flex-1 px-4 pt-4 pb-(--tabbar-space) lg:px-6 lg:pt-6 lg:pb-10">
+          <main className="mx-auto w-full max-w-6xl flex-1 px-4 pt-4 pb-(--tabbar-space) has-[[data-planilha]]:max-w-none lg:px-6 lg:pt-6 lg:pb-10">
             {SAVINGS_PAIR.some((item) => isAt(item.href)) && (
               <nav aria-label="Economia e Meu ano" className="bg-muted mb-4 flex rounded-xl p-1 lg:hidden">
                 {SAVINGS_PAIR.map((item) => (
