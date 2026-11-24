@@ -161,6 +161,8 @@ type RowProps = {
   onFocus: () => void;
   /** Spec §11: the day a RedDayAlert jump landed on. */
   ringed: boolean;
+  /** Takes a focus asked for `date` before its month loaded; true when it is still the person's. */
+  claim: (date: string) => boolean;
 };
 
 const FINE_POINTER = "(hover: hover) and (pointer: fine)";
@@ -168,7 +170,7 @@ const FINE_POINTER = "(hover: hover) and (pointer: fine)";
 /** `hover`: the popover a resting pointer opened, which leaves focus where it is. */
 type Shown = "hover" | "popover" | "sheet" | null;
 
-const Row = ({ row, today, view, entries, stop, onFocus, ringed }: RowProps) => {
+const Row = ({ row, today, view, entries, stop, onFocus, ringed, claim }: RowProps) => {
   const { date, day, income, outflow, landed } = row;
   const [shown, setShown] = useState<Shown>(null);
   const button = useRef<HTMLButtonElement>(null);
@@ -181,10 +183,9 @@ const Row = ({ row, today, view, entries, stop, onFocus, ringed }: RowProps) => 
   const hasItems = landed.length > 0 || Boolean(entries.data?.some((transaction) => transaction.date === date));
   const close = (next: boolean) => next || setShown(null);
 
-  // Also on mount: a jump can land before the day's month has loaded.
   useEffect(() => {
-    if (ringed) button.current?.focus({ preventScroll: true });
-  }, [ringed]);
+    if (claim(date)) button.current?.focus({ preventScroll: true });
+  }, [claim, date]);
 
   const open = () => {
     clearTimeout(timer.current);
@@ -310,9 +311,9 @@ const SkeletonBody = ({ month }: { month: string }) => (
   </tbody>
 );
 
-type MonthProps = { month: string; today: string; openingDate: string; highlight: string | null };
+type MonthProps = Pick<RowProps, "today" | "claim"> & { month: string; openingDate: string; highlight: string | null };
 
-const MonthBody = ({ month, today, openingDate, highlight }: MonthProps) => {
+const MonthBody = ({ month, today, openingDate, highlight, claim }: MonthProps) => {
   const view = useMonth(month);
   const entries = useTransactions(month);
   const [stop, setStop] = useState(today.startsWith(month) ? today : `${month}-01`);
@@ -329,6 +330,7 @@ const MonthBody = ({ month, today, openingDate, highlight }: MonthProps) => {
             stop={row.date === stop}
             onFocus={() => setStop(row.date)}
             ringed={row.date === highlight}
+            claim={claim}
           />
         ))}
       </tbody>
@@ -349,7 +351,7 @@ const MonthBody = ({ month, today, openingDate, highlight }: MonthProps) => {
   );
 };
 
-const MonthBlock = ({ month, today, openingDate, highlight }: MonthProps) => {
+const MonthBlock = ({ month, today, openingDate, highlight, claim }: MonthProps) => {
   const [near, setNear] = useState(false);
   const label = monthLabel(month);
 
@@ -392,7 +394,7 @@ const MonthBlock = ({ month, today, openingDate, highlight }: MonthProps) => {
         </tr>
       </thead>
       {near ? (
-        <MonthBody month={month} today={today} openingDate={openingDate} highlight={highlight} />
+        <MonthBody month={month} today={today} openingDate={openingDate} highlight={highlight} claim={claim} />
       ) : (
         <SkeletonBody month={month} />
       )}
@@ -460,9 +462,26 @@ export const Planilha = ({ today, openingDate, month = today.slice(0, 7), highli
     follow(month);
   }, [month]);
 
+  /** A focus asked for a day whose month has not loaded, and what had the focus then. */
+  const pending = useRef<{ date: string; from: Element | null }>(null);
+  const focusDay = (date: string) => {
+    const button = scroller.current?.querySelector<HTMLElement>(`[data-day="${date}"]`);
+    pending.current = button ? null : { date, from: document.activeElement };
+    button?.focus({ preventScroll: true });
+  };
+  const claim = useCallback((date: string) => {
+    const asked = pending.current;
+    if (!asked || asked.date !== date) return false;
+    pending.current = null;
+    return document.activeElement === document.body || document.activeElement === asked.from;
+  }, []);
+
+  const jump = useEffectEvent((date: string) => {
+    if (scroller.current) rowOf(scroller.current, date)?.scrollIntoView({ block: "center", inline: "start" });
+    focusDay(date);
+  });
   useEffect(() => {
-    if (highlight && scroller.current)
-      rowOf(scroller.current, highlight)?.scrollIntoView({ block: "center", inline: "start" });
+    if (highlight) jump(highlight);
   }, [highlight]);
 
   const track = () => {
@@ -479,7 +498,7 @@ export const Planilha = ({ today, openingDate, month = today.slice(0, 7), highli
   const goToday = () => {
     replaceUrl(`?m=${current}`);
     place(current, window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth");
-    scroller.current?.querySelector<HTMLElement>(`[data-day="${today}"]`)?.focus({ preventScroll: true });
+    focusDay(today);
   };
 
   return (
@@ -491,7 +510,14 @@ export const Planilha = ({ today, openingDate, month = today.slice(0, 7), highli
         className="relative flex max-h-[80dvh] snap-x snap-mandatory gap-4 overflow-auto overscroll-x-contain"
       >
         {months.map((each) => (
-          <MonthBlock key={each} month={each} today={today} openingDate={openingDate} highlight={highlight} />
+          <MonthBlock
+            key={each}
+            month={each}
+            today={today}
+            openingDate={openingDate}
+            highlight={highlight}
+            claim={claim}
+          />
         ))}
       </div>
       <div className="text-muted-foreground flex flex-wrap items-center gap-2 text-xs">

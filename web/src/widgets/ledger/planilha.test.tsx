@@ -386,6 +386,15 @@ describe("Planilha position and Ir pra hoje", () => {
     expect(last().to).toEqual({ left: 8 * TABLE, top: TODAY_TOP, behavior: "auto" });
   });
 
+  it("focuses today once its month loads when Ir pra hoje beat it", async () => {
+    const { intersection } = place("2027-02");
+
+    await userEvent.click(screen.getByRole("button", { name: "Ir pra hoje" }));
+    intersection.show(screen.getByRole("table", { name: "Novembro 2026" }));
+
+    expect(await screen.findByRole("button", { name: "Quinta-feira, 5 de novembro, hoje" })).toHaveFocus();
+  });
+
   it("places the planilha before the observers first look, so the months at the start are not fetched", () => {
     const scrollTo = layout();
     stubApi({});
@@ -458,6 +467,24 @@ describe("Planilha jump to a day (A14)", () => {
     const day = await screen.findByRole("button", { name: "Segunda-feira, 23 de novembro" });
     expect(day).toHaveFocus();
     expect(day).toHaveClass("ring-expense");
+  });
+
+  it("leaves the focus where the person moved it while the day's month loaded", async () => {
+    stubApi({ "GET /api/months/2026-11": { status: 200, body: PLANILHA_MONTH } });
+    const intersection = stubIntersection();
+    renderWithQuery(
+      <>
+        <button type="button">Fora</button>
+        <Planilha today="2026-11-05" openingDate="2026-03-10" highlight="2026-11-23" />
+      </>,
+    );
+    act(() => screen.getByRole("button", { name: "Fora" }).focus());
+
+    intersection.show(screen.getByRole("table", { name: "Novembro 2026" }));
+
+    const day = await screen.findByRole("button", { name: "Segunda-feira, 23 de novembro" });
+    expect(day).toHaveClass("ring-expense");
+    expect(screen.getByRole("button", { name: "Fora" })).toHaveFocus();
   });
 });
 
