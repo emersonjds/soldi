@@ -252,12 +252,17 @@ const Row = ({
           {parcel && (
             <>
               {" "}
-              <span className="text-muted-foreground text-sm">
-                · {[parcel, late && `venceu em ${late}`].filter(Boolean).join(" · ")}
+              <span className="basis-full text-muted-foreground text-sm lg:basis-auto">
+                <span className="hidden lg:inline">·</span>{" "}
+                {[parcel, late && `venceu em ${late}`].filter(Boolean).join(" · ")}
               </span>
             </>
           )}
-          {estimated && <span className="whitespace-nowrap text-muted-foreground text-sm"> · valor variável</span>}
+          {estimated && (
+            <span className="basis-full whitespace-nowrap text-muted-foreground text-sm lg:basis-auto">
+              <span className="hidden lg:inline"> ·</span> valor variável
+            </span>
+          )}
         </span>
         <Caption bill={bill} paidOn={paidOn} />
       </span>
