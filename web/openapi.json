@@ -4027,6 +4027,8 @@
           "tier_yellow",
           "tier_green",
           "currency",
+          "savings_target_pct",
+          "daily_estimate",
           "daily_estimate_on"
         ],
         "properties": {

@@ -48,11 +48,11 @@ pub struct Settings {
     pub tier_green: Decimal,
     pub currency: Currency,
     #[serde(serialize_with = "crate::optional_money")]
-    #[schema(value_type = Option<String>, example = "20.00")]
+    #[schema(value_type = Option<String>, required = true, example = "20.00")]
     pub savings_target_pct: Option<Decimal>,
     /// SOL-164: the Diário previsto per day the person declared, 0.01 to 10000.00; null when never set.
     #[serde(serialize_with = "crate::optional_money")]
-    #[schema(value_type = Option<String>, example = "50.00")]
+    #[schema(value_type = Option<String>, required = true, example = "50.00")]
     pub daily_estimate: Option<Decimal>,
     /// When true (and only with a value), every future day on or after the opening date takes
     /// `max(daily_estimate − that day's cash Diário, 0)` in the projected balances (D49).
