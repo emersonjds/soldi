@@ -614,6 +614,10 @@ async fn sol164_the_daily_estimate_starts_empty_and_off_and_on_needs_a_value(poo
     );
     let out_of_range = sqlx::query("UPDATE settings SET daily_estimate = 10000.01")
         .execute(&pool)
-        .await;
-    assert!(out_of_range.is_err());
+        .await
+        .unwrap_err();
+    assert_eq!(
+        out_of_range.as_database_error().unwrap().constraint(),
+        Some("settings_daily_estimate_check")
+    );
 }

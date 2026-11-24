@@ -196,6 +196,13 @@ mod tests {
             field(apply(defaults(), estimate(None, Some(true)))),
             "daily_estimate_on"
         );
+        let valued = apply(defaults(), estimate(Some("50.00"), None)).unwrap();
+        let null_and_on = UpdateSettings {
+            daily_estimate: Some(None),
+            daily_estimate_on: Some(true),
+            ..UpdateSettings::default()
+        };
+        assert_eq!(field(apply(valued, null_and_on)), "daily_estimate_on");
         let both = apply(defaults(), estimate(Some("50.00"), Some(true))).unwrap();
         assert_eq!(both.daily_estimate, Some(money("50.00")));
         assert!(both.daily_estimate_on);

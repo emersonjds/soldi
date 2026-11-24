@@ -651,9 +651,14 @@ async fn sol164_the_callers_declared_estimate_counts_from_tomorrow_in_view_and_f
         days.last().unwrap()["projected_balance"]
     );
     let (_, theirs) = bia.get("/api/forecast").await;
-    assert_ne!(
+    let ana_last: rust_decimal::Decimal = days.last().unwrap()["projected_balance"]
+        .as_str()
+        .unwrap()
+        .parse()
+        .unwrap();
+    assert_eq!(
         theirs["days"].as_array().unwrap().last().unwrap()["projected_balance"],
-        "1000.00"
+        (ana_last + rust_decimal::Decimal::TEN).to_string()
     );
 }
 
