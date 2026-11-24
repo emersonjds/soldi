@@ -6,6 +6,7 @@ import type { Schemas } from "@/shared/api/client";
 import { stubIntersection } from "@/test/intersection";
 import { renderWithQuery } from "@/test/render";
 import {
+  BILL_ALUGUEL,
   COMIDA,
   LUZ,
   MERCADO,
@@ -46,6 +47,28 @@ const ENTRIES: Schemas["Transaction"][] = [
   },
   { id: "p4", date: "2026-11-04", amount: "30.25", kind: "daily", category: MERCADO, note: "Feira" },
   { id: "p5", date: "2026-11-05", amount: "19.75", kind: "daily", category: COMIDA },
+];
+
+const CARD: Schemas["Bill"] = {
+  ...BILL_ALUGUEL,
+  id: "b3000000-0000-4000-8000-000000000003",
+  name: "Porto",
+  amount: null,
+  closing_day: 3,
+};
+
+/** Diário spends on CARD: the server keeps them out of the day's Diário (D28). */
+const CARD_SPENDS: Schemas["Transaction"][] = [
+  { id: "c5", date: "2026-11-05", amount: "80.00", kind: "daily", category: COMIDA, note: "Jantar", card_id: CARD.id },
+  {
+    id: "c1",
+    date: "2026-11-01",
+    amount: "25.00",
+    kind: "daily",
+    category: MERCADO,
+    note: "Padaria",
+    card_id: CARD.id,
+  },
 ];
 
 const REPLIES: Record<string, Reply> = {
@@ -201,6 +224,28 @@ describe("Planilha day detail", () => {
 
     expect(await within(detail).findByText("Comida fora")).toBeInTheDocument();
     expect(within(detail).queryByText("Não foi possível carregar os lançamentos deste dia.")).not.toBeInTheDocument();
+  });
+
+  it("lists a card spend in Diário after the cash ones, on the fatura and out of the total, which stays the cell's", async () => {
+    show({
+      "GET /api/transactions": { status: 200, body: [...ENTRIES, ...CARD_SPENDS] },
+      "GET /api/bills": { status: 200, body: [CARD] },
+    });
+    const { cells } = await row("Quinta-feira, 5 de novembro, hoje");
+
+    const today = await tap("Quinta-feira, 5 de novembro, hoje");
+
+    await within(today).findByText("Porto · na fatura");
+    expect(groups(today)).toEqual([
+      ["Saída", "Saída R$ 400,00", "Internet | - R$ 400,00 | Conta fixa · venceu dia 02/11"],
+      ["Diário", "Diário R$ 19,75", "Comida fora | - R$ 19,75 | Diário", "Jantar | - R$ 80,00 | Porto · na fatura"],
+    ]);
+    expect(text(within(today).getByRole("heading", { name: /Diário/ }))).toContain(cells[3].textContent);
+    await userEvent.click(screen.getByRole("button", { name: "Close" }));
+
+    const only = await tap("Domingo, 1 de novembro");
+    expect(groups(only)).toEqual([["Diário", "Diário", "Padaria | - R$ 25,00 | Porto · na fatura"]]);
+    expect(only).not.toHaveTextContent("Nada lançado neste dia.");
   });
 });
 

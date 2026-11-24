@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useBills } from "@/entities/bill/bill-queries";
+import { useBills, useCards } from "@/entities/bill/bill-queries";
 import { categoriesQuery } from "@/entities/category/categories-query";
 import { billKey } from "@/entities/month/forecast-alert";
 import { useMonth } from "@/entities/month/month-query";
@@ -65,36 +65,45 @@ const itemOf =
 const DayDetail = ({ row, view, entries }: { row: PlanilhaRow; view: Schemas["MonthView"]; entries: Entries }) => {
   const categories = useQuery(categoriesQuery).data;
   const bills = useBills({ includeInactive: true }).data;
+  const cards = useCards({ includeInactive: true }).data;
   if (!row.day) return <p className="text-muted-foreground">Este dia é anterior ao seu saldo inicial.</p>;
   const ofKind = (kind: Schemas["CategoryKind"]) =>
-    (entries.data ?? [])
-      .filter((transaction) => transaction.date === row.date && transaction.kind === kind)
-      .map(itemOf(view, categories, bills));
+    (entries.data ?? []).filter((transaction) => transaction.date === row.date && transaction.kind === kind);
+  const item = itemOf(view, categories, bills);
+  const spends = ofKind("daily")
+    .filter((transaction) => !transaction.card_id)
+    .map(item);
+  // D28: the server counts a card's Diário in its fatura, never in the day's Diário.
+  const onCard = ofKind("daily")
+    .filter((transaction) => transaction.card_id)
+    .map((transaction) => ({
+      ...item(transaction),
+      caption: `${cards?.find(({ id }) => id === transaction.card_id)?.name ?? "Cartão"} · na fatura`,
+    }));
+  const total = (items: Item[]) => (items.length > 0 ? sum(items.map(({ amount }) => amount)) : null);
+  const outflows = [
+    ...ofKind("bill").map(item),
+    ...row.landed.map((bill) => ({
+      key: billKey(bill),
+      title: bill.name,
+      caption: dueCaption(bill, view.month),
+      amount: bill.amount,
+    })),
+  ];
+  const incomes = ofKind("income").map(item);
   const groups = [
-    { name: "Entrada", income: true, items: ofKind("income") },
-    {
-      name: "Saída",
-      income: false,
-      items: [
-        ...ofKind("bill"),
-        ...row.landed.map((bill) => ({
-          key: billKey(bill),
-          title: bill.name,
-          caption: dueCaption(bill, view.month),
-          amount: bill.amount,
-        })),
-      ],
-    },
-    { name: "Diário", income: false, items: ofKind("daily") },
+    { name: "Entrada", income: true, items: incomes, total: total(incomes) },
+    { name: "Saída", income: false, items: outflows, total: total(outflows) },
+    { name: "Diário", income: false, items: [...spends, ...onCard], total: total(spends) },
   ].filter(({ items }) => items.length > 0);
 
   return (
     <>
       <DayBalance day={row.day} />
-      {groups.map(({ name, income, items }) => (
+      {groups.map(({ name, income, items, total }) => (
         <section key={name} aria-label={name} className="flex flex-col gap-2">
           <h3 className="flex justify-between gap-3 text-sm font-semibold">
-            <span>{name}</span> <Money amount={sum(items.map(({ amount }) => amount))} />
+            <span>{name}</span> {total && <Money amount={total} />}
           </h3>
           <ul className="flex flex-col gap-2">
             {items.map((item) => (
