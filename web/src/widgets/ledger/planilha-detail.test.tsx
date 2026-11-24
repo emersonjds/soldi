@@ -1,5 +1,5 @@
 import { QueryClientProvider } from "@tanstack/react-query";
-import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -11,6 +11,7 @@ import { renderWithQuery } from "@/test/render";
 import {
   BILL_ALUGUEL,
   COMIDA,
+  ESTIMATE_MONTH,
   LUZ,
   MERCADO,
   PLANILHA_MONTH,
@@ -80,10 +81,12 @@ const REPLIES: Record<string, Reply> = {
   "GET /api/categories": { status: 200, body: [...WITH_COFRINHOS, RESGATE] },
 };
 
-const show = (replies: Record<string, Reply> = {}, openingDate = "2026-03-10") => {
+const show = (replies: Record<string, Reply> = {}, openingDate = "2026-03-10", estimate?: string) => {
   const requests = stubApi({ ...REPLIES, ...replies });
   const intersection = stubIntersection();
-  const { client, rerender } = renderWithQuery(<Planilha today="2026-11-05" openingDate={openingDate} />);
+  const { client, rerender } = renderWithQuery(
+    <Planilha today="2026-11-05" openingDate={openingDate} estimate={estimate} />,
+  );
   intersection.show(screen.getByRole("table", { name: "Novembro 2026" }));
   return {
     client,
@@ -250,6 +253,110 @@ describe("Planilha day detail", () => {
     const only = await tap("Domingo, 1 de novembro");
     expect(groups(only)).toEqual([["Diário", "Diário", "Padaria | - R$ 25,00 | Porto · na fatura"]]);
     expect(only).not.toHaveTextContent("Nada lançado neste dia.");
+  });
+});
+
+/** ESTIMATE_MONTH's typed Diário ahead, plus a card spend on the 7th kept out of the total. */
+const AHEAD: Schemas["Transaction"][] = [
+  ...ENTRIES,
+  { id: "a7", date: "2026-11-07", amount: "20.00", kind: "daily", category: MERCADO, note: "Padaria" },
+  { id: "k7", date: "2026-11-07", amount: "90.00", kind: "daily", category: COMIDA, note: "Jantar", card_id: CARD.id },
+  { id: "a8", date: "2026-11-08", amount: "80.00", kind: "daily", category: MERCADO, note: "Feira grande" },
+];
+
+const ESTIMATED: Record<string, Reply> = {
+  "GET /api/months/2026-11": { status: 200, body: ESTIMATE_MONTH },
+  "GET /api/transactions": { status: 200, body: AHEAD },
+  "GET /api/bills": { status: 200, body: [CARD] },
+};
+
+describe("Planilha Diário previsto (SOL-164)", () => {
+  const media = window.matchMedia;
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 10, 5, 12));
+  });
+  afterEach(() => {
+    window.matchMedia = media;
+    vi.useRealTimers();
+  });
+
+  it("A19: takes the keyboard to Ajustar Diário previsto in the popover, and Esc gives focus back to the day", async () => {
+    window.matchMedia = (query) => ({ ...media(query), matches: query === "(hover: hover) and (pointer: fine)" });
+    show(ESTIMATED, "2026-03-10", "50.00");
+    const day = await screen.findByRole("button", { name: "Sexta-feira, 6 de novembro" });
+
+    day.focus();
+    await userEvent.keyboard("{Enter}");
+    const popover = await screen.findByRole("dialog");
+
+    expect(popover).toHaveAttribute("data-slot", "popover-content");
+    await userEvent.tab();
+    expect(within(popover).getByRole("link", { name: "Ajustar Diário previsto" })).toHaveFocus();
+    await userEvent.keyboard("{Escape}");
+    expect(day).toHaveFocus();
+  });
+
+  it("A12: shows a future Diário cell with the estimate, italic, read as including it; today unchanged", async () => {
+    show(ESTIMATED, "2026-03-10", "50.00");
+
+    const sixth = (await row("Sexta-feira, 6 de novembro")).cells[3];
+    expect(sixth).toHaveTextContent(/^50,00 inclui Diário previsto$/);
+    expect(sixth).toHaveClass("italic");
+    expect(within(sixth).getByText("inclui Diário previsto")).toHaveClass("sr-only");
+    expect((await row("Sábado, 7 de novembro")).cells[3]).toHaveTextContent(/^50,00 inclui Diário previsto$/);
+    expect((await row("Domingo, 8 de novembro")).cells[3]).toHaveTextContent(/^80,00$/);
+    expect((await row("Quinta-feira, 5 de novembro, hoje")).cells[3]).toHaveTextContent(/^19,75$/);
+  });
+
+  it("A12: lists the estimate in an otherwise empty day's Diário, total equal to the cell, with a link to the setting", async () => {
+    show(ESTIMATED, "2026-03-10", "50.00");
+
+    const detail = await tap("Sexta-feira, 6 de novembro");
+
+    expect(groups(detail)).toEqual([
+      ["Diário", "Diário R$ 50,00", "Diário previsto | - R$ 50,00 | Estimativa de R$ 50,00/dia"],
+    ]);
+    expect(within(detail).getByText("Diário previsto")).toHaveClass("italic");
+    expect(detail).not.toHaveTextContent("Nada previsto para este dia.");
+    const link = within(detail).getByRole("link", { name: "Ajustar Diário previsto" });
+    expect(link).toHaveAttribute("href", "/ajustes#diario-previsto");
+    expect(link).toHaveClass("min-h-11", "text-primary");
+  });
+
+  it("S8: puts the estimate after the typed cash Diário and before the card spend, outside the fatura", async () => {
+    show(ESTIMATED, "2026-03-10", "50.00");
+
+    const detail = await tap("Sábado, 7 de novembro");
+
+    await within(detail).findByText("Porto · na fatura");
+    expect(groups(detail)).toEqual([
+      [
+        "Diário",
+        "Diário R$ 50,00",
+        "Padaria | - R$ 20,00 | Diário",
+        "Diário previsto | - R$ 30,00 | Estimativa de R$ 50,00/dia, menos R$ 20,00 lançados",
+        "Jantar | - R$ 90,00 | Porto · na fatura",
+      ],
+    ]);
+  });
+
+  it("S13: shows no estimate item or link once the typed Diário reaches it", async () => {
+    show(ESTIMATED, "2026-03-10", "50.00");
+
+    const detail = await tap("Domingo, 8 de novembro");
+
+    await within(detail).findByText("Feira grande");
+    expect(detail).not.toHaveTextContent("Diário previsto");
+  });
+
+  it("notes the estimate under the legend, and nothing while off", async () => {
+    show(ESTIMATED, "2026-03-10", "50.00");
+    expect(screen.getByRole("link", { name: /^Inclui Diário previsto de R\$\s50,00\/dia$/ })).toBeInTheDocument();
+    cleanup();
+
+    show();
+    expect(screen.queryByRole("link", { name: /Inclui Diário previsto/ })).not.toBeInTheDocument();
   });
 });
 

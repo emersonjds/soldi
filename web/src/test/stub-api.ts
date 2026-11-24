@@ -1,7 +1,7 @@
 import { vi } from "vitest";
 
 import type { Schemas } from "@/shared/api/client";
-import { tierOf } from "@/shared/lib/tier";
+import { cents, fromCents, tierOf } from "@/shared/lib/tier";
 
 type Reply = { status: number; body?: unknown };
 
@@ -575,4 +575,25 @@ export const PLANILHA_MONTH: Schemas["MonthView"] = {
     { ...forecastBill(5, "Internet", "400.00", "2026-11-02"), overdue: true, lands_on: "2026-11-05" },
     forecastBill(6, "Financiamento", "1850.00", "2026-11-10"),
   ],
+};
+
+/** Cash Diário typed ahead in ESTIMATE_MONTH, by day: under the estimate on the 7th (E4), over it on the 8th (E5). */
+const TYPED_AHEAD: Record<string, string> = { "2026-11-07": "20.00", "2026-11-08": "80.00" };
+
+/** PLANILHA_MONTH with a Diário previsto of 50,00/dia from the 6th (SOL-164 R1, R3): 650,00 on the 6th, -2.430,00 on the 30th. */
+export const ESTIMATE_MONTH: Schemas["MonthView"] = {
+  ...PLANILHA_MONTH,
+  days: PLANILHA_MONTH.days.reduce<Schemas["Day"][]>((days, each) => {
+    if (!each.is_future) {
+      days.push(each);
+      return days;
+    }
+    const daily = TYPED_AHEAD[each.date] ?? "0.00";
+    const previsto = fromCents(Math.max(5000 - cents(daily), 0));
+    const landed = each.date === "2026-11-10" ? 185000 : 0;
+    const before = days[days.length - 1].projected_balance;
+    const projected = fromCents(cents(before) - cents(daily) - cents(previsto) - landed);
+    days.push({ ...each, daily, previsto, projected_balance: projected, projected_tier: tierOf(projected, SETTINGS) });
+    return days;
+  }, []),
 };
