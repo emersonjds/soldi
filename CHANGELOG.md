@@ -7,6 +7,14 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.70.0
+
+> Headline: the planilha uses the whole screen on wide monitors
+
+### Web
+- With the planilha open, Mês drops its page width cap and uses the whole window; every other screen, and Lista, keeps the cap (SOL-170).
+- The planilha shows only whole months, never a cut one, and adds months as the window grows: 1 on a phone and at 1024px, 2 at 1280px, 3 at 1440px, 4 at 1920px, 5 at 2560px. Each month is sized for balances up to R$ 123.456,78; cell padding is slightly tighter.
+
 ## 0.69.0
 
 > Headline: Diário previsto, an optional daily spending estimate in the projection
