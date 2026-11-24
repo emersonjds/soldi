@@ -4,7 +4,6 @@ import { type FormEvent, type ReactNode, useState } from "react";
 
 import {
   ArrowDown,
-  ArrowRight,
   CalendarDays,
   Check,
   CircleCheck,
@@ -16,6 +15,7 @@ import {
   Lightbulb,
   type LucideIcon,
   NotebookPen,
+  Pencil,
   ReceiptText,
   Repeat,
   Save,
@@ -31,7 +31,7 @@ import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { monthsBetween } from "@/entities/bill/bill-plan";
-import { type BillPrefill, useCards, useCreateBill } from "@/entities/bill/bill-queries";
+import { type Bill, type BillPrefill, useBills, useCards, useCreateBill } from "@/entities/bill/bill-queries";
 import { CategoryChips, useCategoryChips } from "@/entities/category/category-chips";
 import { useSettings } from "@/entities/settings/settings-query";
 import { ScopeRadio } from "@/entities/transaction/scope-radio";
@@ -49,7 +49,7 @@ import { useIsLg } from "@/hooks/use-lg";
 import { cn } from "@/lib/utils";
 import { ApiError, problemMessage, type Schemas } from "@/shared/api/client";
 import { useCurrency } from "@/shared/lib/currency";
-import { isoWeekStart, lastDay, todayISO, weekdayName } from "@/shared/lib/date";
+import { addMonths, isoWeekStart, lastDay, monthAbbrev, todayISO, weekdayName } from "@/shared/lib/date";
 import { formatMoney, positiveAmount } from "@/shared/lib/money";
 import { cents, fromCents } from "@/shared/lib/tier";
 import { AmountKeypad, useKeypad } from "@/shared/ui/amount-keypad";
@@ -124,8 +124,18 @@ const presetOf = (open: boolean, total: string) => {
   return PRESETS.includes(total) ? total : "other";
 };
 
-const SERIES_HINT =
-  "Os lançamentos desta série até este mês viram pagamentos desta conta. Os dos próximos meses saem da lista: a conta passa a prever cada mês.";
+/** SOL-160: what a conversion does to the series' members, by the kind Parcelado says. */
+const seriesHint = (lastDate: string) => (parcelado: boolean) => {
+  if (lastDate.slice(0, 7) <= todayISO().slice(0, 7))
+    return parcelado
+      ? "Os lançamentos desta série viram pagamentos desta conta. A última parcela é deste mês."
+      : "Os lançamentos desta série viram pagamentos desta conta. Daqui em diante, a conta fixa prevê todo mês, sem fim.";
+  const ahead =
+    "Os lançamentos desta série até este mês viram pagamentos desta conta. Os dos próximos meses saem da lista:";
+  return parcelado
+    ? `${ahead} a conta prevê cada parcela até ${monthAbbrev(lastDate)}.`
+    : `${ahead} a conta fixa prevê todo mês, sem fim.`;
+};
 
 /** D20's series day: the last member's, or the larger of the two when it sits clamped on its month's last day. */
 const seriesDay = (lastDate: string, date: string) => {
@@ -157,11 +167,35 @@ const prefillOf = (source: Source): BillPrefill => {
   };
 };
 
+const kindButton = "h-auto min-h-12 min-w-0 flex-1 whitespace-normal text-base";
+
+/** SOL-161: a payment opens its conta; the list leaves archived ones out. */
+const PaidBill = ({ billId, onEdit }: { billId: string; onEdit: (bill: Bill) => void }) => {
+  const bills = useBills({ includeInactive: true });
+  const bill = bills.data?.find((each) => each.id === billId);
+  if (bills.data && !bill)
+    return <p className="text-muted-foreground text-sm">A conta deste pagamento foi excluída.</p>;
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      className={kindButton}
+      disabled={!bill}
+      onClick={() => bill && onEdit(bill)}
+    >
+      <Pencil aria-hidden />
+      {bill?.closing_day != null ? "Editar cartão" : "Editar conta"}
+    </Button>
+  );
+};
+
 const TransactionForm = ({
   initial,
   transaction,
   onSave,
+  onParcelada,
   onConvert,
+  onEditBill,
   onDiscard,
   onDelete,
   onOpenEnded,
@@ -170,9 +204,13 @@ const TransactionForm = ({
   transaction?: Transaction;
   /** `moving`: Este e os próximos moves the series to a new day. */
   onSave: (fields: NewTransaction, scope?: Scope, moving?: boolean) => void;
+  /** D47: the entry, then the conta parcelada linked to it. */
+  onParcelada: (fields: NewTransaction, bill: BillPrefill) => void;
   onDiscard: () => void;
-  /** Absent: no Criar como Conta Fixa. */
-  onConvert?: (source: Source) => void;
+  /** Absent: no Transformar em conta. `parcelado`: the kind picked. */
+  onConvert?: (source: Source, parcelado: boolean) => void;
+  /** Absent: a payment offers no Editar conta. */
+  onEditBill?: (bill: Bill) => void;
   /** Excluir da Série...; absent, not offered. */
   onDelete?: () => void;
   /** Parar recorrência (`false`) or Tornar sem fim (`true`) on a series member. */
@@ -210,11 +248,16 @@ const TransactionForm = ({
   const firstValid = Number.isInteger(first) && first >= 1 && first <= months;
   const offset = starting && firstValid && first > 1;
   const written = offset ? months - first + 1 : months;
-  // `open_ended` 422s on a bill (D36): Criar como Conta Fixa instead.
+  // `open_ended` 422s on a bill (D36): a conta fixa instead.
   const refused = draft.repeat && openEnded && draft.kind === "bill";
   const counted = (draft.repeat && !refused) || Boolean(series);
   // SOL-156: a new or standalone Conta counts parcelas, never Sempre.
   const parcelado = draft.kind === "bill" && !series;
+  // D47: `check_plan` takes a plan starting this month or the next; any other stays a series (D14).
+  const ahead = monthsBetween(todayISO(), draft.date);
+  const conta = parcelado && counting && every === "month" && ahead >= 0 && ahead <= 1;
+  const parcela = offset ? first : 1;
+  const lastMonth = addMonths(draft.date.slice(0, 7), months - parcela);
   const unit = UNITS[every];
   const weekly = every === "week";
   // D20, D32: a move keeps each member in its own month (its own ISO week when weekly).
@@ -239,6 +282,7 @@ const TransactionForm = ({
   const money = (value: number) => formatMoney(fromCents(value), currency);
 
   let amountLabel = draft.kind === "income" ? "Valor da entrada" : "Valor do gasto";
+  if (parcelado && counting) amountLabel = "Valor da parcela";
   if (series) amountLabel = "Valor por parcela";
   let dateLegendClass = isLg ? "sr-only" : undefined;
   if (series) dateLegendClass = caption;
@@ -252,13 +296,13 @@ const TransactionForm = ({
 
   const set = (patch: Partial<Draft>) => setDraft((current) => ({ ...current, ...patch }));
 
-  /** `repeat` false: the plain entry, for Criar como Conta Fixa. */
-  const fields = (repeat = draft.repeat): NewTransaction | undefined => {
+  /** `repeat` false: the plain entry, for a conta fixa. */
+  const fields = (repeat = draft.repeat && !conta): NewTransaction | undefined => {
     setSubmitted(true);
     const counts = repeat && counting;
     if (!amount || !category || periodChanged) return;
-    if ((counts || resizing) && !monthsValid) return;
-    if (counts && starting && !firstValid) return;
+    if ((counting || resizing) && !monthsValid) return;
+    if (starting && !firstValid) return;
     const note = draft.note.trim();
     const parcelas = counts && offset;
     let repeatMonths = resized;
@@ -285,6 +329,7 @@ const TransactionForm = ({
     const valid = fields();
     if (!valid) return;
     if (refused) return convert();
+    if (conta) return onParcelada(valid, { ...prefillOf(valid), installments: months, last_month: `${lastMonth}-01` });
     // D33: asked here, before onSave closes the sheet and this dialog with it.
     if (series && draft.scope === "all" && !confirmed) return setAsking(true);
     onSave(valid, series ? draft.scope : undefined, moving);
@@ -295,15 +340,21 @@ const TransactionForm = ({
     save();
   };
 
-  // D44: the server takes a monthly series member, never a weekly or yearly one, and one that ended before this
-  // month leaves nothing to owe.
+  // D44, D45: the server takes a monthly series member, never a weekly or yearly one; one that ended before this
+  // month has nothing left to owe as a parcelada.
   const ended = series != null && series.last_date.slice(0, 7) < todayISO().slice(0, 7);
-  const convertible = onConvert && transaction?.kind === "bill" && series?.every === "month" && !ended;
+  const convertible =
+    onConvert &&
+    transaction?.kind === "bill" &&
+    series?.every === "month" &&
+    !transaction.recurring_bill_id &&
+    !transaction.cofrinho_id &&
+    !transaction.card_id;
 
   // Editar converts the stored entry; its unsaved edits stay out.
-  const convert = () => {
+  const convert = (parcelado = false) => {
     const source = transaction ?? fields(false);
-    if (source) onConvert?.(source);
+    if (source) onConvert?.(source, parcelado);
   };
 
   const amountField = (
@@ -404,8 +455,8 @@ const TransactionForm = ({
       )}
     </div>
   );
-  const recurringNote = transaction?.recurring_bill_id && (
-    <p className="text-muted-foreground text-sm">Já é uma conta fixa recorrente.</p>
+  const paidBill = transaction?.recurring_bill_id && onEditBill && (
+    <PaidBill billId={transaction.recurring_bill_id} onEdit={onEditBill} />
   );
   const repeatSwitch = (id: string, Icon: LucideIcon, label: string, checked: boolean, preset = "always") => (
     <label
@@ -554,6 +605,13 @@ const TransactionForm = ({
               {`${amount ? `${written}× de ${formatMoney(amount, currency)} · ` : ""}${repeatSummary(every, draft.date, written)}`}
             </p>
           )}
+          {conta && monthsValid && (
+            <p className="text-muted-foreground text-sm">
+              {parcela === months
+                ? "Vira uma conta parcelada: este lançamento paga a última parcela."
+                : `Vira uma conta parcelada: este lançamento paga a parcela ${parcela} e as próximas ficam em Contas a pagar até ${monthAbbrev(lastMonth)}.`}
+            </p>
+          )}
           {draft.repeat && openEnded && (
             <p className="flex items-center gap-2 text-muted-foreground text-sm">
               <Lightbulb aria-hidden className="size-4 shrink-0" />
@@ -572,18 +630,27 @@ const TransactionForm = ({
           )}
         </>
       )}
-      {convertible && (
-        <p className="text-muted-foreground text-sm">
-          Prefere transformar em conta fixa recorrente?{" "}
-          <button
-            type="button"
-            onClick={convert}
-            className="inline-flex min-h-11 items-center gap-1 font-semibold text-primary underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring"
-          >
-            Criar como Conta Fixa
-            <ArrowRight aria-hidden className="size-4" />
-          </button>
-        </p>
+      {convertible && series && (
+        <div className="flex flex-col gap-2">
+          <span className={caption}>Transformar em conta</span>
+          <div className="flex gap-2">
+            <Button type="button" variant="outline" className={kindButton} onClick={() => convert(false)}>
+              <Repeat aria-hidden />
+              Conta fixa
+            </Button>
+            {!ended && (
+              <Button type="button" variant="outline" className={kindButton} onClick={() => convert(true)}>
+                <Layers aria-hidden />
+                Conta parcelada
+              </Button>
+            )}
+          </div>
+          <p className="text-muted-foreground text-sm">
+            {ended
+              ? `A série terminou em ${monthAbbrev(series.last_date)}. Como conta fixa, volta a prever todo mês.`
+              : `Fixa: todo mês, sem fim. Parcelada: termina em ${monthAbbrev(series.last_date)}.`}
+          </p>
+        </div>
       )}
     </div>
   );
@@ -630,7 +697,7 @@ const TransactionForm = ({
           {categoryField}
           {cardField}
           {noteField}
-          {recurringNote}
+          {paidBill}
         </>
       ) : (
         <>
@@ -668,7 +735,7 @@ const TransactionForm = ({
           {cardField}
           {dateField}
           {noteField}
-          {recurringNote}
+          {paidBill}
           {monthsField}
         </>
       )}
@@ -725,12 +792,15 @@ type TransactionSheetProps = {
   hint?: string;
   /** Excluir da Série... closes the sheet and calls it; absent, not offered. */
   onDelete?: () => void;
-  /** The bill sheet that Criar como Conta Fixa opens; absent, the link is not offered. */
+  /** The bill sheet that Transformar em conta opens; absent, it is not offered. */
   billSheet?: (props: {
-    prefill: BillPrefill;
-    hint?: string;
+    /** Given: the sheet edits it (Editar conta on a payment). */
+    bill?: Bill;
+    prefill?: BillPrefill;
+    parcelado?: boolean;
+    hint?: (parcelado: boolean) => string;
     onOpenChange: (open: boolean) => void;
-    onCreate: (bill: BillPrefill) => void;
+    onCreate?: (bill: BillPrefill) => void;
   }) => ReactNode;
 };
 
@@ -749,7 +819,8 @@ export const TransactionSheet = ({
   const create = useCreateTransaction();
   const update = useUpdateTransaction();
   const createBill = useCreateBill();
-  const [converting, setConverting] = useState<Source>();
+  const [converting, setConverting] = useState<{ source: Source; parcelado: boolean }>();
+  const [editingBill, setEditingBill] = useState<Bill>();
   const isLg = useIsLg();
   const failed = () => toast.error("Não foi possível salvar o lançamento.");
   let title = isLg ? "Novo Lançamento" : "Novo Registro";
@@ -805,25 +876,31 @@ export const TransactionSheet = ({
     );
   };
 
-  // Lançar posts the entry first; Editar links the one that exists.
+  // Lançar posts the entry first, Editar's conta parcelada patches it first (D47); a stored one is linked as it is.
   const convert = async (source: Source, bill: BillPrefill) => {
     onOpenChange(false);
     let transactionId: string;
     try {
-      transactionId = "id" in source ? source.id : (await create.mutateAsync(source)).id;
+      if ("id" in source) transactionId = source.id;
+      else if (transaction) {
+        const { category: _category, ...patch } = source;
+        await update.mutateAsync({ id: transaction.id, ...patch });
+        transactionId = transaction.id;
+      } else transactionId = (await create.mutateAsync(source)).id;
     } catch {
       return failed();
     }
+    const refused = (error: Error) => {
+      if ("id" in source) return problemMessage(error) ?? "Não foi possível criar a conta fixa.";
+      if (bill.installments)
+        return "O lançamento foi salvo, mas a conta parcelada não foi criada. Tente de novo em Editar.";
+      return "Lançado, mas a conta fixa não foi criada.";
+    };
     createBill.mutate(
       { ...bill, transactionId },
       {
-        onSuccess: () => toast.success("Conta fixa criada"),
-        onError: (error) =>
-          toast.error(
-            transaction
-              ? (problemMessage(error) ?? "Não foi possível criar a conta fixa.")
-              : "Lançado, mas a conta fixa não foi criada.",
-          ),
+        onSuccess: () => toast.success(bill.installments ? "Conta parcelada criada" : "Conta fixa criada"),
+        onError: (error) => toast.error(refused(error)),
       },
     );
   };
@@ -885,7 +962,9 @@ export const TransactionSheet = ({
         initial={initial}
         transaction={transaction}
         onSave={save}
-        onConvert={billSheet && setConverting}
+        onParcelada={(fields, bill) => void convert(fields, bill)}
+        onConvert={billSheet && ((source, parcelado) => setConverting({ source, parcelado }))}
+        onEditBill={billSheet && setEditingBill}
         onDiscard={() => onOpenChange(false)}
         onOpenEnded={
           transaction?.series && (transaction.series.open_ended || transaction.kind !== "bill")
@@ -902,11 +981,16 @@ export const TransactionSheet = ({
       />
       {converting &&
         billSheet?.({
-          prefill: prefillOf(converting),
-          hint: "series" in converting && converting.series ? SERIES_HINT : undefined,
+          prefill: prefillOf(converting.source),
+          parcelado: converting.parcelado,
+          hint:
+            "series" in converting.source && converting.source.series
+              ? seriesHint(converting.source.series.last_date)
+              : undefined,
           onOpenChange: (open) => open || setConverting(undefined),
-          onCreate: (bill) => void convert(converting, bill),
+          onCreate: (bill) => void convert(converting.source, bill),
         })}
+      {editingBill && billSheet?.({ bill: editingBill, onOpenChange: (open) => open || setEditingBill(undefined) })}
     </ResponsiveSheet>
   );
 };

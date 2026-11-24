@@ -7,6 +7,19 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.67.0
+
+> Headline: a conta is fixa or parcelada, and reads as one everywhere
+
+### Server
+- `PATCH /api/bills/{id}` with `installments: null` and `last_month: null` turns a conta parcelada into a conta fixa with no end; absent keys still keep the plan. Payments are never touched; an ended parcelada restarts from today (D46, SOL-161).
+
+### Web
+- Lançamentos reads a conta's payment as its conta: "Conta fixa · paga", "Parcela 3/12 · paga", "Última parcela · paga" or "Fatura · paga"; unpaid rows read the same kind with "a pagar" or "venceu" (SOL-159).
+- Editing a monthly Conta series offers "Transformar em conta" with Conta fixa and Conta parcelada; Nova conta opens in the kind picked, and a series that already ended can still become a conta fixa (D45, SOL-160).
+- A conta switches between fixa and parcelada both ways from its form, and a payment entry offers "Editar conta" (SOL-161).
+- Lançar a Conta with Parcelado, Mensal, this month or the next, creates a conta parcelada: the entry pays its parcela and the next ones wait in Contas a pagar. The value typed is one parcela (D47, SOL-162).
+
 ## 0.66.0
 
 > Headline: fold away Contas a pagar and Lançamentos

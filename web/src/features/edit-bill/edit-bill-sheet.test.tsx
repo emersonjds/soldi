@@ -13,10 +13,13 @@ import { EditBillSheet, useArchiveLater } from "./edit-bill-sheet";
 
 const PORTO = { name: "Porto", amount: "1200.00", category_id: ALUGUEL.id };
 
-const create = (prefill: Schemas["CreateBill"]) => {
+const create = (
+  prefill: Schemas["CreateBill"],
+  props: Partial<Pick<Parameters<typeof EditBillSheet>[0], "parcelado" | "hint">> = {},
+) => {
   stubApi({ "GET /api/categories": { status: 200, body: CATEGORIES } });
   const onCreate = vi.fn();
-  renderWithQuery(<EditBillSheet open onOpenChange={vi.fn()} prefill={prefill} onCreate={onCreate} />);
+  renderWithQuery(<EditBillSheet open onOpenChange={vi.fn()} prefill={prefill} onCreate={onCreate} {...props} />);
   return onCreate;
 };
 
@@ -63,6 +66,38 @@ describe("EditBillSheet with a series prefill (SOL-152)", () => {
 
     expect(onCreate).toHaveBeenCalledWith({ ...PORTO, due_day: 1, installments: 9, last_month: "2027-06-01" });
   });
+
+  it("opens with Parcelado off when told to, keeping the plan for the switch, and posts no plan", async () => {
+    const onCreate = create({ ...PORTO, due_day: 5, installments: 3, last_month: "2027-01-01" }, { parcelado: false });
+
+    const form = await sheet();
+    expect(within(form).getByRole("switch", { name: "Parcelado" })).not.toBeChecked();
+    expect(within(form).queryByLabelText("Quantas parcelas")).not.toBeInTheDocument();
+    await userEvent.click(within(form).getByRole("button", { name: "Salvar Conta Fixa" }));
+
+    expect(onCreate).toHaveBeenLastCalledWith({ ...PORTO, due_day: 5 });
+    await userEvent.click(within(form).getByRole("switch", { name: "Parcelado" }));
+    expect(within(form).getByLabelText("Quantas parcelas")).toHaveValue("3");
+    expect(within(form).getByLabelText("Parcela atual")).toHaveValue("1");
+    expect(within(form).getByText("Parcela 1/3 em nov/26 · termina em jan/27")).toBeInTheDocument();
+    await userEvent.click(within(form).getByRole("button", { name: "Salvar Conta Fixa" }));
+
+    expect(onCreate).toHaveBeenLastCalledWith({ ...PORTO, due_day: 5, installments: 3, last_month: "2027-01-01" });
+  });
+
+  it("swaps the hint with the Parcelado switch", async () => {
+    create(
+      { ...PORTO, due_day: 1, installments: 9, last_month: "2026-11-01" },
+      { parcelado: true, hint: (parcelado) => (parcelado ? "Parcelada." : "Fixa.") },
+    );
+
+    const form = await sheet();
+    expect(within(form).getByText("Parcelada.")).toBeInTheDocument();
+    await userEvent.click(within(form).getByRole("switch", { name: "Parcelado" }));
+
+    expect(within(form).getByText("Fixa.")).toBeInTheDocument();
+    expect(within(form).queryByText("Parcelada.")).not.toBeInTheDocument();
+  });
 });
 
 describe("EditBillSheet removal (SOL-153)", () => {
@@ -92,6 +127,123 @@ describe("EditBillSheet removal (SOL-153)", () => {
 
     const form = await screen.findByRole("dialog", { name: "Editar conta" });
     expect(within(form).getByRole("button", { name: "Excluir cartão" })).toBeInTheDocument();
+    expect(within(form).queryByRole("button", { name: "Excluir conta fixa" })).not.toBeInTheDocument();
+  });
+});
+
+describe("EditBillSheet switches a conta between fixa and parcelada (SOL-161)", () => {
+  beforeEach(() => {
+    window.innerWidth = 375;
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 10, 5, 12));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const FIES: Schemas["Bill"] = { ...BILL_ALUGUEL, name: "Fies", installments: 3, last_month: "2027-01-01" };
+
+  const edit = async (bill: Schemas["Bill"]) => {
+    const requests = stubApi({
+      "GET /api/categories": { status: 200, body: CATEGORIES },
+      [`PATCH /api/bills/${bill.id}`]: { status: 200, body: bill },
+    });
+    renderWithQuery(
+      <>
+        <EditBillSheet open onOpenChange={vi.fn()} bill={bill} />
+        <Toaster />
+      </>,
+    );
+    const form = await screen.findByRole("dialog", { name: "Editar conta" });
+    const save = async () => {
+      await userEvent.click(within(form).getByRole("button", { name: "Salvar Conta Fixa" }));
+      await waitFor(() => expect(requests.some((request) => request.method === "PATCH")).toBe(true));
+      return requests.find((request) => request.method === "PATCH")?.json();
+    };
+    return { form, save };
+  };
+
+  it("turns a parcelada into a conta fixa: Parcelado off, the helper, no Ativa, both plan keys null", async () => {
+    const { form, save } = await edit(FIES);
+
+    const parcelado = within(form).getByRole("switch", { name: "Parcelado" });
+    expect(parcelado).toBeChecked();
+    await userEvent.click(parcelado);
+
+    expect(
+      within(form).getByText("Vira conta fixa: todo mês, sem fim. Os pagamentos feitos ficam como estão."),
+    ).toBeInTheDocument();
+    expect(within(form).queryByRole("switch", { name: "Ativa" })).not.toBeInTheDocument();
+    const body = await save();
+    expect(body).toMatchObject({ installments: null, last_month: null });
+    expect(body).not.toHaveProperty("active");
+    expect(await screen.findByText("Agora é uma conta fixa")).toBeInTheDocument();
+  });
+
+  it("sends no plan keys on a parcelada switched off and on again", async () => {
+    const { form, save } = await edit(FIES);
+
+    await userEvent.click(within(form).getByRole("switch", { name: "Parcelado" }));
+    await userEvent.click(within(form).getByRole("switch", { name: "Parcelado" }));
+    const body = await save();
+
+    expect(body).not.toHaveProperty("installments");
+    expect(body).not.toHaveProperty("last_month");
+    expect(await screen.findByText("Conta salva")).toBeInTheDocument();
+  });
+
+  it("never sends null for a fixa saved as is", async () => {
+    const { save } = await edit(BILL_ALUGUEL);
+
+    const body = await save();
+
+    expect(body).not.toHaveProperty("installments");
+    expect(body).not.toHaveProperty("last_month");
+  });
+
+  it("turns a fixa into a parcelada and says so", async () => {
+    const { form, save } = await edit(BILL_ALUGUEL);
+
+    await userEvent.click(within(form).getByRole("switch", { name: "Parcelado" }));
+    await userEvent.type(within(form).getByLabelText("Quantas parcelas"), "3");
+
+    expect(await save()).toMatchObject({ installments: 3 });
+    expect(await screen.findByText("Agora é uma conta parcelada")).toBeInTheDocument();
+  });
+
+  it("shows no Parcelado on a card", async () => {
+    const { form } = await edit({ ...BILL_ALUGUEL, name: "Porto", amount: null, closing_day: 3 });
+
+    expect(within(form).queryByRole("switch", { name: "Parcelado" })).not.toBeInTheDocument();
+  });
+
+  it("still says so when its host unmounts the sheet on close, as Editar conta on a payment does", async () => {
+    stubApi({
+      "GET /api/categories": { status: 200, body: CATEGORIES },
+      [`PATCH /api/bills/${FIES.id}`]: { status: 200, body: FIES },
+    });
+    const Host = () => {
+      const [open, setOpen] = useState(true);
+      return (
+        <>
+          {open && <EditBillSheet open onOpenChange={setOpen} bill={FIES} />}
+          <Toaster />
+        </>
+      );
+    };
+    renderWithQuery(<Host />);
+
+    const form = await screen.findByRole("dialog", { name: "Editar conta" });
+    await userEvent.click(within(form).getByRole("switch", { name: "Parcelado" }));
+    await userEvent.click(within(form).getByRole("button", { name: "Salvar Conta Fixa" }));
+
+    expect(await screen.findByText("Agora é uma conta fixa")).toBeInTheDocument();
+  });
+
+  it("offers no Excluir without onArchive", async () => {
+    const { form } = await edit(FIES);
+
     expect(within(form).queryByRole("button", { name: "Excluir conta fixa" })).not.toBeInTheDocument();
   });
 });

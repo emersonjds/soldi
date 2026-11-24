@@ -11,7 +11,10 @@ const monthFrom = (offset: number) => {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 };
 
-test("Parcelado 3x writes three parcelas", async ({ page, request }) => {
+test("Lançar a Conta Parcelado 3x pays this month's parcela and leaves the next two in Contas a pagar (SOL-162)", async ({
+  page,
+  request,
+}) => {
   await requireServer(request);
   test.setTimeout(90_000);
 
@@ -33,13 +36,32 @@ test("Parcelado 3x writes three parcelas", async ({ page, request }) => {
   await tabs.getByRole("button", { name: "Lançar" }).click();
   await launch.getByRole("radio", { name: "Conta" }).click();
   await launch.getByLabel("Valor").fill("100,00");
+  await launch.getByLabel("Observação").fill("Geladeira");
   await launch.getByRole("switch", { name: "Parcelado" }).click();
   await launch.getByRole("radio", { name: "3", exact: true }).click();
   await expect(launch).toContainText("3× de R$ 100,00 · repete todo dia");
+  await expect(launch).toContainText("Vira uma conta parcelada: este lançamento paga a parcela 1");
   await launch.getByRole("button", { name: "Salvar" }).click();
-  await expect(page.getByText("3 lançamentos criados")).toBeVisible();
-  await page.goto(`/mes?m=${monthFrom(1)}`);
-  await expect(page.getByRole("region", { name: "Lançamentos" })).toContainText("R$ 100,00");
+  await expect(page.getByText("Conta parcelada criada")).toBeVisible();
+
+  await page.goto(`/mes?m=${monthFrom(0)}`);
+  await expect(
+    page.getByRole("region", { name: "Lançamentos" }).getByRole("button", { name: /^Geladeira/ }),
+  ).toContainText("Parcela 1/3 · paga");
+  for (const [offset, parcela] of [
+    [1, "Parcela 2/3"],
+    [2, "Última parcela"],
+  ] as const) {
+    await page.goto(`/mes?m=${monthFrom(offset)}`);
+    const bill = page.getByRole("region", { name: "Contas a pagar" }).getByRole("listitem", { name: "Geladeira" });
+    await expect(bill).toContainText(parcela);
+    await expect(bill).toContainText("R$ 100,00");
+    await expect(bill.getByRole("button", { name: "Pagar Geladeira" })).toBeVisible();
+  }
+  await page.goto(`/mes?m=${monthFrom(3)}`);
+  await expect(page.getByRole("region", { name: "Saldo hoje" })).toBeVisible();
+  await page.waitForLoadState("networkidle");
+  await expect(page.getByRole("listitem", { name: "Geladeira" })).toHaveCount(0);
 });
 
 test("Posso comprar isso? from the sidebar: 6× R$ 12.000,00 names the red month and recalculates in 10x", async ({

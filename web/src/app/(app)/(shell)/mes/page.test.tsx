@@ -813,7 +813,7 @@ describe("Mês", () => {
     expect(within(bill).getByLabelText("Dia do vencimento recorrente")).toHaveValue("4");
   });
 
-  it("turns a series member into a parcelado conta fixa from the bill sheet", async () => {
+  describe("a series member turned into a conta (SOL-160)", () => {
     const porto: Schemas["Transaction"] = {
       ...TRANSACTIONS[1],
       id: "t-porto",
@@ -821,36 +821,67 @@ describe("Mês", () => {
       date: "2026-11-01",
       series: { id: "s", position: 9, total: 26, last_date: "2028-04-01", every: "month", open_ended: false },
     };
-    const requests = open({
-      "GET /api/transactions": { status: 200, body: [porto] },
-      "POST /api/bills": { status: 201, body: BILL_ALUGUEL },
+    const convert = async (kind: string) => {
+      const requests = open({
+        "GET /api/transactions": { status: 200, body: [porto] },
+        "POST /api/bills": { status: 201, body: BILL_ALUGUEL },
+      });
+      await userEvent.click(
+        await within(await screen.findByRole("region", { name: "Lançamentos" })).findByRole("button", {
+          name: /Porto/,
+        }),
+      );
+      await userEvent.click(
+        within(await screen.findByRole("dialog", { name: "Porto" })).getByRole("button", { name: "Editar" }),
+      );
+      await userEvent.click(await screen.findByRole("button", { name: kind }));
+      const bill = await screen.findByRole("dialog", { name: "Nova conta" });
+      const posted = async () => {
+        await waitFor(() =>
+          expect(requests.some((request) => request.method === "POST" && request.url.includes("/api/bills"))).toBe(
+            true,
+          ),
+        );
+        const post = requests.find((request) => request.method === "POST" && request.url.includes("/api/bills"));
+        expect(new URL(post?.url ?? "").searchParams.get("transaction_id")).toBe("t-porto");
+        return post?.json();
+      };
+      return { bill, posted };
+    };
+
+    it("Conta parcelada opens Parcelado on with the series' plan and its end month", async () => {
+      const { bill, posted } = await convert("Conta parcelada");
+
+      expect(
+        within(bill).getByText(
+          "Os lançamentos desta série até este mês viram pagamentos desta conta. Os dos próximos meses saem da lista: a conta prevê cada parcela até abr/28.",
+        ),
+      ).toBeInTheDocument();
+      expect(within(bill).getByRole("switch", { name: "Parcelado" })).toBeChecked();
+      expect(within(bill).getByLabelText("Quantas parcelas")).toHaveValue("26");
+      expect(within(bill).queryByRole("switch", { name: "Cartão de crédito" })).not.toBeInTheDocument();
+      await userEvent.click(within(bill).getByRole("button", { name: "Salvar Conta Fixa" }));
+
+      expect(await posted()).toMatchObject({ installments: 26, last_month: "2028-04-01" });
+      expect(await screen.findByText("Conta parcelada criada")).toBeInTheDocument();
     });
 
-    await userEvent.click(
-      await within(await screen.findByRole("region", { name: "Lançamentos" })).findByRole("button", { name: /Porto/ }),
-    );
-    await userEvent.click(
-      within(await screen.findByRole("dialog", { name: "Porto" })).getByRole("button", { name: "Editar" }),
-    );
-    await userEvent.click(await screen.findByRole("button", { name: "Criar como Conta Fixa" }));
+    it("Conta fixa opens Parcelado off and posts no plan", async () => {
+      const { bill, posted } = await convert("Conta fixa");
 
-    const bill = await screen.findByRole("dialog", { name: "Nova conta" });
-    expect(
-      within(bill).getByText(
-        "Os lançamentos desta série até este mês viram pagamentos desta conta. Os dos próximos meses saem da lista: a conta passa a prever cada mês.",
-      ),
-    ).toBeInTheDocument();
-    expect(within(bill).getByRole("switch", { name: "Parcelado" })).toBeChecked();
-    expect(within(bill).getByLabelText("Quantas parcelas")).toHaveValue("26");
-    expect(within(bill).queryByRole("switch", { name: "Cartão de crédito" })).not.toBeInTheDocument();
-    await userEvent.click(within(bill).getByRole("button", { name: "Salvar Conta Fixa" }));
+      expect(
+        within(bill).getByText(
+          "Os lançamentos desta série até este mês viram pagamentos desta conta. Os dos próximos meses saem da lista: a conta fixa prevê todo mês, sem fim.",
+        ),
+      ).toBeInTheDocument();
+      expect(within(bill).getByRole("switch", { name: "Parcelado" })).not.toBeChecked();
+      await userEvent.click(within(bill).getByRole("button", { name: "Salvar Conta Fixa" }));
 
-    await waitFor(() =>
-      expect(requests.some((request) => request.method === "POST" && request.url.includes("/api/bills"))).toBe(true),
-    );
-    const post = requests.find((request) => request.method === "POST" && request.url.includes("/api/bills"));
-    expect(new URL(post?.url ?? "").searchParams.get("transaction_id")).toBe("t-porto");
-    expect(await post?.json()).toMatchObject({ installments: 26, last_month: "2028-04-01" });
+      const body = await posted();
+      expect(body).not.toHaveProperty("installments");
+      expect(body).not.toHaveProperty("last_month");
+      expect(await screen.findByText("Conta fixa criada")).toBeInTheDocument();
+    });
   });
 
   it("warns above the cards of the first red day and its two largest outflows; Ver o dia jumps, rings it for 2 s and names the cause", async () => {
