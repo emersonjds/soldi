@@ -77,7 +77,7 @@ export const AccountSection = () => {
           </Tile>
         </div>
       )}
-      <div className="flex flex-col-reverse gap-4 sm:flex-row sm:items-start sm:justify-between">
+      <div className="flex flex-col-reverse gap-4 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
         <DeleteAccountButton />
         <div className="flex flex-col items-stretch sm:items-end">
           <SignOutButton />
