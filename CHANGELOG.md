@@ -7,6 +7,16 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.68.0
+
+> Headline: Modo planilha, every day of each month side by side like the Termômetro sheet
+
+### Web
+- Lançamentos in Mês switches between "Lista" (unchanged, the default) and "Planilha", remembered in the browser (SOL-163, D48).
+- Planilha: one row per day with Entrada, Saída, Diário and Saldo, months side by side from a year back (never before the opening date) to 11 months ahead, Saldo colored by tier, today marked, previsto in italics, a legend, and "Ir pra hoje". One month per screen at 375, three at 1440; each month loads as it comes near.
+- Hover (mouse) or tap (touch) on a day lists its entries and contas, each group totalling its cell; card spends show as "{cartão} · na fatura" outside the Diário total. Arrow keys move between days and months.
+- The red-day banner's jump lands on the day in the planilha too.
+
 ## 0.67.2
 
 ### Dependencies
