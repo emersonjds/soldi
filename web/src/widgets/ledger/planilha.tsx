@@ -35,7 +35,7 @@ import { type PlanilhaRow, planilhaMonths, planilhaRows, sum } from "./planilha-
 
 const COLUMNS = ["Data", "Entrada", "Saída", "Diário", "Saldo"];
 
-const MONEY = "whitespace-nowrap px-2 text-right";
+const MONEY = "whitespace-nowrap px-1.5 text-right";
 
 /** The weekend tint over the card, opaque for the sticky Data cell. */
 const WEEKEND_OPAQUE = "bg-[color-mix(in_oklab,var(--color-muted)_50%,var(--color-card))]";
@@ -275,7 +275,7 @@ const Row = ({ row, today, view, entries, stop, onFocus, ringed, claim, estimate
               onKeyDown={(event) => move(event, date)}
               aria-label={dayName(date, today)}
               className={cn(
-                "flex min-h-11 w-full items-center px-2",
+                "flex min-h-11 w-full items-center px-1.5",
                 ringed && "ring-expense rounded-md ring-2 ring-inset",
               )}
             >
@@ -432,7 +432,7 @@ const MonthBlock = ({ month, today, openingDate, highlight, claim, estimate }: M
       ref={near ? undefined : watch}
       data-month={month}
       aria-label={label}
-      className="min-w-[100cqi] shrink-0 snap-start border-separate border-spacing-0 text-[length:clamp(0.75rem,3.6cqi,0.875rem)] tabular-nums @[40rem]:min-w-[calc((100cqi-1rem)/2)] @[64rem]:min-w-[calc((100cqi-2rem)/3)]"
+      className="min-w-[100cqi] shrink-0 border-separate border-spacing-0 snap-start text-[length:clamp(0.75rem,3.6cqi,0.875rem)] tabular-nums @[45rem]:min-w-[calc((100cqi-1rem)/2)] @[68rem]:min-w-[calc((100cqi-2rem)/3)] @[91rem]:min-w-[calc((100cqi-3rem)/4)] @[114rem]:min-w-[calc((100cqi-4rem)/5)]"
     >
       <thead className="bg-card sticky top-0 z-10">
         <tr>
@@ -446,7 +446,7 @@ const MonthBlock = ({ month, today, openingDate, highlight, claim, estimate }: M
               key={column}
               scope="col"
               className={cn(
-                "text-muted-foreground bg-card border-b px-2 py-1 text-right font-medium",
+                "text-muted-foreground bg-card border-b px-1.5 py-1 text-right font-medium",
                 column === "Data" && "sticky left-0 text-left",
               )}
             >
@@ -579,7 +579,7 @@ export const Planilha = ({
   };
 
   return (
-    <div className="@container flex flex-col gap-3">
+    <div data-planilha className="@container flex flex-col gap-3">
       <Toolbar away={month !== current || !seen} onToday={goToday} />
       <div
         ref={scroller}

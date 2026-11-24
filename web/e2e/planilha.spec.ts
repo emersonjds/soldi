@@ -15,6 +15,19 @@ const monthsInView = (page: Page) =>
     }).length;
   });
 
+/** Tables of the planilha cut by its scroller's edge. */
+const partialMonths = (page: Page) =>
+  page.evaluate(() => {
+    const tables = [...document.querySelectorAll("table[data-month]")];
+    const frame = tables[0].parentElement?.getBoundingClientRect();
+    if (!frame) return -1;
+    return tables.filter((table) => {
+      const box = table.getBoundingClientRect();
+      const meets = box.right > frame.left + 1 && box.left < frame.right - 1;
+      return meets && (box.left < frame.left - 1 || box.right > frame.right + 1);
+    }).length;
+  });
+
 /** Today's day button fully inside the planilha's scroller. */
 const todayInView = (page: Page, today: string) =>
   page.evaluate((date) => {
@@ -58,6 +71,15 @@ test("Lançamentos switches to the planilha, remembers it, shows a day's entries
       })
     ).ok(),
   ).toBe(true);
+  // A six-digit balance: the widest month the breakpoints are sized for.
+  const salary = categories.find((each) => each.kind === "income");
+  expect(
+    (
+      await page.request.post("/api/transactions", {
+        data: { date: today, amount: "123456.78", kind: "income", category_id: salary?.id },
+      })
+    ).ok(),
+  ).toBe(true);
   // Six months of history: today's month opens away from scrollLeft 0.
   const [year, month] = today.split("-").map(Number);
   const opening = new Date(Date.UTC(year, month - 7, 1)).toISOString().slice(0, 10);
@@ -89,24 +111,38 @@ test("Lançamentos switches to the planilha, remembers it, shows a day's entries
   // One month in view and its neighbour on each side.
   expect(fetched.size).toBeLessThanOrEqual(3);
 
+  const cardWidth: Record<number, number> = {};
   for (const [width, shown] of [
     [375, 1],
-    [1024, 2],
+    [1024, 1],
     [1280, 2],
     [1440, 3],
+    [1920, 4],
+    [2560, 5],
   ]) {
     await page.setViewportSize({ width, height: 900 });
     expect(await page.evaluate(() => (document.scrollingElement?.scrollWidth ?? 0) <= window.innerWidth)).toBe(true);
     await expectNoClipped(page);
     await expect.poll(() => monthsInView(page)).toBe(shown);
+    await expect.poll(() => partialMonths(page)).toBe(0);
+    cardWidth[width] = (await ledger.boundingBox())?.width ?? 0;
   }
+  expect(cardWidth[1920]).toBeGreaterThan(cardWidth[1440]);
+  expect(cardWidth[2560]).toBeGreaterThan(cardWidth[1920]);
 
   fetched.clear();
   await page.reload();
   await expect.poll(() => todayInView(page, today)).toBe(true);
   await page.waitForLoadState("networkidle");
-  // Three months in view and a neighbour on each side.
-  expect(fetched.size).toBeLessThanOrEqual(5);
+  // Five months in view and a neighbour on each side.
+  expect(fetched.size).toBeLessThanOrEqual(7);
+
+  await page.setViewportSize({ width: 1920, height: 900 });
+  const main = page.getByRole("main");
+  await views.getByRole("radio", { name: "Lista" }).click();
+  await expect.poll(async () => (await main.boundingBox())?.width).toBe(72 * 16);
+  await views.getByRole("radio", { name: "Planilha" }).click();
+  await expect.poll(async () => (await main.boundingBox())?.width).toBeGreaterThan(72 * 16);
 
   await page.setViewportSize({ width: 375, height: 812 });
   await day.click();

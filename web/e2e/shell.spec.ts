@@ -130,6 +130,7 @@ test("the shell follows Stitch from 375 to 1440: app bar and tab bar on mobile, 
 
   const main = page.getByRole("main");
   await tabs.getByRole("link", { name: "Mês" }).click();
+  await expect(page).toHaveURL(/\/mes(\?|$)/);
   const shown = main.getByRole("group", { name: "Mês" }).locator("[aria-live]");
   const current = await shown.innerText();
   await main.getByRole("group", { name: "Mês" }).getByRole("button", { name: "Próximo mês" }).click();
