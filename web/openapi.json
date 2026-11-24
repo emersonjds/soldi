@@ -3501,6 +3501,7 @@
           "withdrawn",
           "bills",
           "daily",
+          "previsto",
           "balance",
           "tier",
           "projected_balance",
@@ -3531,9 +3532,14 @@
           "is_today": {
             "type": "boolean"
           },
+          "previsto": {
+            "type": "string",
+            "description": "SOL-164 R1: the Diário previsto this day adds to the projection; 0 when off, today or\nearlier, before the opening date, or when the cash Diário typed reaches the estimate.",
+            "example": "30.00"
+          },
           "projected_balance": {
             "type": "string",
-            "description": "`balance` minus the unpaid bills landed on or before this day (`BillOfMonth::lands_on`);\nequal to `balance` before today and in a past month."
+            "description": "`balance` minus the unpaid bills landed on or before this day (`BillOfMonth::lands_on`)\nand the Diário previsto of every future day up to it; equal to `balance` up to today and\nin a past month."
           },
           "projected_tier": {
             "$ref": "#/components/schemas/Tier"
@@ -3625,7 +3631,7 @@
       },
       "ForecastDay": {
         "type": "object",
-        "description": "One day ahead (D16): the balance with every unpaid bill landed, and its tier.",
+        "description": "One day ahead (D16): the balance with every unpaid bill landed and, when on, the Diário\nprevisto of every future day up to it (D49), and its tier.",
         "required": [
           "date",
           "projected_balance",
@@ -3680,7 +3686,7 @@
       },
       "MonthView": {
         "type": "object",
-        "description": "`month` is `YYYY-MM`. `balance_today` is the balance at today, or at the month's last day\nwhen the month is past. `projected_balance` is, for the current and a future month, the last\nday's `projected_balance` (every unpaid bill landed, earlier months' included); for a past\nmonth, the balance at its end minus its unpaid `bills_of_month`.",
+        "description": "`month` is `YYYY-MM`. `balance_today` is the balance at today, or at the month's last day\nwhen the month is past. `projected_balance` is, for the current and a future month, the last\nday's `projected_balance` (every unpaid bill landed, earlier months' included, and the Diário\nprevisto of every future day up to it); for a past month, the balance at its end minus its\nunpaid `bills_of_month`.",
         "required": [
           "month",
           "days",
