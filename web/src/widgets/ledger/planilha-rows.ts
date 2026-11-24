@@ -20,6 +20,8 @@ export type PlanilhaRow = {
   income: string;
   /** Saída: bills paid plus the unpaid contas landed on the day. */
   outflow: string;
+  /** Diário: the cash Diário typed plus the Diário previsto (SOL-164 R8). */
+  daily: string;
   /** The unpaid contas landed on the day. */
   landed: Schemas["BillOfMonth"][];
 };
@@ -30,13 +32,14 @@ export const planilhaRows = (view: Schemas["MonthView"], openingDate: string): P
   Array.from({ length: lastDay(view.month) }, (_, index) => {
     const date = `${view.month}-${String(index + 1).padStart(2, "0")}`;
     const day = date < openingDate ? undefined : view.days.find((each) => each.date === date);
-    if (!day) return { date, day: null, income: "0.00", outflow: "0.00", landed: [] };
+    if (!day) return { date, day: null, income: "0.00", outflow: "0.00", daily: "0.00", landed: [] };
     const landed = view.bills_of_month.filter((bill) => bill.lands_on === date);
     return {
       date,
       day,
       income: sum([day.income, day.withdrawn]),
       outflow: sum([day.bills, ...landed.map((bill) => bill.amount)]),
+      daily: sum([day.daily, day.previsto]),
       landed,
     };
   });

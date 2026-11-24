@@ -7,7 +7,7 @@
       "name": "AGPL-3.0-only",
       "identifier": "AGPL-3.0-only"
     },
-    "version": "0.68.0"
+    "version": "0.69.0"
   },
   "paths": {
     "/api/auth/email-verification/confirm": {
@@ -2166,7 +2166,7 @@
             }
           },
           "422": {
-            "description": "Money with more than two places, tiers out of order (names the upper tier of the first pair), an unknown field",
+            "description": "Money with more than two places, tiers out of order (names the upper tier of the first pair), a daily_estimate outside 0.01..10000.00, daily_estimate_on true without a value, an unknown field",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -2177,6 +2177,42 @@
           },
           "429": {
             "description": "Rate limited with the account's write budget; wait `Retry-After` seconds",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/settings/daily-estimate-suggestion": {
+      "get": {
+        "tags": [
+          "settings"
+        ],
+        "operationId": "get_suggestion",
+        "responses": {
+          "200": {
+            "description": "The last 3 complete months' cash Diário per day, from the opening date; null under 28 days of history, no cash Diário, or an amount that could not be saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/DailyEstimateSuggestion"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -3431,6 +3467,31 @@
           "EUR"
         ]
       },
+      "DailyEstimateSuggestion": {
+        "type": "object",
+        "description": "R-S: the cash Diário (no card) from `from` to `to` divided by its days, half-even to cents;\na pre-fill only, never stored.",
+        "required": [
+          "amount",
+          "from",
+          "to"
+        ],
+        "properties": {
+          "amount": {
+            "type": "string",
+            "example": "36.30"
+          },
+          "from": {
+            "type": "string",
+            "format": "date",
+            "example": "2026-08-20"
+          },
+          "to": {
+            "type": "string",
+            "format": "date",
+            "example": "2026-10-31"
+          }
+        }
+      },
       "Day": {
         "type": "object",
         "description": "One calendar day: what came in and went out, and the balance at its end. `income` leaves\nresgates out; `withdrawn` holds them, and the balance adds both.",
@@ -3440,6 +3501,7 @@
           "withdrawn",
           "bills",
           "daily",
+          "previsto",
           "balance",
           "tier",
           "projected_balance",
@@ -3470,9 +3532,14 @@
           "is_today": {
             "type": "boolean"
           },
+          "previsto": {
+            "type": "string",
+            "description": "SOL-164 R1: the Diário previsto this day adds to the projection; 0 when off, today or\nearlier, before the opening date, or when the cash Diário typed reaches the estimate.",
+            "example": "30.00"
+          },
           "projected_balance": {
             "type": "string",
-            "description": "`balance` minus the unpaid bills landed on or before this day (`BillOfMonth::lands_on`);\nequal to `balance` before today and in a past month."
+            "description": "`balance` minus the unpaid bills landed on or before this day (`BillOfMonth::lands_on`)\nand the Diário previsto of every future day up to it; equal to `balance` up to today and\nin a past month."
           },
           "projected_tier": {
             "$ref": "#/components/schemas/Tier"
@@ -3564,7 +3631,7 @@
       },
       "ForecastDay": {
         "type": "object",
-        "description": "One day ahead (D16): the balance with every unpaid bill landed, and its tier.",
+        "description": "One day ahead (D16): the balance with every unpaid bill landed and, when on, the Diário\nprevisto of every future day up to it (D49), and its tier.",
         "required": [
           "date",
           "projected_balance",
@@ -3619,7 +3686,7 @@
       },
       "MonthView": {
         "type": "object",
-        "description": "`month` is `YYYY-MM`. `balance_today` is the balance at today, or at the month's last day\nwhen the month is past. `projected_balance` is, for the current and a future month, the last\nday's `projected_balance` (every unpaid bill landed, earlier months' included); for a past\nmonth, the balance at its end minus its unpaid `bills_of_month`.",
+        "description": "`month` is `YYYY-MM`. `balance_today` is the balance at today, or at the month's last day\nwhen the month is past. `projected_balance` is, for the current and a future month, the last\nday's `projected_balance` (every unpaid bill landed, earlier months' included, and the Diário\nprevisto of every future day up to it); for a past month, the balance at its end minus its\nunpaid `bills_of_month`.",
         "required": [
           "month",
           "days",
@@ -3959,11 +4026,27 @@
           "tier_zero",
           "tier_yellow",
           "tier_green",
-          "currency"
+          "currency",
+          "savings_target_pct",
+          "daily_estimate",
+          "daily_estimate_on"
         ],
         "properties": {
           "currency": {
             "$ref": "#/components/schemas/Currency"
+          },
+          "daily_estimate": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "SOL-164: the Diário previsto per day the person declared, 0.01 to 10000.00; null when never set.",
+            "example": "50.00"
+          },
+          "daily_estimate_on": {
+            "type": "boolean",
+            "description": "When true (and only with a value), every future day on or after the opening date takes\n`max(daily_estimate − that day's cash Diário, 0)` in the projected balances (D49).",
+            "example": true
           },
           "opening_balance": {
             "type": "string"
@@ -4380,6 +4463,22 @@
                 "type": "null"
               }
             ]
+          },
+          "daily_estimate": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "0.01 to 10000.00, two places at most; null clears it and turns it off.",
+            "example": "50.00"
+          },
+          "daily_estimate_on": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "true needs a value saved or sent in the same patch.",
+            "example": true
           },
           "opening_balance": {
             "type": [

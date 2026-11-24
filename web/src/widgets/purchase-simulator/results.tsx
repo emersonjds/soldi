@@ -15,6 +15,7 @@ import { CategorySheet } from "@/entities/category/category-sheet";
 import { useForecast } from "@/entities/forecast/forecast-query";
 import type { DraftRow } from "@/entities/forecast/months-ahead";
 import { monthQuery } from "@/entities/month/month-query";
+import { activeEstimate, includesEstimate } from "@/entities/settings/daily-estimate";
 import { settingsQuery } from "@/entities/settings/settings-query";
 import { cn } from "@/lib/utils";
 import type { Schemas } from "@/shared/api/client";
@@ -24,6 +25,7 @@ import { formatMoney } from "@/shared/lib/money";
 import type { Count } from "@/shared/lib/simulation-history";
 import { cents, fromCents } from "@/shared/lib/tier";
 import { BrandButton } from "@/shared/ui/brand-button";
+import { EstimateNote } from "@/shared/ui/estimate-note";
 import { Money } from "@/shared/ui/money";
 import { PageError } from "@/shared/ui/page-state";
 
@@ -37,13 +39,19 @@ const COUNTS: Count[] = [6, 10, 12];
 const card = "flex flex-col gap-4 rounded-2xl bg-card p-4 shadow-sm lg:p-6";
 const eyebrow = "font-semibold text-xs uppercase tracking-wider";
 
-/** The month's two largest outflows landing by `day`, its red day. */
-const outflowsOf = (day: string, view?: Schemas["MonthView"]) =>
-  (view?.bills_of_month ?? [])
-    .filter((bill) => bill.lands_on && bill.lands_on <= day)
-    .sort((a, b) => cents(b.amount) - cents(a.amount))
+/** The month's two largest outflows landing by `day`, its red day, the day's Diário previsto among them (SOL-164). */
+const outflowsOf = (day: string, view?: Schemas["MonthView"]) => {
+  const previsto = cents(view?.days.find((each) => each.date === day)?.previsto ?? "0.00");
+  return [
+    ...(view?.bills_of_month ?? [])
+      .filter((bill) => bill.lands_on && bill.lands_on <= day)
+      .map((bill) => ({ name: bill.name, amount: cents(bill.amount) })),
+    ...(previsto > 0 ? [{ name: "Diário previsto", amount: previsto }] : []),
+  ]
+    .sort((a, b) => b.amount - a.amount)
     .slice(0, 2)
-    .map((bill) => bill.name);
+    .map(({ name }) => name);
+};
 
 type Props = {
   rows: DraftRow[];
@@ -86,6 +94,7 @@ export const Results = ({ rows, count, total, name, onRetest }: Props) => {
     return <PageError message="Sem meses para projetar agora. Tente de novo." onRetry={() => forecast.refetch()} />;
 
   const first = reds[0];
+  const estimate = includesEstimate(settings.data, forecast.data) ? activeEstimate(settings.data) : null;
   const until = projectedUntil(forecast.data, rows);
   const fits = until
     ? `Até ${monthSlashYear(until)}, nenhum mês fica no vermelho.`
@@ -125,6 +134,7 @@ export const Results = ({ rows, count, total, name, onRetest }: Props) => {
                   ? `Em ${monthOnly(first.month)} você fica no vermelho: ${money(first.low.projected_balance)}`
                   : fits}
               </h2>
+              {estimate && <EstimateNote estimate={estimate} />}
             </div>
           </div>
           <span

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { cents } from "@/shared/lib/tier";
-import { MONTH, PLANILHA_MONTH } from "@/test/stub-api";
+import { ESTIMATE_MONTH, MONTH, PLANILHA_MONTH } from "@/test/stub-api";
 
 import { planilhaMonths, planilhaRows } from "./planilha-rows";
 
@@ -63,10 +63,43 @@ describe("planilhaRows", () => {
     }
   });
 
+  it("SOL-164 S8: puts the Diário previsto in a future day's Diário, the larger of typed and estimate", () => {
+    const ahead = planilhaRows(ESTIMATE_MONTH, "2026-03-10");
+
+    expect(ahead.slice(3, 10).map(({ daily }) => daily)).toEqual([
+      "30.25",
+      "19.75",
+      "50.00",
+      "50.00",
+      "80.00",
+      "50.00",
+      "50.00",
+    ]);
+    expect(row(4).daily).toBe("30.25");
+    expect(ahead[29].day?.projected_balance).toBe("-2430.00");
+  });
+
+  it("SOL-164 R8: adds up with the estimate: Saldo(d) = Saldo(d−1) + Entrada − Saída − Diário", () => {
+    const ahead = planilhaRows(ESTIMATE_MONTH, "2026-03-10");
+    for (let index = 1; index < ahead.length; index++) {
+      const [before, today] = [ahead[index - 1], ahead[index]];
+      const expected =
+        cents(before.day?.projected_balance ?? "") + cents(today.income) - cents(today.outflow) - cents(today.daily);
+      expect(cents(today.day?.projected_balance ?? ""), today.date).toBe(expected);
+    }
+  });
+
   it("leaves the days before the opening date without a day", () => {
     const opening = planilhaRows(PLANILHA_MONTH, "2026-11-03");
 
-    expect(opening[0]).toEqual({ date: "2026-11-01", day: null, income: "0.00", outflow: "0.00", landed: [] });
+    expect(opening[0]).toEqual({
+      date: "2026-11-01",
+      day: null,
+      income: "0.00",
+      outflow: "0.00",
+      daily: "0.00",
+      landed: [],
+    });
     expect(opening[1].day).toBeNull();
     expect(opening[2].day?.date).toBe("2026-11-03");
   });

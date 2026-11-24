@@ -526,4 +526,14 @@ describe("PlanilhaView", () => {
     expect(screen.getAllByRole("table")[0]).toHaveAccessibleName("Novembro 2026");
     vi.useRealTimers();
   });
+
+  it("passes the Diário previsto in the settings on, only while it is on", async () => {
+    const on = { ...SETTINGS, daily_estimate: "50.00", daily_estimate_on: true };
+    stubApi({ "GET /api/settings": { status: 200, body: on } });
+    renderWithQuery(<PlanilhaView month="2026-11" />);
+
+    expect(
+      await screen.findByRole("link", { name: /^Inclui Diário previsto de R\$\s50,00\/dia$/ }),
+    ).toBeInTheDocument();
+  });
 });

@@ -304,6 +304,48 @@ fn landing(
     (before, on)
 }
 
+/// SOL-164 R1: what the Diário previsto adds on `date`, on top of the cash `daily` typed for it.
+pub fn previsto_on(
+    settings: &Settings,
+    today: NaiveDate,
+    date: NaiveDate,
+    daily: Decimal,
+) -> Decimal {
+    match settings.daily_estimate {
+        Some(estimate)
+            if settings.daily_estimate_on && date > today && date >= settings.opening_date =>
+        {
+            (estimate - daily).max(Decimal::ZERO)
+        }
+        _ => Decimal::ZERO,
+    }
+}
+
+/// R2: the previstos of the days before `from`.
+fn estimated_before(
+    settings: &Settings,
+    today: NaiveDate,
+    flows: &BTreeMap<NaiveDate, Flows>,
+    from: NaiveDate,
+) -> Decimal {
+    if !settings.daily_estimate_on {
+        return Decimal::ZERO;
+    }
+    let start = today.succ_opt().unwrap_or(today).max(settings.opening_date);
+    start
+        .iter_days()
+        .take_while(|date| *date < from)
+        .map(|date| {
+            previsto_on(
+                settings,
+                today,
+                date,
+                flows.get(&date).map_or(Decimal::ZERO, |flow| flow.daily),
+            )
+        })
+        .sum()
+}
+
 /// The entries on or after `opening`, a card's spends left to its faturas.
 fn flows_by_day(
     sums: Vec<DaySum>,
@@ -414,6 +456,7 @@ pub fn month_view(input: MonthInput) -> MonthView {
     });
     let bills_of_month: Vec<BillOfMonth> = carried.chain(own).collect();
     let (mut pending, lands) = landing(&unpaid_months, month, end);
+    let mut estimated = estimated_before(&settings, today, &flows, month);
     let mut balance = settings.opening_balance
         + flows
             .range(..month)
@@ -427,7 +470,9 @@ pub fn month_view(input: MonthInput) -> MonthView {
             let flow = flows.get(&date).copied().unwrap_or_default();
             balance += flow.net();
             pending += lands.get(&date).copied().unwrap_or_default();
-            let projected_balance = balance - pending;
+            let previsto = previsto_on(&settings, today, date, flow.daily);
+            estimated += previsto;
+            let projected_balance = balance - pending - estimated;
             totals.income += flow.income;
             totals.withdrawn += flow.withdrawn;
             totals.bills += flow.bills;
@@ -438,6 +483,7 @@ pub fn month_view(input: MonthInput) -> MonthView {
                 withdrawn: flow.withdrawn,
                 bills: flow.bills,
                 daily: flow.daily,
+                previsto,
                 balance,
                 tier: tier(balance, &settings),
                 projected_balance,
@@ -448,7 +494,7 @@ pub fn month_view(input: MonthInput) -> MonthView {
         })
         .collect();
     let projected = if today <= end {
-        balance - pending
+        balance - pending - estimated
     } else {
         balance
             - bills_of_month
@@ -519,6 +565,7 @@ pub fn forecast(input: ForecastInput) -> Forecast {
         to,
     );
     let (mut pending, lands) = landing(&unpaid_months, from, to);
+    let mut estimated = estimated_before(&settings, today, &flows, from);
     let mut balance = settings.opening_balance
         + flows
             .range(..from)
@@ -528,9 +575,11 @@ pub fn forecast(input: ForecastInput) -> Forecast {
         .iter_days()
         .take_while(|date| *date <= to)
         .map(|date| {
-            balance += flows.get(&date).map_or(Decimal::ZERO, Flows::net);
+            let flow = flows.get(&date).copied().unwrap_or_default();
+            balance += flow.net();
             pending += lands.get(&date).copied().unwrap_or_default();
-            let projected_balance = balance - pending;
+            estimated += previsto_on(&settings, today, date, flow.daily);
+            let projected_balance = balance - pending - estimated;
             ForecastDay {
                 date,
                 projected_balance,
@@ -623,6 +672,16 @@ mod tests {
             tier_green: money("2000"),
             currency: soldi_types::settings::Currency::Brl,
             savings_target_pct: None,
+            daily_estimate: None,
+            daily_estimate_on: false,
+        }
+    }
+
+    fn estimate(settings: Settings, amount: &str) -> Settings {
+        Settings {
+            daily_estimate: Some(money(amount)),
+            daily_estimate_on: true,
+            ..settings
         }
     }
 
@@ -1987,11 +2046,21 @@ mod tests {
                 "2026-11-20",
             )
         };
-        for scenario in [owners, carried, later, cards] {
+        for (scenario, on) in [owners, carried, later, cards]
+            .into_iter()
+            .flat_map(|scenario| [(scenario, false), (scenario, true)])
+        {
+            let declared = |settings: Settings| {
+                if on {
+                    estimate(settings, "50")
+                } else {
+                    settings
+                }
+            };
             let (settings, sums, bills, payments, today) = scenario();
             let from = date(today).max(settings.opening_date);
             let year = forecast(ForecastInput {
-                settings,
+                settings: declared(settings),
                 sums,
                 bills,
                 payments,
@@ -2005,18 +2074,18 @@ mod tests {
             for month in months {
                 let (settings, sums, bills, payments, _) = scenario();
                 let month = month.format("%Y-%m").to_string();
-                let view = with_bills(&month, settings, sums, bills, payments, today);
+                let view = with_bills(&month, declared(settings), sums, bills, payments, today);
                 for day in view.days.iter().filter(|day| day.date >= from) {
                     assert_eq!(
                         at(&year, &day.date.to_string()),
                         (day.projected_balance, day.projected_tier),
-                        "{today} {}",
+                        "{today} {on} {}",
                         day.date
                     );
                     checked += 1;
                 }
             }
-            assert_eq!(checked, year.days.len(), "{today}");
+            assert_eq!(checked, year.days.len(), "{today} {on}");
         }
     }
 
@@ -2088,5 +2157,387 @@ mod tests {
     fn sol119_a_month_before_the_opening_is_refused() {
         assert!(check_opening(date("2026-10-01"), date("2026-11-15")).is_err());
         assert!(check_opening(date("2026-11-01"), date("2026-11-15")).is_ok());
+    }
+
+    const T: &str = "2026-11-28";
+
+    fn e1() -> Settings {
+        estimate(settings("1000", "2026-10-01"), "50")
+    }
+
+    fn day<'a>(view: &'a MonthView, on: &str) -> &'a Day {
+        view.days.iter().find(|day| day.date == date(on)).unwrap()
+    }
+
+    fn projected(view: &MonthView, on: &str) -> (Decimal, Tier) {
+        let day = day(view, on);
+        (day.projected_balance, day.projected_tier)
+    }
+
+    #[test]
+    fn e1_every_day_after_today_takes_the_estimate_across_the_month_boundary() {
+        let november = view("2026-11", e1(), vec![], T);
+        let december = view("2026-12", e1(), vec![], T);
+
+        let today = day(&november, T);
+        assert_eq!(
+            (today.balance, today.tier, today.previsto),
+            (money("1000"), Tier::LightGreen, money("0"))
+        );
+        assert_eq!(projected(&november, T), (money("1000"), Tier::LightGreen));
+        assert_eq!(day(&november, "2026-11-27").previsto, money("0"));
+        assert_eq!(day(&november, "2026-11-29").previsto, money("50"));
+        assert_eq!(
+            projected(&november, "2026-11-29"),
+            (money("950"), Tier::Yellow)
+        );
+        assert_eq!(projected(&november, "2026-11-30").0, money("900"));
+        assert_eq!(
+            (
+                november.projected_balance,
+                november.projected_tier,
+                november.balance_today
+            ),
+            (money("900"), Tier::Yellow, money("1000"))
+        );
+        assert_eq!(
+            projected(&december, "2026-12-01"),
+            (money("850"), Tier::Yellow)
+        );
+        assert_eq!(
+            projected(&december, "2026-12-20"),
+            (money("-100"), Tier::LightRed)
+        );
+        assert_eq!(
+            projected(&december, "2026-12-28"),
+            (money("-500"), Tier::LightRed)
+        );
+        assert_eq!(
+            projected(&december, "2026-12-29"),
+            (money("-550"), Tier::Red)
+        );
+        assert_eq!(
+            projected(&december, "2026-12-31"),
+            (money("-650"), Tier::Red)
+        );
+        assert_eq!(
+            (december.projected_balance, december.projected_tier),
+            (money("-650"), Tier::Red)
+        );
+        assert!(
+            december
+                .days
+                .iter()
+                .all(|day| (day.balance, day.tier) == (money("1000"), Tier::LightGreen))
+        );
+    }
+
+    #[test]
+    fn e1_the_forecast_ends_337_previstos_down_like_its_last_month() {
+        let year = ahead(e1(), vec![], vec![], T);
+        let october = view("2027-10", e1(), vec![], T);
+
+        assert_eq!(year.days[0].date, date(T));
+        assert_eq!(at(&year, T), (money("1000"), Tier::LightGreen));
+        assert_eq!(year.days.last().unwrap().date, date("2027-10-31"));
+        assert_eq!(at(&year, "2027-10-31"), (money("-15850"), Tier::Red));
+        assert_eq!(
+            (october.projected_balance, october.projected_tier),
+            (money("-15850"), Tier::Red)
+        );
+    }
+
+    #[test]
+    fn e2_r9_off_keeps_the_value_and_reads_exactly_the_d16_numbers() {
+        let off = Settings {
+            daily_estimate_on: false,
+            ..estimate(settings("6150", "2026-11-01"), "50")
+        };
+        let year = ahead(off.clone(), owners_sums(), owners_bills(), "2026-11-10");
+
+        assert_eq!(at(&year, "2026-11-22"), (money("6150"), Tier::Green));
+        assert_eq!(at(&year, "2026-11-23"), (money("-675"), Tier::Red));
+        assert_eq!(at(&year, "2026-11-28"), (money("-2916"), Tier::Red));
+        assert_eq!(at(&year, "2026-11-30"), (money("491"), Tier::Yellow));
+        assert_eq!(at(&year, "2026-12-22"), (money("491"), Tier::Yellow));
+        assert_eq!(at(&year, "2026-12-23"), (money("-4409"), Tier::Red));
+        assert_eq!(at(&year, "2026-12-31"), (money("-7577"), Tier::Red));
+        let december = with_bills(
+            "2026-12",
+            off.clone(),
+            owners_sums(),
+            owners_bills(),
+            vec![],
+            "2026-11-10",
+        );
+        assert_eq!(december.projected_balance, money("-7577"));
+        assert!(december.days.iter().all(|day| day.previsto == money("0")));
+
+        let kept = Settings {
+            daily_estimate_on: false,
+            ..e1()
+        };
+        assert_eq!(
+            view("2026-12", kept.clone(), vec![], T).projected_balance,
+            money("1000")
+        );
+        let again = Settings {
+            daily_estimate_on: true,
+            ..kept
+        };
+        assert_eq!(again.daily_estimate, Some(money("50")));
+        assert_eq!(
+            view("2026-12", again, vec![], T),
+            view("2026-12", e1(), vec![], T)
+        );
+    }
+
+    #[test]
+    fn e3_today_takes_no_previsto_on_top_of_what_was_typed() {
+        let november = view("2026-11", e1(), vec![sum(T, Daily, "10")], T);
+
+        let today = day(&november, T);
+        assert_eq!(
+            (today.balance, today.projected_balance, today.previsto),
+            (money("990"), money("990"), money("0"))
+        );
+        assert_eq!(projected(&november, "2026-11-29").0, money("940"));
+    }
+
+    #[test]
+    fn e4_e5_typed_cash_diario_fills_the_days_cap_and_never_goes_below_zero() {
+        let below = view("2026-11", e1(), vec![sum("2026-11-30", Daily, "20")], T);
+        let above = view("2026-11", e1(), vec![sum("2026-11-30", Daily, "80")], T);
+
+        let below = day(&below, "2026-11-30");
+        let above = day(&above, "2026-11-30");
+        assert_eq!(
+            (below.balance, below.previsto, below.projected_balance),
+            (money("980"), money("30"), money("900"))
+        );
+        assert_eq!(
+            (above.balance, above.previsto, above.projected_balance),
+            (money("920"), money("0"), money("870"))
+        );
+    }
+
+    #[test]
+    fn e6_a_card_spend_fills_no_cap_and_lands_once_in_its_fatura() {
+        let bills = || vec![card(1, "Porto", 5, 15)];
+        let sums = || vec![spend("2026-11-30", 1, "80")];
+        let november = with_bills("2026-11", e1(), sums(), bills(), vec![], T);
+        let december = with_bills("2026-12", e1(), sums(), bills(), vec![], T);
+
+        let spent = day(&november, "2026-11-30");
+        assert_eq!(
+            (spent.daily, spent.previsto, spent.projected_balance),
+            (money("0"), money("50"), money("900"))
+        );
+        assert_eq!(projected(&december, "2026-12-14").0, money("200"));
+        assert_eq!(
+            projected(&december, "2026-12-15"),
+            (money("70"), Tier::Yellow)
+        );
+    }
+
+    #[test]
+    fn e7_e8_saidas_and_income_move_the_balance_not_the_previsto() {
+        let november = view("2026-11", e1(), vec![sum("2026-11-29", Bill, "30")], T);
+        let december = view("2026-12", e1(), vec![sum("2026-12-05", Income, "3000")], T);
+
+        let saida = day(&november, "2026-11-29");
+        assert_eq!(
+            (saida.previsto, saida.projected_balance),
+            (money("50"), money("920"))
+        );
+        let salary = day(&december, "2026-12-05");
+        assert_eq!(
+            (salary.balance, salary.previsto),
+            (money("4000"), money("50"))
+        );
+        assert_eq!(
+            projected(&december, "2026-12-05"),
+            (money("3650"), Tier::Green)
+        );
+    }
+
+    #[test]
+    fn e9_an_unpaid_conta_lands_on_top_of_the_previstos() {
+        let aluguel = MonthBill {
+            amount: Some(money("1800")),
+            ..since(1, "Aluguel", 10, "2026-12-01")
+        };
+        let december = with_bills("2026-12", e1(), vec![], vec![aluguel], vec![], T);
+
+        assert_eq!(
+            projected(&december, "2026-12-09"),
+            (money("450"), Tier::Yellow)
+        );
+        assert_eq!(
+            projected(&december, "2026-12-10"),
+            (money("-1400"), Tier::Red)
+        );
+    }
+
+    #[test]
+    fn e10_a_negative_opening_takes_the_same_previstos() {
+        let negative = estimate(settings("-300", "2026-10-01"), "50");
+        let november = view("2026-11", negative.clone(), vec![], T);
+        let december = view("2026-12", negative, vec![], T);
+
+        assert_eq!(projected(&november, T), (money("-300"), Tier::LightRed));
+        assert_eq!(
+            projected(&december, "2026-12-02"),
+            (money("-500"), Tier::LightRed)
+        );
+        assert_eq!(
+            projected(&december, "2026-12-03"),
+            (money("-550"), Tier::Red)
+        );
+    }
+
+    #[test]
+    fn e11_today_on_the_last_day_leaves_its_month_without_estimate() {
+        let november = view("2026-11", e1(), vec![], "2026-11-30");
+        let december = view("2026-12", e1(), vec![], "2026-11-30");
+
+        assert_eq!(
+            (november.projected_balance, november.projected_tier),
+            (money("1000"), Tier::LightGreen)
+        );
+        assert_eq!(projected(&december, "2026-12-01").0, money("950"));
+    }
+
+    #[test]
+    fn e12_the_previstos_run_into_the_next_year() {
+        let december = view("2026-12", e1(), vec![], "2026-12-30");
+        let january = view("2027-01", e1(), vec![], "2026-12-30");
+
+        assert_eq!(projected(&december, "2026-12-31").0, money("950"));
+        assert_eq!(december.projected_balance, money("950"));
+        assert_eq!(projected(&january, "2027-01-01").0, money("900"));
+        assert_eq!(
+            (january.projected_balance, january.projected_tier),
+            (money("-600"), Tier::Red)
+        );
+    }
+
+    #[test]
+    fn e13_a_leap_february_takes_29_previstos_and_a_common_one_28() {
+        let leap = estimate(settings("1000", "2028-01-01"), "10");
+        let february = view("2028-02", leap.clone(), vec![], "2028-02-27");
+        let march = view("2028-03", leap, vec![], "2028-02-27");
+
+        assert_eq!(projected(&february, "2028-02-28").0, money("990"));
+        assert_eq!(projected(&february, "2028-02-29").0, money("980"));
+        assert_eq!(february.projected_balance, money("980"));
+        assert_eq!(projected(&march, "2028-03-01").0, money("970"));
+
+        let common = estimate(settings("1000", "2027-01-01"), "10");
+        let february = view("2027-02", common.clone(), vec![], "2027-02-27");
+        let march = view("2027-03", common, vec![], "2027-02-27");
+
+        assert_eq!(projected(&february, "2027-02-28").0, money("990"));
+        assert_eq!(february.projected_balance, money("990"));
+        assert_eq!(projected(&march, "2027-03-01").0, money("980"));
+    }
+
+    #[test]
+    fn e14_a_future_opening_date_takes_previstos_from_itself_on() {
+        let later = estimate(settings("1000", "2026-12-15"), "50");
+        let december = view("2026-12", later.clone(), vec![], T);
+        let year = ahead(later, vec![], vec![], T);
+
+        assert!(
+            december
+                .days
+                .iter()
+                .take(14)
+                .all(|day| (day.projected_balance, day.previsto) == (money("1000"), money("0")))
+        );
+        assert_eq!(projected(&december, "2026-12-15").0, money("950"));
+        assert_eq!(
+            projected(&december, "2026-12-31"),
+            (money("150"), Tier::Yellow)
+        );
+        assert_eq!(
+            (year.days[0].date, year.days[0].projected_balance),
+            (date("2026-12-15"), money("950"))
+        );
+    }
+
+    #[test]
+    fn e15_a_past_month_reads_the_same_on_and_off() {
+        let sums = || vec![sum("2026-10-05", Daily, "20")];
+
+        assert_eq!(
+            view("2026-10", e1(), sums(), T),
+            view("2026-10", settings("1000", "2026-10-01"), sums(), T)
+        );
+    }
+
+    fn mixed() -> Vec<DaySum> {
+        vec![
+            sum(T, Daily, "10"),
+            sum("2026-11-30", Daily, "20"),
+            sum("2026-12-05", Income, "3000"),
+            sum("2026-12-07", Bill, "100"),
+            sum("2026-12-09", Daily, "70"),
+            resgate("2026-12-08", "50"),
+        ]
+    }
+
+    #[test]
+    fn r4_r6_real_balances_totals_and_savings_never_take_the_estimate() {
+        for month in ["2026-11", "2026-12"] {
+            let on = view(month, e1(), mixed(), T);
+            let off = view(month, settings("1000", "2026-10-01"), mixed(), T);
+
+            assert_eq!(on.totals, off.totals, "{month}");
+            assert_eq!(on.savings, off.savings, "{month}");
+            assert_eq!(
+                (on.balance_today, on.balance_today_tier),
+                (off.balance_today, off.balance_today_tier),
+                "{month}"
+            );
+            assert_eq!(on.bills_of_month, off.bills_of_month, "{month}");
+            let real = |view: &MonthView| {
+                view.days
+                    .iter()
+                    .map(|day| {
+                        (
+                            day.date,
+                            day.income,
+                            day.withdrawn,
+                            day.bills,
+                            day.daily,
+                            day.balance,
+                            day.tier,
+                        )
+                    })
+                    .collect::<Vec<_>>()
+            };
+            assert_eq!(real(&on), real(&off), "{month}");
+        }
+    }
+
+    #[test]
+    fn r8_each_day_moves_by_its_entries_and_its_previsto() {
+        let december = view("2026-12", e1(), mixed(), T);
+
+        for pair in december.days.windows(2) {
+            let (before, day) = (&pair[0], &pair[1]);
+            assert_eq!(
+                day.projected_balance,
+                before.projected_balance + day.income + day.withdrawn
+                    - day.bills
+                    - day.daily
+                    - day.previsto,
+                "{}",
+                day.date
+            );
+        }
+        assert_eq!(day(&december, "2026-12-09").previsto, money("0"));
+        assert_eq!(day(&december, "2026-12-10").previsto, money("50"));
     }
 }

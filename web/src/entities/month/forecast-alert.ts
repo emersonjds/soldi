@@ -25,7 +25,10 @@ export const billKey = (bill: Schemas["BillOfMonth"]) => `${bill.bill_id}@${bill
 
 const RANK = { bill: 1, daily: 2 } as const;
 
-/** The day's largest outflow, only when its projected balance fell from the day before; ties go conta fixa, Saída, Diário, then list order. */
+/** The Lista line of a day's Diário previsto (SOL-164 S11). */
+export const previstoKey = (date: string) => `previsto@${date}`;
+
+/** The day's largest outflow, only when its projected balance fell from the day before; ties go conta fixa, Saída, Diário, Diário previsto, then list order. */
 export const causeOf = (
   date: string,
   days: Day[],
@@ -43,24 +46,34 @@ export const causeOf = (
         ? [{ id: transaction.id, amount: cents(transaction.amount), rank: RANK[transaction.kind] }]
         : [],
     ),
+    ...(index >= 0 && cents(days[index].previsto) > 0
+      ? [{ id: previstoKey(date), amount: cents(days[index].previsto), rank: 3 }]
+      : []),
   ];
   const [largest] = outflows.sort((a, b) => b.amount - a.amount || a.rank - b.rank);
   return largest ? largest.id : null;
 };
 
-/** The banner's cause (SOL-79 §2.2): the names of the day's two largest outflows, open bills landing on it and Saídas or Diários dated on it, by cents. */
-export const topOutflows = (date: string, transactions: Schemas["Transaction"][], bills: Schemas["BillOfMonth"][]) =>
+/** The banner's cause (SOL-79 §2.2): the names of the day's two largest outflows, open bills landing on it, Saídas or Diários dated on it and its Diário previsto, by cents. */
+export const topOutflows = (
+  date: string,
+  transactions: Schemas["Transaction"][],
+  bills: Schemas["BillOfMonth"][],
+  previsto = "0.00",
+) =>
   [
     ...bills
       .filter((bill) => !bill.paid && bill.lands_on === date)
-      .map((bill) => ({ name: bill.name, amount: cents(bill.amount) })),
+      .map((bill) => ({ name: bill.name, amount: cents(bill.amount), estimate: false })),
     ...transactions
       .filter((transaction) => transaction.date === date && transaction.kind !== "income")
       .map((transaction) => ({
         name: transaction.note || transaction.category.name,
         amount: cents(transaction.amount),
+        estimate: false,
       })),
+    ...(cents(previsto) > 0 ? [{ name: "Diário previsto", amount: cents(previsto), estimate: true }] : []),
   ]
     .sort((a, b) => b.amount - a.amount)
     .slice(0, 2)
-    .map(({ name }) => name);
+    .map(({ name, estimate }) => ({ name, estimate }));

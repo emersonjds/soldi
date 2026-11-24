@@ -1,10 +1,13 @@
 import { render, screen, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { Schemas } from "@/shared/api/client";
-import { MONTH } from "@/test/stub-api";
+import { renderWithQuery } from "@/test/render";
+import { MONTH, signedIn } from "@/test/stub-api";
 
-import { ThermometerCard } from "./month-overview";
+import { MonthHero, ThermometerCard } from "./month-overview";
+
+vi.mock("next/navigation", () => import("@/test/next-navigation"));
 
 type MonthView = Schemas["MonthView"];
 
@@ -90,11 +93,43 @@ describe("Termômetro do Mês", () => {
     expect(card()).not.toHaveTextContent(/Gasto|Comprometido|comprometeu/);
   });
 
+  it("S12: names the Diário previsto in the sentence when the projection counts it", () => {
+    render(<ThermometerCard view={STITCH} estimate="50.00" />);
+
+    expect(sentence("Com as contas em aberto e o Diário previsto, o caixa fecha o mês no verde.")).toBeInTheDocument();
+  });
+
   it("renders nothing on a month with no entrada and no saída (D25)", () => {
     const { container } = render(
       <ThermometerCard view={{ ...MONTH, totals: { ...MONTH.totals, income: "0.00", outflow: "0.00" } }} />,
     );
 
     expect(container).toBeEmptyDOMElement();
+  });
+});
+
+describe("MonthHero Diário previsto (SOL-164 S6)", () => {
+  const hero = (estimate?: string | null) => {
+    signedIn();
+    renderWithQuery(<MonthHero view={MONTH} onLaunch={vi.fn()} estimate={estimate} />);
+  };
+  const notes = () => screen.queryAllByRole("link", { name: /^Inclui Diário previsto de R\$\s50,00\/dia$/ });
+
+  it("A9: notes the estimate under the three figures below 1024 and inside the Projetado box from 1024", () => {
+    hero("50.00");
+
+    const summary = screen.getByRole("region", { name: "Resumo do mês" });
+    const [inBox, inSummary] = notes();
+    expect(summary).toContainElement(inSummary);
+    expect(inSummary.parentElement).toHaveClass("col-span-3");
+    expect(inBox.closest("div.bg-muted")).toHaveTextContent("Projetado no fim do mês");
+    expect(inBox).toHaveAttribute("href", "/ajustes#diario-previsto");
+  });
+
+  it("A15: shows no note when the figure does not count the estimate", () => {
+    hero(null);
+
+    expect(notes()).toHaveLength(0);
+    expect(screen.queryByText(/Diário previsto/)).not.toBeInTheDocument();
   });
 });

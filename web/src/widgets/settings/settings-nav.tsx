@@ -2,13 +2,23 @@
 
 import { useEffect, useState } from "react";
 
-import { ChevronRight, CircleHelp, Coins, Shapes, ShieldAlert, Thermometer, UserRoundCog } from "lucide-react";
+import {
+  CalendarClock,
+  ChevronRight,
+  CircleHelp,
+  Coins,
+  Shapes,
+  ShieldAlert,
+  Thermometer,
+  UserRoundCog,
+} from "lucide-react";
 
 import { useSettings } from "@/entities/settings/settings-query";
 import { cn } from "@/lib/utils";
 
 const SECTIONS = [
   { id: "termometro", label: "Termômetro & Limites", icon: Thermometer },
+  { id: "diario-previsto", label: "Diário previsto", icon: CalendarClock },
   { id: "moeda", label: "Moeda & Saldo Inicial", icon: Coins },
   { id: "organizacao", label: "Organização (Contas)", icon: Shapes },
   { id: "dados", label: "Gestão de Dados", icon: ShieldAlert },

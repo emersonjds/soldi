@@ -19,7 +19,9 @@ import { PageError } from "@/shared/ui/page-state";
 const Tile = ({ label, value, children }: { label: string; value: string; children?: ReactNode }) => (
   <div className="bg-muted flex min-w-0 flex-col items-start gap-1 rounded-2xl p-4">
     <span className="text-muted-foreground text-[11px] font-semibold tracking-[0.12em]">{label}</span>
-    <p className="max-w-full truncate text-base font-semibold">{value}</p>
+    <p title={value} className="max-w-full truncate text-base font-semibold">
+      {value}
+    </p>
     {children}
   </div>
 );
@@ -75,7 +77,7 @@ export const AccountSection = () => {
           </Tile>
         </div>
       )}
-      <div className="flex flex-col-reverse gap-4 sm:flex-row sm:items-start sm:justify-between">
+      <div className="flex flex-col-reverse gap-4 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
         <DeleteAccountButton />
         <div className="flex flex-col items-stretch sm:items-end">
           <SignOutButton />

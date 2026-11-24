@@ -16,6 +16,7 @@ const day = (
   withdrawn: "0.00",
   bills: "0.00",
   daily: "0.00",
+  previsto: "0.00",
   balance: projected,
   tier,
   projected_balance: projected,
@@ -84,6 +85,18 @@ describe("causeOf", () => {
     expect(causeOf(on, [], [diario, saida, entrada], [])).toBe("saida");
   });
 
+  it("S11: counts the day's Diário previsto, after a Diário on ties", () => {
+    const [, feira] = FORECAST_TRANSACTIONS;
+    const on = "2026-11-12";
+    const diario = { ...feira, id: "diario", date: on, amount: "100.00" };
+    const ahead = (previsto: string) => [{ ...day(on, "-700.00", "red"), previsto }];
+
+    expect(causeOf(on, ahead("100.00"), [diario], [])).toBe("diario");
+    expect(causeOf(on, ahead("100.01"), [diario], [])).toBe(`previsto@${on}`);
+    expect(causeOf(on, ahead("50.00"), [], [])).toBe(`previsto@${on}`);
+    expect(causeOf(on, ahead("0.00"), [], [])).toBeNull();
+  });
+
   it("has no cause on a day without outflow", () => {
     expect(causeOf("2026-11-10", FORECAST_MONTH.days, FORECAST_TRANSACTIONS, FORECAST_MONTH.bills_of_month)).toBeNull();
   });
@@ -123,9 +136,24 @@ describe("causeOf", () => {
 describe("topOutflows", () => {
   it("names the owner's two largest outflows on the 23rd: the Cartão bill, then the Seguro Saída", () => {
     expect(topOutflows("2026-11-23", FORECAST_TRANSACTIONS, FORECAST_MONTH.bills_of_month)).toEqual([
-      "Cartão",
-      "Seguro",
+      { name: "Cartão", estimate: false },
+      { name: "Seguro", estimate: false },
     ]);
+  });
+
+  it("counts the day's Diário previsto by its own name, after an outflow of the same cents", () => {
+    const on = "2026-12-10";
+    const aluguel = { ...CARTAO, name: "Aluguel", amount: "1500.00", lands_on: on };
+    const luz = { ...FINANCIAMENTO, name: "Luz", amount: "50.00", lands_on: on };
+    const previsto = { name: "Diário previsto", estimate: true };
+
+    expect(topOutflows(on, [], [], "50.00")).toEqual([previsto]);
+    expect(topOutflows(on, [], [aluguel], "50.00")).toEqual([{ name: "Aluguel", estimate: false }, previsto]);
+    expect(topOutflows(on, [], [aluguel, luz], "50.00")).toEqual([
+      { name: "Aluguel", estimate: false },
+      { name: "Luz", estimate: false },
+    ]);
+    expect(topOutflows(on, [], [aluguel], "0.00")).toEqual([{ name: "Aluguel", estimate: false }]);
   });
 
   it("keeps two by cents, leaves out income, paid bills and other days, and names an entry without a note by its category", () => {
@@ -140,8 +168,11 @@ describe("topOutflows", () => {
     const paid = { ...CARTAO, name: "Paga", amount: "8000.00", lands_on: on, paid: true };
     const open = { ...FINANCIAMENTO, name: "Luz", amount: "99.99", lands_on: on };
 
-    expect(topOutflows(on, entries, [paid, open])).toEqual(["Mercado", "Seguro"]);
-    expect(topOutflows(on, [], [open])).toEqual(["Luz"]);
+    expect(topOutflows(on, entries, [paid, open])).toEqual([
+      { name: "Mercado", estimate: false },
+      { name: "Seguro", estimate: false },
+    ]);
+    expect(topOutflows(on, [], [open])).toEqual([{ name: "Luz", estimate: false }]);
     expect(topOutflows(on, [], [])).toEqual([]);
   });
 });

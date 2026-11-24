@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT opening_balance, opening_date, tier_red, tier_zero, tier_yellow, tier_green,\n                currency AS \"currency: Currency\", savings_target_pct\n         FROM settings WHERE user_id = $1 FOR UPDATE",
+  "query": "SELECT opening_balance, opening_date, tier_red, tier_zero, tier_yellow, tier_green,\n                currency AS \"currency: Currency\", savings_target_pct, daily_estimate,\n                daily_estimate_on\n         FROM settings WHERE user_id = $1 FOR UPDATE",
   "describe": {
     "columns": [
       {
@@ -90,6 +90,28 @@
             "name": "savings_target_pct"
           }
         }
+      },
+      {
+        "ordinal": 8,
+        "name": "daily_estimate",
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "settings",
+            "name": "daily_estimate"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "daily_estimate_on",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "settings",
+            "name": "daily_estimate_on"
+          }
+        }
       }
     ],
     "parameters": {
@@ -105,8 +127,10 @@
       false,
       false,
       false,
-      true
+      true,
+      true,
+      false
     ]
   },
-  "hash": "899da081cc87cdea2a947f8cfd7672e613c3461d3637eb6dba98e30930872d65"
+  "hash": "665cf8aa090160176a8dbf2ab1e7f1b94d9967835d46b32c9add38c8ff6b3ba6"
 }
