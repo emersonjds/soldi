@@ -30,7 +30,8 @@ import { monthLabel } from "@/shared/ui/month-switcher";
 import { PageError } from "@/shared/ui/page-state";
 import { TierPill } from "@/shared/ui/tier-pill";
 
-import { DayBalance, dayLabel, dueCaption, entryOf, estimateCaption, isForecast, titleOf } from "./ledger";
+import { titleOf } from "./entry-actions";
+import { DayBalance, dayLabel, dueCaption, entryOf, estimateCaption, isForecast } from "./ledger";
 import { type PlanilhaRow, planilhaMonths, planilhaRows, sum } from "./planilha-rows";
 
 const COLUMNS = ["Data", "Entrada", "Saída", "Diário", "Saldo"];
