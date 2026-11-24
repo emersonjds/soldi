@@ -19,23 +19,23 @@ export type PlanilhaRow = {
   income: string;
   /** Saída: bills paid plus the unpaid contas landed on the day. */
   outflow: string;
-  /** An unpaid conta landed on the day. */
-  landed: boolean;
+  /** The unpaid contas landed on the day. */
+  landed: Schemas["BillOfMonth"][];
 };
 
-const sum = (amounts: string[]) => fromCents(amounts.reduce((total, amount) => total + cents(amount), 0));
+export const sum = (amounts: string[]) => fromCents(amounts.reduce((total, amount) => total + cents(amount), 0));
 
 export const planilhaRows = (view: Schemas["MonthView"], openingDate: string): PlanilhaRow[] =>
   Array.from({ length: lastDay(view.month) }, (_, index) => {
     const date = `${view.month}-${String(index + 1).padStart(2, "0")}`;
     const day = date < openingDate ? undefined : view.days.find((each) => each.date === date);
-    if (!day) return { date, day: null, income: "0.00", outflow: "0.00", landed: false };
-    const landed = view.bills_of_month.filter((bill) => bill.lands_on === date).map((bill) => bill.amount);
+    if (!day) return { date, day: null, income: "0.00", outflow: "0.00", landed: [] };
+    const landed = view.bills_of_month.filter((bill) => bill.lands_on === date);
     return {
       date,
       day,
       income: sum([day.income, day.withdrawn]),
-      outflow: sum([day.bills, ...landed]),
-      landed: landed.length > 0,
+      outflow: sum([day.bills, ...landed.map((bill) => bill.amount)]),
+      landed,
     };
   });

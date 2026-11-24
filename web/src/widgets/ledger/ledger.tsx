@@ -34,7 +34,7 @@ import { TierPill } from "@/shared/ui/tier-pill";
 
 const KIND_LABEL: Record<Schemas["CategoryKind"], string> = { income: "Entrada", bill: "Saída", daily: "Diário" };
 
-const dayLabel = ({ date, is_future }: Schemas["Day"]) => {
+export const dayLabel = ({ date, is_future }: Pick<Schemas["Day"], "date" | "is_future">) => {
   const short = shortDay(date);
   if (is_future) return `Previsto · ${short}`;
   if (date === todayISO()) return `Hoje, ${short}`;
@@ -69,7 +69,7 @@ const paidCaption = (transaction: Transaction, billsOfMonth: Due[], bills: Schem
 };
 
 /** `Economia › Reserva` with `Guardado` for money put away, `Resgate › Reserva` with `Resgatado` for money taken back. */
-const entryOf = (
+export const entryOf = (
   transaction: Transaction,
   categories: Schemas["Category"][] = [],
   billsOfMonth: Due[],
@@ -88,7 +88,7 @@ const entryOf = (
   return { label, caption: KIND_LABEL[transaction.kind] };
 };
 
-const titleOf = (transaction: Transaction, entry: Entry) => transaction.note || entry.label;
+export const titleOf = (transaction: Transaction, entry: Entry) => transaction.note || entry.label;
 
 /** Same rule as the day balance: only income adds; a deposit into a cofrinho takes from it. */
 const addsToBalance = (transaction: Transaction) => transaction.kind === "income";
@@ -111,6 +111,15 @@ const groupByDay = (days: Day[], transactions: Transaction[], bills: Due[]) =>
 /** A day ahead, or today once an unpaid bill landed on it. */
 export const isForecast = (day: Day) => day.is_future || day.projected_balance !== day.balance;
 
+/** The day header's "Saldo ao final:" / "Projeção:" line. */
+export const DayBalance = ({ day }: { day: Day }) => (
+  <span className="flex items-center gap-1.5">
+    <span className="font-medium">{day.is_future ? "Projeção:" : "Saldo ao final:"}</span>
+    <Money amount={day.projected_balance} className={cn("font-bold", TIER_STYLE[day.projected_tier].label)} />
+    <TierPill tier={day.projected_tier} forecast={!day.is_future && isForecast(day)} size="sm" />
+  </span>
+);
+
 const Cause = () => <span className="text-expense text-xs">Motivo da queda</span>;
 
 const dueStatus = (bill: Due, month: string) => {
@@ -118,7 +127,7 @@ const dueStatus = (bill: Due, month: string) => {
   return bill.overdue ? `venceu dia ${dayMonth(bill.due_date)}` : "a pagar";
 };
 
-const dueCaption = (bill: Due, month: string) =>
+export const dueCaption = (bill: Due, month: string) =>
   `${billKind(bill)} · ${dueStatus(bill, month)}${bill.variable ? " · valor variável" : ""}`;
 
 const DueRow = ({ bill, month, cause }: { bill: Due; month: string; cause: boolean }) => (
@@ -361,14 +370,7 @@ export const Ledger = ({
               >
                 <h3 className="bg-muted text-muted-foreground sticky top-14 z-10 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 rounded-lg px-3 py-2 text-sm font-semibold lg:top-0">
                   {dayLabel(day)}
-                  <span className="flex items-center gap-1.5">
-                    <span className="font-medium">{day.is_future ? "Projeção:" : "Saldo ao final:"}</span>
-                    <Money
-                      amount={day.projected_balance}
-                      className={cn("font-bold", TIER_STYLE[day.projected_tier].label)}
-                    />
-                    <TierPill tier={day.projected_tier} forecast={!day.is_future && isForecast(day)} size="sm" />
-                  </span>
+                  <DayBalance day={day} />
                 </h3>
                 <ul className={cn("flex flex-col", day.is_future && "opacity-60")}>
                   {entries.map((transaction) => (

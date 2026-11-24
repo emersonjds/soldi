@@ -18,7 +18,8 @@ const show = (replies: Record<string, Reply> = {}, openingDate = "2026-03-10") =
   const requests = stubApi({ "GET /api/months/2026-11": { status: 200, body: PLANILHA_MONTH }, ...replies });
   const intersection = stubIntersection();
   renderWithQuery(<Planilha today="2026-11-05" openingDate={openingDate} />);
-  const months = () => requests.map((request) => new URL(request.url).pathname);
+  const months = () =>
+    requests.flatMap(({ url }) => (new URL(url).pathname.startsWith("/api/months/") ? [new URL(url).pathname] : []));
   return { months, reveal: (name: string) => intersection.show(screen.getByRole("table", { name })), intersection };
 };
 

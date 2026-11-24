@@ -1,22 +1,29 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 
+import { useQuery } from "@tanstack/react-query";
 import { TriangleAlert } from "lucide-react";
 
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useBills } from "@/entities/bill/bill-queries";
+import { categoriesQuery } from "@/entities/category/categories-query";
+import { billKey } from "@/entities/month/forecast-alert";
 import { useMonth } from "@/entities/month/month-query";
+import { type Transaction, useTransactions } from "@/entities/transaction/transaction-queries";
 import { cn } from "@/lib/utils";
-import { hasProblem } from "@/shared/api/client";
+import { hasProblem, type Schemas } from "@/shared/api/client";
 import { lastDay, monthName, weekdayName } from "@/shared/lib/date";
 import { toInput } from "@/shared/lib/money";
 import { cents, TIER_LABEL, TIER_ORDER, TIER_STYLE } from "@/shared/lib/tier";
+import { Money } from "@/shared/ui/money";
 import { monthLabel } from "@/shared/ui/month-switcher";
 import { PageError } from "@/shared/ui/page-state";
 import { TierPill } from "@/shared/ui/tier-pill";
 
-import { isForecast } from "./ledger";
-import { type PlanilhaRow, planilhaMonths, planilhaRows } from "./planilha-rows";
+import { DayBalance, dayLabel, dueCaption, entryOf, isForecast, titleOf } from "./ledger";
+import { type PlanilhaRow, planilhaMonths, planilhaRows, sum } from "./planilha-rows";
 
 const COLUMNS = ["Data", "Entrada", "Saída", "Diário", "Saldo"];
 
@@ -34,51 +41,154 @@ const dayName = (date: string, today: string) => {
   return date === today ? `${name}, hoje` : name;
 };
 
-const Row = ({ row: { date, day, income, outflow, landed }, today }: { row: PlanilhaRow; today: string }) => {
+type Entries = ReturnType<typeof useTransactions>;
+
+type Item = { key: string; title: string; caption: string; amount: string };
+
+const itemOf =
+  (view: Schemas["MonthView"], categories?: Schemas["Category"][], bills?: Schemas["Bill"][]) =>
+  (transaction: Transaction): Item => {
+    const entry = entryOf(transaction, categories, view.bills_of_month, bills);
+    return {
+      key: transaction.id,
+      title: titleOf(transaction, entry),
+      caption: entry.caption,
+      amount: transaction.amount,
+    };
+  };
+
+/** Spec SOL-163 §9: the day's items under the planilha's columns, read-only. */
+const DayDetail = ({ row, view, entries }: { row: PlanilhaRow; view: Schemas["MonthView"]; entries: Entries }) => {
+  const categories = useQuery(categoriesQuery).data;
+  const bills = useBills({ includeInactive: true }).data;
+  if (!row.day) return <p className="text-muted-foreground">Este dia é anterior ao seu saldo inicial.</p>;
+  const ofKind = (kind: Schemas["CategoryKind"]) =>
+    (entries.data ?? [])
+      .filter((transaction) => transaction.date === row.date && transaction.kind === kind)
+      .map(itemOf(view, categories, bills));
+  const groups = [
+    { name: "Entrada", income: true, items: ofKind("income") },
+    {
+      name: "Saída",
+      income: false,
+      items: [
+        ...ofKind("bill"),
+        ...row.landed.map((bill) => ({
+          key: billKey(bill),
+          title: bill.name,
+          caption: dueCaption(bill, view.month),
+          amount: bill.amount,
+        })),
+      ],
+    },
+    { name: "Diário", income: false, items: ofKind("daily") },
+  ].filter(({ items }) => items.length > 0);
+
+  return (
+    <>
+      <DayBalance day={row.day} />
+      {groups.map(({ name, income, items }) => (
+        <section key={name} aria-label={name} className="flex flex-col gap-2">
+          <h3 className="flex justify-between gap-3 text-sm font-semibold">
+            <span>{name}</span> <Money amount={sum(items.map(({ amount }) => amount))} />
+          </h3>
+          <ul className="flex flex-col gap-2">
+            {items.map((item) => (
+              <li key={item.key} className="grid grid-cols-[1fr_auto] gap-x-3">
+                <span className="text-base font-medium break-words">{item.title}</span>
+                <Money amount={item.amount} income={income} outflow={!income} className="row-span-2 font-semibold" />
+                <span className="text-muted-foreground text-xs">{item.caption}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))}
+      {entries.isSuccess && groups.length === 0 && (
+        <p className="text-muted-foreground">
+          {row.day.is_future ? "Nada previsto para este dia." : "Nada lançado neste dia."}
+        </p>
+      )}
+      {entries.isError && (
+        <PageError message="Não foi possível carregar os lançamentos deste dia." onRetry={() => entries.refetch()} />
+      )}
+    </>
+  );
+};
+
+type RowProps = { row: PlanilhaRow; today: string; view: Schemas["MonthView"]; entries: Entries };
+
+const Row = ({ row, today, view, entries }: RowProps) => {
+  const { date, day, income, outflow, landed } = row;
+  const [open, setOpen] = useState(false);
+  const button = useRef<HTMLButtonElement>(null);
   const weekend = ["sábado", "domingo"].includes(weekdayName(date));
   const ahead = day?.is_future && "italic text-muted-foreground";
   return (
-    <tr
-      aria-current={date === today ? "date" : undefined}
-      className={cn(weekend && "bg-muted/50", !day && "text-muted-foreground")}
-    >
-      <td className={cn("sticky left-0 p-0", weekend ? WEEKEND_OPAQUE : "bg-card")}>
-        <button type="button" aria-label={dayName(date, today)} className="flex min-h-11 w-full items-center px-2">
-          <span
-            className={cn(
-              "inline-flex size-7 items-center justify-center rounded-full",
-              date === today && "bg-primary text-primary-foreground font-semibold",
-            )}
+    <>
+      <tr
+        onClick={() => setOpen(true)}
+        aria-current={date === today ? "date" : undefined}
+        className={cn("cursor-pointer", weekend && "bg-muted/50", !day && "text-muted-foreground")}
+      >
+        <td className={cn("sticky left-0 p-0", weekend ? WEEKEND_OPAQUE : "bg-card")}>
+          <button
+            ref={button}
+            type="button"
+            aria-label={dayName(date, today)}
+            className="flex min-h-11 w-full items-center px-2"
           >
-            {Number(date.slice(8))}
-          </span>
-        </button>
-      </td>
-      {day ? (
-        <>
-          <td className={cn(MONEY, ahead)}>{amountOf(income)}</td>
-          <td className={cn(MONEY, ahead, landed && "italic")}>
-            {amountOf(outflow)}
-            {landed && <span className="sr-only"> inclui conta a pagar</span>}
-          </td>
-          <td className={cn(MONEY, ahead)}>{amountOf(day.daily)}</td>
-          <td className={cn(MONEY, "font-semibold", TIER_STYLE[day.projected_tier].pill, isForecast(day) && "italic")}>
-            {(day.projected_tier === "red" || day.projected_tier === "light_red") && (
-              <TriangleAlert aria-hidden className="mr-1 inline size-[1em] align-[-0.125em]" />
-            )}
-            {toInput(day.projected_balance)}
-            <span className="sr-only"> {TIER_LABEL[day.projected_tier]}</span>
-          </td>
-        </>
-      ) : (
-        <>
-          <td />
-          <td />
-          <td />
-          <td />
-        </>
-      )}
-    </tr>
+            <span
+              className={cn(
+                "inline-flex size-7 items-center justify-center rounded-full",
+                date === today && "bg-primary text-primary-foreground font-semibold",
+              )}
+            >
+              {Number(date.slice(8))}
+            </span>
+          </button>
+        </td>
+        {day ? (
+          <>
+            <td className={cn(MONEY, ahead)}>{amountOf(income)}</td>
+            <td className={cn(MONEY, ahead, landed.length > 0 && "italic")}>
+              {amountOf(outflow)}
+              {landed.length > 0 && <span className="sr-only"> inclui conta a pagar</span>}
+            </td>
+            <td className={cn(MONEY, ahead)}>{amountOf(day.daily)}</td>
+            <td
+              className={cn(MONEY, "font-semibold", TIER_STYLE[day.projected_tier].pill, isForecast(day) && "italic")}
+            >
+              {(day.projected_tier === "red" || day.projected_tier === "light_red") && (
+                <TriangleAlert aria-hidden className="mr-1 inline size-[1em] align-[-0.125em]" />
+              )}
+              {toInput(day.projected_balance)}
+              <span className="sr-only"> {TIER_LABEL[day.projected_tier]}</span>
+            </td>
+          </>
+        ) : (
+          <>
+            <td />
+            <td />
+            <td />
+            <td />
+          </>
+        )}
+      </tr>
+      <Sheet open={open} onOpenChange={setOpen}>
+        <SheetContent
+          side="bottom"
+          aria-describedby={undefined}
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            button.current?.focus();
+          }}
+          className="mx-auto max-h-[80dvh] max-w-lg gap-3 overflow-y-auto rounded-t-3xl px-4 pt-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))]"
+        >
+          <SheetTitle className="pr-12 text-lg font-bold">{dayLabel(day ?? { date, is_future: false })}</SheetTitle>
+          <DayDetail row={row} view={view} entries={entries} />
+        </SheetContent>
+      </Sheet>
+    </>
   );
 };
 
@@ -97,11 +207,12 @@ const SkeletonBody = ({ month }: { month: string }) => (
 
 const MonthBody = ({ month, today, openingDate }: { month: string; today: string; openingDate: string }) => {
   const view = useMonth(month);
+  const entries = useTransactions(month);
   if (view.isSuccess)
     return (
       <tbody>
         {planilhaRows(view.data, openingDate).map((row) => (
-          <Row key={row.date} row={row} today={today} />
+          <Row key={row.date} row={row} today={today} view={view.data} entries={entries} />
         ))}
       </tbody>
     );

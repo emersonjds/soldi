@@ -33,16 +33,18 @@ describe("planilhaRows", () => {
   });
 
   it("puts income plus resgates in Entrada and passes Diário and Saldo through", () => {
-    expect(row(2)).toMatchObject({ income: "350.00", outflow: "0.00", landed: false });
+    expect(row(2)).toMatchObject({ income: "350.00", outflow: "0.00", landed: [] });
     expect(row(4).day?.daily).toBe("30.25");
     expect(row(10).day?.projected_balance).toBe("-1150.00");
   });
 
   it("adds the unpaid contas landed on a day to its Saída, trusting lands_on over the due date", () => {
     expect(row(2).outflow).toBe("0.00");
-    expect(row(3)).toMatchObject({ outflow: "200.00", landed: false });
-    expect(row(5)).toMatchObject({ outflow: "400.00", landed: true });
-    expect(row(10)).toMatchObject({ outflow: "1850.00", landed: true });
+    expect(row(3)).toMatchObject({ outflow: "200.00", landed: [] });
+    expect(row(5).outflow).toBe("400.00");
+    expect(row(5).landed.map((bill) => bill.name)).toEqual(["Internet"]);
+    expect(row(10).outflow).toBe("1850.00");
+    expect(row(10).landed.map((bill) => bill.name)).toEqual(["Financiamento"]);
   });
 
   it("adds up inside the month: Saldo(d) = Saldo(d−1) + Entrada − Saída − Diário", () => {
@@ -60,7 +62,7 @@ describe("planilhaRows", () => {
   it("leaves the days before the opening date without a day", () => {
     const opening = planilhaRows(PLANILHA_MONTH, "2026-11-03");
 
-    expect(opening[0]).toEqual({ date: "2026-11-01", day: null, income: "0.00", outflow: "0.00", landed: false });
+    expect(opening[0]).toEqual({ date: "2026-11-01", day: null, income: "0.00", outflow: "0.00", landed: [] });
     expect(opening[1].day).toBeNull();
     expect(opening[2].day?.date).toBe("2026-11-03");
   });
