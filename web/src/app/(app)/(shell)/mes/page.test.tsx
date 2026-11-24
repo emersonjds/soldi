@@ -1197,6 +1197,23 @@ describe("Mês", () => {
       expect(within(views()).getByRole("radio", { name: "Planilha" })).toHaveAttribute("aria-checked", "true");
     });
 
+    it("keeps the planilha's cells when the entries fail, with no Lista error (States: entries only)", async () => {
+      localStorage.setItem("soldi:open:ledger-planilha", "open");
+      const intersection = stubIntersection();
+      open({ "GET /api/transactions": { status: 500, body: problem(500, "Falhou.") } });
+
+      intersection.show(
+        await within(await screen.findByRole("region", { name: "Lançamentos" })).findByRole("table", {
+          name: "Novembro 2026",
+        }),
+      );
+
+      expect(
+        await within(ledger()).findByRole("button", { name: /^Segunda-feira, 23 de novembro/ }),
+      ).toBeInTheDocument();
+      expect(screen.queryByText("Não foi possível carregar os lançamentos.")).not.toBeInTheDocument();
+    });
+
     it("opens a collapsed Lançamentos on Planilha when that view is chosen", async () => {
       localStorage.setItem("soldi:open:ledger", "closed");
       open();

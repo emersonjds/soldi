@@ -110,15 +110,15 @@ const MonthScreen = () => {
               <BillsOfMonth view={view.data} className="max-lg:order-1" />
             </>
           )}
-          {entriesFailed && !monthFailed && (
+          {entriesFailed && !monthFailed && !planilha.open && (
             <section aria-label="Lançamentos" className="bg-card rounded-2xl shadow-sm max-lg:order-3">
               <PageError message="Não foi possível carregar os lançamentos." onRetry={() => transactions.refetch()} />
             </section>
           )}
-          {view.data && entries && (
+          {view.data && (entries || planilha.open) && (
             <Ledger
               view={view.data}
-              transactions={entries}
+              transactions={entries ?? []}
               highlight={highlight?.date ?? null}
               causes={causes}
               filter={filter}
