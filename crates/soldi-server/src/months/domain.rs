@@ -623,6 +623,8 @@ mod tests {
             tier_green: money("2000"),
             currency: soldi_types::settings::Currency::Brl,
             savings_target_pct: None,
+            daily_estimate: None,
+            daily_estimate_on: false,
         }
     }
 

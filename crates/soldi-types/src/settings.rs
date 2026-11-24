@@ -50,6 +50,14 @@ pub struct Settings {
     #[serde(serialize_with = "crate::optional_money")]
     #[schema(value_type = Option<String>, example = "20.00")]
     pub savings_target_pct: Option<Decimal>,
+    /// SOL-164: the Diário previsto per day the person declared, 0.01 to 10000.00; null when never set.
+    #[serde(serialize_with = "crate::optional_money")]
+    #[schema(value_type = Option<String>, example = "50.00")]
+    pub daily_estimate: Option<Decimal>,
+    /// When true (and only with a value), every future day on or after the opening date takes
+    /// `max(daily_estimate − that day's cash Diário, 0)` in the projected balances (D49).
+    #[schema(example = true)]
+    pub daily_estimate_on: bool,
 }
 
 /// Absent fields stay as they are; `"savings_target_pct": null` clears the target.
@@ -79,4 +87,12 @@ pub struct UpdateSettings {
     #[serde(default, deserialize_with = "crate::nullable_money")]
     #[schema(value_type = Option<String>, nullable, example = "20")]
     pub savings_target_pct: Option<Option<Decimal>>,
+    /// 0.01 to 10000.00, two places at most; null clears it and turns it off.
+    #[serde(default, deserialize_with = "crate::nullable_money")]
+    #[schema(value_type = Option<String>, nullable, example = "50.00")]
+    pub daily_estimate: Option<Option<Decimal>>,
+    /// true needs a value saved or sent in the same patch.
+    #[serde(default)]
+    #[schema(example = true)]
+    pub daily_estimate_on: Option<bool>,
 }

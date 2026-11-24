@@ -29,7 +29,7 @@ pub async fn get_settings(
     responses(
         (status = 200, body = Settings, description = "The settings after the change; absent fields stay as they are"),
         (status = 401, body = Problem, content_type = "application/problem+json"),
-        (status = 422, body = Problem, content_type = "application/problem+json", description = "Money with more than two places, tiers out of order (names the upper tier of the first pair), an unknown field")))]
+        (status = 422, body = Problem, content_type = "application/problem+json", description = "Money with more than two places, tiers out of order (names the upper tier of the first pair), a daily_estimate outside 0.01..10000.00, daily_estimate_on true without a value, an unknown field")))]
 pub async fn update_settings(
     State(state): State<AppState>,
     user: CurrentUser,

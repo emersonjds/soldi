@@ -23,9 +23,79 @@ async fn sign_up_creates_the_spreadsheet_defaults(pool: PgPool) {
             "tier_yellow": "1000.00",
             "tier_green": "2000.00",
             "currency": "BRL",
-            "savings_target_pct": null
+            "savings_target_pct": null,
+            "daily_estimate": null,
+            "daily_estimate_on": false
         })
     );
+}
+
+#[sqlx::test]
+async fn r_v_one_patch_saves_the_daily_estimate_and_turns_it_on(pool: PgPool) {
+    let ana = TestApp::signed_in(pool.clone(), "ana@example.com").await;
+    let bia = TestApp::signed_in(pool, "bia@example.com").await;
+
+    let (status, settings) = ana
+        .patch(
+            "/api/settings",
+            json!({ "daily_estimate": "50", "daily_estimate_on": true }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{settings}");
+    assert_eq!(settings["daily_estimate"], "50.00");
+    assert_eq!(settings["daily_estimate_on"], true);
+
+    let (status, other) = bia
+        .patch(
+            "/api/settings",
+            json!({ "daily_estimate": "10.00", "daily_estimate_on": true }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{other}");
+    assert_eq!(ana.get("/api/settings").await.1, settings);
+
+    let (_, off) = ana
+        .patch("/api/settings", json!({ "daily_estimate_on": false }))
+        .await;
+    assert_eq!(off["daily_estimate"], "50.00");
+    assert_eq!(off["daily_estimate_on"], false);
+    let (_, cleared) = bia
+        .patch("/api/settings", json!({ "daily_estimate": null }))
+        .await;
+    assert_eq!(cleared["daily_estimate"], serde_json::Value::Null);
+    assert_eq!(cleared["daily_estimate_on"], false);
+}
+
+#[sqlx::test]
+async fn r_v_refuses_a_daily_estimate_out_of_range_or_on_without_one(pool: PgPool) {
+    let user = TestApp::signed_in(pool, "ana@example.com").await;
+
+    for value in [
+        json!("0"),
+        json!("0.00"),
+        json!("-5.00"),
+        json!("0.001"),
+        json!("50.005"),
+        json!("10000.01"),
+        json!(50),
+    ] {
+        let (status, problem) = user
+            .patch("/api/settings", json!({ "daily_estimate": value }))
+            .await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{value}");
+        assert_eq!(problem["type"], "urn:soldi:error:validation", "{value}");
+        assert_eq!(problem["errors"][0]["field"], "daily_estimate", "{value}");
+    }
+
+    let (status, problem) = user
+        .patch("/api/settings", json!({ "daily_estimate_on": true }))
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(problem["errors"][0]["field"], "daily_estimate_on");
+
+    let settings = user.get("/api/settings").await.1;
+    assert_eq!(settings["daily_estimate"], serde_json::Value::Null);
+    assert_eq!(settings["daily_estimate_on"], false);
 }
 
 #[sqlx::test]

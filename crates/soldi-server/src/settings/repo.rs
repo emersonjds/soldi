@@ -18,7 +18,8 @@ pub async fn find(conn: &mut PgConnection, user_id: Uuid) -> Result<Settings, sq
     sqlx::query_as!(
         Settings,
         r#"SELECT opening_balance, opening_date, tier_red, tier_zero, tier_yellow, tier_green,
-                currency AS "currency: Currency", savings_target_pct
+                currency AS "currency: Currency", savings_target_pct, daily_estimate,
+                daily_estimate_on
          FROM settings WHERE user_id = $1 FOR UPDATE"#,
         user_id
     )
@@ -36,10 +37,11 @@ pub async fn update(
         r#"UPDATE settings
          SET opening_balance = $2, opening_date = $3, tier_red = $4, tier_zero = $5,
              tier_yellow = $6, tier_green = $7, currency = $8, savings_target_pct = $9,
-             updated_at = now()
+             daily_estimate = $10, daily_estimate_on = $11, updated_at = now()
          WHERE user_id = $1
          RETURNING opening_balance, opening_date, tier_red, tier_zero, tier_yellow, tier_green,
-                   currency AS "currency: Currency", savings_target_pct"#,
+                   currency AS "currency: Currency", savings_target_pct, daily_estimate,
+                   daily_estimate_on"#,
         user_id,
         settings.opening_balance,
         settings.opening_date,
@@ -48,7 +50,9 @@ pub async fn update(
         settings.tier_yellow,
         settings.tier_green,
         settings.currency.as_str(),
-        settings.savings_target_pct
+        settings.savings_target_pct,
+        settings.daily_estimate,
+        settings.daily_estimate_on
     )
     .fetch_one(&mut *conn)
     .await
