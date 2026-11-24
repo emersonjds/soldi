@@ -461,3 +461,9 @@ Detail: `docs/specs/cards/SOL-160.md`.
 A new or standalone Conta with Parcelado, Mensal and an entry in this month or the next one saves the entry, then creates a `recurring_bills` parcelada linked to it (R8): `amount` = the typed parcela, `installments` = N, `last_month` = entry month + N − Começa na parcela. Weekly, yearly, past-month and later dates keep D14's series. Card purchases in parcelas are untouched. Trade-off: the result depends on frequency and date; the caption says when it is a conta.
 
 Detail: `docs/specs/cards/SOL-162.md`.
+
+## D48 — Mês has an opt-in Modo planilha (2026-11-23, owner + SOL-163; extends D16, D17)
+
+Lançamentos can render as a day grid (Data, Entrada, Saída, Diário, Saldo) of months side by side, from today's month − 12 (never before the opening month) to + 11, chosen in its header ("Lista" / "Planilha") and remembered in the browser; Lista stays the default and unchanged. Saída includes unpaid contas on their landing day and Saldo is `projected_balance`/`projected_tier`, so a month's rows add up and red shows ahead. Card spends stay out of Diário (D28) and appear in the day detail as "{cartão} · na fatura". The day detail is read-only, like the sheet's cell comment. Trade-off: a nested scroll region and one more view to maintain; no API change.
+
+Detail: `docs/specs/cards/SOL-163.md`.

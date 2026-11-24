@@ -1,4 +1,5 @@
-import { screen, within } from "@testing-library/react";
+import { cleanup, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import type { Schemas } from "@/shared/api/client";
@@ -251,5 +252,81 @@ describe("Ledger captions (SOL-159)", () => {
     expect(screen.getByRole("button", { name: /Parcela 3\/12 · paga/ })).toBeInTheDocument();
     expect(item("Aluguel Residencial")).toBeInTheDocument();
     expect(screen.getByText("Parcela 3/12 · paga")).toHaveClass("flex-wrap");
+  });
+});
+
+describe("Ledger view switch (SOL-163)", () => {
+  const view = (props: { planilha?: boolean; open?: boolean; transactions?: Schemas["Transaction"][] } = {}) => {
+    stubApi({
+      "GET /api/categories": { status: 200, body: WITH_COFRINHOS },
+      "GET /api/bills?include_inactive=true": { status: 200, body: [] },
+    });
+    const callbacks = { onPlanilhaChange: vi.fn(), onFilterChange: vi.fn(), onOpenChange: vi.fn() };
+    renderWithQuery(
+      <Ledger
+        view={{ ...MONTH, bills_of_month: [] }}
+        transactions={props.transactions ?? TRANSACTIONS}
+        filter="daily"
+        open={props.open ?? true}
+        planilha={props.planilha ? <p>A planilha</p> : undefined}
+        {...callbacks}
+      />,
+    );
+    return callbacks;
+  };
+  const views = () => screen.getByRole("radiogroup", { name: "Ver lançamentos como" });
+
+  it("shows Lista pressed and the filters by default", () => {
+    view();
+
+    expect(within(views()).getByRole("radio", { name: "Lista" })).toHaveAttribute("aria-checked", "true");
+    expect(within(views()).getByRole("radio", { name: "Planilha" })).toHaveAttribute("aria-checked", "false");
+    expect(within(views()).getByRole("radio", { name: "Planilha" })).toHaveClass("min-h-11", "text-base");
+    expect(screen.getByRole("radiogroup", { name: "Filtrar lançamentos" })).toBeInTheDocument();
+    expect(screen.queryByText("A planilha")).not.toBeInTheDocument();
+  });
+
+  it("puts the planilha in place of the filters and the days in Planilha mode", () => {
+    view({ planilha: true });
+
+    expect(within(views()).getByRole("radio", { name: "Planilha" })).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByText("A planilha")).toBeInTheDocument();
+    expect(screen.queryByRole("radiogroup", { name: "Filtrar lançamentos" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { level: 3 })).not.toBeInTheDocument();
+  });
+
+  it("switches back to Lista with the filter on Todos", async () => {
+    const { onPlanilhaChange, onFilterChange, onOpenChange } = view({ planilha: true });
+
+    await userEvent.click(within(views()).getByRole("radio", { name: "Lista" }));
+    expect(onPlanilhaChange).toHaveBeenCalledWith(false);
+    expect(onFilterChange).toHaveBeenCalledWith("all");
+    expect(onOpenChange).not.toHaveBeenCalled();
+  });
+
+  it("keeps the switch on a collapsed section, and choosing a view opens it", async () => {
+    const { onPlanilhaChange, onOpenChange } = view({ open: false });
+    expect(screen.queryByRole("radiogroup", { name: "Filtrar lançamentos" })).not.toBeInTheDocument();
+
+    await userEvent.click(within(views()).getByRole("radio", { name: "Planilha" }));
+    expect(onPlanilhaChange).toHaveBeenCalledWith(true);
+    expect(onOpenChange).toHaveBeenCalledWith(true);
+  });
+
+  it("opens a collapsed section from the view already chosen", async () => {
+    const { onPlanilhaChange, onOpenChange } = view({ open: false });
+
+    await userEvent.click(within(views()).getByRole("radio", { name: "Lista" }));
+    expect(onPlanilhaChange).not.toHaveBeenCalled();
+    expect(onOpenChange).toHaveBeenCalledWith(true);
+  });
+
+  it("hides a month with no entries in Lista and still shows it in Planilha", () => {
+    view({ transactions: [] });
+    expect(screen.queryByRole("region", { name: "Lançamentos" })).not.toBeInTheDocument();
+    cleanup();
+
+    view({ transactions: [], planilha: true });
+    expect(screen.getByRole("region", { name: "Lançamentos" })).toBeInTheDocument();
   });
 });

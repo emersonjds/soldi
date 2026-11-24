@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { CreditCard, Pencil, Trash2 } from "lucide-react";
@@ -34,7 +34,7 @@ import { TierPill } from "@/shared/ui/tier-pill";
 
 const KIND_LABEL: Record<Schemas["CategoryKind"], string> = { income: "Entrada", bill: "Saída", daily: "Diário" };
 
-const dayLabel = ({ date, is_future }: Schemas["Day"]) => {
+export const dayLabel = ({ date, is_future }: Pick<Schemas["Day"], "date" | "is_future">) => {
   const short = shortDay(date);
   if (is_future) return `Previsto · ${short}`;
   if (date === todayISO()) return `Hoje, ${short}`;
@@ -69,7 +69,7 @@ const paidCaption = (transaction: Transaction, billsOfMonth: Due[], bills: Schem
 };
 
 /** `Economia › Reserva` with `Guardado` for money put away, `Resgate › Reserva` with `Resgatado` for money taken back. */
-const entryOf = (
+export const entryOf = (
   transaction: Transaction,
   categories: Schemas["Category"][] = [],
   billsOfMonth: Due[],
@@ -88,7 +88,7 @@ const entryOf = (
   return { label, caption: KIND_LABEL[transaction.kind] };
 };
 
-const titleOf = (transaction: Transaction, entry: Entry) => transaction.note || entry.label;
+export const titleOf = (transaction: Transaction, entry: Entry) => transaction.note || entry.label;
 
 /** Same rule as the day balance: only income adds; a deposit into a cofrinho takes from it. */
 const addsToBalance = (transaction: Transaction) => transaction.kind === "income";
@@ -109,7 +109,16 @@ const groupByDay = (days: Day[], transactions: Transaction[], bills: Due[]) =>
     .reverse();
 
 /** A day ahead, or today once an unpaid bill landed on it. */
-const isForecast = (day: Day) => day.is_future || day.projected_balance !== day.balance;
+export const isForecast = (day: Day) => day.is_future || day.projected_balance !== day.balance;
+
+/** The day header's "Saldo ao final:" / "Projeção:" line. */
+export const DayBalance = ({ day }: { day: Day }) => (
+  <span className="flex items-center gap-1.5">
+    <span className="font-medium">{day.is_future ? "Projeção:" : "Saldo ao final:"}</span>
+    <Money amount={day.projected_balance} className={cn("font-bold", TIER_STYLE[day.projected_tier].label)} />
+    <TierPill tier={day.projected_tier} forecast={!day.is_future && isForecast(day)} size="sm" />
+  </span>
+);
 
 const Cause = () => <span className="text-expense text-xs">Motivo da queda</span>;
 
@@ -118,7 +127,7 @@ const dueStatus = (bill: Due, month: string) => {
   return bill.overdue ? `venceu dia ${dayMonth(bill.due_date)}` : "a pagar";
 };
 
-const dueCaption = (bill: Due, month: string) =>
+export const dueCaption = (bill: Due, month: string) =>
   `${billKind(bill)} · ${dueStatus(bill, month)}${bill.variable ? " · valor variável" : ""}`;
 
 const DueRow = ({ bill, month, cause }: { bill: Due; month: string; cause: boolean }) => (
@@ -223,8 +232,14 @@ type LedgerProps = {
   onFilterChange: (filter: LedgerFilter) => void;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** SOL-163: shown in place of the filters and the days; given = Planilha mode. */
+  planilha?: ReactNode;
+  onPlanilhaChange?: (planilha: boolean) => void;
   className?: string;
 };
+
+const VIEW_ITEM =
+  "text-muted-foreground data-[state=on]:bg-card data-[state=on]:text-primary min-h-11 rounded-lg! px-4 text-base font-medium data-[state=on]:shadow-sm";
 
 /**
  * `Lançamentos`: the whole month's entries grouped by day; a row opens Editar / Excluir,
@@ -239,6 +254,8 @@ export const Ledger = ({
   onFilterChange,
   open: expanded,
   onOpenChange,
+  planilha,
+  onPlanilhaChange,
   className,
 }: LedgerProps) => {
   const categories = useQuery(categoriesQuery).data;
@@ -305,7 +322,16 @@ export const Ledger = ({
     );
   };
 
-  if (!any) return null;
+  if (!any && !planilha) return null;
+
+  /** Tapping the view already pressed deselects it in Radix: it only opens the section. */
+  const chooseView = (value: string) => {
+    if (value) {
+      onPlanilhaChange?.(value === "planilha");
+      onFilterChange("all");
+    }
+    if (!expanded) onOpenChange(true);
+  };
 
   return (
     <section
@@ -326,68 +352,75 @@ export const Ledger = ({
           className="lg:col-start-3 lg:row-start-1"
         />
       </div>
-      {expanded && (
-        <>
+      <div className="flex flex-col gap-2 lg:col-start-2 lg:row-start-1 lg:flex-row lg:flex-wrap lg:items-center lg:gap-x-4">
+        <ToggleGroup
+          type="single"
+          spacing={0}
+          value={planilha ? "planilha" : "lista"}
+          onValueChange={chooseView}
+          aria-label="Ver lançamentos como"
+          className="bg-muted grid w-full grid-cols-2 rounded-xl p-1 lg:order-last lg:ml-auto lg:flex lg:w-fit"
+        >
+          <ToggleGroupItem value="lista" className={VIEW_ITEM}>
+            Lista
+          </ToggleGroupItem>
+          <ToggleGroupItem value="planilha" className={VIEW_ITEM}>
+            Planilha
+          </ToggleGroupItem>
+        </ToggleGroup>
+        {expanded && !planilha && (
           <ToggleGroup
             type="single"
             spacing={0}
             value={filter}
             onValueChange={(value: LedgerFilter | "") => value && onFilterChange(value)}
             aria-label="Filtrar lançamentos"
-            className="bg-muted mb-2 grid w-full grid-cols-2 rounded-xl p-1 lg:mb-0 lg:flex lg:w-fit lg:justify-self-start"
+            className="bg-muted mb-2 grid w-full grid-cols-2 rounded-xl p-1 lg:mb-0 lg:flex lg:w-fit"
           >
             {FILTERS.map((option) => (
-              <ToggleGroupItem
-                key={option.value}
-                value={option.value}
-                className="text-muted-foreground data-[state=on]:bg-card data-[state=on]:text-primary min-h-11 rounded-lg! px-4 text-base font-medium data-[state=on]:shadow-sm"
-              >
+              <ToggleGroupItem key={option.value} value={option.value} className={VIEW_ITEM}>
                 {option.label}
               </ToggleGroupItem>
             ))}
           </ToggleGroup>
-          <div className="flex flex-col gap-2 lg:col-span-3 lg:row-start-2">
-            {groups.length === 0 && (
-              <p className="text-muted-foreground px-2 py-8 text-center">
-                {FILTERS.find((option) => option.value === filter)?.empty}
-              </p>
-            )}
-            {groups.map(({ day, entries, due }) => (
-              <div
-                key={day.date}
-                id={`dia-${day.date}`}
-                tabIndex={-1}
-                className={cn("scroll-mt-28 rounded-xl", highlight === day.date && "ring-expense ring-2")}
-              >
-                <h3 className="bg-muted text-muted-foreground sticky top-14 z-10 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 rounded-lg px-3 py-2 text-sm font-semibold lg:top-0">
-                  {dayLabel(day)}
-                  <span className="flex items-center gap-1.5">
-                    <span className="font-medium">{day.is_future ? "Projeção:" : "Saldo ao final:"}</span>
-                    <Money
-                      amount={day.projected_balance}
-                      className={cn("font-bold", TIER_STYLE[day.projected_tier].label)}
-                    />
-                    <TierPill tier={day.projected_tier} forecast={!day.is_future && isForecast(day)} size="sm" />
-                  </span>
-                </h3>
-                <ul className={cn("flex flex-col", day.is_future && "opacity-60")}>
-                  {entries.map((transaction) => (
-                    <Row
-                      key={transaction.id}
-                      entry={entryFor(transaction)}
-                      transaction={transaction}
-                      cause={causes.has(transaction.id)}
-                      onOpen={() => open(transaction)}
-                    />
-                  ))}
-                  {due.map((bill) => (
-                    <DueRow key={billKey(bill)} bill={bill} month={view.month} cause={causes.has(billKey(bill))} />
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-        </>
+        )}
+      </div>
+      {expanded && planilha && <div className="min-w-0 lg:col-span-3 lg:row-start-2">{planilha}</div>}
+      {expanded && !planilha && (
+        <div className="flex flex-col gap-2 lg:col-span-3 lg:row-start-2">
+          {groups.length === 0 && (
+            <p className="text-muted-foreground px-2 py-8 text-center">
+              {FILTERS.find((option) => option.value === filter)?.empty}
+            </p>
+          )}
+          {groups.map(({ day, entries, due }) => (
+            <div
+              key={day.date}
+              id={`dia-${day.date}`}
+              tabIndex={-1}
+              className={cn("scroll-mt-28 rounded-xl", highlight === day.date && "ring-expense ring-2")}
+            >
+              <h3 className="bg-muted text-muted-foreground sticky top-14 z-10 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 rounded-lg px-3 py-2 text-sm font-semibold lg:top-0">
+                {dayLabel(day)}
+                <DayBalance day={day} />
+              </h3>
+              <ul className={cn("flex flex-col", day.is_future && "opacity-60")}>
+                {entries.map((transaction) => (
+                  <Row
+                    key={transaction.id}
+                    entry={entryFor(transaction)}
+                    transaction={transaction}
+                    cause={causes.has(transaction.id)}
+                    onOpen={() => open(transaction)}
+                  />
+                ))}
+                {due.map((bill) => (
+                  <DueRow key={billKey(bill)} bill={bill} month={view.month} cause={causes.has(billKey(bill))} />
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
       )}
 
       <Sheet open={acting} onOpenChange={setActing}>

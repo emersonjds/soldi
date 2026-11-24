@@ -542,3 +542,33 @@ export const FORECAST_LATE_OPENING = forecastFixture("2026-11-10", "2027-01-15",
   ["2027-01-15", "1000.00"],
   ["2027-02-10", "2500.00"],
 ]);
+
+const planilhaDay = (index: number, projected: string, rest: Partial<Schemas["Day"]> = {}): Schemas["Day"] =>
+  day(`2026-11-${String(index).padStart(2, "0")}`, projected, tierOf(projected, SETTINGS), {
+    projected_tier: tierOf(projected, SETTINGS),
+    is_future: index > 5,
+    is_today: index === 5,
+    ...rest,
+  });
+
+/**
+ * November for the planilha, today the 5th: 300 in and 50 resgatado on the 2nd, a paid 200 on the 3rd, 30,25 diário on the 4th;
+ * on the 5th a conta due on the 2nd lands (400) plus 19,75 diário; a 1.850 conta lands on the 10th, -1.150,00 from then on.
+ */
+export const PLANILHA_MONTH: Schemas["MonthView"] = {
+  ...MONTH,
+  days: [
+    planilhaDay(1, "1000.00"),
+    planilhaDay(2, "1350.00", { income: "300.00", withdrawn: "50.00" }),
+    planilhaDay(3, "1150.00", { bills: "200.00" }),
+    planilhaDay(4, "1119.75", { daily: "30.25" }),
+    planilhaDay(5, "700.00", { daily: "19.75", balance: "1100.00" }),
+    ...Array.from({ length: 4 }, (_, index) => planilhaDay(index + 6, "700.00", { balance: "1100.00" })),
+    ...Array.from({ length: 21 }, (_, index) => planilhaDay(index + 10, "-1150.00", { balance: "1100.00" })),
+  ],
+  bills_of_month: [
+    { ...forecastBill(4, "Luz", "200.00", "2026-11-03"), paid: true, transaction_id: "t4", lands_on: null },
+    { ...forecastBill(5, "Internet", "400.00", "2026-11-02"), overdue: true, lands_on: "2026-11-05" },
+    forecastBill(6, "Financiamento", "1850.00", "2026-11-10"),
+  ],
+};
