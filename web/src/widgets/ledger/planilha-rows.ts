@@ -5,11 +5,9 @@ import { cents, fromCents } from "@/shared/lib/tier";
 /** Spec SOL-163 §5: `max(opening month, today's month − 12)` to today's month + 11, as `YYYY-MM`. */
 export const planilhaMonths = (today: string, openingDate: string) => {
   const current = today.slice(0, 7);
-  const back = addMonths(current, -12);
-  const opening = openingDate.slice(0, 7);
+  const [, first] = [addMonths(current, -12), openingDate.slice(0, 7)].sort();
   const months: string[] = [];
-  for (let month = opening > back ? opening : back; month <= addMonths(current, 11); month = addMonths(month, 1))
-    months.push(month);
+  for (let month = first; month <= addMonths(current, 11); month = addMonths(month, 1)) months.push(month);
   return months;
 };
 

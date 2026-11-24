@@ -109,7 +109,7 @@ const groupByDay = (days: Day[], transactions: Transaction[], bills: Due[]) =>
     .reverse();
 
 /** A day ahead, or today once an unpaid bill landed on it. */
-const isForecast = (day: Day) => day.is_future || day.projected_balance !== day.balance;
+export const isForecast = (day: Day) => day.is_future || day.projected_balance !== day.balance;
 
 const Cause = () => <span className="text-expense text-xs">Motivo da queda</span>;
 

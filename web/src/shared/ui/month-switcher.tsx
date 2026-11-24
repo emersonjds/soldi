@@ -8,7 +8,7 @@ import { addMonths } from "@/shared/lib/date";
 const monthName = new Intl.DateTimeFormat("pt-BR", { month: "long", timeZone: "UTC" });
 
 /** `2026-11` → `Novembro 2026`. */
-const monthLabel = (month: string) => {
+export const monthLabel = (month: string) => {
   const [year, index] = month.split("-").map(Number);
   const name = monthName.format(Date.UTC(year, index - 1, 1));
   return `${name.charAt(0).toUpperCase()}${name.slice(1)} ${year}`;
