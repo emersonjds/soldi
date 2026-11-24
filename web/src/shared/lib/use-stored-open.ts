@@ -2,20 +2,21 @@ import { useState } from "react";
 
 const keyOf = (section: string) => `soldi:open:${section}`;
 
-const read = (section: string) => {
+const read = (section: string, initial: boolean) => {
   try {
-    return localStorage.getItem(keyOf(section)) !== "closed";
+    const stored = localStorage.getItem(keyOf(section));
+    return stored === null ? initial : stored !== "closed";
   } catch {
-    return true;
+    return initial;
   }
 };
 
 /**
- * SOL-158: whether a card shows open, remembered in this browser. `choose` remembers the choice;
- * `reveal` opens the card for this visit only.
+ * SOL-158: whether a card shows open, remembered in this browser; `initial` until a choice is stored.
+ * `choose` remembers the choice; `reveal` opens the card for this visit only.
  */
-export const useStoredOpen = (section: string) => {
-  const [open, setOpen] = useState(() => read(section));
+export const useStoredOpen = (section: string, initial = true) => {
+  const [open, setOpen] = useState(() => read(section, initial));
   const choose = (next: boolean) => {
     setOpen(next);
     try {
