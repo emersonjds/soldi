@@ -118,7 +118,7 @@ const MonthSummary = ({
       <TierPill tier={view.projected_tier} size="sm" />
     </Figure>
     {estimate && (
-      <div className="col-span-3 flex justify-center">
+      <div className="col-span-3 flex justify-center text-center">
         <EstimateNote estimate={estimate} />
       </div>
     )}
