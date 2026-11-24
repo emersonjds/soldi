@@ -26,7 +26,15 @@ const signUp = async (page: Page, name: string) => {
 const atEveryWidth = async (page: Page) => {
   for (const width of WIDTHS) {
     await page.setViewportSize({ width, height: 900 });
-    expect(await page.evaluate(() => (document.scrollingElement?.scrollWidth ?? 0) <= window.innerWidth)).toBe(true);
+    const wider = await page.evaluate(() =>
+      (document.scrollingElement?.scrollWidth ?? 0) <= window.innerWidth
+        ? []
+        : [...document.querySelectorAll("body *")]
+            .filter((element) => element.getBoundingClientRect().right > window.innerWidth + 0.5)
+            .slice(-3)
+            .map((element) => `${element.tagName}.${element.className} "${element.textContent?.slice(0, 40)}"`),
+    );
+    expect(wider, `page wider than ${width}px`).toEqual([]);
     await expectNoClipped(page);
   }
   await page.setViewportSize({ width: 375, height: 812 });
