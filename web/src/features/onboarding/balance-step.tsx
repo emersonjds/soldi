@@ -33,7 +33,7 @@ export const BalanceStep = ({
 
   return (
     <form noValidate onSubmit={form.handleSubmit(onNext)} className="flex flex-col gap-6">
-      <h1 className="font-bold text-[22px] leading-7">Quanto você tem hoje?</h1>
+      <h1 className="text-[22px] leading-7 font-bold">Quanto você tem hoje?</h1>
       <FieldGroup className="gap-4">
         <Field className="gap-1.5" data-invalid={Boolean(errors.amount)}>
           <FieldLabel htmlFor="opening-amount">Saldo de hoje</FieldLabel>
@@ -81,7 +81,7 @@ export const BalanceStep = ({
         <Button
           type="button"
           variant="ghost"
-          className="min-h-11 text-base text-muted-foreground"
+          className="text-muted-foreground min-h-11 text-base"
           onClick={() => onBack(form.getValues())}
         >
           Voltar

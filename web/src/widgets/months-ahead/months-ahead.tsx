@@ -23,18 +23,18 @@ export const MonthsAhead = ({ viewing, onOpen, className }: MonthsAheadProps) =>
   return (
     <section
       aria-labelledby="months-ahead-title"
-      className={cn("flex flex-col gap-4 rounded-2xl bg-card p-4 shadow-sm lg:p-6", className)}
+      className={cn("bg-card flex flex-col gap-4 rounded-2xl p-4 shadow-sm lg:p-6", className)}
     >
       <div className="flex flex-wrap items-center justify-between gap-x-2">
-        <h2 id="months-ahead-title" className="flex items-center gap-3 font-semibold text-lg leading-6">
-          <span className="flex size-10 items-center justify-center rounded-full bg-secondary text-primary">
+        <h2 id="months-ahead-title" className="flex items-center gap-3 text-lg leading-6 font-semibold">
+          <span className="bg-secondary text-primary flex size-10 items-center justify-center rounded-full">
             <CalendarRange className="size-5" aria-hidden />
           </span>
           Próximos meses
         </h2>
         <Link
           href="/posso-comprar"
-          className="inline-flex min-h-11 items-center gap-1 font-semibold text-primary text-sm hover:underline focus-visible:outline-2 focus-visible:outline-ring"
+          className="text-primary focus-visible:outline-ring inline-flex min-h-11 items-center gap-1 text-sm font-semibold hover:underline focus-visible:outline-2"
         >
           Posso comprar?
           <ArrowRight className="size-4" aria-hidden />
@@ -43,12 +43,12 @@ export const MonthsAhead = ({ viewing, onOpen, className }: MonthsAheadProps) =>
       {forecast.data ? (
         <MonthChips months={monthsAhead(forecast.data, 12)} current={viewing} onOpen={onOpen} />
       ) : (
-        <p className="flex flex-wrap items-center gap-x-2 text-muted-foreground text-sm">
+        <p className="text-muted-foreground flex flex-wrap items-center gap-x-2 text-sm">
           Não foi possível carregar.
           <button
             type="button"
             onClick={() => forecast.refetch()}
-            className="inline-flex min-h-11 items-center font-semibold text-primary hover:underline focus-visible:outline-2 focus-visible:outline-ring"
+            className="text-primary focus-visible:outline-ring inline-flex min-h-11 items-center font-semibold hover:underline focus-visible:outline-2"
           >
             Tentar de novo
           </button>

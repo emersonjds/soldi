@@ -318,11 +318,11 @@ async fn a_failed_delivery_is_logged_as_an_error_without_the_address(pool: PgPoo
     let (status, _) = request(&ana).await;
 
     assert_eq!(status, StatusCode::ACCEPTED);
-    let line = log.line("email verification request failed").await;
-    assert!(line.contains("ERROR"), "{line}");
     let fixed = "email verification request failed error=internal error: mail";
+    let line = log.line(fixed).await;
+    assert!(line.contains("ERROR"), "{line}");
     assert!(line.ends_with(fixed), "{line}");
-    let cause = log.line("internal error cause").await;
-    assert!(cause.contains("WARN") && cause.contains("mail"), "{cause}");
+    let cause = log.line("internal error cause category=\"mail\"").await;
+    assert!(cause.contains("WARN"), "{cause}");
     assert!(!line.contains('@'), "{line}");
 }

@@ -24,7 +24,7 @@ export const SettingsSection = ({ id, icon: Icon, title, subtitle, badge, danger
   <section
     id={id}
     aria-labelledby={`${id}-title`}
-    className="flex scroll-mt-24 flex-col gap-6 rounded-2xl bg-card p-4 shadow-sm lg:p-6"
+    className="bg-card flex scroll-mt-24 flex-col gap-6 rounded-2xl p-4 shadow-sm lg:p-6"
   >
     <header className="flex flex-wrap items-start gap-3">
       <span
@@ -36,7 +36,7 @@ export const SettingsSection = ({ id, icon: Icon, title, subtitle, badge, danger
         <Icon aria-hidden className="size-5" />
       </span>
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <h2 id={`${id}-title`} className="font-bold text-lg leading-6">
+        <h2 id={`${id}-title`} className="text-lg leading-6 font-bold">
           {title}
         </h2>
         {subtitle && <p className="text-muted-foreground text-sm">{subtitle}</p>}

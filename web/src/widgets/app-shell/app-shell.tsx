@@ -129,7 +129,7 @@ const TabLink = ({ item, active }: { item: NavItem; active: boolean }) => (
     href={item.href}
     aria-current={active ? "page" : undefined}
     className={cn(
-      "flex min-h-11 min-w-14 flex-col items-center justify-center gap-0.5 whitespace-nowrap rounded-lg px-1 py-1 text-center font-medium text-[11px] leading-tight transition-colors duration-200 focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2 motion-reduce:transition-none",
+      "focus-visible:outline-ring flex min-h-11 min-w-14 flex-col items-center justify-center gap-0.5 rounded-lg px-1 py-1 text-center text-[11px] leading-tight font-medium whitespace-nowrap transition-colors duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 motion-reduce:transition-none",
       active ? "text-primary" : "text-muted-foreground hover:text-foreground",
     )}
   >
@@ -143,7 +143,7 @@ const TodayLink = ({ className, mark }: { className?: string; mark?: string }) =
     href="/mes"
     aria-label="Soldi, ir para hoje"
     className={cn(
-      "inline-flex min-h-11 w-fit items-center rounded-lg px-2 focus-visible:outline-2 focus-visible:outline-ring",
+      "focus-visible:outline-ring inline-flex min-h-11 w-fit items-center rounded-lg px-2 focus-visible:outline-2",
       className,
     )}
   >
@@ -179,7 +179,7 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
               <nav aria-label="Menu lateral">
                 {SIDEBAR.map((group) => (
                   <SidebarGroup key={group.label} role="group" aria-labelledby={`grupo-${group.label}`}>
-                    <SidebarGroupLabel id={`grupo-${group.label}`} className="uppercase tracking-wider">
+                    <SidebarGroupLabel id={`grupo-${group.label}`} className="tracking-wider uppercase">
                       {group.label}
                     </SidebarGroupLabel>
                     <SidebarMenu className="gap-1">
@@ -205,14 +205,14 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
               <Link
                 href="/ajustes#conta"
                 aria-label={`Minha conta, ${name}`}
-                className="flex min-w-0 items-center gap-3 rounded-2xl bg-muted p-3 transition-colors hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring"
+                className="bg-muted hover:bg-accent focus-visible:outline-ring flex min-w-0 items-center gap-3 rounded-2xl p-3 transition-colors focus-visible:outline-2"
               >
                 <Avatar className="size-10">
                   <AvatarFallback className="bg-brand text-brand-foreground">{getInitials(name)}</AvatarFallback>
                 </Avatar>
                 <div className="grid min-w-0 text-sm leading-tight">
                   <span className="truncate font-medium">{name}</span>
-                  <span title={email} className="truncate text-muted-foreground text-xs">
+                  <span title={email} className="text-muted-foreground truncate text-xs">
                     {email}
                   </span>
                 </div>
@@ -222,9 +222,9 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="sticky top-0 z-30 box-content grid h-14 grid-cols-[1fr_auto_1fr] items-center gap-3 bg-background/85 px-4 pt-[env(safe-area-inset-top)] backdrop-blur lg:flex lg:h-16 lg:gap-4 lg:border-b lg:px-6 lg:pt-0">
+          <header className="bg-background/85 sticky top-0 z-30 box-content grid h-14 grid-cols-[1fr_auto_1fr] items-center gap-3 px-4 pt-[env(safe-area-inset-top)] backdrop-blur lg:flex lg:h-16 lg:gap-4 lg:border-b lg:px-6 lg:pt-0">
             <TodayLink className="-ml-2 lg:hidden" mark="flex-row-reverse text-xl" />
-            <p className="font-semibold text-lg lg:hidden">{pageName}</p>
+            <p className="text-lg font-semibold lg:hidden">{pageName}</p>
             <div className="hidden lg:mr-auto lg:block">
               {readsMonth && (
                 <Suspense>
@@ -234,7 +234,7 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
             </div>
             <TodayTier />
             <Button
-              className="hidden min-h-11 bg-brand text-base text-brand-foreground hover:bg-brand-hover lg:inline-flex"
+              className="bg-brand text-brand-foreground hover:bg-brand-hover hidden min-h-11 text-base lg:inline-flex"
               onClick={() => launch()}
             >
               <Plus className="size-5" aria-hidden />
@@ -243,7 +243,7 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
             <Link
               href="/ajustes#conta"
               aria-label="Minha conta"
-              className="flex size-11 shrink-0 items-center justify-center justify-self-end rounded-full focus-visible:outline-2 focus-visible:outline-ring"
+              className="focus-visible:outline-ring flex size-11 shrink-0 items-center justify-center justify-self-end rounded-full focus-visible:outline-2"
             >
               <Avatar className="size-10">
                 <AvatarFallback className="bg-brand text-brand-foreground">{getInitials(name)}</AvatarFallback>
@@ -252,14 +252,14 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
           </header>
           <main className="mx-auto w-full max-w-6xl flex-1 px-4 pt-4 pb-(--tabbar-space) lg:px-6 lg:pt-6 lg:pb-10">
             {SAVINGS_PAIR.some((item) => isAt(item.href)) && (
-              <nav aria-label="Economia e Meu ano" className="mb-4 flex rounded-xl bg-muted p-1 lg:hidden">
+              <nav aria-label="Economia e Meu ano" className="bg-muted mb-4 flex rounded-xl p-1 lg:hidden">
                 {SAVINGS_PAIR.map((item) => (
                   <MonthLink
                     key={item.href}
                     href={item.href}
                     aria-current={isAt(item.href) ? "page" : undefined}
                     className={cn(
-                      "flex min-h-11 flex-1 items-center justify-center rounded-lg font-medium text-sm transition-colors duration-200 focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2 motion-reduce:transition-none",
+                      "focus-visible:outline-ring flex min-h-11 flex-1 items-center justify-center rounded-lg text-sm font-medium transition-colors duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 motion-reduce:transition-none",
                       isAt(item.href)
                         ? "bg-card text-primary shadow-sm"
                         : "text-muted-foreground hover:text-foreground",
@@ -272,7 +272,7 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
             )}
             {switcherCard && (
               <Suspense>
-                <div className="mb-4 rounded-2xl bg-card p-2 shadow-sm lg:hidden">
+                <div className="bg-card mb-4 rounded-2xl p-2 shadow-sm lg:hidden">
                   <ShellMonthSwitcher pathname={pathname} />
                 </div>
               </Suspense>
@@ -283,7 +283,7 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
 
         <nav
           aria-label="Navegação principal"
-          className="fixed inset-x-0 bottom-0 z-40 border-t bg-card pb-[env(safe-area-inset-bottom)] lg:hidden"
+          className="bg-card fixed inset-x-0 bottom-0 z-40 border-t pb-[env(safe-area-inset-bottom)] lg:hidden"
         >
           <div className="mx-auto flex h-16 max-w-lg items-center justify-around px-1">
             {NAV.slice(0, 2).map((item) => (
@@ -294,7 +294,7 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
                 type="button"
                 aria-label="Lançar"
                 onClick={() => launch()}
-                className="absolute -top-5 flex size-14 items-center justify-center rounded-full bg-brand text-brand-foreground shadow-lg transition-colors hover:bg-brand-hover focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2"
+                className="bg-brand text-brand-foreground hover:bg-brand-hover focus-visible:outline-ring absolute -top-5 flex size-14 items-center justify-center rounded-full shadow-lg transition-colors focus-visible:outline-2 focus-visible:outline-offset-2"
               >
                 <Plus className="size-7" aria-hidden />
               </button>

@@ -59,7 +59,7 @@ export const WithdrawForm = ({
       <HeroAmount id="withdraw-amount" value={amount} onChange={setAmount} invalid={submitted && !valid} />
       <DateChips legend="Quando?" value={date} onChange={setDate} />
       <div className="flex flex-col gap-2">
-        <label htmlFor="withdraw-note" className="font-semibold text-sm">
+        <label htmlFor="withdraw-note" className="text-sm font-semibold">
           Observação
         </label>
         <Input
@@ -68,7 +68,7 @@ export const WithdrawForm = ({
           onChange={(event) => setNote(event.target.value)}
           placeholder="Opcional"
           maxLength={500}
-          className="h-12 rounded-xl bg-muted text-base md:text-base"
+          className="bg-muted h-12 rounded-xl text-base md:text-base"
         />
       </div>
       {problem && (

@@ -45,7 +45,7 @@ export const SplitBar = ({
 
   return (
     <div className={cn("flex flex-col gap-3", className)}>
-      <div role="img" aria-label={summary} className="flex h-3 overflow-hidden rounded-full bg-muted">
+      <div role="img" aria-label={summary} className="bg-muted flex h-3 overflow-hidden rounded-full">
         {rows.map((row) => (
           <span
             key={row.label}
@@ -58,9 +58,9 @@ export const SplitBar = ({
         {rows.map((row) => (
           <li key={row.label} className="flex items-start gap-2">
             <span aria-hidden className={cn("mt-1 size-2.5 shrink-0 rounded-full", TONE[row.tone])} />
-            <span className="flex min-w-0 flex-col text-muted-foreground text-xs leading-4">
+            <span className="text-muted-foreground flex min-w-0 flex-col text-xs leading-4">
               <span>{row.label}</span>
-              <Money amount={row.amount} className="font-medium text-foreground text-sm leading-5" />
+              <Money amount={row.amount} className="text-foreground text-sm leading-5 font-medium" />
               <span className="tabular-nums">{row.share}</span>
             </span>
           </li>

@@ -82,7 +82,7 @@ const CategoryChips = ({ index, register }: { index: number; register: UseFormRe
       {bills.map((category) => (
         <label
           key={category.id}
-          className="inline-flex min-h-11 cursor-pointer items-center rounded-full border border-input px-4 font-medium text-sm transition-colors has-checked:border-primary has-checked:bg-primary has-checked:text-primary-foreground has-focus-visible:outline-2 has-focus-visible:outline-ring"
+          className="border-input has-checked:border-primary has-checked:bg-primary has-checked:text-primary-foreground has-focus-visible:outline-ring inline-flex min-h-11 cursor-pointer items-center rounded-full border px-4 text-sm font-medium transition-colors has-focus-visible:outline-2"
         >
           <input type="radio" value={category.id} className="sr-only" {...register(`rows.${index}.category_id`)} />
           {categoryLabel(category, categories.data)}
@@ -100,7 +100,7 @@ export const BillsStep = ({ defaultRows, onNext, onSkip, onBack }: BillsStepProp
   return (
     <form noValidate onSubmit={form.handleSubmit((values) => onNext(values.rows))} className="flex flex-col gap-6">
       <div className="flex flex-col gap-1">
-        <h1 className="font-bold text-[22px] leading-7">Suas contas fixas</h1>
+        <h1 className="text-[22px] leading-7 font-bold">Suas contas fixas</h1>
         <p className="text-muted-foreground">Aluguel, luz, internet: o que se repete todo mês.</p>
       </div>
       {rows.fields.map((item, index) => {
@@ -164,7 +164,7 @@ export const BillsStep = ({ defaultRows, onNext, onSkip, onBack }: BillsStepProp
               </Field>
             </div>
             <fieldset className="flex flex-col gap-2">
-              <legend className="mb-2 font-medium text-sm">Categoria</legend>
+              <legend className="mb-2 text-sm font-medium">Categoria</legend>
               <CategoryChips index={index} register={form.register} />
               {rowErrors?.category_id && <FieldError errors={[rowErrors.category_id]} />}
             </fieldset>
@@ -174,7 +174,7 @@ export const BillsStep = ({ defaultRows, onNext, onSkip, onBack }: BillsStepProp
       <Button
         type="button"
         variant="ghost"
-        className="min-h-11 self-start px-2 font-semibold text-base text-primary"
+        className="text-primary min-h-11 self-start px-2 text-base font-semibold"
         onClick={() => rows.append(EMPTY_ROW)}
       >
         <Plus />
@@ -188,7 +188,7 @@ export const BillsStep = ({ defaultRows, onNext, onSkip, onBack }: BillsStepProp
         <Button
           type="button"
           variant="ghost"
-          className="min-h-11 text-base text-muted-foreground"
+          className="text-muted-foreground min-h-11 text-base"
           onClick={() => onBack(form.getValues().rows)}
         >
           Voltar

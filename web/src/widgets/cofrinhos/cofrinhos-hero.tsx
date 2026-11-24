@@ -28,7 +28,7 @@ const MonthLine = ({ saved, firstUse }: { saved: string; firstUse: boolean }) =>
   const negative = saved.startsWith("-");
   return (
     <>
-      <span className={negative ? "font-semibold text-expense" : "font-semibold text-income-text"}>
+      <span className={negative ? "text-expense font-semibold" : "text-income-text font-semibold"}>
         {negative ? "" : "+"}
         {formatMoney(saved, currency)}
       </span>{" "}
@@ -50,12 +50,12 @@ const MetaGlobal = ({ items }: { items: Cofrinho[] }) => {
     <div className="flex flex-col gap-2 border-t pt-4">
       <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
         <p>
-          Meta Global Consolidada: <Money amount={fromCents(saved)} className="font-bold text-primary" />{" "}
-          <span className="whitespace-nowrap text-muted-foreground">
+          Meta Global Consolidada: <Money amount={fromCents(saved)} className="text-primary font-bold" />{" "}
+          <span className="text-muted-foreground whitespace-nowrap">
             de <Money amount={fromCents(target)} />
           </span>
         </p>
-        <span className="rounded-md bg-secondary px-2 py-0.5 font-semibold text-primary text-xs">
+        <span className="bg-secondary text-primary rounded-md px-2 py-0.5 text-xs font-semibold">
           {formatPct(String(pct))} concluído
         </span>
       </div>
@@ -89,10 +89,10 @@ export const CofrinhosHero = ({
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex min-w-0 flex-col gap-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h2 id={id} className="font-semibold text-muted-foreground text-xs uppercase tracking-wider">
+            <h2 id={id} className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
               Total guardado em cofrinhos
             </h2>
-            <span className="inline-flex items-center gap-1 rounded-full bg-secondary px-2 py-0.5 font-semibold text-primary text-xs">
+            <span className="bg-secondary text-primary inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold">
               <Lock className="size-3" aria-hidden />
               Protegido
             </span>
@@ -141,11 +141,11 @@ export const CofrinhoPicker = ({ title, options, open, onOpenChange, onPick }: P
           <button
             type="button"
             onClick={() => onPick(option)}
-            className="flex min-h-14 w-full items-center gap-3 rounded-lg py-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="focus-visible:ring-ring flex min-h-14 w-full items-center gap-3 rounded-lg py-2 text-left outline-none focus-visible:ring-2"
           >
             <CategoryIcon icon={option.icon} color={option.color} />
-            <span className="min-w-0 flex-1 truncate font-medium text-base">{option.name}</span>
-            <Money amount={option.balance} className="font-semibold text-base" />
+            <span className="min-w-0 flex-1 truncate text-base font-medium">{option.name}</span>
+            <Money amount={option.balance} className="text-base font-semibold" />
           </button>
         </li>
       ))}

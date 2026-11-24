@@ -217,7 +217,7 @@ export const BillForm = ({
         <Check className="size-5" />
         Salvar Conta Fixa
       </BrandButton>
-      <Button type="button" variant="ghost" className="min-h-11 text-base text-muted-foreground" onClick={discard}>
+      <Button type="button" variant="ghost" className="text-muted-foreground min-h-11 text-base" onClick={discard}>
         Descartar alterações
       </Button>
     </>
@@ -226,10 +226,10 @@ export const BillForm = ({
   return (
     <form noValidate onSubmit={submit} className="flex flex-col gap-5">
       {hint && (
-        <p className="rounded-xl bg-secondary px-4 py-3 font-medium text-primary text-sm">{hint(draft.parcelado)}</p>
+        <p className="bg-secondary text-primary rounded-xl px-4 py-3 text-sm font-medium">{hint(draft.parcelado)}</p>
       )}
-      <span className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-muted p-1">
-        <span className="flex min-h-9 flex-1 items-center justify-center gap-2 rounded-lg bg-card font-semibold text-primary text-sm shadow-sm">
+      <span className="bg-muted flex min-h-11 items-center justify-center gap-2 rounded-xl p-1">
+        <span className="bg-card text-primary flex min-h-9 flex-1 items-center justify-center gap-2 rounded-lg text-sm font-semibold shadow-sm">
           <TrendingDown className="size-4" aria-hidden />
           Despesa Fixa
         </span>
@@ -253,9 +253,9 @@ export const BillForm = ({
           {!bill && !prefill && (
             <label
               htmlFor="bill-card-switch"
-              className="flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-xl bg-muted px-4 py-2"
+              className="bg-muted flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-xl px-4 py-2"
             >
-              <span id="bill-card" className="font-medium text-base">
+              <span id="bill-card" className="text-base font-medium">
                 Cartão de crédito
               </span>
               <Switch
@@ -268,10 +268,10 @@ export const BillForm = ({
           )}
           <label
             htmlFor="bill-parcelado-switch"
-            className="flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-xl bg-muted px-4 py-2"
+            className="bg-muted flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-xl px-4 py-2"
           >
             <span className="flex flex-col">
-              <span id="bill-parcelado" className="font-medium text-base">
+              <span id="bill-parcelado" className="text-base font-medium">
                 Parcelado
               </span>
               {dropping && (
@@ -309,10 +309,10 @@ export const BillForm = ({
       {!draft.card && (
         <label
           htmlFor="bill-variable-switch"
-          className="flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-xl bg-muted px-4 py-2"
+          className="bg-muted flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-xl px-4 py-2"
         >
           <span className="flex flex-col">
-            <span id="bill-variable" className="font-medium text-base">
+            <span id="bill-variable" className="text-base font-medium">
               Valor varia todo mês
             </span>
             {draft.variable && (
@@ -386,7 +386,7 @@ export const BillForm = ({
             {errors.current && <FieldError>{errors.current}</FieldError>}
           </Field>
           {lastMonth && endMonth === lastMonth && (
-            <p className="-mt-3 text-muted-foreground text-sm">
+            <p className="text-muted-foreground -mt-3 text-sm">
               {`Parcela ${current}/${count} em ${monthAbbrev(firstMonth(todayISO(), day))} · termina em ${monthAbbrev(lastMonth)}`}
             </p>
           )}
@@ -413,27 +413,27 @@ export const BillForm = ({
         </NativeSelect>
         {errors.category && <FieldError>{errors.category}</FieldError>}
       </Field>
-      {draft.card && <p className="-mt-3 text-muted-foreground text-sm">Ex.: Cartão › Porto</p>}
+      {draft.card && <p className="text-muted-foreground -mt-3 text-sm">Ex.: Cartão › Porto</p>}
       {archived && (
-        <p className="-mt-3 text-muted-foreground text-sm">
+        <p className="text-muted-foreground -mt-3 text-sm">
           Categoria arquivada. Fica a mesma se você não escolher outra.
         </p>
       )}
       <div className="flex flex-col gap-1.5">
-        <span className="font-medium text-sm">Periodicidade</span>
-        <span className="flex min-h-12 items-center gap-2 rounded-xl bg-muted px-4 text-base">
-          <Repeat className="size-4 text-primary" aria-hidden />
+        <span className="text-sm font-medium">Periodicidade</span>
+        <span className="bg-muted flex min-h-12 items-center gap-2 rounded-xl px-4 text-base">
+          <Repeat className="text-primary size-4" aria-hidden />
           Mensal (todo mês)
-          <span className="ml-auto text-muted-foreground text-xs">{draft.parcelado ? "Parcelado" : "Fixo"}</span>
+          <span className="text-muted-foreground ml-auto text-xs">{draft.parcelado ? "Parcelado" : "Fixo"}</span>
         </span>
       </div>
       {bill && !draft.card && !draft.parcelado && bill.installments == null && (
         <label
           htmlFor="bill-active-switch"
-          className="flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-xl bg-muted px-4"
+          className="bg-muted flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-xl px-4"
         >
           <span className="flex flex-col">
-            <span id="bill-active" className="font-medium text-base">
+            <span id="bill-active" className="text-base font-medium">
               Ativa
             </span>
             {!draft.active && (
@@ -455,13 +455,13 @@ export const BillForm = ({
           <Button
             type="button"
             variant="ghost"
-            className="min-h-11 text-base text-destructive hover:text-destructive"
+            className="text-destructive hover:text-destructive min-h-11 text-base"
             onClick={() => onArchive(bill)}
           >
             <Trash2 className="size-5" />
             {bill.closing_day == null ? "Excluir conta fixa" : "Excluir cartão"}
           </Button>
-          <p className="text-center text-muted-foreground text-xs">
+          <p className="text-muted-foreground text-center text-xs">
             Sai de todos os meses; os pagamentos já feitos continuam nos lançamentos.
           </p>
         </div>
@@ -547,10 +547,10 @@ export const BillFormPanel = ({
   const save = useSaveBill(bill);
   const id = useId();
   return (
-    <section aria-labelledby={id} className="flex flex-col gap-5 rounded-2xl bg-card p-6 shadow-sm">
+    <section aria-labelledby={id} className="bg-card flex flex-col gap-5 rounded-2xl p-6 shadow-sm">
       <header className="flex items-start justify-between gap-3">
-        <h2 id={id} className="flex items-center gap-2 font-bold text-lg leading-6">
-          <span className="size-2 shrink-0 rounded-full bg-primary" aria-hidden />
+        <h2 id={id} className="flex items-center gap-2 text-lg leading-6 font-bold">
+          <span className="bg-primary size-2 shrink-0 rounded-full" aria-hidden />
           {bill ? "Editar Conta" : "Adicionar Nova Conta"}
         </h2>
         <span className="text-muted-foreground text-xs">Formulário rápido</span>

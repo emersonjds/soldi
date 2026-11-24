@@ -69,10 +69,10 @@ export const WelcomeTour = () => {
   });
 
   return (
-    <div className="flex min-h-dvh bg-card lg:items-center lg:justify-center lg:bg-linear-to-br lg:from-hero-from lg:to-hero-to lg:p-8">
+    <div className="bg-card lg:from-hero-from lg:to-hero-to flex min-h-dvh lg:items-center lg:justify-center lg:bg-linear-to-br lg:p-8">
       <main
         aria-label="Como o Soldi funciona"
-        className="flex w-full flex-col gap-6 px-6 pt-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] lg:max-w-[560px] lg:rounded-3xl lg:bg-card lg:p-10 lg:shadow-xl"
+        className="lg:bg-card flex w-full flex-col gap-6 px-6 pt-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] lg:max-w-[560px] lg:rounded-3xl lg:p-10 lg:shadow-xl"
       >
         <div className="flex min-h-11 items-center justify-between gap-2">
           <div className="flex items-center gap-2">
@@ -85,7 +85,7 @@ export const WelcomeTour = () => {
                 aria-hidden
                 className={cn(
                   "h-2 rounded-full transition-all duration-200 motion-reduce:transition-none",
-                  index === step ? "w-6 bg-brand" : "w-2 bg-input",
+                  index === step ? "bg-brand w-6" : "bg-input w-2",
                 )}
               />
             ))}
@@ -94,7 +94,7 @@ export const WelcomeTour = () => {
             <Button
               type="button"
               variant="ghost"
-              className="min-h-11 text-base text-muted-foreground"
+              className="text-muted-foreground min-h-11 text-base"
               disabled={seen.isPending}
               onClick={finish}
             >
@@ -104,16 +104,16 @@ export const WelcomeTour = () => {
         </div>
         <div
           aria-hidden
-          className="-mx-6 flex flex-1 items-center justify-center bg-muted px-4 py-8 lg:mx-0 lg:min-h-64 lg:flex-none lg:rounded-3xl"
+          className="bg-muted -mx-6 flex flex-1 items-center justify-center px-4 py-8 lg:mx-0 lg:min-h-64 lg:flex-none lg:rounded-3xl"
         >
           {current.illustration}
         </div>
         <div className="flex flex-col gap-2">
-          <h1 className="font-bold text-[22px] leading-7">{current.title}</h1>
-          <p className="min-h-18 text-base text-muted-foreground leading-6">{current.text}</p>
+          <h1 className="text-[22px] leading-7 font-bold">{current.title}</h1>
+          <p className="text-muted-foreground min-h-18 text-base leading-6">{current.text}</p>
         </div>
         {seen.isError && (
-          <p role="alert" className="rounded-xl bg-expense-soft px-4 py-3 font-medium text-sm text-tier-red-foreground">
+          <p role="alert" className="bg-expense-soft text-tier-red-foreground rounded-xl px-4 py-3 text-sm font-medium">
             Não foi possível salvar. Tente de novo.
           </p>
         )}

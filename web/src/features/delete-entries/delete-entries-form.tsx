@@ -93,7 +93,7 @@ export const DeleteEntriesForm = ({ month, opening }: { month: string; opening: 
 
   return (
     <div className="flex flex-col gap-4">
-      <p id="delete-scope" className="font-semibold text-sm">
+      <p id="delete-scope" className="text-sm font-semibold">
         Selecione o escopo para exclusão:
       </p>
       <div
@@ -106,10 +106,10 @@ export const DeleteEntriesForm = ({ month, opening }: { month: string; opening: 
         {scopes.map(({ value, title, caption }) => (
           <label
             key={value}
-            className="flex min-h-14 cursor-pointer items-start justify-between gap-2 rounded-xl bg-muted p-3 has-checked:ring-2 has-checked:ring-brand has-focus-visible:ring-3 has-focus-visible:ring-ring/50"
+            className="bg-muted has-checked:ring-brand has-focus-visible:ring-ring/50 flex min-h-14 cursor-pointer items-start justify-between gap-2 rounded-xl p-3 has-checked:ring-2 has-focus-visible:ring-3"
           >
             <span className="flex min-w-0 flex-col">
-              <span className="font-semibold text-sm">{title}</span>
+              <span className="text-sm font-semibold">{title}</span>
               <span className="text-muted-foreground text-xs">{caption}</span>
             </span>
             <input
@@ -119,7 +119,7 @@ export const DeleteEntriesForm = ({ month, opening }: { month: string; opening: 
               aria-label={title}
               checked={scope === value}
               onChange={() => choose(value)}
-              className="size-5 shrink-0 accent-brand"
+              className="accent-brand size-5 shrink-0"
             />
           </label>
         ))}
@@ -138,12 +138,12 @@ export const DeleteEntriesForm = ({ month, opening }: { month: string; opening: 
           </Button>
         </p>
       )}
-      <div className="flex flex-col gap-3 rounded-2xl bg-destructive/10 p-4 lg:flex-row lg:items-center">
-        <TriangleAlert aria-hidden className="size-6 shrink-0 text-destructive" />
+      <div className="bg-destructive/10 flex flex-col gap-3 rounded-2xl p-4 lg:flex-row lg:items-center">
+        <TriangleAlert aria-hidden className="text-destructive size-6 shrink-0" />
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <p className="font-semibold text-sm">Ação destrutiva sem retorno</p>
+          <p className="text-sm font-semibold">Ação destrutiva sem retorno</p>
           <p id="delete-word" className="text-muted-foreground text-xs">
-            Para confirmar exclusão em massa, digite <code className="font-bold text-destructive">{WORD}</code> no
+            Para confirmar exclusão em massa, digite <code className="text-destructive font-bold">{WORD}</code> no
             campo:
           </p>
         </div>
@@ -156,7 +156,7 @@ export const DeleteEntriesForm = ({ month, opening }: { month: string; opening: 
           placeholder={WORD}
           value={typed}
           onChange={(event) => setTyped(event.target.value)}
-          className="h-12 bg-card text-base md:text-base lg:w-40"
+          className="bg-card h-12 text-base md:text-base lg:w-40"
         />
         <Button
           variant="destructive"

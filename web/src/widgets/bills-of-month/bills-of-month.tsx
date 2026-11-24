@@ -48,7 +48,7 @@ const overdueOf = (bills: BillOfMonth[]) => bills.filter((bill) => bill.overdue 
 
 /** Clock + `1 vencida`: never color alone. */
 const Overdue = ({ count, lead = "" }: { count: number; lead?: string }) => (
-  <span className="inline-flex items-center gap-1 whitespace-nowrap text-expense">
+  <span className="text-expense inline-flex items-center gap-1 whitespace-nowrap">
     {lead}
     <Clock className="size-3.5 shrink-0" aria-hidden />
     {count === 1 ? "1 vencida" : `${count} vencidas`}
@@ -73,7 +73,7 @@ const Summary = ({ bills, currency }: { bills: BillOfMonth[]; currency: Currency
   const unpaid = bills.filter((bill) => !bill.paid);
   if (unpaid.length === 0)
     return (
-      <span className="flex items-center gap-1 text-income-text">
+      <span className="text-income-text flex items-center gap-1">
         <Check className="size-3.5 shrink-0" aria-hidden />
         {paidOf(bills)}
       </span>
@@ -81,7 +81,7 @@ const Summary = ({ bills, currency }: { bills: BillOfMonth[]; currency: Currency
   const left = fromCents(unpaid.reduce((sum, bill) => sum + cents(bill.amount), 0));
   const late = overdueOf(bills);
   return (
-    <span className="flex flex-wrap items-center gap-x-1 text-muted-foreground">
+    <span className="text-muted-foreground flex flex-wrap items-center gap-x-1">
       <span className="whitespace-nowrap">{paidOf(bills)}</span>{" "}
       <span className="whitespace-nowrap">
         · falta {unpaid.some((bill) => bill.variable) && "≈ "}
@@ -132,7 +132,7 @@ const Caption = ({ bill, paidOn }: { bill: BillOfMonth; paidOn?: string }) => {
       </span>
       <span
         className={cn(
-          "flex items-center gap-1 whitespace-nowrap text-xs lg:hidden",
+          "flex items-center gap-1 text-xs whitespace-nowrap lg:hidden",
           late ? "text-expense" : "text-muted-foreground",
         )}
       >
@@ -165,19 +165,19 @@ const RoundCheck = ({
     aria-label={bill.paid ? `Desmarcar ${label}` : payLabel(bill, label)}
     onClick={onToggle}
     disabled={busy}
-    className="group/check -ml-2 hidden size-11 shrink-0 items-center justify-center rounded-full focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-60 lg:flex"
+    className="group/check focus-visible:outline-ring -ml-2 hidden size-11 shrink-0 items-center justify-center rounded-full focus-visible:outline-2 disabled:opacity-60 lg:flex"
   >
     <span
       className={cn(
         "flex size-6 items-center justify-center rounded-full border-2 motion-safe:transition-[background-color,border-color,scale] motion-safe:duration-150",
         bill.paid && "border-income bg-income text-primary-foreground",
-        !bill.paid && "scale-90 group-hover/check:border-income",
+        !bill.paid && "group-hover/check:border-income scale-90",
         !bill.paid &&
           (bill.overdue ? "border-expense bg-expense text-primary-foreground" : "border-muted-foreground/50"),
       )}
     >
       {bill.overdue && !bill.paid ? (
-        <span aria-hidden className="font-bold text-sm leading-none">
+        <span aria-hidden className="text-sm leading-none font-bold">
           !
         </span>
       ) : (
@@ -243,7 +243,7 @@ const Row = ({
           <span
             title={title}
             className={cn(
-              "max-w-full truncate font-medium text-base",
+              "max-w-full truncate text-base font-medium",
               bill.paid && "lg:text-muted-foreground lg:line-through",
             )}
           >
@@ -252,14 +252,14 @@ const Row = ({
           {parcel && (
             <>
               {" "}
-              <span className="basis-full text-muted-foreground text-sm lg:basis-auto">
+              <span className="text-muted-foreground basis-full text-sm lg:basis-auto">
                 <span className="hidden lg:inline">·</span>{" "}
                 {[parcel, late && `venceu em ${late}`].filter(Boolean).join(" · ")}
               </span>
             </>
           )}
           {estimated && (
-            <span className="basis-full whitespace-nowrap text-muted-foreground text-sm lg:basis-auto">
+            <span className="text-muted-foreground basis-full text-sm whitespace-nowrap lg:basis-auto">
               <span className="hidden lg:inline"> ·</span> valor variável
             </span>
           )}
@@ -283,10 +283,10 @@ const Row = ({
         aria-describedby={captionId}
         onClick={onOpenName}
         disabled={!onOpenName}
-        className="flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-lg text-left focus-visible:outline-2 focus-visible:outline-ring sm:gap-3"
+        className="focus-visible:outline-ring flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-lg text-left focus-visible:outline-2 sm:gap-3"
       >
         {name}
-        {onOpenName && <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />}
+        {onOpenName && <ChevronRight className="text-muted-foreground size-4 shrink-0" aria-hidden />}
       </button>
       {bill.paid ? (
         amount
@@ -295,7 +295,7 @@ const Row = ({
           type="button"
           aria-label={`${estimated ? "valor estimado " : ""}${formatMoney(bill.amount, currency)}: ajustar pagamento de ${label}`}
           onClick={onAdjust}
-          className="min-h-11 shrink-0 rounded-lg px-1 transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"
+          className="hover:bg-muted focus-visible:outline-ring min-h-11 shrink-0 rounded-lg px-1 transition-colors focus-visible:outline-2"
         >
           {amount}
         </button>
@@ -411,11 +411,11 @@ export const BillsOfMonth = ({ view, className }: { view: Schemas["MonthView"]; 
         <span
           ref={title}
           tabIndex={-1}
-          className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-sm focus-visible:outline-2 focus-visible:outline-ring"
+          className="focus-visible:outline-ring flex flex-wrap items-center gap-x-2 gap-y-1 rounded-sm focus-visible:outline-2"
         >
-          <span aria-hidden className="h-4 w-1 rounded-full bg-primary lg:hidden" />
+          <span aria-hidden className="bg-primary h-4 w-1 rounded-full lg:hidden" />
           Contas a pagar
-          <span className="inline-flex rounded-full bg-muted px-2 font-medium text-muted-foreground text-xs leading-5">
+          <span className="bg-muted text-muted-foreground inline-flex rounded-full px-2 text-xs leading-5 font-medium">
             {paidOf(bills)}
           </span>
         </span>
@@ -425,7 +425,7 @@ export const BillsOfMonth = ({ view, className }: { view: Schemas["MonthView"]; 
       className={className}
     >
       <div className="flex flex-col gap-4">
-        <p className="-mt-2 flex flex-wrap gap-x-2 text-muted-foreground text-sm">
+        <p className="text-muted-foreground -mt-2 flex flex-wrap gap-x-2 text-sm">
           {late > 0 && (
             <>
               <Overdue count={late} />{" "}
@@ -447,7 +447,7 @@ export const BillsOfMonth = ({ view, className }: { view: Schemas["MonthView"]; 
                   key={date}
                   value={date}
                   aria-label={`dia ${chipDay(date, view.month)}, ${unpaidLabel(unpaid)}`}
-                  className="h-11 gap-1.5 rounded-full! border border-border px-4 font-medium text-base data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
+                  className="border-border data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground h-11 gap-1.5 rounded-full! border px-4 text-base font-medium"
                 >
                   dia {chipDay(date, view.month)}
                   {unpaid > 0 && (
@@ -479,11 +479,11 @@ export const BillsOfMonth = ({ view, className }: { view: Schemas["MonthView"]; 
                       className="flex flex-col gap-1"
                     >
                       <h3>
-                        <CollapsibleTrigger className="group/trigger flex min-h-11 w-full flex-col items-start gap-0.5 rounded-lg py-1 text-left text-sm focus-visible:outline-2 focus-visible:outline-ring">
-                          <span className="flex w-full items-center justify-between gap-2 font-medium text-base">
+                        <CollapsibleTrigger className="group/trigger focus-visible:outline-ring flex min-h-11 w-full flex-col items-start gap-0.5 rounded-lg py-1 text-left text-sm focus-visible:outline-2">
+                          <span className="flex w-full items-center justify-between gap-2 text-base font-medium">
                             {name}
                             <ChevronDown
-                              className="size-4 shrink-0 text-muted-foreground group-data-[state=open]/trigger:rotate-180 motion-safe:transition-transform motion-safe:duration-150"
+                              className="text-muted-foreground size-4 shrink-0 group-data-[state=open]/trigger:rotate-180 motion-safe:transition-transform motion-safe:duration-150"
                               aria-hidden
                             />
                           </span>
@@ -497,7 +497,7 @@ export const BillsOfMonth = ({ view, className }: { view: Schemas["MonthView"]; 
               : list(shown)}
             <Link
               href="/ajustes/contas"
-              className="inline-flex min-h-11 items-center self-start rounded-lg font-medium text-primary text-sm hover:underline focus-visible:outline-2 focus-visible:outline-ring"
+              className="text-primary focus-visible:outline-ring inline-flex min-h-11 items-center self-start rounded-lg text-sm font-medium hover:underline focus-visible:outline-2"
             >
               Gerenciar contas fixas
             </Link>

@@ -37,7 +37,7 @@ export const ProfileForm = ({ user }: { user: User }) => {
   };
 
   return (
-    <form noValidate onSubmit={submit} className="flex flex-col gap-4 rounded-2xl bg-card p-4 shadow-sm lg:p-6">
+    <form noValidate onSubmit={submit} className="bg-card flex flex-col gap-4 rounded-2xl p-4 shadow-sm lg:p-6">
       <Field className="gap-1.5" data-invalid={invalid}>
         <FieldLabel htmlFor="account-name">Nome</FieldLabel>
         <Input
@@ -58,7 +58,7 @@ export const ProfileForm = ({ user }: { user: User }) => {
           type="email"
           readOnly
           value={user.email}
-          className="h-12 bg-muted text-base text-muted-foreground md:text-base"
+          className="bg-muted text-muted-foreground h-12 text-base md:text-base"
         />
         <FieldDescription>Para trocar o e-mail, fale com o suporte.</FieldDescription>
       </Field>

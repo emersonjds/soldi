@@ -35,7 +35,7 @@ export const DashCard = ({
       className={cn("rounded-2xl shadow-sm ring-0 lg:[--card-spacing:--spacing(6)]", className)}
     >
       <CardHeader className="items-center">
-        <h2 id={id} className="flex items-center gap-2 font-semibold text-foreground text-lg leading-6">
+        <h2 id={id} className="text-foreground flex items-center gap-2 text-lg leading-6 font-semibold">
           {icon}
           {title}
         </h2>
@@ -43,7 +43,7 @@ export const DashCard = ({
           <CardAction className="self-center">
             <Link
               href={action.href}
-              className="-my-2.5 -mr-2 inline-flex min-h-11 items-center gap-1 rounded-lg px-2 font-medium text-primary text-sm hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"
+              className="text-primary hover:bg-muted focus-visible:outline-ring -my-2.5 -mr-2 inline-flex min-h-11 items-center gap-1 rounded-lg px-2 text-sm font-medium focus-visible:outline-2"
             >
               {action.label}
               {action.arrow && <span aria-hidden>→</span>}

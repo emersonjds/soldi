@@ -37,7 +37,7 @@ export const RequestForm = () => {
         <p ref={focus} tabIndex={-1} role="status" className="text-base">
           Se existir uma conta com esse e-mail, enviamos um link para redefinir a senha. Ele vale por 1 hora.
         </p>
-        <Link href="/entrar" className="inline-flex min-h-11 items-center self-center font-semibold text-primary">
+        <Link href="/entrar" className="text-primary inline-flex min-h-11 items-center self-center font-semibold">
           Voltar para Entrar
         </Link>
       </div>
@@ -66,7 +66,7 @@ export const RequestForm = () => {
         )}
       />
       {send.isError && (
-        <p role="alert" className="rounded-xl bg-expense-soft px-4 py-3 font-medium text-sm text-tier-red-foreground">
+        <p role="alert" className="bg-expense-soft text-tier-red-foreground rounded-xl px-4 py-3 text-sm font-medium">
           {failure(send.error)}
         </p>
       )}

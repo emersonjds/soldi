@@ -35,7 +35,7 @@ export const OnboardingWizard = () => {
               aria-hidden
               className={cn(
                 "h-2 rounded-full transition-all duration-200 motion-reduce:transition-none",
-                dot === step ? "w-6 bg-brand" : "w-2 bg-input",
+                dot === step ? "bg-brand w-6" : "bg-input w-2",
               )}
             />
           ))}

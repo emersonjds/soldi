@@ -13,11 +13,11 @@ const card = "w-full rounded-2xl bg-card p-4 shadow-sm";
 
 export const IncomeIllustration = () => (
   <div className={cn(card, "flex max-w-xs flex-col items-center gap-1 text-center")}>
-    <span className="flex size-12 items-center justify-center rounded-full bg-income-soft text-income">
+    <span className="bg-income-soft text-income flex size-12 items-center justify-center rounded-full">
       <ArrowUp className="size-6" aria-hidden />
     </span>
     <span className="text-muted-foreground text-sm">Entradas</span>
-    <Money amount="5000.00" income className="font-bold text-2xl" />
+    <Money amount="5000.00" income className="text-2xl font-bold" />
   </div>
 );
 
@@ -32,10 +32,10 @@ export const LedgerIllustration = () => (
       <li key={row.title} className="flex min-h-16 items-center gap-3 px-2 py-2">
         <CategoryIcon icon={row.icon} color={row.color} />
         <span className="flex min-w-0 flex-1 flex-col">
-          <span className="truncate font-medium text-base">{row.title}</span>
+          <span className="truncate text-base font-medium">{row.title}</span>
           <span className="text-muted-foreground text-xs">{row.caption}</span>
         </span>
-        <Money amount={row.amount} className="font-bold text-base" />
+        <Money amount={row.amount} className="text-base font-bold" />
       </li>
     ))}
   </ul>
@@ -58,14 +58,14 @@ export const CofrinhoIllustration = () => (
     <span className="flex items-center gap-3">
       <CategoryIcon icon="shield" color="cat-3" className="size-11" />
       <span className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate font-semibold text-base">Reserva</span>
+        <span className="truncate text-base font-semibold">Reserva</span>
         <span className="text-muted-foreground text-sm tabular-nums">30%</span>
       </span>
-      <ChevronRight className="size-5 shrink-0 text-muted-foreground" aria-hidden />
+      <ChevronRight className="text-muted-foreground size-5 shrink-0" aria-hidden />
     </span>
     <p className="leading-8">
-      <Money amount="3000.00" className="font-bold text-2xl leading-8 tracking-[-0.02em]" />{" "}
-      <span className="whitespace-nowrap text-muted-foreground">
+      <Money amount="3000.00" className="text-2xl leading-8 font-bold tracking-[-0.02em]" />{" "}
+      <span className="text-muted-foreground whitespace-nowrap">
         de <Money amount="10000.00" />
       </span>
     </p>

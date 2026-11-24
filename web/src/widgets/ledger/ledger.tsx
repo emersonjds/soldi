@@ -128,13 +128,13 @@ const DueRow = ({ bill, month, cause }: { bill: Due; month: string; cause: boole
   >
     <CategoryIcon icon={bill.icon} color={bill.color} />
     <span className="flex min-w-0 flex-1 flex-col">
-      <span className="truncate font-medium text-base">{bill.name}</span>
+      <span className="truncate text-base font-medium">{bill.name}</span>
       <span className={cn("text-xs", bill.overdue ? "text-expense" : "text-muted-foreground")}>
         {dueCaption(bill, month)}
       </span>
     </span>
     <span className="flex flex-col items-end gap-0.5">
-      <Money amount={bill.amount} outflow className="font-bold text-base" />
+      <Money amount={bill.amount} outflow className="text-base font-bold" />
       {cause && <Cause />}
     </span>
   </li>
@@ -147,12 +147,12 @@ const Row = ({ transaction, entry, cause, onOpen }: RowProps) => (
     <button
       type="button"
       onClick={onOpen}
-      className="flex min-h-16 w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"
+      className="hover:bg-muted focus-visible:outline-ring flex min-h-16 w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition-colors focus-visible:outline-2"
     >
       <CategoryIcon icon={transaction.category.icon} color={transaction.category.color} />
       <span className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate font-medium text-base">{titleOf(transaction, entry)}</span>
-        <span className="flex flex-wrap items-center gap-1 text-muted-foreground text-xs">
+        <span className="truncate text-base font-medium">{titleOf(transaction, entry)}</span>
+        <span className="text-muted-foreground flex flex-wrap items-center gap-1 text-xs">
           {entry.caption}
           {entry.card && (
             <span className="flex min-w-0 items-center gap-1">
@@ -162,7 +162,7 @@ const Row = ({ transaction, entry, cause, onOpen }: RowProps) => (
           )}
           {transaction.series && (
             <>
-              <span aria-hidden className="rounded-full bg-muted px-2 font-medium text-foreground">
+              <span aria-hidden className="bg-muted text-foreground rounded-full px-2 font-medium">
                 {`↻ ${KIND_LABEL[transaction.kind]} · ${
                   transaction.series.open_ended
                     ? OPEN_LABEL[transaction.series.every]
@@ -183,7 +183,7 @@ const Row = ({ transaction, entry, cause, onOpen }: RowProps) => (
           amount={transaction.amount}
           income={addsToBalance(transaction)}
           outflow={!addsToBalance(transaction)}
-          className="font-bold text-base"
+          className="text-base font-bold"
         />
         {cause && <Cause />}
       </span>
@@ -244,7 +244,7 @@ export const Ledger = ({
   const categories = useQuery(categoriesQuery).data;
   const cards = useCards({ includeInactive: true }).data;
   const bills = useBills({ includeInactive: true }).data;
-  const describe = (transaction: Transaction): Entry => ({
+  const entryFor = (transaction: Transaction): Entry => ({
     ...entryOf(transaction, categories, view.bills_of_month, bills),
     card: cards?.find(({ id }) => id === transaction.card_id)?.name,
   });
@@ -311,12 +311,12 @@ export const Ledger = ({
     <section
       aria-labelledby="ledger-title"
       className={cn(
-        "flex flex-col gap-2 rounded-2xl bg-card p-4 shadow-sm lg:grid lg:grid-cols-[auto_1fr_auto] lg:items-center lg:gap-x-4 lg:p-6",
+        "bg-card flex flex-col gap-2 rounded-2xl p-4 shadow-sm lg:grid lg:grid-cols-[auto_1fr_auto] lg:items-center lg:gap-x-4 lg:p-6",
         className,
       )}
     >
       <div className="flex items-center justify-between gap-2 lg:contents">
-        <h2 id="ledger-title" className="font-semibold text-lg leading-6">
+        <h2 id="ledger-title" className="text-lg leading-6 font-semibold">
           Lançamentos
         </h2>
         <SectionToggle
@@ -334,13 +334,13 @@ export const Ledger = ({
             value={filter}
             onValueChange={(value: LedgerFilter | "") => value && onFilterChange(value)}
             aria-label="Filtrar lançamentos"
-            className="mb-2 grid w-full grid-cols-2 rounded-xl bg-muted p-1 lg:mb-0 lg:flex lg:w-fit lg:justify-self-start"
+            className="bg-muted mb-2 grid w-full grid-cols-2 rounded-xl p-1 lg:mb-0 lg:flex lg:w-fit lg:justify-self-start"
           >
             {FILTERS.map((option) => (
               <ToggleGroupItem
                 key={option.value}
                 value={option.value}
-                className="min-h-11 rounded-lg! px-4 font-medium text-base text-muted-foreground data-[state=on]:bg-card data-[state=on]:text-primary data-[state=on]:shadow-sm"
+                className="text-muted-foreground data-[state=on]:bg-card data-[state=on]:text-primary min-h-11 rounded-lg! px-4 text-base font-medium data-[state=on]:shadow-sm"
               >
                 {option.label}
               </ToggleGroupItem>
@@ -348,7 +348,7 @@ export const Ledger = ({
           </ToggleGroup>
           <div className="flex flex-col gap-2 lg:col-span-3 lg:row-start-2">
             {groups.length === 0 && (
-              <p className="px-2 py-8 text-center text-muted-foreground">
+              <p className="text-muted-foreground px-2 py-8 text-center">
                 {FILTERS.find((option) => option.value === filter)?.empty}
               </p>
             )}
@@ -357,9 +357,9 @@ export const Ledger = ({
                 key={day.date}
                 id={`dia-${day.date}`}
                 tabIndex={-1}
-                className={cn("scroll-mt-28 rounded-xl", highlight === day.date && "ring-2 ring-expense")}
+                className={cn("scroll-mt-28 rounded-xl", highlight === day.date && "ring-expense ring-2")}
               >
-                <h3 className="sticky top-14 z-10 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 rounded-lg bg-muted px-3 py-2 font-semibold text-muted-foreground text-sm lg:top-0">
+                <h3 className="bg-muted text-muted-foreground sticky top-14 z-10 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 rounded-lg px-3 py-2 text-sm font-semibold lg:top-0">
                   {dayLabel(day)}
                   <span className="flex items-center gap-1.5">
                     <span className="font-medium">{day.is_future ? "Projeção:" : "Saldo ao final:"}</span>
@@ -374,7 +374,7 @@ export const Ledger = ({
                   {entries.map((transaction) => (
                     <Row
                       key={transaction.id}
-                      entry={describe(transaction)}
+                      entry={entryFor(transaction)}
                       transaction={transaction}
                       cause={causes.has(transaction.id)}
                       onOpen={() => open(transaction)}
@@ -395,11 +395,11 @@ export const Ledger = ({
           side="bottom"
           className="mx-auto max-w-lg gap-2 rounded-t-3xl px-4 pt-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))]"
         >
-          <SheetTitle className="pr-12 font-bold text-lg">
-            {selected && titleOf(selected, describe(selected))}
+          <SheetTitle className="pr-12 text-lg font-bold">
+            {selected && titleOf(selected, entryFor(selected))}
           </SheetTitle>
           <SheetDescription>
-            {selected && `${describe(selected).caption} · ${describe(selected).label}`}
+            {selected && `${entryFor(selected).caption} · ${entryFor(selected).label}`}
           </SheetDescription>
           {confirming && selected?.series ? (
             <>
@@ -438,7 +438,7 @@ export const Ledger = ({
               </Button>
               <Button
                 variant="ghost"
-                className="min-h-12 justify-start gap-3 text-base text-destructive hover:text-destructive"
+                className="text-destructive hover:text-destructive min-h-12 justify-start gap-3 text-base"
                 onClick={() => selected && (selected.series ? setConfirming(true) : destroy(selected))}
               >
                 <Trash2 className="size-5" />

@@ -125,15 +125,15 @@ export const CategoryChips = ({
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center justify-between gap-2">
-        <span id={labelId} className="flex items-center gap-2 font-semibold text-sm">
-          <span aria-hidden className="size-1.5 rounded-full bg-primary" />
+        <span id={labelId} className="flex items-center gap-2 text-sm font-semibold">
+          <span aria-hidden className="bg-primary size-1.5 rounded-full" />
           {label}
         </span>
         <span className="flex items-center gap-1">
           <button
             type="button"
             onClick={() => setCustomizing(true)}
-            className="inline-flex min-h-11 items-center rounded-lg px-2 font-semibold text-muted-foreground text-sm outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+            className="text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-ring/50 inline-flex min-h-11 items-center rounded-lg px-2 text-sm font-semibold outline-none focus-visible:ring-3"
           >
             Personalizar
           </button>
@@ -169,17 +169,17 @@ export const CategoryChips = ({
               key={category.id}
               value={category.id}
               aria-label={categoryLabel(category, list)}
-              className="group/chip h-auto min-h-11 w-16 shrink-0 snap-start flex-col justify-start gap-1 whitespace-normal rounded-xl px-0 py-1 font-medium text-foreground data-[state=on]:bg-transparent data-[state=on]:font-semibold data-[state=on]:text-primary"
+              className="group/chip text-foreground data-[state=on]:text-primary h-auto min-h-11 w-16 shrink-0 snap-start flex-col justify-start gap-1 rounded-xl px-0 py-1 font-medium whitespace-normal data-[state=on]:bg-transparent data-[state=on]:font-semibold"
             >
               <span className="relative">
                 <CategoryIcon
                   icon={category.icon}
                   color={category.color}
-                  className="size-12 ring-primary ring-offset-2 ring-offset-background group-data-[state=on]/chip:ring-2 [&_svg]:size-6"
+                  className="ring-primary ring-offset-background size-12 ring-offset-2 group-data-[state=on]/chip:ring-2 [&_svg]:size-6"
                 />
                 <span
                   aria-hidden
-                  className="absolute -top-1 -right-1 hidden size-5 items-center justify-center rounded-full bg-primary text-primary-foreground ring-2 ring-background group-data-[state=on]/chip:flex"
+                  className="bg-primary text-primary-foreground ring-background absolute -top-1 -right-1 hidden size-5 items-center justify-center rounded-full ring-2 group-data-[state=on]/chip:flex"
                 >
                   <Check className="size-3!" />
                 </span>
@@ -190,7 +190,7 @@ export const CategoryChips = ({
         </ToggleGroup>
         {parent && children.length > 0 && (
           <div className="flex items-start gap-2">
-            <span aria-hidden className="flex min-h-11 items-center font-semibold text-muted-foreground text-sm">
+            <span aria-hidden className="text-muted-foreground flex min-h-11 items-center text-sm font-semibold">
               Sub:
             </span>
             <ToggleGroup
@@ -208,7 +208,7 @@ export const CategoryChips = ({
                   key={child.id}
                   value={child.id}
                   aria-label={categoryLabel(child, list)}
-                  className="group/pill h-11 gap-1 rounded-full! border border-border px-4 font-medium text-foreground text-sm data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
+                  className="group/pill border-border text-foreground data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground h-11 gap-1 rounded-full! border px-4 text-sm font-medium"
                 >
                   <Check aria-hidden className="hidden group-data-[state=on]/pill:block" />
                   {child.name}

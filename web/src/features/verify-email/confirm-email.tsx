@@ -13,7 +13,7 @@ import { BrandButton } from "@/shared/ui/brand-button";
 
 const Outcome = ({ title, text, action, href }: { title: string; text: string; action: string; href: string }) => (
   <div className="flex flex-col gap-4">
-    <h1 className="font-bold text-[22px] leading-7">{title}</h1>
+    <h1 className="text-[22px] leading-7 font-bold">{title}</h1>
     <p className="text-base">{text}</p>
     <BrandButton asChild>
       <Link href={href}>{action}</Link>
@@ -22,7 +22,7 @@ const Outcome = ({ title, text, action, href }: { title: string; text: string; a
 );
 
 const Alert = ({ children }: { children: string }) => (
-  <p role="alert" className="rounded-xl bg-expense-soft px-4 py-3 font-medium text-sm text-tier-red-foreground">
+  <p role="alert" className="bg-expense-soft text-tier-red-foreground rounded-xl px-4 py-3 text-sm font-medium">
     {children}
   </p>
 );

@@ -87,7 +87,7 @@ const MonthScreen = () => {
       <div className="flex flex-col gap-4 lg:grid lg:gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] xl:items-start">
         <div className="contents lg:flex lg:flex-col lg:gap-6">
           {monthFailed && (
-            <section aria-label="Saldo hoje" className="rounded-3xl bg-card shadow-sm">
+            <section aria-label="Saldo hoje" className="bg-card rounded-3xl shadow-sm">
               <PageError message="Não foi possível carregar o mês." onRetry={() => view.refetch()} />
             </section>
           )}
@@ -103,7 +103,7 @@ const MonthScreen = () => {
             </>
           )}
           {entriesFailed && !monthFailed && (
-            <section aria-label="Lançamentos" className="rounded-2xl bg-card shadow-sm max-lg:order-3">
+            <section aria-label="Lançamentos" className="bg-card rounded-2xl shadow-sm max-lg:order-3">
               <PageError message="Não foi possível carregar os lançamentos." onRetry={() => transactions.refetch()} />
             </section>
           )}

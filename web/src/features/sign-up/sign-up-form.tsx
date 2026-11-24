@@ -96,7 +96,7 @@ export const SignUpForm = () => {
         />
       </FieldGroup>
       {signUp.isError && !fieldErrors && (
-        <p role="alert" className="rounded-xl bg-expense-soft px-4 py-3 font-medium text-sm text-tier-red-foreground">
+        <p role="alert" className="bg-expense-soft text-tier-red-foreground rounded-xl px-4 py-3 text-sm font-medium">
           {failure(signUp.error)}
         </p>
       )}

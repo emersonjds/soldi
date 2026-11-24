@@ -74,7 +74,7 @@ export const ResponsiveSheet = ({
     event.preventDefault();
     onBack();
   };
-  const heading = cn("pr-12 font-bold text-[22px] leading-7", onBack && "pl-12");
+  const heading = cn("pr-12 text-[22px] leading-7 font-bold", onBack && "pl-12");
 
   if (useIsLg())
     return (
@@ -84,13 +84,13 @@ export const ResponsiveSheet = ({
           onEscapeKeyDown={escapeBack}
           onCloseAutoFocus={onCloseAutoFocus}
           className={cn(
-            "flex max-h-[90dvh] flex-col gap-6 overflow-y-auto rounded-3xl px-8 pt-8 pb-(--sheet-pb) [--sheet-pb:--spacing(8)] [scrollbar-width:none] has-data-[slot=responsive-sheet-footer]:scroll-pb-[calc(var(--sheet-pb)+7.5rem)] has-data-[slot=responsive-sheet-footer]:pb-0 sm:max-w-lg [&::-webkit-scrollbar]:hidden",
+            "flex max-h-[90dvh] [scrollbar-width:none] flex-col gap-6 overflow-y-auto rounded-3xl px-8 pt-8 pb-(--sheet-pb) [--sheet-pb:--spacing(8)] has-data-[slot=responsive-sheet-footer]:scroll-pb-[calc(var(--sheet-pb)+7.5rem)] has-data-[slot=responsive-sheet-footer]:pb-0 sm:max-w-lg [&::-webkit-scrollbar]:hidden",
             wide && "sm:max-w-[560px]",
           )}
         >
           {eyebrow}
           <DialogTitle className={heading}>{title}</DialogTitle>
-          <DialogDescription className={showDescription ? "-mt-4 text-muted-foreground text-sm" : "sr-only"}>
+          <DialogDescription className={showDescription ? "text-muted-foreground -mt-4 text-sm" : "sr-only"}>
             {description}
           </DialogDescription>
           {back}
@@ -107,7 +107,7 @@ export const ResponsiveSheet = ({
         showCloseButton={false}
         onEscapeKeyDown={escapeBack}
         onCloseAutoFocus={onCloseAutoFocus}
-        className="mx-auto max-h-[92dvh] max-w-lg gap-6 overflow-y-auto rounded-t-3xl px-4 pt-6 pb-(--sheet-pb) [--sheet-pb:calc(1.5rem+env(safe-area-inset-bottom))] [scrollbar-width:none] has-data-[slot=responsive-sheet-footer]:scroll-pb-[calc(var(--sheet-pb)+7.5rem)] has-data-[slot=responsive-sheet-footer]:pb-0 [&::-webkit-scrollbar]:hidden"
+        className="mx-auto max-h-[92dvh] max-w-lg [scrollbar-width:none] gap-6 overflow-y-auto rounded-t-3xl px-4 pt-6 pb-(--sheet-pb) [--sheet-pb:calc(1.5rem+env(safe-area-inset-bottom))] has-data-[slot=responsive-sheet-footer]:scroll-pb-[calc(var(--sheet-pb)+7.5rem)] has-data-[slot=responsive-sheet-footer]:pb-0 [&::-webkit-scrollbar]:hidden"
       >
         {eyebrow}
         <SheetTitle className={heading}>{title}</SheetTitle>
@@ -124,7 +124,7 @@ export const ResponsiveSheet = ({
 export const ResponsiveSheetFooter = ({ children }: { children: ReactNode }) => (
   <div
     data-slot="responsive-sheet-footer"
-    className="sticky bottom-0 z-10 flex flex-col gap-2 border-border/60 border-t bg-popover pt-3 pb-(--sheet-pb)"
+    className="border-border/60 bg-popover sticky bottom-0 z-10 flex flex-col gap-2 border-t pt-3 pb-(--sheet-pb)"
   >
     {children}
   </div>

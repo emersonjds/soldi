@@ -63,7 +63,7 @@ export const ScopeRadio = ({
         ];
   return (
     <div className="flex flex-col gap-2">
-      <p id={`${id}-legend`} className="font-semibold text-sm">
+      <p id={`${id}-legend`} className="text-sm font-semibold">
         {legend}
       </p>
       <RadioGroup
@@ -76,7 +76,7 @@ export const ScopeRadio = ({
           <label
             key={scope}
             htmlFor={`${id}-${scope}`}
-            className="flex min-h-11 cursor-pointer items-start gap-3 rounded-xl bg-muted p-3.5 text-base has-data-[state=checked]:ring-2 has-data-[state=checked]:ring-primary"
+            className="bg-muted has-data-[state=checked]:ring-primary flex min-h-11 cursor-pointer items-start gap-3 rounded-xl p-3.5 text-base has-data-[state=checked]:ring-2"
           >
             <RadioGroupItem
               id={`${id}-${scope}`}
@@ -91,7 +91,7 @@ export const ScopeRadio = ({
                   {label}
                 </span>
                 {scope === "following" && position > 1 && (
-                  <span className="rounded-full bg-primary px-2 font-semibold text-primary-foreground text-xs uppercase tracking-wider">
+                  <span className="bg-primary text-primary-foreground rounded-full px-2 text-xs font-semibold tracking-wider uppercase">
                     Recomendado
                   </span>
                 )}

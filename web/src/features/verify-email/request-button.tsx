@@ -25,7 +25,7 @@ export const VerifyEmailButton = ({ email }: { email: string }) => {
   return (
     <Button
       variant="link"
-      className="min-h-11 px-0 font-semibold text-primary text-sm"
+      className="text-primary min-h-11 px-0 text-sm font-semibold"
       disabled={send.isPending}
       onClick={() => send.mutate()}
     >

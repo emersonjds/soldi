@@ -13,7 +13,7 @@ export const SignOutButton = () => {
     <div className="flex flex-col gap-1">
       <Button
         variant="outline"
-        className="h-12 gap-2 px-5 font-semibold text-base"
+        className="h-12 gap-2 px-5 text-base font-semibold"
         disabled={signOut.isPending}
         onClick={() => signOut.mutate()}
       >
