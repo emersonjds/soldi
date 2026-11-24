@@ -111,7 +111,7 @@ export const CategoryList = ({ kind, onKindChange }: ListProps) => {
       return <PageError message="Não foi possível carregar as categorias." onRetry={() => categories.refetch()} />;
     if (!categories.data)
       return (
-        <div className="rounded-2xl bg-card p-4 shadow-sm">
+        <div className="bg-card rounded-2xl p-4 shadow-sm">
           <SkeletonRows count={4} />
         </div>
       );
@@ -120,8 +120,8 @@ export const CategoryList = ({ kind, onKindChange }: ListProps) => {
     const tops = topsOf(visible);
     if (tops.length === 0)
       return (
-        <div className="flex flex-col items-center gap-3 rounded-2xl bg-card px-4 py-10 text-center shadow-sm">
-          <span className="flex size-12 items-center justify-center rounded-full bg-secondary text-primary">
+        <div className="bg-card flex flex-col items-center gap-3 rounded-2xl px-4 py-10 text-center shadow-sm">
+          <span className="bg-secondary text-primary flex size-12 items-center justify-center rounded-full">
             <Tags className="size-6" aria-hidden />
           </span>
           <p className="text-muted-foreground">{`Nenhuma categoria de ${KIND_NAMES[kind]} ainda.`}</p>
@@ -142,7 +142,7 @@ export const CategoryList = ({ kind, onKindChange }: ListProps) => {
     });
     if (groups.length === 0)
       return (
-        <p className="rounded-2xl bg-card px-4 py-10 text-center text-muted-foreground shadow-sm">
+        <p className="bg-card text-muted-foreground rounded-2xl px-4 py-10 text-center shadow-sm">
           Nenhuma categoria encontrada.
         </p>
       );
@@ -153,7 +153,7 @@ export const CategoryList = ({ kind, onKindChange }: ListProps) => {
           <li
             key={parent.id}
             aria-label={parent.name}
-            className="flex min-w-0 flex-col gap-1 rounded-2xl bg-card p-3 shadow-sm"
+            className="bg-card flex min-w-0 flex-col gap-1 rounded-2xl p-3 shadow-sm"
           >
             <div className="flex items-center gap-1">
               <button
@@ -163,9 +163,9 @@ export const CategoryList = ({ kind, onKindChange }: ListProps) => {
                 className={`${row} min-h-14 py-1`}
               >
                 <CategoryIcon icon={parent.icon} color={parent.color} />
-                <span className="min-w-0 flex-1 break-words font-semibold text-base">{parent.name}</span>
+                <span className="min-w-0 flex-1 text-base font-semibold break-words">{parent.name}</span>
                 {parent.is_savings && (
-                  <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-secondary px-2.5 py-1 font-medium text-primary text-xs">
+                  <span className="bg-secondary text-primary inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium">
                     <PiggyBank className="size-3.5" aria-hidden />
                     Cofrinhos
                   </span>
@@ -177,7 +177,7 @@ export const CategoryList = ({ kind, onKindChange }: ListProps) => {
                 size="icon"
                 aria-label={`${parent.is_savings ? "Novo cofrinho" : "Nova subcategoria"} em ${parent.name}`}
                 onClick={() => edit({ parentId: parent.id })}
-                className="size-11 shrink-0 rounded-full text-primary"
+                className="text-primary size-11 shrink-0 rounded-full"
               >
                 <Plus className="size-5" />
               </Button>
@@ -193,7 +193,7 @@ export const CategoryList = ({ kind, onKindChange }: ListProps) => {
                       className={`${row} min-h-11 py-2`}
                     >
                       <span aria-hidden className={cn("size-2 shrink-0 rounded-full", categoryBg(parent.color))} />
-                      <span className="min-w-0 flex-1 break-words text-sm">{child.name}</span>
+                      <span className="min-w-0 flex-1 text-sm break-words">{child.name}</span>
                     </button>
                   </li>
                 ))}
@@ -208,7 +208,7 @@ export const CategoryList = ({ kind, onKindChange }: ListProps) => {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-3">
-        <h1 className="font-bold text-[22px] leading-7 lg:text-[28px] lg:leading-9">Categorias</h1>
+        <h1 className="text-[22px] leading-7 font-bold lg:text-[28px] lg:leading-9">Categorias</h1>
         <Button
           type="button"
           aria-disabled={!categories.data}
@@ -220,14 +220,14 @@ export const CategoryList = ({ kind, onKindChange }: ListProps) => {
         </Button>
       </div>
       <div className="relative">
-        <Search aria-hidden className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+        <Search aria-hidden className="text-muted-foreground absolute top-1/2 left-3 size-4 -translate-y-1/2" />
         <Input
           type="search"
           aria-label="Buscar categoria"
           placeholder="Buscar categoria..."
           value={search}
           onChange={(event) => setSearch(event.target.value)}
-          className="h-11 rounded-xl bg-card pl-9 text-base md:text-base"
+          className="bg-card h-11 rounded-xl pl-9 text-base md:text-base"
         />
       </div>
       <ToggleGroup
@@ -237,7 +237,7 @@ export const CategoryList = ({ kind, onKindChange }: ListProps) => {
         onValueChange={(value) => {
           if (value) onKindChange(kindParam(value));
         }}
-        className="grid w-full grid-cols-3 gap-1 rounded-2xl bg-card p-1 shadow-sm"
+        className="bg-card grid w-full grid-cols-3 gap-1 rounded-2xl p-1 shadow-sm"
       >
         {TABS.map(([each, text, Icon]) => (
           <ToggleGroupItem key={each} value={each} className={tab}>

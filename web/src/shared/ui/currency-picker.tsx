@@ -14,7 +14,7 @@ export const CurrencyPicker = ({ value, onChange }: { value: Currency; onChange:
     {CURRENCIES.map(({ code, flag, name }) => (
       <label
         key={code}
-        className="flex min-h-28 cursor-pointer flex-col justify-center gap-1 rounded-2xl border-2 border-input bg-card p-4 transition-colors has-checked:border-brand has-checked:bg-accent has-focus-visible:ring-3 has-focus-visible:ring-ring/50 motion-reduce:transition-none"
+        className="border-input bg-card has-checked:border-brand has-checked:bg-accent has-focus-visible:ring-ring/50 flex min-h-28 cursor-pointer flex-col justify-center gap-1 rounded-2xl border-2 p-4 transition-colors has-focus-visible:ring-3 motion-reduce:transition-none"
       >
         <input
           type="radio"
@@ -28,7 +28,7 @@ export const CurrencyPicker = ({ value, onChange }: { value: Currency; onChange:
         <span aria-hidden className="text-3xl leading-9">
           {flag}
         </span>
-        <span className="font-semibold text-base">{name}</span>
+        <span className="text-base font-semibold">{name}</span>
         <span className="text-muted-foreground text-sm">{code}</span>
       </label>
     ))}

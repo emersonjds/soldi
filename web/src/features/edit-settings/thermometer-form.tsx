@@ -125,8 +125,8 @@ export const ThermometerForm = ({ settings }: { settings: Schemas["Settings"] })
     <form noValidate onSubmit={submit} className="flex flex-col gap-6">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {FIELDS.map(({ key, label, caption, tiers }, index) => (
-          <Field key={key} className="gap-2 rounded-2xl bg-muted p-3" data-invalid={index === wrong}>
-            <FieldLabel htmlFor={key} className="gap-1.5 font-semibold text-xs">
+          <Field key={key} className="bg-muted gap-2 rounded-2xl p-3" data-invalid={index === wrong}>
+            <FieldLabel htmlFor={key} className="gap-1.5 text-xs font-semibold">
               <span className="flex shrink-0 gap-0.5" aria-hidden>
                 {tiers.map((dot) => (
                   <span key={dot} className={cn("size-2 rounded-full", TIER_STYLE[dot].dot)} />
@@ -134,8 +134,8 @@ export const ThermometerForm = ({ settings }: { settings: Schemas["Settings"] })
               </span>
               {label}
             </FieldLabel>
-            <div className="flex items-center gap-2 rounded-xl bg-card pl-3">
-              <span aria-hidden className="font-semibold text-muted-foreground">
+            <div className="bg-card flex items-center gap-2 rounded-xl pl-3">
+              <span aria-hidden className="text-muted-foreground font-semibold">
                 {symbol}
               </span>
               <AmountInput
@@ -143,7 +143,7 @@ export const ThermometerForm = ({ settings }: { settings: Schemas["Settings"] })
                 negative
                 value={draft[key]}
                 onValueChange={(value) => setDraft((current) => ({ ...current, [key]: value }))}
-                className="h-12 border-0 pl-0 font-bold text-base tabular-nums shadow-none md:text-base"
+                className="h-12 border-0 pl-0 text-base font-bold tabular-nums shadow-none md:text-base"
                 aria-invalid={index === wrong}
               />
             </div>
@@ -156,9 +156,9 @@ export const ThermometerForm = ({ settings }: { settings: Schemas["Settings"] })
           {problem}
         </p>
       )}
-      <section aria-label="Simulação" className="flex flex-col gap-4 rounded-2xl bg-muted p-4">
+      <section aria-label="Simulação" className="bg-muted flex flex-col gap-4 rounded-2xl p-4">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h3 className="font-semibold text-[11px] text-muted-foreground tracking-[0.12em]">
+          <h3 className="text-muted-foreground text-[11px] font-semibold tracking-[0.12em]">
             SIMULAÇÃO DE ESCALA TÉRMICA
           </h3>
           {tier && (
@@ -175,7 +175,7 @@ export const ThermometerForm = ({ settings }: { settings: Schemas["Settings"] })
             {balance !== undefined && tier && (
               <span
                 className={cn(
-                  "absolute top-0 whitespace-nowrap rounded-md bg-foreground px-1.5 py-0.5 font-bold text-[11px] text-background tabular-nums",
+                  "bg-foreground text-background absolute top-0 rounded-md px-1.5 py-0.5 text-[11px] font-bold whitespace-nowrap tabular-nums",
                   MARKER_PLACE[TIER_ORDER.indexOf(tier)],
                 )}
               >
@@ -194,15 +194,15 @@ export const ThermometerForm = ({ settings }: { settings: Schemas["Settings"] })
                 key={segment}
                 aria-current={active || undefined}
                 className={cn(
-                  "flex min-w-0 flex-col gap-0.5 rounded-xl border-2 bg-card p-2",
+                  "bg-card flex min-w-0 flex-col gap-0.5 rounded-xl border-2 p-2",
                   active ? "border-brand" : "border-transparent",
                 )}
               >
-                <span className={cn("flex items-center gap-1.5 font-semibold text-xs", TIER_STYLE[segment].label)}>
+                <span className={cn("flex items-center gap-1.5 text-xs font-semibold", TIER_STYLE[segment].label)}>
                   <span aria-hidden className={cn("size-2 shrink-0 rounded-full", TIER_STYLE[segment].dot)} />
                   {TIER_LABEL[segment]}
                 </span>
-                <span className="text-[11px] text-muted-foreground tabular-nums">{range}</span>
+                <span className="text-muted-foreground text-[11px] tabular-nums">{range}</span>
               </li>
             );
           })}

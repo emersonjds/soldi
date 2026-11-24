@@ -58,7 +58,7 @@ const Card = ({ heading, note, children }: { heading: string; note?: string; chi
 };
 
 const Bar = ({ width, className }: { width: string; className: string }) => (
-  <span aria-hidden className="h-2 overflow-hidden rounded-full bg-muted">
+  <span aria-hidden className="bg-muted h-2 overflow-hidden rounded-full">
     <span className={cn("block h-full rounded-full", className)} style={{ width }} />
   </span>
 );
@@ -82,7 +82,7 @@ const Split = ({ totals }: { totals: Report["totals"] }) => {
 
 const Summary = ({ data, first, last }: { data: Report; first: string; last: string }) => (
   <Card heading="Resumo do ano">
-    <p className="-mt-3 text-muted-foreground text-sm">{period(first, last)}</p>
+    <p className="text-muted-foreground -mt-3 text-sm">{period(first, last)}</p>
     <dl className="grid gap-4 lg:grid-cols-2">
       <div className="flex min-w-0 flex-col gap-1">
         <dt className="text-muted-foreground text-sm">Entradas</dt>
@@ -111,7 +111,7 @@ const TopMonths = ({ months }: { months: Report["top_months"] }) => {
           <li key={month.month}>
             <Link
               href={`/para-onde-vai?m=${month.month}`}
-              className="flex min-h-11 flex-col justify-center gap-1.5 rounded-lg py-1 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              className="focus-visible:ring-ring/50 flex min-h-11 flex-col justify-center gap-1.5 rounded-lg py-1 outline-none focus-visible:ring-[3px]"
             >
               <span className="flex flex-wrap items-baseline gap-x-3 text-sm">
                 <span className="text-muted-foreground tabular-nums">{index + 1}º</span>{" "}
@@ -175,7 +175,7 @@ const OnCard = ({ data }: { data: Report }) => {
         <ul className="flex flex-col gap-3">
           {data.cards.map((each) => (
             <li key={each.card_id} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-              <CreditCard aria-hidden className="size-5 text-muted-foreground" />
+              <CreditCard aria-hidden className="text-muted-foreground size-5" />
               <span className="grow font-medium">{each.name}</span>
               <Money amount={each.amount} outflow className="ml-auto font-semibold" />
             </li>
@@ -191,7 +191,7 @@ const nothing = ({ income, outflow, withdrawn }: Report["totals"]) =>
 
 const Body = ({ data }: { data: Report }) => {
   if (!data.first_month || !data.last_month || nothing(data.totals))
-    return <p className="py-6 text-center text-muted-foreground">Nada para mostrar em {data.year}.</p>;
+    return <p className="text-muted-foreground py-6 text-center">Nada para mostrar em {data.year}.</p>;
   return (
     <>
       <Summary data={data} first={data.first_month} last={data.last_month} />

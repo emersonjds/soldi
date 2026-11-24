@@ -23,7 +23,7 @@ export const TierPill = ({ tier, amount, forecast = false, size = "md", classNam
   return (
     <span
       className={cn(
-        "inline-flex shrink-0 items-center rounded-full font-semibold leading-5",
+        "inline-flex shrink-0 items-center rounded-full leading-5 font-semibold",
         SIZE[size],
         TIER_STYLE[tier].pill,
         className,

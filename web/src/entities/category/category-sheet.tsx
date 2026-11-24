@@ -317,7 +317,7 @@ const CategoryForm = ({
           value={sub ? "sub" : "top"}
           onValueChange={(value) => value && setSub(value === "sub")}
           aria-label="Grupo ou subcategoria"
-          className="grid w-full grid-cols-2 rounded-2xl bg-muted p-1"
+          className="bg-muted grid w-full grid-cols-2 rounded-2xl p-1"
         >
           <ToggleGroupItem value="top" className={segment}>
             Grupo
@@ -370,7 +370,7 @@ const CategoryForm = ({
             value={formKind}
             onValueChange={askKind}
             aria-labelledby="category-kind"
-            className="grid w-full grid-cols-2 rounded-2xl bg-muted p-1"
+            className="bg-muted grid w-full grid-cols-2 rounded-2xl p-1"
           >
             {OUTFLOW_KINDS.map((value) => (
               <ToggleGroupItem key={value} value={value} className={kindChip}>
@@ -431,7 +431,7 @@ const CategoryForm = ({
       )}
       {!category && sub && !presetParent && (
         <div className="flex flex-col gap-2">
-          <span id="category-parents" className="font-semibold text-sm">
+          <span id="category-parents" className="text-sm font-semibold">
             Dentro de
           </span>
           {parents.length > 8 && (
@@ -448,7 +448,7 @@ const CategoryForm = ({
             {shownParents.map((each) => (
               <label
                 key={each.id}
-                className="flex min-h-11 cursor-pointer items-center gap-3 rounded-xl px-2 has-checked:bg-secondary has-focus-visible:outline-2 has-focus-visible:outline-ring"
+                className="has-checked:bg-secondary has-focus-visible:outline-ring flex min-h-11 cursor-pointer items-center gap-3 rounded-xl px-2 has-focus-visible:outline-2"
               >
                 <input
                   type="radio"
@@ -506,7 +506,7 @@ const CategoryForm = ({
               <button
                 type="button"
                 onClick={() => setDeadline("")}
-                className="inline-flex min-h-11 items-center self-start font-semibold text-primary text-sm underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring"
+                className="text-primary focus-visible:outline-ring inline-flex min-h-11 items-center self-start text-sm font-semibold underline-offset-4 hover:underline focus-visible:outline-2"
               >
                 Remover prazo
               </button>
@@ -538,7 +538,7 @@ const CategoryForm = ({
       <div className="flex items-center gap-3">
         <CategoryIcon icon={chosenIcon} color={chosenColor ?? ""} />
         <div className="flex min-w-0 flex-1 flex-col">
-          <span className="font-semibold text-base">{needsColor ? "Ícone e cor" : "Ícone"}</span>
+          <span className="text-base font-semibold">{needsColor ? "Ícone e cor" : "Ícone"}</span>
           {parent && <span className="text-muted-foreground text-sm">{`Usa a cor de ${parent.name}`}</span>}
         </div>
       </div>
@@ -547,10 +547,10 @@ const CategoryForm = ({
       {needsColor && !full && (
         <fieldset aria-labelledby="category-color" className="flex flex-col gap-2">
           <div className="flex items-center justify-between gap-2">
-            <span id="category-color" className="font-semibold text-sm">
+            <span id="category-color" className="text-sm font-semibold">
               Cor
             </span>
-            <span className="font-semibold text-primary text-sm">
+            <span className="text-primary text-sm font-semibold">
               {COLOR_NAMES.find(([token]) => token === chosenColor)?.[1]}
             </span>
           </div>
@@ -558,7 +558,7 @@ const CategoryForm = ({
             {swatches.map(([token, label]) => (
               <label
                 key={token}
-                className="group flex size-11 cursor-pointer items-center justify-center rounded-full has-focus-visible:outline-2 has-focus-visible:outline-ring"
+                className="group has-focus-visible:outline-ring flex size-11 cursor-pointer items-center justify-center rounded-full has-focus-visible:outline-2"
               >
                 <input
                   type="radio"
@@ -571,7 +571,7 @@ const CategoryForm = ({
                 <span
                   aria-hidden
                   className={cn(
-                    "size-8 rounded-full transition-transform group-has-checked:scale-110 group-has-checked:ring-2 group-has-checked:ring-primary group-has-checked:ring-offset-2 group-has-checked:ring-offset-background",
+                    "group-has-checked:ring-primary group-has-checked:ring-offset-background size-8 rounded-full transition-transform group-has-checked:scale-110 group-has-checked:ring-2 group-has-checked:ring-offset-2",
                     categoryBg(token),
                   )}
                 />
@@ -593,7 +593,7 @@ const CategoryForm = ({
           <Button
             type="button"
             variant="ghost"
-            className="min-h-11 text-base text-destructive hover:text-destructive"
+            className="text-destructive hover:text-destructive min-h-11 text-base"
             onClick={() => onArchive(category)}
           >
             <Trash2 className="size-5" />

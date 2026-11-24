@@ -58,13 +58,13 @@ export const ConfirmForm = () => {
           ref={focus}
           tabIndex={-1}
           role="alert"
-          className="rounded-xl bg-expense-soft px-4 py-3 font-medium text-sm text-tier-red-foreground"
+          className="bg-expense-soft text-tier-red-foreground rounded-xl px-4 py-3 text-sm font-medium"
         >
           Este link expirou ou já foi usado.
         </p>
         <Link
           href="/esqueci-senha"
-          className="inline-flex min-h-11 items-center self-center font-semibold text-primary"
+          className="text-primary inline-flex min-h-11 items-center self-center font-semibold"
         >
           Pedir outro link
         </Link>

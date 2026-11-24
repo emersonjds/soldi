@@ -79,7 +79,7 @@ const Lists = ({
     <span className="flex min-w-0 flex-1 items-center gap-3">
       <CategoryIcon icon={category.icon} color={category.color} className="size-8 shrink-0 [&_svg]:size-4" />
       <span className="flex min-w-0 flex-col">
-        <span className="truncate font-medium text-base">{category.name}</span>
+        <span className="truncate text-base font-medium">{category.name}</span>
         {isPinned(category) && kindsOf(category, all).length > 1 && (
           <span className="text-muted-foreground text-xs">
             Também fixada em{" "}
@@ -97,7 +97,7 @@ const Lists = ({
   return (
     <>
       <section className="flex flex-col gap-2">
-        <h3 id={fixedId} className="font-semibold text-sm">
+        <h3 id={fixedId} className="text-sm font-semibold">
           Fixadas
         </h3>
         {pinnedTops.length === 0 ? (
@@ -147,7 +147,7 @@ const Lists = ({
         )}
       </section>
       <section className="flex flex-col gap-2">
-        <h3 id={othersId} className="font-semibold text-sm">
+        <h3 id={othersId} className="text-sm font-semibold">
           Outras
         </h3>
         {full && <p className="text-muted-foreground text-sm">Limite de 8 fixadas.</p>}

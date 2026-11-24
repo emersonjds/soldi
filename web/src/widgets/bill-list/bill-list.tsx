@@ -85,20 +85,20 @@ const Row = ({
   return (
     <li
       className={cn(
-        "grid grid-cols-[auto_1fr_auto] items-center gap-x-3 gap-y-2 border-border/60 border-t px-3 py-3 first:border-t-0 lg:px-6",
+        "border-border/60 grid grid-cols-[auto_1fr_auto] items-center gap-x-3 gap-y-2 border-t px-3 py-3 first:border-t-0 lg:px-6",
         COLUMNS,
       )}
     >
       <button
         type="button"
         onClick={onEdit}
-        className="col-span-3 flex min-h-11 min-w-0 items-center gap-3 rounded-xl text-left focus-visible:outline-2 focus-visible:outline-ring lg:col-span-1"
+        className="focus-visible:outline-ring col-span-3 flex min-h-11 min-w-0 items-center gap-3 rounded-xl text-left focus-visible:outline-2 lg:col-span-1"
       >
         <CategoryIcon icon={category?.icon ?? ""} color={category?.color ?? ""} />
         <span className="flex min-w-0 flex-col">
           <span className="flex min-w-0 flex-wrap items-center gap-x-2">
             <span
-              className={cn("truncate font-semibold text-base", !active && "text-muted-foreground")}
+              className={cn("truncate text-base font-semibold", !active && "text-muted-foreground")}
               title={bill.name}
             >
               {bill.name}
@@ -106,28 +106,28 @@ const Row = ({
             {end && (
               <>
                 {" "}
-                <span className="whitespace-nowrap text-muted-foreground text-sm">· {end}</span>
+                <span className="text-muted-foreground text-sm whitespace-nowrap">· {end}</span>
               </>
             )}
             {bill.variable && (
               <>
                 {" "}
-                <span className="whitespace-nowrap text-muted-foreground text-sm">· valor variável</span>
+                <span className="text-muted-foreground text-sm whitespace-nowrap">· valor variável</span>
               </>
             )}
             {!active && !parcelado && (
-              <span className={cn(statusPill, "min-h-6 shrink-0 bg-muted text-muted-foreground")}>Pausada</span>
+              <span className={cn(statusPill, "bg-muted text-muted-foreground min-h-6 shrink-0")}>Pausada</span>
             )}
           </span>
-          {label && <span className="truncate text-muted-foreground text-xs">{label}</span>}
+          {label && <span className="text-muted-foreground truncate text-xs">{label}</span>}
         </span>
       </button>
       {hasAmount(bill) ? (
         <>
-          <span className={cn(pill, "justify-self-start bg-muted text-muted-foreground")}>
+          <span className={cn(pill, "bg-muted text-muted-foreground justify-self-start")}>
             Dia {String(bill.due_day).padStart(2, "0")}
           </span>
-          <span className="justify-self-end whitespace-nowrap text-base leading-6">
+          <span className="justify-self-end text-base leading-6 whitespace-nowrap">
             {bill.variable && <span aria-hidden>≈ </span>}
             <Money
               amount={bill.amount}
@@ -137,7 +137,7 @@ const Row = ({
           </span>
         </>
       ) : (
-        <span className="col-span-2 text-muted-foreground text-sm">
+        <span className="text-muted-foreground col-span-2 text-sm">
           Fecha dia {bill.closing_day} · vence dia {bill.due_day}
         </span>
       )}
@@ -158,7 +158,7 @@ const Row = ({
               variant="ghost"
               size="icon"
               aria-label={`Mais ações de ${bill.name}`}
-              className="size-11 shrink-0 rounded-full text-muted-foreground"
+              className="text-muted-foreground size-11 shrink-0 rounded-full"
             >
               <MoreVertical className="size-5" />
             </Button>
@@ -231,11 +231,11 @@ const NextDue = ({ rows: month, today }: { rows: Schemas["BillOfMonth"][]; today
     >
       {next ? (
         <p className="flex flex-col gap-1">
-          <span className="truncate font-bold text-base" title={next.name}>
+          <span className="truncate text-base font-bold" title={next.name}>
             {next.name}
           </span>
-          <Money amount={next.amount} className="font-bold text-lg" />
-          <span className="mt-2 flex items-center gap-1.5 text-muted-foreground text-sm">
+          <Money amount={next.amount} className="text-lg font-bold" />
+          <span className="text-muted-foreground mt-2 flex items-center gap-1.5 text-sm">
             <CalendarDays className="size-4" aria-hidden />
             Vence no dia {next.due_date.slice(8)}
           </span>
@@ -264,7 +264,7 @@ const Summary = ({ active, month }: { active: (Bill & { amount: string })[]; mon
         title={
           <>
             Total de Despesas Fixas
-            <span className={cn(pill, "ml-auto bg-secondary text-primary")}>
+            <span className={cn(pill, "bg-secondary text-primary ml-auto")}>
               {active.length === 1 ? "1 conta" : `${active.length} contas`}
             </span>
           </>
@@ -275,7 +275,7 @@ const Summary = ({ active, month }: { active: (Bill & { amount: string })[]; mon
           <p className="mt-3 flex items-center gap-2 text-sm">
             {income > 0 ? (
               <>
-                <span className="size-2 shrink-0 rounded-full bg-expense" aria-hidden />
+                <span className="bg-expense size-2 shrink-0 rounded-full" aria-hidden />
                 <span>
                   Compromete <strong>{wholeShare(total, income)}%</strong> da renda líquida
                 </span>
@@ -334,7 +334,7 @@ export const BillList = ({ month }: { month: string }) => {
     const commit = () => {
       if (done) return;
       done = true;
-      send(bill, false);
+      void send(bill, false);
     };
     toast("Conta pausada", {
       duration: 5000,
@@ -353,7 +353,7 @@ export const BillList = ({ month }: { month: string }) => {
   const toggle = (bill: Bill, active: boolean) => {
     setToggled((current) => ({ ...current, [bill.id]: active }));
     if (!active) return pauseLater(bill);
-    send(bill, true, () =>
+    void send(bill, true, () =>
       toast("Conta reativada", {
         duration: 5000,
         action: { label: "Desfazer", onClick: () => toggle(bill, false) },
@@ -375,7 +375,7 @@ export const BillList = ({ month }: { month: string }) => {
 
   const list = (
     <section className="flex min-w-0 flex-col gap-4">
-      <div className="flex flex-col gap-3 rounded-2xl bg-card p-2 shadow-sm lg:flex-row lg:items-center lg:justify-between">
+      <div className="bg-card flex flex-col gap-3 rounded-2xl p-2 shadow-sm lg:flex-row lg:items-center lg:justify-between">
         <Tabs value={filter} onValueChange={choose}>
           <TabsList className="h-auto w-full lg:w-auto">
             <TabsTrigger value="all" className="min-h-11 px-3 text-sm">
@@ -391,7 +391,7 @@ export const BillList = ({ month }: { month: string }) => {
         </Tabs>
         <label
           htmlFor="bills-sort"
-          className="flex items-center gap-2 px-2 font-semibold text-muted-foreground text-xs uppercase tracking-[0.12em]"
+          className="text-muted-foreground flex items-center gap-2 px-2 text-xs font-semibold tracking-[0.12em] uppercase"
         >
           Ordenação:
           <NativeSelect
@@ -401,7 +401,7 @@ export const BillList = ({ month }: { month: string }) => {
             onChange={(event) => isSort(event.target.value) && setSort(event.target.value)}
             className={cn(
               select,
-              "normal-case tracking-normal [&_select]:border-0 [&_select]:font-semibold [&_select]:text-foreground",
+              "[&_select]:text-foreground tracking-normal normal-case [&_select]:border-0 [&_select]:font-semibold",
             )}
           >
             <NativeSelectOption value="due">Vencimento</NativeSelectOption>
@@ -410,10 +410,10 @@ export const BillList = ({ month }: { month: string }) => {
           </NativeSelect>
         </label>
       </div>
-      <div className="flex flex-col rounded-2xl bg-card shadow-sm">
+      <div className="bg-card flex flex-col rounded-2xl shadow-sm">
         <div
           className={cn(
-            "hidden gap-x-3 rounded-t-2xl bg-muted px-6 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-[0.08em] lg:grid",
+            "bg-muted text-muted-foreground hidden gap-x-3 rounded-t-2xl px-6 py-3 text-xs font-semibold tracking-[0.08em] uppercase lg:grid",
             COLUMNS,
           )}
         >
@@ -423,7 +423,7 @@ export const BillList = ({ month }: { month: string }) => {
           <span className="text-right">Ação / Status</span>
         </div>
         {shown.length === 0 ? (
-          <p className="px-6 py-8 text-center text-muted-foreground">
+          <p className="text-muted-foreground px-6 py-8 text-center">
             {filter === "paused" ? "Nenhuma conta pausada." : "Nenhuma conta ativa."}
           </p>
         ) : (
@@ -447,11 +447,11 @@ export const BillList = ({ month }: { month: string }) => {
             })}
           </ul>
         )}
-        <footer className="flex flex-col gap-2 border-border/60 border-t px-6 py-4 text-muted-foreground text-xs sm:flex-row sm:items-center sm:justify-between">
+        <footer className="border-border/60 text-muted-foreground flex flex-col gap-2 border-t px-6 py-4 text-xs sm:flex-row sm:items-center sm:justify-between">
           <span>
             Mostrando {shown.length} de {visible.length} contas fixas configuradas
           </span>
-          <span className="flex items-center gap-1.5 font-medium text-income-text">
+          <span className="text-income-text flex items-center gap-1.5 font-medium">
             <ShieldCheck className="size-4" aria-hidden />
             Sincronizado com projeção de caixa
           </span>
@@ -464,14 +464,14 @@ export const BillList = ({ month }: { month: string }) => {
     <div className="flex flex-col gap-6">
       <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div className="flex flex-col gap-1">
-          <h1 className="font-bold text-[22px] leading-7 lg:text-[28px] lg:leading-9">Contas Fixas Recorrentes</h1>
+          <h1 className="text-[22px] leading-7 font-bold lg:text-[28px] lg:leading-9">Contas Fixas Recorrentes</h1>
           <p className="text-muted-foreground">Despesas mensais que compõem sua base fixa de orçamento.</p>
         </div>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           {visible.length > 0 && (
             <label
               htmlFor="bills-status"
-              className="flex items-center gap-2 rounded-xl bg-card px-3 text-base shadow-sm"
+              className="bg-card flex items-center gap-2 rounded-xl px-3 text-base shadow-sm"
             >
               Status:
               <NativeSelect
@@ -496,8 +496,8 @@ export const BillList = ({ month }: { month: string }) => {
       {visible.length > 0 && <Summary active={active.filter(hasAmount)} month={month} />}
       <div className="flex flex-col gap-6 xl:grid xl:grid-cols-[minmax(0,1fr)_22rem] xl:items-start">
         {visible.length === 0 ? (
-          <div className="flex flex-col items-center gap-3 rounded-2xl bg-card px-4 py-10 text-center shadow-sm">
-            <span className="flex size-12 items-center justify-center rounded-full bg-secondary text-primary">
+          <div className="bg-card flex flex-col items-center gap-3 rounded-2xl px-4 py-10 text-center shadow-sm">
+            <span className="bg-secondary text-primary flex size-12 items-center justify-center rounded-full">
               <ReceiptText className="size-6" aria-hidden />
             </span>
             <p className="text-muted-foreground">Nenhuma conta fixa ainda</p>

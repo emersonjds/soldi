@@ -17,9 +17,9 @@ import { VerifyEmailButton } from "@/features/verify-email/request-button";
 import { PageError } from "@/shared/ui/page-state";
 
 const Tile = ({ label, value, children }: { label: string; value: string; children?: ReactNode }) => (
-  <div className="flex min-w-0 flex-col items-start gap-1 rounded-2xl bg-muted p-4">
-    <span className="font-semibold text-[11px] text-muted-foreground tracking-[0.12em]">{label}</span>
-    <p className="max-w-full truncate font-semibold text-base">{value}</p>
+  <div className="bg-muted flex min-w-0 flex-col items-start gap-1 rounded-2xl p-4">
+    <span className="text-muted-foreground text-[11px] font-semibold tracking-[0.12em]">{label}</span>
+    <p className="max-w-full truncate text-base font-semibold">{value}</p>
     {children}
   </div>
 );
@@ -28,7 +28,7 @@ const Tile = ({ label, value, children }: { label: string; value: string; childr
 const FormDialog = ({ action, children }: { action: string; children: ReactNode }) => (
   <Dialog>
     <DialogTrigger asChild>
-      <Button variant="link" className="min-h-11 px-0 font-semibold text-primary text-sm">
+      <Button variant="link" className="text-primary min-h-11 px-0 text-sm font-semibold">
         {action}
       </Button>
     </DialogTrigger>
@@ -57,7 +57,7 @@ export const AccountSection = () => {
           </Tile>
           <Tile label="E-MAIL CADASTRADO" value={me.data.email}>
             {me.data.email_verified ? (
-              <Badge className="h-6 bg-income-soft text-income-text">
+              <Badge className="bg-income-soft text-income-text h-6">
                 <BadgeCheck aria-hidden />
                 Verificado
               </Badge>

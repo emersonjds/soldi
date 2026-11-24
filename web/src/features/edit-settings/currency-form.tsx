@@ -37,12 +37,12 @@ export const CurrencyForm = ({ settings }: { settings: Schemas["Settings"] }) =>
 
   return (
     <fieldset className="flex min-w-0 flex-col gap-3">
-      <legend className="mb-3 font-semibold text-sm">Moeda Base do App</legend>
+      <legend className="mb-3 text-sm font-semibold">Moeda Base do App</legend>
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         {CURRENCIES.map(({ code, name, caption }) => (
           <label
             key={code}
-            className="flex min-h-14 cursor-pointer items-center gap-3 rounded-xl px-3 py-2 transition-colors hover:bg-muted has-checked:bg-accent has-focus-visible:ring-3 has-focus-visible:ring-ring/50 motion-reduce:transition-none"
+            className="hover:bg-muted has-checked:bg-accent has-focus-visible:ring-ring/50 flex min-h-14 cursor-pointer items-center gap-3 rounded-xl px-3 py-2 transition-colors has-focus-visible:ring-3 motion-reduce:transition-none"
           >
             <input
               type="radio"
@@ -52,10 +52,10 @@ export const CurrencyForm = ({ settings }: { settings: Schemas["Settings"] }) =>
               checked={currency === code}
               disabled={save.isPending}
               onChange={() => pick(code)}
-              className="size-5 shrink-0 accent-brand"
+              className="accent-brand size-5 shrink-0"
             />
             <span className="flex min-w-0 flex-col">
-              <span className="font-semibold text-sm">{name}</span>
+              <span className="text-sm font-semibold">{name}</span>
               <span className="text-muted-foreground text-xs">{caption}</span>
             </span>
           </label>

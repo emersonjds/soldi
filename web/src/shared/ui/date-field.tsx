@@ -49,11 +49,11 @@ export const DateField = ({
         id={id}
         aria-label={shown ? `${label}, ${shown}` : label}
         className={cn(
-          "flex min-h-11 w-full items-center gap-2 rounded-lg border border-input bg-transparent px-3 text-left text-base tabular-nums transition-colors focus-visible:border-ring focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+          "border-input focus-visible:border-ring focus-visible:ring-ring/50 flex min-h-11 w-full items-center gap-2 rounded-lg border bg-transparent px-3 text-left text-base tabular-nums transition-colors focus-visible:ring-3 focus-visible:outline-none",
           className,
         )}
       >
-        <CalendarDays className="size-5 shrink-0 text-muted-foreground" aria-hidden />
+        <CalendarDays className="text-muted-foreground size-5 shrink-0" aria-hidden />
         {shown ?? <span className="text-muted-foreground">{placeholder}</span>}
       </PopoverTrigger>
       <PopoverContent

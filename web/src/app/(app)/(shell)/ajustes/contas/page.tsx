@@ -27,7 +27,7 @@ const ContasPage = () => (
         </BreadcrumbItem>
         <BreadcrumbSeparator />
         <BreadcrumbItem>
-          <BreadcrumbPage className="font-medium text-primary">Contas Fixas</BreadcrumbPage>
+          <BreadcrumbPage className="text-primary font-medium">Contas Fixas</BreadcrumbPage>
         </BreadcrumbItem>
       </BreadcrumbList>
     </Breadcrumb>

@@ -39,7 +39,7 @@ export const ThermometerStrip = ({
             {marker && current && (
               <span
                 className={cn(
-                  "absolute bottom-full mb-1 hidden whitespace-nowrap rounded-md px-1.5 py-0.5 font-bold text-[10px] leading-4 shadow-xs lg:block",
+                  "absolute bottom-full mb-1 hidden rounded-md px-1.5 py-0.5 text-[10px] leading-4 font-bold whitespace-nowrap shadow-xs lg:block",
                   TIER_STYLE[segment].pill,
                   MARKER_PLACE[index],
                 )}
@@ -57,7 +57,7 @@ export const ThermometerStrip = ({
             />
             <span
               className={cn(
-                "max-w-full hyphens-auto break-words text-center text-[11px] leading-3.5",
+                "max-w-full text-center text-[11px] leading-3.5 break-words hyphens-auto",
                 current ? "font-bold" : "font-medium",
                 marker && [TIER_STYLE[segment].label, "lg:text-muted-foreground"],
                 !marker && (current ? "text-foreground" : "text-muted-foreground"),

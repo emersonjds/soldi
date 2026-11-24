@@ -38,7 +38,7 @@ export const DateChips = ({
 
   return (
     <fieldset className="flex flex-col gap-2">
-      <legend className={cn("mb-2 font-semibold text-sm", legendClassName)}>{legend}</legend>
+      <legend className={cn("mb-2 text-sm font-semibold", legendClassName)}>{legend}</legend>
       <div className="flex flex-wrap gap-2">
         {pick(today, isLg ? `Hoje (${shortDay(today)})` : "Hoje")}
         {pick(yesterday, "Ontem")}
@@ -49,7 +49,7 @@ export const DateChips = ({
           onChange={onChange}
           min={min}
           max={max}
-          className="w-auto rounded-full border-0 bg-muted px-4 font-medium"
+          className="bg-muted w-auto rounded-full border-0 px-4 font-medium"
         />
       </div>
     </fieldset>

@@ -51,7 +51,7 @@ const Figure = ({
       onClick={onClick}
       className={cn(
         figure,
-        "min-h-11 cursor-pointer rounded-xl p-1 transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring",
+        "hover:bg-muted focus-visible:outline-ring min-h-11 cursor-pointer rounded-xl p-1 transition-colors focus-visible:outline-2",
       )}
     >
       {body}
@@ -66,7 +66,7 @@ const amount = "whitespace-nowrap font-bold text-sm leading-5 tracking-tight sm:
 const MonthSummary = ({ view, onLaunch }: { view: MonthView; onLaunch: (kind: "income" | "bill") => void }) => (
   <section
     aria-label="Resumo do mês"
-    className="relative mx-2 -mt-10 grid grid-cols-3 gap-2 rounded-2xl bg-card p-4 shadow-sm sm:mx-4 lg:hidden"
+    className="bg-card relative mx-2 -mt-10 grid grid-cols-3 gap-2 rounded-2xl p-4 shadow-sm sm:mx-4 lg:hidden"
   >
     <Figure
       label="Entradas"
@@ -147,19 +147,19 @@ export const MonthHero = ({
   const first = useMe().data?.name.trim().split(/\s+/)[0] ?? "";
   return (
     <section aria-label="Saldo hoje" className={cn("flex flex-col", className)}>
-      <div className="flex flex-col gap-4 rounded-3xl bg-linear-to-br from-hero-from to-hero-to px-4 pt-5 pb-14 text-hero-foreground lg:gap-6 lg:bg-card lg:bg-none lg:p-6 lg:text-card-foreground lg:shadow-sm">
+      <div className="from-hero-from to-hero-to text-hero-foreground lg:bg-card lg:text-card-foreground flex flex-col gap-4 rounded-3xl bg-linear-to-br px-4 pt-5 pb-14 lg:gap-6 lg:bg-none lg:p-6 lg:shadow-sm">
         <div className="flex items-center gap-2 lg:hidden">
           {first && (
-            <span aria-hidden className={cn(circle, "bg-white/15 font-semibold text-lg")}>
+            <span aria-hidden className={cn(circle, "bg-white/15 text-lg font-semibold")}>
               {first.charAt(0).toUpperCase()}
             </span>
           )}
-          <p className="font-semibold text-xl leading-7">{first ? `Olá, ${first}` : "Olá"}</p>
+          <p className="text-xl leading-7 font-semibold">{first ? `Olá, ${first}` : "Olá"}</p>
         </div>
         <div className="lg:hidden">{switcher}</div>
         <div className="flex flex-col items-center gap-4 lg:flex-row lg:justify-between">
           <div className="flex flex-col items-center gap-2 lg:items-start lg:gap-1">
-            <p className="font-semibold text-[11px] text-hero-foreground/80 uppercase leading-4 tracking-[0.12em] lg:text-muted-foreground">
+            <p className="text-hero-foreground/80 lg:text-muted-foreground text-[11px] leading-4 font-semibold tracking-[0.12em] uppercase">
               Saldo hoje<span className="hidden lg:inline"> em conta</span>
             </p>
             <div className="flex flex-col items-center gap-3 lg:flex-row lg:flex-wrap lg:items-baseline">
@@ -174,10 +174,10 @@ export const MonthHero = ({
               <TierPill tier={view.balance_today_tier} />
             </div>
           </div>
-          <div className="hidden items-center gap-3 rounded-xl bg-muted px-4 py-2.5 lg:flex">
+          <div className="bg-muted hidden items-center gap-3 rounded-xl px-4 py-2.5 lg:flex">
             <div className="flex flex-col">
-              <span className="font-medium text-muted-foreground text-xs leading-4">Projetado no fim do mês</span>
-              <Money amount={view.projected_balance} className="font-bold text-lg leading-7" />
+              <span className="text-muted-foreground text-xs leading-4 font-medium">Projetado no fim do mês</span>
+              <Money amount={view.projected_balance} className="text-lg leading-7 font-bold" />
             </div>
             <TierPill tier={view.projected_tier} size="sm" />
           </div>
@@ -210,21 +210,21 @@ export const ThermometerCard = ({ view, className }: { view: MonthView; classNam
   return (
     <section
       aria-labelledby="thermometer-title"
-      className={cn("flex flex-col gap-5 rounded-2xl bg-card p-4 shadow-sm lg:p-6", className)}
+      className={cn("bg-card flex flex-col gap-5 rounded-2xl p-4 shadow-sm lg:p-6", className)}
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 id="thermometer-title" className="flex items-center gap-3 font-semibold text-lg leading-6">
-          <span className="flex size-10 items-center justify-center rounded-full bg-secondary text-primary">
+        <h2 id="thermometer-title" className="flex items-center gap-3 text-lg leading-6 font-semibold">
+          <span className="bg-secondary text-primary flex size-10 items-center justify-center rounded-full">
             <Gauge className="size-5" aria-hidden />
           </span>
           Termômetro do Mês
         </h2>
         {spent && (
           <>
-            <span className="hidden font-semibold text-muted-foreground text-xs lg:inline">{spent} Gasto</span>
+            <span className="text-muted-foreground hidden text-xs font-semibold lg:inline">{spent} Gasto</span>
             <span
               className={cn(
-                "rounded-full px-2 py-0.5 font-bold text-xs lg:hidden",
+                "rounded-full px-2 py-0.5 text-xs font-bold lg:hidden",
                 TIER_STYLE[view.balance_today_tier].pill,
               )}
             >
@@ -233,11 +233,11 @@ export const ThermometerCard = ({ view, className }: { view: MonthView; classNam
           </>
         )}
       </div>
-      <dl className="hidden flex-wrap justify-between gap-x-4 gap-y-2 rounded-xl bg-muted p-3 text-sm lg:flex">
+      <dl className="bg-muted hidden flex-wrap justify-between gap-x-4 gap-y-2 rounded-xl p-3 text-sm lg:flex">
         <div className="flex flex-col">
           <dt className="text-muted-foreground text-xs">Entradas</dt>
           <dd>
-            <Money amount={income} className="font-bold text-income-text" />
+            <Money amount={income} className="text-income-text font-bold" />
           </dd>
         </div>
         <div className="flex flex-col">
@@ -250,7 +250,7 @@ export const ThermometerCard = ({ view, className }: { view: MonthView; classNam
           <dt className="text-muted-foreground text-xs">Resultado</dt>
           <dd>
             {result < 0 ? (
-              <span className="whitespace-nowrap font-bold text-expense tabular-nums">
+              <span className="text-expense font-bold whitespace-nowrap tabular-nums">
                 - {formatMoney(fromCents(-result), currency)}
               </span>
             ) : (
@@ -260,8 +260,8 @@ export const ThermometerCard = ({ view, className }: { view: MonthView; classNam
         </div>
       </dl>
       <ThermometerStrip tier={view.balance_today_tier} marker />
-      <p className="flex items-start gap-2.5 rounded-xl bg-muted p-3 text-muted-foreground text-sm leading-6">
-        <CircleCheck className="mt-0.5 size-5 shrink-0 text-income lg:hidden" aria-hidden />
+      <p className="bg-muted text-muted-foreground flex items-start gap-2.5 rounded-xl p-3 text-sm leading-6">
+        <CircleCheck className="text-income mt-0.5 size-5 shrink-0 lg:hidden" aria-hidden />
         <span>
           {spent ? (
             <>

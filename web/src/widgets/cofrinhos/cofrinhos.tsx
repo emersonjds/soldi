@@ -52,7 +52,7 @@ const Movements = ({ categoryId, nameOf }: MovementsProps) => {
       </div>
     );
   if (movements.data.length === 0)
-    return <p className="py-4 text-center text-muted-foreground">Nada guardado aqui ainda</p>;
+    return <p className="text-muted-foreground py-4 text-center">Nada guardado aqui ainda</p>;
 
   return (
     <ul aria-label="Movimentos" className="flex flex-col divide-y">
@@ -70,12 +70,12 @@ const Movements = ({ categoryId, nameOf }: MovementsProps) => {
               {resgate ? <ArrowUpFromLine className="size-4" /> : <ArrowDownToLine className="size-4" />}
             </span>
             <span className="flex min-w-0 flex-1 flex-col">
-              <span className="font-medium text-base">{resgate ? "Resgatado" : "Guardado"}</span>
-              <span className="truncate text-muted-foreground text-xs">
+              <span className="text-base font-medium">{resgate ? "Resgatado" : "Guardado"}</span>
+              <span className="text-muted-foreground truncate text-xs">
                 {[shortDay(movement.date), nameOf?.(movement), movement.note].filter(Boolean).join(" · ")}
               </span>
             </span>
-            <Money amount={movement.amount} income={resgate} className="font-semibold text-base" />
+            <Money amount={movement.amount} income={resgate} className="text-base font-semibold" />
           </li>
         );
       })}
@@ -216,7 +216,7 @@ const GridControls = ({ filter, list, onFilter, onList }: ControlsProps) => {
             type="button"
             variant="ghost"
             aria-label={`Filtrar: ${active}`}
-            className="min-h-11 min-w-11 rounded-full px-3 text-base text-muted-foreground"
+            className="text-muted-foreground min-h-11 min-w-11 rounded-full px-3 text-base"
           >
             <ListFilter className="size-5" />
             {filter !== "all" && active}
@@ -243,7 +243,7 @@ const GridControls = ({ filter, list, onFilter, onList }: ControlsProps) => {
         size="icon"
         aria-label="Ver em lista"
         aria-pressed={list}
-        className="size-11 rounded-full text-muted-foreground"
+        className="text-muted-foreground size-11 rounded-full"
         onClick={onList}
       >
         {list ? <LayoutGrid className="size-5" /> : <List className="size-5" />}
@@ -345,7 +345,7 @@ export const CofrinhosView = ({ month }: { month?: string }) => {
   const body = () => {
     if (cofrinhos.isError)
       return (
-        <div className="rounded-2xl bg-card shadow-sm">
+        <div className="bg-card rounded-2xl shadow-sm">
           <PageError message="Não foi possível carregar os cofrinhos." onRetry={() => cofrinhos.refetch()} />
         </div>
       );
@@ -367,10 +367,10 @@ export const CofrinhosView = ({ month }: { month?: string }) => {
         />
         <section aria-labelledby="cofrinhos-grid-title" className="flex flex-col gap-3">
           <div className="flex items-center gap-2">
-            <h2 className="flex items-center gap-2 font-semibold text-lg leading-6">
+            <h2 className="flex items-center gap-2 text-lg leading-6 font-semibold">
               <span id="cofrinhos-grid-title">Seus Cofrinhos</span>{" "}
               {goals.length > 0 && (
-                <span className="rounded-full bg-muted px-2 py-0.5 font-semibold text-muted-foreground text-xs">
+                <span className="bg-muted text-muted-foreground rounded-full px-2 py-0.5 text-xs font-semibold">
                   {goals.length} {goals.length === 1 ? "ativo" : "ativos"}
                 </span>
               )}
@@ -412,10 +412,10 @@ export const CofrinhosView = ({ month }: { month?: string }) => {
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="flex flex-col gap-1">
-          <p className="font-semibold text-muted-foreground text-xs uppercase tracking-wider">
+          <p className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
             POUPANÇA ATIVA & FUTURO
           </p>
-          <h1 className="font-bold text-[22px] leading-7 lg:text-[28px] lg:leading-9">Cofrinhos & Metas de Poupança</h1>
+          <h1 className="text-[22px] leading-7 font-bold lg:text-[28px] lg:leading-9">Cofrinhos & Metas de Poupança</h1>
         </div>
         <BrandButton className="w-auto px-5" onClick={create}>
           <Plus className="size-5" />

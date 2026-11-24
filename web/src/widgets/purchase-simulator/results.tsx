@@ -112,15 +112,15 @@ export const Results = ({ rows, count, total, name, onRetest }: Props) => {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex min-w-0 items-start gap-3">
             {first ? (
-              <TriangleAlert aria-hidden className="mt-1 size-6 shrink-0 text-expense-text" />
+              <TriangleAlert aria-hidden className="text-expense-text mt-1 size-6 shrink-0" />
             ) : (
-              <CircleCheck aria-hidden className="mt-1 size-6 shrink-0 text-income-text" />
+              <CircleCheck aria-hidden className="text-income-text mt-1 size-6 shrink-0" />
             )}
             <div className="flex min-w-0 flex-col gap-1">
               <p className={cn(eyebrow, first ? "text-expense-text" : "text-income-text")}>
                 {first ? "VEREDITO DO ORÇAMENTO • ALERTA CRÍTICO" : "VEREDITO DO ORÇAMENTO • CABE NO ORÇAMENTO"}
               </p>
-              <h2 ref={focusVerdict} tabIndex={-1} className="font-bold text-xl leading-7 outline-none lg:text-2xl">
+              <h2 ref={focusVerdict} tabIndex={-1} className="text-xl leading-7 font-bold outline-none lg:text-2xl">
                 {first
                   ? `Em ${monthOnly(first.month)} você fica no vermelho: ${money(first.low.projected_balance)}`
                   : fits}
@@ -129,14 +129,14 @@ export const Results = ({ rows, count, total, name, onRetest }: Props) => {
           </div>
           <span
             className={cn(
-              "rounded-full bg-card px-3 py-1 font-semibold text-sm",
+              "bg-card rounded-full px-3 py-1 text-sm font-semibold",
               first ? "text-expense-text" : "text-income-text",
             )}
           >
             {first ? "Déficit Projetado" : "Sem déficit"}
           </span>
         </div>
-        {first && <p className="rounded-xl bg-card p-4 text-expense-text text-sm leading-6">{body()}</p>}
+        {first && <p className="bg-card text-expense-text rounded-xl p-4 text-sm leading-6">{body()}</p>}
         {until && <p className="text-sm">{`As parcelas depois de ${monthSlashYear(until)} ficam fora da projeção.`}</p>}
         {months
           .filter((month) => month.alreadyRed)
@@ -150,22 +150,22 @@ export const Results = ({ rows, count, total, name, onRetest }: Props) => {
       <section aria-labelledby="purchase-curve-title" className={card}>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h2 id="purchase-curve-title" className="font-semibold text-lg">
+            <h2 id="purchase-curve-title" className="text-lg font-semibold">
               {`Curva de Saldo Projetado (${months.length} ${months.length === 1 ? "Mês" : "Meses"})`}
             </h2>
             <p className="text-muted-foreground text-sm">Comparativo do saldo ao fechar cada mês</p>
           </div>
           <ul aria-hidden className="flex flex-wrap gap-3 text-xs">
-            <li className="flex items-center gap-1.5 text-muted-foreground">
-              <span className="w-4 border-muted-foreground border-t-2 border-dashed" />
+            <li className="text-muted-foreground flex items-center gap-1.5">
+              <span className="border-muted-foreground w-4 border-t-2 border-dashed" />
               Cenário Atual
             </li>
             <li className="flex items-center gap-1.5">
-              <span className="w-4 border-primary border-t-2" />
+              <span className="border-primary w-4 border-t-2" />
               Com Nova Compra
             </li>
-            <li className="flex items-center gap-1.5 text-expense-text">
-              <span className="size-2 rounded-full bg-expense" />
+            <li className="text-expense-text flex items-center gap-1.5">
+              <span className="bg-expense size-2 rounded-full" />
               Alerta Vermelho
             </li>
           </ul>
@@ -212,7 +212,7 @@ export const Results = ({ rows, count, total, name, onRetest }: Props) => {
 
       <section aria-labelledby="purchase-months-title" className="flex flex-col gap-3">
         <div className="flex flex-wrap items-baseline justify-between gap-x-3">
-          <h2 id="purchase-months-title" className="font-semibold text-lg">
+          <h2 id="purchase-months-title" className="text-lg font-semibold">
             Projeção Mensal Comparativa (Antes vs. Depois)
           </h2>
           <p className="text-muted-foreground text-xs">{`Vencimento no dia ${Number(rows[0].date.slice(8))} de cada mês`}</p>
@@ -227,7 +227,7 @@ export const Results = ({ rows, count, total, name, onRetest }: Props) => {
       {first && (
         <section aria-labelledby="purchase-actions-title" className={cn(card, "lg:flex-row lg:items-center")}>
           <div className="flex flex-1 flex-col gap-1">
-            <h2 id="purchase-actions-title" className="font-semibold text-lg">
+            <h2 id="purchase-actions-title" className="text-lg font-semibold">
               O que você gostaria de fazer agora?
             </h2>
             <p className="text-muted-foreground text-sm">
@@ -268,17 +268,17 @@ export const Results = ({ rows, count, total, name, onRetest }: Props) => {
 const MonthCard = ({ month, count, outflows }: { month: MonthProjection; count: number; outflows: string[] }) => (
   <li
     className={cn(
-      "flex min-w-0 flex-col gap-3 rounded-2xl bg-card p-3 shadow-sm lg:p-4",
-      month.red && "border-expense border-r-4 bg-expense-soft",
+      "bg-card flex min-w-0 flex-col gap-3 rounded-2xl p-3 shadow-sm lg:p-4",
+      month.red && "border-expense bg-expense-soft border-r-4",
     )}
   >
     <div className="flex flex-wrap items-start justify-between gap-2">
       <h3 className="flex items-center gap-1.5 font-semibold">
-        {month.red && <CircleAlert aria-hidden className="size-4 shrink-0 text-expense-text" />}
+        {month.red && <CircleAlert aria-hidden className="text-expense-text size-4 shrink-0" />}
         {monthTitle(month.month)}
       </h3>
       {(month.red || month.alreadyRed) && (
-        <span className="rounded-full bg-card px-2 py-0.5 font-bold text-expense-text text-xs">CRÍTICO</span>
+        <span className="bg-card text-expense-text rounded-full px-2 py-0.5 text-xs font-bold">CRÍTICO</span>
       )}
     </div>
     <dl className="grid gap-1 text-sm">
@@ -295,7 +295,7 @@ const MonthCard = ({ month, count, outflows }: { month: MonthProjection; count: 
         </dd>
       </div>
     </dl>
-    <p className="mt-auto flex flex-wrap justify-between gap-x-2 text-primary text-xs">
+    <p className="text-primary mt-auto flex flex-wrap justify-between gap-x-2 text-xs">
       <span>{`Parcela ${month.index}/${count}${month.red && outflows.length > 0 ? ` (+ ${outflows.join("/")})` : ""}`}</span>
       {month.index === 0 ? <span>Sem alteração</span> : <Money amount={fromCents(month.parcela)} outflow />}
     </p>

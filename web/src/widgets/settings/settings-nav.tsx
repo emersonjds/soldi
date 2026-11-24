@@ -50,7 +50,7 @@ export const SettingsNav = () => {
   useScrollToHash();
 
   return (
-    <nav aria-label="Seções dos ajustes" className="sticky top-24 hidden rounded-2xl bg-card p-2 shadow-sm lg:block">
+    <nav aria-label="Seções dos ajustes" className="bg-card sticky top-24 hidden rounded-2xl p-2 shadow-sm lg:block">
       <ul className="flex flex-col gap-1">
         {SECTIONS.map(({ id, label, icon: Icon }) => {
           const current = id === inView;
@@ -60,8 +60,8 @@ export const SettingsNav = () => {
                 href={`#${id}`}
                 aria-current={current || undefined}
                 className={cn(
-                  "flex min-h-11 items-center gap-3 rounded-xl px-3 py-2 text-sm transition-colors hover:bg-muted motion-reduce:transition-none",
-                  current && "bg-secondary font-semibold text-primary",
+                  "hover:bg-muted flex min-h-11 items-center gap-3 rounded-xl px-3 py-2 text-sm transition-colors motion-reduce:transition-none",
+                  current && "bg-secondary text-primary font-semibold",
                 )}
               >
                 <Icon aria-hidden className="size-4 shrink-0" />

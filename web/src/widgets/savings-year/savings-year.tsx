@@ -124,7 +124,7 @@ const Rate = ({ month }: { month: Month }) => {
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 font-semibold text-sm tabular-nums",
+        "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-sm font-semibold tabular-nums",
         level.pill,
       )}
     >
@@ -147,7 +147,7 @@ const RowMenu = ({ month, onNote, vertical = false }: Noting & { month: Month; v
           variant="ghost"
           size="icon"
           aria-label={`Ações de ${monthTitle(month.month)}`}
-          className="size-11 shrink-0 rounded-full text-muted-foreground"
+          className="text-muted-foreground size-11 shrink-0 rounded-full"
         >
           <Icon className="size-5" />
         </Button>
@@ -172,14 +172,14 @@ const TableMonth = ({ month, current, today, onNote }: Noting & { month: Month; 
     <TableRow className={cn(month.forecast && "text-muted-foreground", current && "bg-primary/5")}>
       <TableCell
         className={cn(
-          "relative py-4 pl-6 font-medium text-base",
-          current && "text-primary before:absolute before:inset-y-0 before:left-0 before:w-1 before:bg-primary",
+          "relative py-4 pl-6 text-base font-medium",
+          current && "text-primary before:bg-primary before:absolute before:inset-y-0 before:left-0 before:w-1",
         )}
       >
         <span className="flex items-center gap-2">
           {name}
           {current && (
-            <span className="rounded-md bg-primary px-2 py-0.5 font-semibold text-[10px] text-primary-foreground">
+            <span className="bg-primary text-primary-foreground rounded-md px-2 py-0.5 text-[10px] font-semibold">
               MÊS ATUAL
             </span>
           )}
@@ -194,7 +194,7 @@ const TableMonth = ({ month, current, today, onNote }: Noting & { month: Month; 
           <Link
             href={adjustHref(month.month)}
             aria-label={`Ajustar o guardado de ${name}: ${formatMoney(month.deposited, currency)}`}
-            className="inline-flex min-h-11 items-center gap-1.5 rounded-lg bg-card px-3 font-semibold text-primary shadow-sm hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"
+            className="bg-card text-primary hover:bg-muted focus-visible:outline-ring inline-flex min-h-11 items-center gap-1.5 rounded-lg px-3 font-semibold shadow-sm focus-visible:outline-2"
           >
             <Money amount={month.deposited} />
             <Pencil aria-hidden className="size-4" />
@@ -205,7 +205,7 @@ const TableMonth = ({ month, current, today, onNote }: Noting & { month: Month; 
       </TableCell>
       <TableCell className="text-right">
         {cents(month.withdrawn) > 0 ? (
-          <Money amount={month.withdrawn} outflow className="font-semibold text-expense-text" />
+          <Money amount={month.withdrawn} outflow className="text-expense-text font-semibold" />
         ) : (
           <span className="text-muted-foreground">—</span>
         )}
@@ -213,9 +213,9 @@ const TableMonth = ({ month, current, today, onNote }: Noting & { month: Month; 
       <TableCell className="text-center">
         <Rate month={month} />
       </TableCell>
-      <TableCell className={cn("whitespace-normal text-sm", current && "text-primary", month.forecast && "italic")}>
+      <TableCell className={cn("text-sm whitespace-normal", current && "text-primary", month.forecast && "italic")}>
         {current ? closing(today) : situation(month, "")}
-        {month.note && <span className="block text-muted-foreground not-italic">{month.note}</span>}
+        {month.note && <span className="text-muted-foreground block not-italic">{month.note}</span>}
       </TableCell>
       <TableCell className="pr-6 text-right">
         <RowMenu month={month} onNote={onNote} />
@@ -237,39 +237,39 @@ const ListMonth = ({ month, current, onNote }: Noting & { month: Month; current:
         aria-label={`${name} de ${month.month.slice(0, 4)}: guardou ${formatMoney(month.deposited, currency)}, ${withdrawn}${share}${level ? `, ${level.word}` : ""}${current ? ", ajustar" : ""}${month.note ? `, observação: ${month.note}` : ""}`}
         aria-current={current ? "date" : undefined}
         className={cn(
-          "flex min-h-11 min-w-0 flex-1 items-center justify-between gap-3 rounded-xl px-3 py-3 hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring",
+          "hover:bg-muted focus-visible:outline-ring flex min-h-11 min-w-0 flex-1 items-center justify-between gap-3 rounded-xl px-3 py-3 focus-visible:outline-2",
           current && "bg-primary/5",
         )}
       >
         <span className="flex min-w-0 flex-1 flex-col">
-          <span className="flex flex-wrap items-center gap-x-2 font-medium text-base">
+          <span className="flex flex-wrap items-center gap-x-2 text-base font-medium">
             {name}
             {current && (
-              <span className="rounded-full bg-primary px-2 py-0.5 font-semibold text-primary-foreground text-xs uppercase">
+              <span className="bg-primary text-primary-foreground rounded-full px-2 py-0.5 text-xs font-semibold uppercase">
                 Atual
               </span>
             )}
             {month.note && (
-              <span className="max-w-[50%] truncate rounded-full bg-muted px-2 py-0.5 font-normal text-muted-foreground text-xs">
+              <span className="bg-muted text-muted-foreground max-w-[50%] truncate rounded-full px-2 py-0.5 text-xs font-normal">
                 {month.note}
               </span>
             )}
           </span>
-          <span className="flex flex-wrap gap-x-1 text-muted-foreground text-sm">
+          <span className="text-muted-foreground flex flex-wrap gap-x-1 text-sm">
             Entradas: <Money amount={month.income} />
           </span>
         </span>
         <span className="flex shrink-0 flex-col items-end">
           <span className="flex items-center gap-1.5">
             <Money amount={month.deposited} className="font-semibold" />
-            {current && <Pencil aria-hidden className="size-4 text-muted-foreground" />}
+            {current && <Pencil aria-hidden className="text-muted-foreground size-4" />}
           </span>
           {withdrawn && (
             <span className="text-expense-text text-sm">
               Resgatado <Money amount={month.withdrawn} />
             </span>
           )}
-          <span className="flex items-center gap-1.5 text-muted-foreground text-sm tabular-nums">
+          <span className="text-muted-foreground flex items-center gap-1.5 text-sm tabular-nums">
             {level && (
               <>
                 <Dot className={level.dot} />
@@ -286,7 +286,7 @@ const ListMonth = ({ month, current, onNote }: Noting & { month: Month; current:
 };
 
 const Tile = ({ icon, tone, children }: { icon: ReactNode; tone: string; children: ReactNode }) => (
-  <div className="flex items-center gap-3 rounded-2xl bg-card p-4 shadow-sm">
+  <div className="bg-card flex items-center gap-3 rounded-2xl p-4 shadow-sm">
     <span aria-hidden className={cn("flex size-11 shrink-0 items-center justify-center rounded-xl", tone)}>
       {icon}
     </span>
@@ -326,7 +326,7 @@ const YearBody = ({ data, year, today }: { data: Schemas["SavingsYear"]; year: n
             )}
           </div>
           {data.rate_pct && (
-            <span className="flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 font-semibold text-primary text-sm tabular-nums">
+            <span className="bg-primary/10 text-primary flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-semibold tabular-nums">
               {cents(data.saved_total) < 0 ? (
                 <TrendingDown aria-hidden className="size-4" />
               ) : (
@@ -336,14 +336,14 @@ const YearBody = ({ data, year, today }: { data: Schemas["SavingsYear"]; year: n
             </span>
           )}
         </div>
-        <div className="grid grid-cols-2 gap-3 rounded-xl bg-muted p-3 max-lg:hidden">
-          <div className="flex flex-col gap-1 rounded-lg bg-card p-3">
+        <div className="bg-muted grid grid-cols-2 gap-3 rounded-xl p-3 max-lg:hidden">
+          <div className="bg-card flex flex-col gap-1 rounded-lg p-3">
             <span className="text-muted-foreground text-xs">Entradas no ano</span>
             <Money amount={data.income_total} className="font-semibold" />
           </div>
-          <div className="flex flex-col gap-1 rounded-lg bg-card p-3">
+          <div className="bg-card flex flex-col gap-1 rounded-lg p-3">
             <span className="text-muted-foreground text-xs">Meses no Azul</span>
-            <span className="font-semibold text-tier-green-foreground tabular-nums">
+            <span className="text-tier-green-foreground font-semibold tabular-nums">
               {past.filter(saved).length} / {past.length}
             </span>
           </div>
@@ -362,11 +362,11 @@ const YearBody = ({ data, year, today }: { data: Schemas["SavingsYear"]; year: n
           {run > 0 && (
             <Tile icon={<BadgeCheck className="size-5" />} tone="bg-tier-green-soft text-tier-green-foreground">
               <span className="text-muted-foreground text-sm">Consistência {year}</span>
-              <span className="font-semibold text-lg">
+              <span className="text-lg font-semibold">
                 {run} {one ? "Mês" : "Meses"}
                 <span className="max-lg:hidden"> {one ? "Consecutivo" : "Consecutivos"}</span>
               </span>
-              <span className="text-sm text-tier-green-foreground lg:hidden">
+              <span className="text-tier-green-foreground text-sm lg:hidden">
                 {one ? "Consecutivo ativo" : "Consecutivos ativos"}
               </span>
             </Tile>
@@ -375,7 +375,7 @@ const YearBody = ({ data, year, today }: { data: Schemas["SavingsYear"]; year: n
             <div className="max-lg:hidden">
               <Tile icon={<PiggyBank className="size-5" />} tone="bg-primary/10 text-primary">
                 <span className="text-muted-foreground text-sm">Maior Aporte Único</span>
-                <span className="font-semibold text-lg">
+                <span className="text-lg font-semibold">
                   <Money amount={best.saved} /> ({monthTitle(best.month)})
                 </span>
               </Tile>
@@ -388,10 +388,10 @@ const YearBody = ({ data, year, today }: { data: Schemas["SavingsYear"]; year: n
         <header className="flex flex-wrap items-center justify-between gap-3 lg:px-6">
           <div className="flex flex-col gap-1">
             <div className="flex items-center gap-2">
-              <h2 id={detailId} className="font-semibold text-lg leading-6">
+              <h2 id={detailId} className="text-lg leading-6 font-semibold">
                 Detalhamento Mensal
               </h2>
-              <span className="rounded-md bg-muted px-2 py-0.5 text-muted-foreground text-xs max-lg:hidden">
+              <span className="bg-muted text-muted-foreground rounded-md px-2 py-0.5 text-xs max-lg:hidden">
                 {data.months.length} registros
               </span>
             </div>
@@ -403,7 +403,7 @@ const YearBody = ({ data, year, today }: { data: Schemas["SavingsYear"]; year: n
           <div className="flex flex-wrap items-center gap-3 max-lg:w-full">
             <ul
               aria-label="Faixas"
-              className="flex flex-1 flex-wrap justify-between gap-x-4 gap-y-1 rounded-full bg-muted px-3 py-1 text-muted-foreground text-sm"
+              className="bg-muted text-muted-foreground flex flex-1 flex-wrap justify-between gap-x-4 gap-y-1 rounded-full px-3 py-1 text-sm"
             >
               {LEVELS.map((level) => (
                 <li key={level.legend} className="flex items-center gap-1.5">
@@ -487,7 +487,7 @@ export const SavingsYear = () => {
         </div>
       );
     if (!data) return null;
-    if (empty) return <p className="py-6 text-center text-muted-foreground">Nada para mostrar em {data.year}.</p>;
+    if (empty) return <p className="text-muted-foreground py-6 text-center">Nada para mostrar em {data.year}.</p>;
     return <YearBody data={data} year={data.year} today={today} />;
   };
 

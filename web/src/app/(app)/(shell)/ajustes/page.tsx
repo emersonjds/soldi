@@ -38,15 +38,15 @@ type Item = { href: string; label: string; hint: string; icon: LucideIcon };
 
 const Row = ({ href, label, hint, icon: Icon }: Item) => (
   <li>
-    <MonthLink href={href} className="flex min-h-16 items-center gap-3 px-4 py-2 transition-colors hover:bg-muted">
-      <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-secondary text-primary">
+    <MonthLink href={href} className="hover:bg-muted flex min-h-16 items-center gap-3 px-4 py-2 transition-colors">
+      <span className="bg-secondary text-primary flex size-10 shrink-0 items-center justify-center rounded-full">
         <Icon className="size-5" aria-hidden />
       </span>
       <span className="flex min-w-0 flex-1 flex-col">
-        <span className="font-medium text-base">{label}</span>
+        <span className="text-base font-medium">{label}</span>
         <span className="text-muted-foreground text-xs">{hint}</span>
       </span>
-      <ChevronRight className="size-5 text-muted-foreground" aria-hidden />
+      <ChevronRight className="text-muted-foreground size-5" aria-hidden />
     </MonthLink>
   </li>
 );
@@ -69,7 +69,7 @@ const HELP: Item[] = [
 ];
 
 const LiveBadge = () => (
-  <span className="flex items-center gap-1 rounded-full bg-secondary px-3 py-1 font-semibold text-primary text-xs">
+  <span className="bg-secondary text-primary flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold">
     <TrendingUp aria-hidden className="size-3.5" />
     Projeção em tempo real
   </span>
@@ -90,7 +90,7 @@ const AjustesPage = () => {
             </BreadcrumbItem>
           </BreadcrumbList>
         </Breadcrumb>
-        <h1 className="font-bold text-[22px] leading-7 lg:text-[28px] lg:leading-9">Ajustes & Preferências</h1>
+        <h1 className="text-[22px] leading-7 font-bold lg:text-[28px] lg:leading-9">Ajustes & Preferências</h1>
         <p className="text-muted-foreground">
           Personalize os parâmetros de cálculo do termômetro, organização de contas e segurança dos seus dados
         </p>

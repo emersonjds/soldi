@@ -34,7 +34,7 @@ const PayForm = ({ bill, month, onPay }: { bill: BillOfMonth; month: string; onP
     <form noValidate onSubmit={submit} className="flex flex-col gap-6">
       <HeroAmount id="pay-amount" value={input} onChange={setInput} invalid={submitted && !amount} />
       {bill.is_card && (
-        <p className="-mt-3 text-center text-muted-foreground text-sm">Confira com a fatura do banco.</p>
+        <p className="text-muted-foreground -mt-3 text-center text-sm">Confira com a fatura do banco.</p>
       )}
       <DateChips
         legend="Quando pagou?"

@@ -53,11 +53,11 @@ export const MonthChips = ({ months, neutral = false, current, onOpen, before }:
         const style = cn(
           chip,
           shown && lowest === "red" ? "bg-expense-soft text-expense-text" : "bg-muted text-foreground",
-          month === current && "ring-2 ring-primary",
+          month === current && "ring-primary ring-2",
         );
         const body = (
           <>
-            <span className="font-semibold text-sm">{monthShort(month)}</span>
+            <span className="text-sm font-semibold">{monthShort(month)}</span>
             {lowest === null && <span className="text-muted-foreground text-xs">Antes do início</span>}
             {shown && (
               <>
@@ -65,7 +65,7 @@ export const MonthChips = ({ months, neutral = false, current, onOpen, before }:
                   <span aria-hidden className={cn("size-2 shrink-0 rounded-full", TIER_STYLE[lowest].dot)} />
                   <span
                     style={glyphs(formatWhole(low))}
-                    className={cn("min-w-0 whitespace-nowrap font-bold tabular-nums tracking-tight", lowFit)}
+                    className={cn("min-w-0 font-bold tracking-tight whitespace-nowrap tabular-nums", lowFit)}
                   >
                     {formatWhole(low)}
                   </span>
@@ -89,7 +89,7 @@ export const MonthChips = ({ months, neutral = false, current, onOpen, before }:
               aria-disabled={lowest === null || undefined}
               aria-current={month === current ? "date" : undefined}
               onClick={lowest === null ? undefined : () => onOpen(month)}
-              className={cn(style, "focus-visible:outline-2 focus-visible:outline-ring")}
+              className={cn(style, "focus-visible:outline-ring focus-visible:outline-2")}
             >
               {body}
             </button>

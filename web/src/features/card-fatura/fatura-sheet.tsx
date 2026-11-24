@@ -43,12 +43,12 @@ const Body = ({ bill, onOpenEntry }: { bill: BillOfMonth; onOpenEntry: (entry: T
   const fatura = useQuery(faturaQuery(bill.due_date.slice(0, 7), bill.bill_id));
   if (fatura.isError && !fatura.data)
     return (
-      <p className="flex flex-wrap items-center gap-x-2 text-muted-foreground text-sm">
+      <p className="text-muted-foreground flex flex-wrap items-center gap-x-2 text-sm">
         Não foi possível carregar.
         <button
           type="button"
           onClick={() => fatura.refetch()}
-          className="inline-flex min-h-11 items-center font-semibold text-primary hover:underline focus-visible:outline-2 focus-visible:outline-ring"
+          className="text-primary focus-visible:outline-ring inline-flex min-h-11 items-center font-semibold hover:underline focus-visible:outline-2"
         >
           Tentar de novo
         </button>
@@ -61,7 +61,7 @@ const Body = ({ bill, onOpenEntry }: { bill: BillOfMonth; onOpenEntry: (entry: T
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col items-center gap-1">
-        <Money amount={data.total} className="font-bold text-3xl" />
+        <Money amount={data.total} className="text-3xl font-bold" />
         <p className={cn("text-sm", late ? "text-expense" : "text-muted-foreground")}>{stateOf(data, bill, money)}</p>
       </div>
       {cents(data.carried) > 0 && (
@@ -74,9 +74,9 @@ const Body = ({ bill, onOpenEntry }: { bill: BillOfMonth; onOpenEntry: (entry: T
       )}
       {faturaGroups(data.entries, data.total, money).map((group) => (
         <section key={group.label} aria-label={group.label} className="flex flex-col gap-1">
-          <h3 className="flex items-baseline justify-between gap-2 font-semibold text-sm">
+          <h3 className="flex items-baseline justify-between gap-2 text-sm font-semibold">
             {group.label}
-            <span className="whitespace-nowrap font-normal text-muted-foreground">
+            <span className="text-muted-foreground font-normal whitespace-nowrap">
               {money(group.total)} · {group.share}%
             </span>
           </h3>
@@ -86,14 +86,14 @@ const Body = ({ bill, onOpenEntry }: { bill: BillOfMonth; onOpenEntry: (entry: T
                 <button
                   type="button"
                   onClick={() => onOpenEntry(row.entry)}
-                  className="-mx-2 flex min-h-14 w-[calc(100%+1rem)] items-center gap-3 rounded-xl px-2 text-left hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"
+                  className="hover:bg-muted focus-visible:outline-ring -mx-2 flex min-h-14 w-[calc(100%+1rem)] items-center gap-3 rounded-xl px-2 text-left focus-visible:outline-2"
                 >
                   <CategoryIcon icon={row.entry.category.icon} color={row.entry.category.color} />
                   <span className="flex min-w-0 flex-1 flex-col">
-                    <span className="truncate font-medium text-base">{row.title}</span>
-                    <span className="truncate text-muted-foreground text-xs">{row.caption}</span>
+                    <span className="truncate text-base font-medium">{row.title}</span>
+                    <span className="text-muted-foreground truncate text-xs">{row.caption}</span>
                   </span>
-                  <Money amount={row.amount} className="whitespace-nowrap font-semibold text-sm" />
+                  <Money amount={row.amount} className="text-sm font-semibold whitespace-nowrap" />
                 </button>
               </li>
             ))}
@@ -103,12 +103,12 @@ const Body = ({ bill, onOpenEntry }: { bill: BillOfMonth; onOpenEntry: (entry: T
       {ahead && (
         <section aria-labelledby="fatura-ahead" className="flex flex-col gap-2">
           <div className="flex flex-wrap items-center justify-between gap-x-2">
-            <h3 id="fatura-ahead" className="font-semibold text-sm">
+            <h3 id="fatura-ahead" className="text-sm font-semibold">
               Próximos meses
             </h3>
             <Link
               href="/posso-comprar"
-              className="inline-flex min-h-11 items-center gap-1 font-semibold text-primary text-sm hover:underline focus-visible:outline-2 focus-visible:outline-ring"
+              className="text-primary focus-visible:outline-ring inline-flex min-h-11 items-center gap-1 text-sm font-semibold hover:underline focus-visible:outline-2"
             >
               Posso comprar?
               <ArrowRight className="size-4" aria-hidden />

@@ -44,10 +44,10 @@ const GoalCaption = ({ cofrinho }: { cofrinho: Cofrinho }) => {
   return (
     <p className="text-muted-foreground text-sm">
       Faltam{" "}
-      <strong className="font-semibold text-foreground">{formatMoney(minusMoney(target, balance), currency)}</strong> ·{" "}
+      <strong className="text-foreground font-semibold">{formatMoney(minusMoney(target, balance), currency)}</strong> ·{" "}
       {deadline && monthly_suggestion ? (
         <>
-          <span className="font-semibold text-income-text">{formatMoney(monthly_suggestion, currency)}/mês</span> até{" "}
+          <span className="text-income-text font-semibold">{formatMoney(monthly_suggestion, currency)}/mês</span> até{" "}
           {monthYear(deadline)}
         </>
       ) : (
@@ -63,7 +63,7 @@ export const Balance = ({ cofrinho, large = false }: { cofrinho: Cofrinho; large
     <p>
       <Money amount={cofrinho.balance} size={large ? "hero" : "figure"} />{" "}
       {cofrinho.target && (
-        <span className="whitespace-nowrap text-muted-foreground text-sm">
+        <span className="text-muted-foreground text-sm whitespace-nowrap">
           de <Money amount={cofrinho.target} />
         </span>
       )}
@@ -154,7 +154,7 @@ const CardMenu = ({ name, onMovements, onEdit, onArchive }: MenuProps) => (
         variant="ghost"
         size="icon"
         aria-label={`Mais ações de ${name}`}
-        className="ml-auto size-11 shrink-0 rounded-full text-muted-foreground"
+        className="text-muted-foreground ml-auto size-11 shrink-0 rounded-full"
       >
         <MoreVertical className="size-5" />
       </Button>
@@ -197,12 +197,12 @@ export const CofrinhoCard = ({ cofrinho, focus, today, disabled, onSave, onWithd
           />
           <Badge cofrinho={cofrinho} focus={focus} today={today} />
         </div>
-        <h3 id={id} className="font-semibold text-lg leading-6">
+        <h3 id={id} className="text-lg leading-6 font-semibold">
           {cofrinho.name}
         </h3>
         <Balance cofrinho={cofrinho} />
         {cofrinho.note && (
-          <p className="line-clamp-2 text-muted-foreground text-sm">
+          <p className="text-muted-foreground line-clamp-2 text-sm">
             {cofrinho.deadline && `Meta para ${cofrinho.deadline.slice(0, 4)} · `}
             {cofrinho.note}
           </p>
@@ -238,10 +238,10 @@ export const ReservaLivreCard = ({ cofrinho, disabled, onSave, onWithdraw }: Act
   return (
     <li className="min-w-0">
       <section aria-labelledby={id} className={tile}>
-        <span aria-hidden className="flex size-12 items-center justify-center rounded-2xl bg-secondary text-primary">
+        <span aria-hidden className="bg-secondary text-primary flex size-12 items-center justify-center rounded-2xl">
           <Lock className="size-6" />
         </span>
-        <h3 id={id} className="font-semibold text-lg leading-6">
+        <h3 id={id} className="text-lg leading-6 font-semibold">
           {cofrinho.name}
         </h3>
         <p>
@@ -277,15 +277,15 @@ export const CreateTile = ({ onCreate }: { onCreate: () => void }) => {
       >
         <span
           aria-hidden
-          className="flex size-12 items-center justify-center rounded-2xl bg-card text-primary shadow-sm"
+          className="bg-card text-primary flex size-12 items-center justify-center rounded-2xl shadow-sm"
         >
           <Plus className="size-6" />
         </span>
-        <h3 id={id} className="font-semibold text-lg leading-6">
+        <h3 id={id} className="text-lg leading-6 font-semibold">
           Criar novo objetivo ou sonho
         </h3>
-        <p className="max-w-xs text-muted-foreground text-sm">Defina meta, prazo e acompanhe a evolução.</p>
-        <Button variant="outline" className="min-h-11 rounded-full px-5 text-base text-primary" onClick={onCreate}>
+        <p className="text-muted-foreground max-w-xs text-sm">Defina meta, prazo e acompanhe a evolução.</p>
+        <Button variant="outline" className="text-primary min-h-11 rounded-full px-5 text-base" onClick={onCreate}>
           Começar objetivo
         </Button>
       </section>
