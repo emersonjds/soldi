@@ -7,6 +7,13 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.67.2
+
+### Dependencies
+- Server: tokio 1.54, sqlx 0.9.1, uuid 1.29, sentry 0.49.6, base64 0.23 (SOL-166).
+- Web: React 19.3, @tanstack/react-table 9, @hookform/resolvers 7, jsdom 31, Biome 2.6, Playwright 1.65 and the rest of the minor and patch group; Tailwind classes re-sorted by Biome 2.6 (SOL-166).
+- CI: taiki-e/install-action 2.90.5, pnpm/action-setup 6.1.1 (SOL-166).
+
 ## 0.67.1
 
 ### Web
