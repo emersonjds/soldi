@@ -379,7 +379,7 @@ const MonthBlock = ({ month, today, openingDate, highlight, claim }: MonthProps)
       ref={near ? undefined : watch}
       data-month={month}
       aria-label={label}
-      className="min-w-[100cqi] shrink-0 snap-start text-[length:clamp(0.75rem,3.6cqi,0.875rem)] tabular-nums @[40rem]:min-w-[calc((100cqi-1rem)/2)] @[64rem]:min-w-[calc((100cqi-2rem)/3)]"
+      className="min-w-[100cqi] shrink-0 snap-start border-separate border-spacing-0 text-[length:clamp(0.75rem,3.6cqi,0.875rem)] tabular-nums @[40rem]:min-w-[calc((100cqi-1rem)/2)] @[64rem]:min-w-[calc((100cqi-2rem)/3)]"
     >
       <thead className="bg-card sticky top-0 z-10">
         <tr>
@@ -387,14 +387,14 @@ const MonthBlock = ({ month, today, openingDate, highlight, claim }: MonthProps)
             {label}
           </th>
         </tr>
-        <tr className="border-b">
+        <tr>
           {COLUMNS.map((column) => (
             <th
               key={column}
               scope="col"
               className={cn(
-                "text-muted-foreground px-2 py-1 text-right font-medium",
-                column === "Data" && "bg-card sticky left-0 text-left",
+                "text-muted-foreground bg-card border-b px-2 py-1 text-right font-medium",
+                column === "Data" && "sticky left-0 text-left",
               )}
             >
               {column}
