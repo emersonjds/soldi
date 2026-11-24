@@ -94,6 +94,9 @@ const show = (
 const card = () => screen.getByRole("region", { name: "Contas a pagar" });
 const loaded = () => screen.findByRole("region", { name: "Contas a pagar" });
 const rowOf = (name: string) => within(card()).getByRole("listitem", { name });
+/** A caption whose leading dot sits in its own span (SOL-165). */
+const captionOf = (text: string) => (_: string, element: Element | null) =>
+  element?.tagName === "SPAN" && element.textContent === text && element.parentElement?.textContent !== text;
 const rows = () =>
   within(card())
     .getAllByRole("listitem")
@@ -522,7 +525,17 @@ describe("Contas a pagar", () => {
       await loaded();
       expect(nameLine("Fies")).toHaveTextContent("Fies · Parcela 4/6 · termina em fev/27");
       expect(nameLine("Fies")).toHaveClass("flex-wrap");
-      expect(within(rowOf("Fies")).getByText("· Parcela 4/6 · termina em fev/27")).not.toHaveClass("whitespace-nowrap");
+      expect(within(rowOf("Fies")).getByText(captionOf("· Parcela 4/6 · termina em fev/27"))).not.toHaveClass(
+        "whitespace-nowrap",
+      );
+    });
+
+    it("gives the name the whole line below 1024 px: the parcela goes under it without its leading dot (SOL-165)", async () => {
+      show([{ ...FIES, installment: 4 }], {}, "2026-12");
+      await loaded();
+      const parcela = within(rowOf("Fies")).getByText(captionOf("· Parcela 4/6 · termina em fev/27"));
+      expect(parcela).toHaveClass("basis-full", "lg:basis-auto");
+      expect(within(parcela).getByText("·")).toHaveClass("hidden", "lg:inline");
     });
 
     it("names the last parcela", async () => {
@@ -879,6 +892,7 @@ describe("Contas a pagar", () => {
 
       const row = rowOf("Luz");
       expect(row).toHaveTextContent("Luz · valor variável");
+      expect(within(row).getByText(captionOf(" · valor variável"))).toHaveClass("basis-full", "lg:basis-auto");
       expect(row).toHaveTextContent("≈ R$ 180,00");
       expect(
         within(row).getByRole("button", { name: /^valor estimado R\$\s180,00: ajustar pagamento de Luz$/ }),
