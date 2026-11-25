@@ -1,30 +1,18 @@
 "use client";
 
-import { type ReactNode, useId, useState } from "react";
+import { type ReactNode, useId } from "react";
 
 import { useQuery } from "@tanstack/react-query";
-import { ChevronRight, CreditCard, Pencil, Trash2 } from "lucide-react";
-import { toast } from "sonner";
+import { ChevronRight, CreditCard } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useBills, useCards } from "@/entities/bill/bill-queries";
 import { categoriesQuery, categoryLabel } from "@/entities/category/categories-query";
 import { billKey, previstoKey } from "@/entities/month/forecast-alert";
-import { ScopeRadio } from "@/entities/transaction/scope-radio";
-import { SeriesAllDialog } from "@/entities/transaction/series-all-dialog";
 import { OPEN_LABEL } from "@/entities/transaction/series-step";
-import {
-  type Scope,
-  type Transaction,
-  useCreateTransaction,
-  useDeleteTransaction,
-} from "@/entities/transaction/transaction-queries";
-import { TransactionSheet } from "@/features/add-transaction/transaction-sheet";
-import { EditBillSheet } from "@/features/edit-bill/edit-bill-sheet";
+import type { Transaction } from "@/entities/transaction/transaction-queries";
 import { cn } from "@/lib/utils";
-import { problemMessage, type Schemas } from "@/shared/api/client";
+import type { Schemas } from "@/shared/api/client";
 import { type Currency, useCurrency } from "@/shared/lib/currency";
 import { dayMonth, monthName, shortDay, todayISO, yesterdayISO } from "@/shared/lib/date";
 import { formatMoney } from "@/shared/lib/money";
@@ -36,6 +24,8 @@ import { MonthLink } from "@/shared/ui/month-link";
 import { SectionToggle } from "@/shared/ui/section-toggle";
 import { TierPill } from "@/shared/ui/tier-pill";
 
+import { type Entry, titleOf, useEntryActions } from "./entry-actions";
+
 const KIND_LABEL: Record<Schemas["CategoryKind"], string> = { income: "Entrada", bill: "Saída", daily: "Diário" };
 
 export const dayLabel = ({ date, is_future }: Pick<Schemas["Day"], "date" | "is_future">) => {
@@ -45,9 +35,6 @@ export const dayLabel = ({ date, is_future }: Pick<Schemas["Day"], "date" | "is_
   if (date === yesterdayISO()) return `Ontem, ${short}`;
   return short;
 };
-
-/** `card`: the name of the card the entry went on (D28). */
-type Entry = { label: string; caption: string; card?: string };
 
 /** Money put in a cofrinho: a bill under Economia or one of its children. */
 const isSaved = ({ kind, category }: Transaction, categories: Schemas["Category"][] = []) =>
@@ -91,8 +78,6 @@ export const entryOf = (
     return { label, caption: paidCaption(transaction, billsOfMonth, bills) };
   return { label, caption: KIND_LABEL[transaction.kind] };
 };
-
-export const titleOf = (transaction: Transaction, entry: Entry) => transaction.note || entry.label;
 
 /** Same rule as the day balance: only income adds; a deposit into a cofrinho takes from it. */
 const addsToBalance = (transaction: Transaction) => transaction.kind === "income";
@@ -311,14 +296,7 @@ export const Ledger = ({
     ...entryOf(transaction, categories, view.bills_of_month, bills),
     card: cards?.find(({ id }) => id === transaction.card_id)?.name,
   });
-  const [selected, setSelected] = useState<Transaction>();
-  const [acting, setActing] = useState(false);
-  const [editing, setEditing] = useState(false);
-  const [confirming, setConfirming] = useState(false);
-  const [asking, setAsking] = useState(false);
-  const [scope, setScope] = useState<Scope>("this");
-  const create = useCreateTransaction();
-  const remove = useDeleteTransaction();
+  const { open, actions } = useEntryActions();
   const any = groupByDay(view.days, transactions, view.bills_of_month).length > 0;
   const shown = (kind: LedgerFilter | null) => filter === "all" || kind === filter;
   const groups = groupByDay(
@@ -326,47 +304,6 @@ export const Ledger = ({
     transactions.filter((transaction) => shown(filterOf(transaction, categories, bills))),
     view.bills_of_month.filter((bill) => shown(bill.variable ? "variable" : "fixed")),
   );
-
-  const open = (transaction: Transaction) => {
-    setSelected(transaction);
-    setConfirming(false);
-    setScope("this");
-    setActing(true);
-  };
-
-  const edit = () => {
-    setActing(false);
-    setEditing(true);
-  };
-
-  // Desfazer would re-create a member outside its series.
-  const destroy = (transaction: Transaction) => {
-    setActing(false);
-    remove.mutate(
-      { id: transaction.id, scope: transaction.series ? scope : undefined },
-      {
-        onSuccess: () => {
-          if (transaction.series) return toast(scope === "this" ? "Lançamento excluído" : "Série excluída");
-          toast("Lançamento excluído", {
-            duration: 5000,
-            action: {
-              label: "Desfazer",
-              onClick: () =>
-                create.mutate({
-                  date: transaction.date,
-                  amount: transaction.amount,
-                  kind: transaction.kind,
-                  category_id: transaction.category.id,
-                  note: transaction.note ?? null,
-                  category: transaction.category,
-                }),
-            },
-          });
-        },
-        onError: (error) => toast.error(problemMessage(error) ?? "Não foi possível excluir o lançamento."),
-      },
-    );
-  };
 
   if (!any && !planilha) return null;
 
@@ -457,7 +394,7 @@ export const Ledger = ({
                     entry={entryFor(transaction)}
                     transaction={transaction}
                     cause={causes.has(transaction.id)}
-                    onOpen={() => open(transaction)}
+                    onOpen={() => open(transaction, entryFor(transaction))}
                   />
                 ))}
                 {due.map((bill) => (
@@ -472,75 +409,7 @@ export const Ledger = ({
         </div>
       )}
 
-      <Sheet open={acting} onOpenChange={setActing}>
-        <SheetContent
-          side="bottom"
-          className="mx-auto max-w-lg gap-2 rounded-t-3xl px-4 pt-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))]"
-        >
-          <SheetTitle className="pr-12 text-lg font-bold">
-            {selected && titleOf(selected, entryFor(selected))}
-          </SheetTitle>
-          <SheetDescription>
-            {selected && `${entryFor(selected).caption} · ${entryFor(selected).label}`}
-          </SheetDescription>
-          {confirming && selected?.series ? (
-            <>
-              <ScopeRadio
-                legend="Excluir quais?"
-                mode="delete"
-                series={selected.series}
-                date={selected.date}
-                value={scope}
-                onChange={setScope}
-              />
-              <Button
-                variant="destructive"
-                className="mt-2 min-h-12 text-base"
-                onClick={() => (scope === "all" ? setAsking(true) : destroy(selected))}
-              >
-                Excluir
-              </Button>
-              <SeriesAllDialog
-                mode="delete"
-                position={selected.series.position}
-                total={selected.series.total}
-                open={asking}
-                onOpenChange={setAsking}
-                onConfirm={() => destroy(selected)}
-              />
-              <Button variant="ghost" className="min-h-12 text-base" onClick={() => setActing(false)}>
-                Cancelar
-              </Button>
-            </>
-          ) : (
-            <>
-              <Button variant="ghost" className="mt-2 min-h-12 justify-start gap-3 text-base" onClick={edit}>
-                <Pencil className="size-5" />
-                Editar
-              </Button>
-              <Button
-                variant="ghost"
-                className="text-destructive hover:text-destructive min-h-12 justify-start gap-3 text-base"
-                onClick={() => selected && (selected.series ? setConfirming(true) : destroy(selected))}
-              >
-                <Trash2 className="size-5" />
-                Excluir
-              </Button>
-            </>
-          )}
-        </SheetContent>
-      </Sheet>
-      <TransactionSheet
-        open={editing}
-        onOpenChange={setEditing}
-        transaction={selected}
-        billSheet={(props) => <EditBillSheet open {...props} />}
-        onDelete={() => {
-          setScope("this");
-          setConfirming(true);
-          setActing(true);
-        }}
-      />
+      {actions}
     </section>
   );
 };

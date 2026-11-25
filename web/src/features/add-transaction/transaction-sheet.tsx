@@ -802,6 +802,7 @@ type TransactionSheetProps = {
     onOpenChange: (open: boolean) => void;
     onCreate?: (bill: BillPrefill) => void;
   }) => ReactNode;
+  onCloseAutoFocus?: (event: Event) => void;
 };
 
 /** `Lançar`: bottom sheet below 1024px, dialog from there; closes at once and the row appears optimistically. */
@@ -815,6 +816,7 @@ export const TransactionSheet = ({
   hint,
   billSheet,
   onDelete,
+  onCloseAutoFocus,
 }: TransactionSheetProps) => {
   const create = useCreateTransaction();
   const update = useUpdateTransaction();
@@ -941,6 +943,7 @@ export const TransactionSheet = ({
     <ResponsiveSheet
       open={open}
       onOpenChange={onOpenChange}
+      onCloseAutoFocus={onCloseAutoFocus}
       title={title}
       eyebrow={
         transaction?.series && (

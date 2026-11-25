@@ -146,8 +146,14 @@ test("Lançamentos switches to the planilha, remembers it, shows a day's entries
 
   await page.setViewportSize({ width: 375, height: 812 });
   await day.click();
-  await expect(page.getByRole("dialog", { name: /^Hoje/ })).toContainText("Feira");
+  const detail = page.getByRole("dialog", { name: /^Hoje/ });
+  await expect(detail).toContainText("Feira");
+  // SOL-171: the detail adds on its day; the right column stays out of the planilha.
+  await expect(detail.getByRole("button", { name: /^Lançar Diário em / })).toBeVisible();
+  await expectNoClipped(page);
   await page.keyboard.press("Escape");
+  await expect(main.getByText("Termômetro do Mês")).toHaveCount(0);
+  await expect(main.getByText("Próximos meses")).toHaveCount(0);
 
   await page.evaluate(() => {
     const scroller = document.querySelector("table[data-month]")?.parentElement;
@@ -161,4 +167,24 @@ test("Lançamentos switches to the planilha, remembers it, shows a day's entries
   await expect.poll(() => todayInView(page, today)).toBe(true);
   await expect(day).toBeFocused();
   await expect(goToday).toHaveCount(0);
+
+  // SOL-171: today's Saída is a "-": a tap opens Lançar as a conta on today, and closing it leaves the grid in place.
+  const outflow = day.locator("xpath=ancestor::tr").locator("td").nth(2);
+  await expect(outflow).toContainText("-");
+  const box = await outflow.boundingBox();
+  expect(box?.height).toBeGreaterThanOrEqual(44);
+  expect(box?.width).toBeGreaterThanOrEqual(44);
+  const scroll = () =>
+    page.evaluate(() => {
+      const scroller = document.querySelector("table[data-month]")?.parentElement;
+      return [scroller?.scrollLeft, scroller?.scrollTop];
+    });
+  const before = await scroll();
+  await outflow.click();
+  const create = page.getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ });
+  await expect(create.getByRole("radio", { name: "Conta" })).toBeChecked();
+  await page.keyboard.press("Escape");
+  await expect(create).toHaveCount(0);
+  await expect(day).toBeFocused();
+  expect(await scroll()).toEqual(before);
 });

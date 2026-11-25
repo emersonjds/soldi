@@ -1223,6 +1223,27 @@ describe("Mês", () => {
       expect(grid()).toHaveClass(TWO_COLUMNS);
     });
 
+    it("hides the right column in Planilha and brings it back in Lista, keeping the hero and Contas a pagar (SOL-171 A16)", async () => {
+      open({
+        "GET /api/months/2026-11": {
+          status: 200,
+          body: { ...MONTH, projected_balance: "-312.40", projected_tier: "light_red", bills_of_month: BILLS_OF_MONTH },
+        },
+        "GET /api/forecast": { status: 200, body: FORECAST },
+      });
+      const rail = ["Termômetro do Mês", "Próximos meses", "Cofrinhos", "Para Onde Vai"];
+      for (const name of rail) await screen.findByRole("region", { name });
+
+      await userEvent.click(within(views()).getByRole("radio", { name: "Planilha" }));
+      expect(await within(ledger()).findAllByRole("table")).not.toHaveLength(0);
+      for (const name of rail) expect(screen.queryByRole("region", { name })).not.toBeInTheDocument();
+      for (const name of ["Saldo hoje", "Contas a pagar"])
+        expect(screen.getByRole("region", { name })).toBeInTheDocument();
+
+      await userEvent.click(within(views()).getByRole("radio", { name: "Lista" }));
+      for (const name of rail) expect(await screen.findByRole("region", { name })).toBeInTheDocument();
+    });
+
     it("opens on Planilha when it was chosen on an earlier visit, even for a month with no entries", async () => {
       localStorage.setItem("soldi:open:ledger-planilha", "open");
       open({
