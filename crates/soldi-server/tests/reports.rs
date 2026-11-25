@@ -1199,3 +1199,62 @@ async fn sol_174_one_gastos_and_one_guardado_on_mes_meu_ano_and_para_onde_vai(po
     assert_eq!(planned["balance_today"], month["balance_today"]);
     assert_eq!(planned_report["spent_total"], report["spent_total"]);
 }
+
+/// SOL-187: a card parcelado counts one parcela per month (each member on its own date, SOL-174
+/// row 8), a conta parcelada its paid parcela, the fatura payment nothing.
+#[sqlx::test]
+async fn sol_187_gastos_counts_one_parcela_per_month(pool: PgPool) {
+    let ana = TestApp::signed_in(pool, "ana@example.com").await;
+    ana.open_at("0", "2026-09-01").await;
+    let porto = card(&ana, "Porto").await;
+    let mercado = ana.category_id("Mercado").await;
+    let (status, created) = ana
+        .post(
+            "/api/transactions",
+            json!({ "date": "2026-10-20", "amount": "12000.00", "kind": "daily",
+                    "category_id": mercado, "card_id": porto, "installments": 10 }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{created}");
+    spend(&ana, &porto, "2026-11-08", "300.00").await;
+    let luz = ana.category_id("Luz").await;
+    let (status, sofa) = ana
+        .post(
+            "/api/bills",
+            json!({ "name": "Sofá", "amount": "500", "due_day": 15, "category_id": luz,
+                    "installments": 6, "last_month": "2027-03-01" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{sofa}");
+    let sofa = sofa["id"].as_str().unwrap().to_string();
+    log(&ana, "2026-11-05", "income", "6000.00", "Salário").await;
+    log(&ana, "2026-11-12", "daily", "100.00", "Mercado").await;
+    for (bill, date, amount) in [
+        (&porto, "2026-11-10", "1200.00"),
+        (&sofa, "2026-11-15", "500.00"),
+    ] {
+        let (status, paid) = ana
+            .post(
+                &format!("/api/bills/{bill}/pay?month=2026-11"),
+                json!({ "date": date, "amount": amount }),
+            )
+            .await;
+        assert_eq!(status, StatusCode::CREATED, "{paid}");
+    }
+
+    let (_, month) = ana.get("/api/months/2026-11").await;
+    let (_, report) = ana.get("/api/reports/categories?month=2026-11").await;
+    let (_, year) = year_report(&ana, "2026").await;
+
+    assert_eq!(
+        money_cents(&month["totals"]["spent"]),
+        210_000,
+        "{}",
+        month["totals"]
+    );
+    assert_eq!(money_cents(&report["spent_total"]), 210_000);
+    assert_eq!(
+        amounts(&year["top_months"], "month")[..2],
+        [pair("2026-11", "2100.00"), pair("2026-10", "1200.00")]
+    );
+}
