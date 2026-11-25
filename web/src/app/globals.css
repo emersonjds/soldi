@@ -49,9 +49,7 @@
   --color-brand: var(--brand);
   --color-brand-hover: var(--brand-hover);
   --color-brand-foreground: var(--brand-foreground);
-  --color-hero-from: var(--hero-from);
-  --color-hero-to: var(--hero-to);
-  --color-hero-foreground: var(--hero-foreground);
+  --color-brand-soft: var(--brand-soft);
   --color-income: var(--income);
   --color-income-soft: var(--income-soft);
   --color-income-text: var(--income-text);

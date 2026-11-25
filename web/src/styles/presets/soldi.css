@@ -6,44 +6,42 @@ value: soldi
 /* The one place raw color lives (docs/design/tokens.md). Components use the semantic names. */
 :root[data-theme-preset="soldi"] {
   --radius: 1rem;
-  --background: #fbf8ff;
-  --foreground: #151935;
+  --background: #ffffff;
+  --foreground: #1f2328;
   --card: #ffffff;
-  --card-foreground: #151935;
+  --card-foreground: #1f2328;
   --popover: #ffffff;
-  --popover-foreground: #151935;
-  --primary: #5341cd;
+  --popover-foreground: #1f2328;
+  --primary: #357a6d;
   --primary-foreground: #ffffff;
-  --secondary: #edecff;
-  --secondary-foreground: #151935;
-  --muted: #f4f2ff;
-  --muted-foreground: #474554;
-  --accent: #edecff;
-  --accent-foreground: #151935;
+  --secondary: #f3f4f2;
+  --secondary-foreground: #1f2328;
+  --muted: #f3f4f2;
+  --muted-foreground: #5f6670;
+  --accent: #f3f4f2;
+  --accent-foreground: #1f2328;
   --destructive: #ba1a1a;
-  --border: #e6e6ff;
-  --input: #c8c4d7;
-  --ring: #6c5ce7;
-  --chart-1: #6c5ce7;
+  --border: #e6e7ea;
+  --input: #e6e7ea;
+  --ring: #357a6d;
+  --chart-1: #357a6d;
   --chart-2: #16a34a;
   --chart-3: #f59e0b;
   --chart-4: #dc2626;
   --chart-5: #06b6d4;
   --sidebar: #ffffff;
-  --sidebar-foreground: #151935;
-  --sidebar-primary: #5341cd;
+  --sidebar-foreground: #1f2328;
+  --sidebar-primary: #357a6d;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #edecff;
-  --sidebar-accent-foreground: #5341cd;
-  --sidebar-border: #e6e6ff;
-  --sidebar-ring: #6c5ce7;
+  --sidebar-accent: #e6f1ee;
+  --sidebar-accent-foreground: #2c6a5e;
+  --sidebar-border: #e6e7ea;
+  --sidebar-ring: #357a6d;
 
-  --brand: #6c5ce7;
-  --brand-hover: #5a4bd1;
+  --brand: #357a6d;
+  --brand-hover: #2c6a5e;
   --brand-foreground: #ffffff;
-  --hero-from: #1e1b4b;
-  --hero-to: #312e81;
-  --hero-foreground: #ffffff;
+  --brand-soft: #e6f1ee;
   --income: #16a34a;
   --income-soft: #dcfce7;
   --income-text: #15803d;
@@ -54,21 +52,21 @@ value: soldi
   --split-daily: #0891b2;
 
   /* Tier: strong color for strips and dots, soft background and AA text for pills. */
-  --tier-red: #dc2626;
-  --tier-red-soft: #fee2e2;
-  --tier-red-foreground: #991b1b;
-  --tier-light-red: #f87171;
-  --tier-light-red-soft: #fee2e2;
-  --tier-light-red-foreground: #b91c1c;
-  --tier-yellow: #f59e0b;
-  --tier-yellow-soft: #fef3c7;
-  --tier-yellow-foreground: #92400e;
-  --tier-light-green: #4ade80;
-  --tier-light-green-soft: #dcfce7;
-  --tier-light-green-foreground: #166534;
-  --tier-green: #16a34a;
-  --tier-green-soft: #dcfce7;
-  --tier-green-foreground: #14532d;
+  --tier-red: #c94a4a;
+  --tier-red-soft: #fbe7e7;
+  --tier-red-foreground: #9b2c2c;
+  --tier-light-red: #dd7a4a;
+  --tier-light-red-soft: #fcede3;
+  --tier-light-red-foreground: #9a4a1f;
+  --tier-yellow: #d9a93a;
+  --tier-yellow-soft: #fbf3dc;
+  --tier-yellow-foreground: #7a5a12;
+  --tier-light-green: #6fae7f;
+  --tier-light-green-soft: #eaf4ec;
+  --tier-light-green-foreground: #2f6b3f;
+  --tier-green: #357a6d;
+  --tier-green-soft: #e6f1ee;
+  --tier-green-foreground: #2c6a5e;
 
   /* Category circles, white icon on top. */
   --cat-1: #ab6200;
@@ -101,14 +99,14 @@ value: soldi
   /* Sonner's own offset rules from 601px; the tab bar stays until lg. */
   --toast-bottom: var(--tabbar-space);
 
-  --shadow-2xs: 0 1px 2px rgb(30 27 75 / 0.04);
-  --shadow-xs: 0 1px 2px rgb(30 27 75 / 0.06);
-  --shadow-sm: 0 4px 16px rgb(30 27 75 / 0.08);
-  --shadow: 0 4px 16px rgb(30 27 75 / 0.08);
-  --shadow-md: 0 8px 24px rgb(30 27 75 / 0.12);
-  --shadow-lg: 0 12px 32px rgb(83 65 205 / 0.28);
-  --shadow-xl: 0 16px 40px rgb(30 27 75 / 0.16);
-  --shadow-2xl: 0 24px 56px rgb(30 27 75 / 0.2);
+  --shadow-2xs: 0 1px 2px rgb(31 35 40 / 0.04);
+  --shadow-xs: 0 1px 2px rgb(31 35 40 / 0.06);
+  --shadow-sm: 0 4px 16px rgb(31 35 40 / 0.06);
+  --shadow: 0 4px 16px rgb(31 35 40 / 0.06);
+  --shadow-md: 0 8px 24px rgb(31 35 40 / 0.12);
+  --shadow-lg: 0 12px 32px rgb(31 35 40 / 0.12);
+  --shadow-xl: 0 16px 40px rgb(31 35 40 / 0.16);
+  --shadow-2xl: 0 24px 56px rgb(31 35 40 / 0.2);
 }
 
 @media (width >= 64rem) {
