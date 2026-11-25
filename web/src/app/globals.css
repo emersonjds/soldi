@@ -50,6 +50,7 @@
   --color-brand-hover: var(--brand-hover);
   --color-brand-foreground: var(--brand-foreground);
   --color-brand-soft: var(--brand-soft);
+  --color-wordmark: var(--wordmark);
   --color-income: var(--income);
   --color-income-soft: var(--income-soft);
   --color-income-text: var(--income-text);
@@ -98,6 +99,7 @@
   --color-cat-24: var(--cat-24);
   --font-heading: var(--font-sans);
   --font-sans: var(--font-sans);
+  --font-wordmark: var(--font-nunito);
 }
 
 /* Default theme styles (used when no data-theme-preset is set or when 'default' is selected).

@@ -7,8 +7,7 @@ const palette = new Map([...preset.matchAll(/--(cat-\d+): (#[0-9a-f]{6});/g)].ma
 const token = (name: string) => preset.match(new RegExp(`--${name}: (#[0-9a-f]{6});`))?.[1] ?? "";
 const card = token("card");
 const glyph = "#ffffff";
-/** Wordmark slate, set in shared/ui/wordmark.tsx (SOL-181). */
-const wordmark = "#555f6e";
+const wordmark = token("wordmark");
 
 type Rgb = [number, number, number];
 type Matrix = [Rgb, Rgb, Rgb];
@@ -154,6 +153,7 @@ describe("brand and text contrast", () => {
   });
 
   it("paints the wordmark at 4.5:1 on the card", () => {
+    expect(wordmark).toBe("#555f6e");
     expect(contrast(wordmark, card)).toBeGreaterThanOrEqual(4.5);
   });
 });
