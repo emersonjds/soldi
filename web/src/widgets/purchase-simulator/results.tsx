@@ -39,9 +39,11 @@ const COUNTS: Count[] = [6, 10, 12];
 const card = "flex flex-col gap-4 rounded-2xl bg-card p-4 shadow-sm lg:p-6";
 const eyebrow = "font-semibold text-xs uppercase tracking-wider";
 
-/** The month's two largest outflows landing by `day`, its red day, the day's Diário previsto among them (SOL-164). */
+/** The month's two largest outflows landing by `day`, its red day, the Diário previsto summed over the same days among them (SOL-164, SOL-169). */
 const outflowsOf = (day: string, view?: Schemas["MonthView"]) => {
-  const previsto = cents(view?.days.find((each) => each.date === day)?.previsto ?? "0.00");
+  const previsto = (view?.days ?? [])
+    .filter((each) => each.date <= day)
+    .reduce((sum, each) => sum + cents(each.previsto), 0);
   return [
     ...(view?.bills_of_month ?? [])
       .filter((bill) => bill.lands_on && bill.lands_on <= day)
