@@ -39,9 +39,9 @@ async fn rule_1_the_month_by_category_against_the_previous_month(pool: PgPool) {
 
     assert_eq!(status, StatusCode::OK, "{report}");
     assert_eq!(report["month"], "2026-11");
-    assert_eq!(report["outflow_total"], "3459.56");
+    assert_eq!(report["spent_total"], "3459.56");
     assert_eq!(report["income_total"], "5000.00");
-    let outflow = report["outflow"].as_array().unwrap();
+    let outflow = report["spending"].as_array().unwrap();
     let names: Vec<&str> = outflow
         .iter()
         .map(|row| row["name"].as_str().unwrap())
@@ -62,8 +62,8 @@ async fn rule_1_the_month_by_category_against_the_previous_month(pool: PgPool) {
     assert_eq!(report["income"][0]["pct"], "100.0");
 
     let (_, theirs) = bia.get("/api/reports/categories?month=2026-11").await;
-    assert_eq!(theirs["outflow_total"], "50.00");
-    assert_eq!(theirs["outflow"][0]["delta_pct"], serde_json::Value::Null);
+    assert_eq!(theirs["spent_total"], "50.00");
+    assert_eq!(theirs["spending"][0]["delta_pct"], serde_json::Value::Null);
 }
 
 #[sqlx::test]
@@ -75,8 +75,23 @@ async fn an_empty_month_has_empty_groups(pool: PgPool) {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(
         report,
-        json!({ "month": "2030-01", "outflow_total": "0.00", "income_total": "0.00", "outflow": [], "income": [], "groups": [] })
+        json!({ "month": "2030-01", "spent_total": "0.00", "income_total": "0.00", "saved": "0.00", "spending": [], "income": [], "groups": [] })
     );
+}
+
+#[sqlx::test]
+async fn para_onde_vai_leaves_out_entries_before_the_opening_date(pool: PgPool) {
+    let ana = TestApp::signed_in(pool, "ana@example.com").await;
+    ana.open_at("0", "2026-11-01").await;
+    log(&ana, "2026-11-05", "daily", "70", "Mercado").await;
+    log(&ana, "2026-11-12", "daily", "30", "Mercado").await;
+    ana.open_at("0", "2026-11-10").await;
+
+    let (status, report) = ana.get("/api/reports/categories?month=2026-11").await;
+
+    assert_eq!(status, StatusCode::OK, "{report}");
+    assert_eq!(report["spent_total"], "30.00");
+    assert_eq!(report["spending"][0]["amount"], "30.00");
 }
 
 #[sqlx::test]
@@ -125,9 +140,9 @@ async fn subcategories_add_up_in_their_parents_group(pool: PgPool) {
     let (status, report) = ana.get("/api/reports/categories?month=2026-11").await;
 
     assert_eq!(status, StatusCode::OK, "{report}");
-    assert_eq!(report["outflow"][2]["name"], "Móveis");
-    assert_eq!(report["outflow"][2]["parent_id"], gasto.as_str());
-    assert_eq!(report["outflow"][2]["pct"], "15.0");
+    assert_eq!(report["spending"][2]["name"], "Móveis");
+    assert_eq!(report["spending"][2]["parent_id"], gasto.as_str());
+    assert_eq!(report["spending"][2]["pct"], "15.0");
     assert_eq!(
         report["groups"][1],
         json!({
@@ -464,7 +479,7 @@ async fn d28_para_onde_vai_counts_card_spends_in_their_categories_and_not_the_fa
     let (_, october) = ana.get("/api/reports/categories?month=2026-10").await;
 
     let rows = |report: &serde_json::Value| -> Vec<(String, String)> {
-        report["outflow"]
+        report["spending"]
             .as_array()
             .unwrap()
             .iter()
@@ -483,7 +498,7 @@ async fn d28_para_onde_vai_counts_card_spends_in_their_categories_and_not_the_fa
             ("Mercado".into(), "50.00".into())
         ]
     );
-    assert_eq!(november["outflow_total"], "150.00");
+    assert_eq!(november["spent_total"], "150.00");
     assert_eq!(rows(&october), [("Mercado".into(), "30.00".into())]);
 }
 
@@ -513,8 +528,8 @@ async fn d28_an_archived_cards_payment_stays_out_of_para_onde_vai(pool: PgPool) 
 
     let (_, november) = ana.get("/api/reports/categories?month=2026-11").await;
 
-    assert_eq!(november["outflow"], json!([]));
-    assert_eq!(november["outflow_total"], "0.00");
+    assert_eq!(november["spending"], json!([]));
+    assert_eq!(november["spent_total"], "0.00");
 }
 
 async fn year_report(user: &TestApp, year: &str) -> (StatusCode, serde_json::Value) {

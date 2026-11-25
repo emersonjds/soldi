@@ -48,9 +48,10 @@ const group = (
 /** Economia holds 1.000,10 in Reserva, 250,20 in Viagem and 149,70 of its own: 1.400,00. */
 const REPORT: Schemas["CategoryReport"] = {
   month: "2026-11",
-  outflow_total: "13584.31",
+  spent_total: "13584.31",
+  saved: "0.00",
   income_total: "500.00",
-  outflow: [
+  spending: [
     share(ALUGUEL, "12000.00", "88.3", "-6.0"),
     share(RESERVA, "1000.10", "7.4"),
     share(VIAGEM, "250.20", "1.8", "10.0"),
@@ -349,7 +350,7 @@ describe("CategoryBreakdown", () => {
     show({
       report: {
         ...REPORT,
-        outflow: [share(odd, "12000.00", "88.3", "-6.0"), share(formula, "184.31", "1.4")],
+        spending: [share(odd, "12000.00", "88.3", "-6.0"), share(formula, "184.31", "1.4")],
         groups: [group(odd, "12000.00", "88.3", "-6.0"), group(formula, "184.31", "1.4", null)],
       },
     });
@@ -363,7 +364,7 @@ describe("CategoryBreakdown", () => {
   });
 
   it("says when nothing was spent, keeping the header", async () => {
-    show({ report: { ...REPORT, outflow: [], outflow_total: "0.00", groups: REPORT.groups.slice(3) } });
+    show({ report: { ...REPORT, spending: [], spent_total: "0.00", groups: REPORT.groups.slice(3) } });
 
     expect(await screen.findByText("Nenhum gasto neste mês ainda.")).toBeInTheDocument();
     expect(screen.getByText("Total Saídas:")).toBeInTheDocument();

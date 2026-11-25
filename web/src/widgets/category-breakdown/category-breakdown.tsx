@@ -48,7 +48,7 @@ const previousShort = (month: string) => monthShort(addMonths(month, -1)).toLowe
 
 const exportCsv = (report: Report) => {
   const groupName = new Map(report.groups.map((group) => [group.category_id, group.name]));
-  const lines = report.outflow.map((share) => {
+  const lines = report.spending.map((share) => {
     const parent = share.parent_id ? groupName.get(share.parent_id) : undefined;
     return [
       csvCell(parent ?? share.name),
@@ -467,7 +467,7 @@ const HeaderRow = ({ report, groups, picked, onPick }: HeaderRowProps) => (
     <p className="text-muted-foreground text-sm">Visão analítica de despesas e alocação de capital</p>
     <span className="bg-expense-soft text-tier-red-foreground ml-auto flex min-h-11 items-center gap-2 rounded-full px-4 text-sm font-semibold">
       <span aria-hidden className="bg-expense size-2 rounded-full" />
-      Total Saídas: <Money amount={report.outflow_total} />
+      Total Saídas: <Money amount={report.spent_total} />
     </span>
     <Select value={picked ?? ALL} onValueChange={(value) => onPick(value === ALL ? undefined : value)}>
       <SelectTrigger aria-label="Categoria" className="bg-card min-h-11 text-base">
@@ -510,7 +510,7 @@ export const CategoryBreakdown = ({ month, group: asked }: { month: string; grou
     );
   if (!report.data) return null;
 
-  const shares = report.data.outflow;
+  const shares = report.data.spending;
   const groups = report.data.groups.filter((group) => group.kind !== "income");
   const savingsId = categories.data?.find((each) => each.is_savings && !each.parent_id)?.id;
   const wanted = asked && plain(asked);
@@ -534,7 +534,7 @@ export const CategoryBreakdown = ({ month, group: asked }: { month: string; grou
       ) : (
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-2 xl:items-start">
           <div className="flex min-w-0 flex-col gap-6">
-            <Composition groups={groups} total={report.data.outflow_total} active={picked} onSelect={toggle} />
+            <Composition groups={groups} total={report.data.spent_total} active={picked} onSelect={toggle} />
             <section aria-labelledby={detailId} className={card}>
               <header className="flex items-end justify-between gap-3">
                 <div className="flex flex-col gap-1">

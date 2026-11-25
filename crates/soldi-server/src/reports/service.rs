@@ -15,8 +15,9 @@ pub async fn categories(
     month: &str,
 ) -> Result<CategoryReport, AppError> {
     let month = months::domain::parse_month(month)?;
-    let from = month - Months::new(1);
     let mut conn = pool.acquire().await?;
+    let opening = settings::repo::find(&mut conn, user.id).await?.opening_date;
+    let from = (month - Months::new(1)).max(opening);
     let sums =
         repo::category_sums(&mut conn, user.id, from, months::domain::month_end(month)).await?;
     Ok(domain::report(month, sums))

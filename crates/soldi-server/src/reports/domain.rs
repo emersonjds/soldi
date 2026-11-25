@@ -1,3 +1,4 @@
+use std::collections::hash_map::Entry;
 use std::collections::{BTreeMap, HashMap};
 
 use chrono::{Datelike, Months, NaiveDate};
@@ -28,12 +29,62 @@ pub struct CategorySum {
     pub group_icon: String,
     pub group_color: String,
     pub group_kind: CategoryKind,
+    pub card_id: Option<Uuid>,
+    pub card_name: Option<String>,
+    /// Its category or its category's parent is `Economia` (`is_savings`).
+    pub savings: bool,
+    /// The entry has a `cofrinho_id` (a resgate unless it is a Saída).
+    pub cofrinho: bool,
+    /// The entry pays a card's fatura (its `recurring_bill` has a `closing_day`).
+    pub fatura_payment: bool,
+}
+
+/// What an entry is to its month (D54).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Flow {
+    Income,
+    Spent,
+    Saved,
+    Withdrawn,
+    Ignored,
 }
 
 impl CategorySum {
     fn group_id(&self) -> Uuid {
         self.parent_id.unwrap_or(self.category_id)
     }
+
+    pub fn flow(&self) -> Flow {
+        match self.kind {
+            _ if self.fatura_payment => Flow::Ignored,
+            CategoryKind::Bill if self.savings || self.cofrinho => Flow::Saved,
+            _ if self.cofrinho => Flow::Withdrawn,
+            CategoryKind::Income => Flow::Income,
+            CategoryKind::Bill | CategoryKind::Daily => Flow::Spent,
+        }
+    }
+}
+
+/// Entradas (resgates out), Gastos and Guardado (deposits − resgates) of `sums` (D54).
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct Spending {
+    pub income: Decimal,
+    pub spent: Decimal,
+    pub saved: Decimal,
+}
+
+pub fn spending<'a>(sums: impl IntoIterator<Item = &'a CategorySum>) -> Spending {
+    let mut total = Spending::default();
+    for sum in sums {
+        match sum.flow() {
+            Flow::Income => total.income += sum.amount,
+            Flow::Spent => total.spent += sum.amount,
+            Flow::Saved => total.saved += sum.amount,
+            Flow::Withdrawn => total.saved -= sum.amount,
+            Flow::Ignored => {}
+        }
+    }
+    total
 }
 
 /// `part` as a percentage of `whole` with one decimal, half to even; none when `whole` is 0.
@@ -275,22 +326,41 @@ pub fn year_report(
     }
 }
 
-/// `sums` hold `month` and the month before it; categories without spending in `month` are left out.
+/// `sums` hold `month` and the month before it; only Gastos and Entradas (D54) are shares, one per
+/// category, and categories without them in `month` are left out. `saved` is the month's Guardado.
 pub fn report(month: NaiveDate, sums: Vec<CategorySum>) -> CategoryReport {
+    let saved = spending(sums.iter().filter(|sum| sum.month == month)).saved;
+    let mut merged: HashMap<(NaiveDate, Uuid, Flow), CategorySum> = HashMap::new();
+    for sum in sums {
+        let flow = sum.flow();
+        if !matches!(flow, Flow::Spent | Flow::Income) {
+            continue;
+        }
+        match merged.entry((sum.month, sum.category_id, flow)) {
+            Entry::Occupied(mut row) => row.get_mut().amount += sum.amount,
+            Entry::Vacant(row) => {
+                row.insert(sum);
+            }
+        }
+    }
     let (mut current, previous): (Vec<CategorySum>, Vec<CategorySum>) =
-        sums.into_iter().partition(|sum| sum.month == month);
+        merged.into_values().partition(|sum| sum.month == month);
     let mut previous_group: HashMap<Uuid, Decimal> = HashMap::new();
+    let mut previous_category: HashMap<Uuid, Decimal> = HashMap::new();
     for sum in &previous {
         *previous_group.entry(sum.group_id()).or_default() += sum.amount;
+        *previous_category.entry(sum.category_id).or_default() += sum.amount;
     }
-    let previous: HashMap<Uuid, Decimal> = previous
-        .into_iter()
-        .map(|sum| (sum.category_id, sum.amount))
-        .collect();
-    current.sort_by(|a, b| b.amount.cmp(&a.amount).then_with(|| a.name.cmp(&b.name)));
+    let previous = previous_category;
+    current.sort_by(|a, b| {
+        b.amount
+            .cmp(&a.amount)
+            .then_with(|| a.name.cmp(&b.name))
+            .then_with(|| a.category_id.cmp(&b.category_id))
+    });
     let (income, outflow): (Vec<CategorySum>, Vec<CategorySum>) = current
         .into_iter()
-        .partition(|sum| sum.kind == CategoryKind::Income);
+        .partition(|sum| sum.flow() == Flow::Income);
     let mut groups = Vec::new();
     let mut shares = |section: Vec<CategorySum>| {
         let total: Decimal = section.iter().map(|sum| sum.amount).sum();
@@ -352,13 +422,14 @@ pub fn report(month: NaiveDate, sums: Vec<CategorySum>) -> CategoryReport {
             .collect();
         (total, shares)
     };
-    let (outflow_total, outflow) = shares(outflow);
+    let (spent_total, spending) = shares(outflow);
     let (income_total, income) = shares(income);
     CategoryReport {
         month: month.format("%Y-%m").to_string(),
-        outflow_total,
+        spent_total,
         income_total,
-        outflow,
+        saved,
+        spending,
         income,
         groups,
     }
@@ -421,7 +492,213 @@ mod tests {
             group_icon: "circle".into(),
             group_color: "cat-1".into(),
             group_kind: kind,
+            card_id: None,
+            card_name: None,
+            savings: false,
+            cofrinho: false,
+            fatura_payment: false,
         }
+    }
+
+    fn on_card(row: CategorySum) -> CategorySum {
+        CategorySum {
+            card_id: Some(Uuid::from_u128(99)),
+            card_name: Some("Porto".into()),
+            ..row
+        }
+    }
+
+    #[test]
+    fn d54_each_rule_row_is_gastos_guardado_income_or_nothing() {
+        let bill = || sum(1, "Luz", Bill, "2026-11", "187.35");
+        let daily = || sum(2, "Mercado", Daily, "2026-11", "250.40");
+        let income = || sum(3, "Salário", Income, "2026-11", "6000");
+        let cases = [
+            ("1, 2, 5: conta paid or saída avulsa", bill(), Flow::Spent),
+            ("6: diário", daily(), Flow::Spent),
+            ("7, 8: card purchase", on_card(daily()), Flow::Spent),
+            (
+                "9, 11: fatura payment",
+                CategorySum {
+                    fatura_payment: true,
+                    ..bill()
+                },
+                Flow::Ignored,
+            ),
+            (
+                "9: fatura payment edited to diário",
+                CategorySum {
+                    fatura_payment: true,
+                    ..daily()
+                },
+                Flow::Ignored,
+            ),
+            (
+                "9: fatura payment edited to entrada",
+                CategorySum {
+                    fatura_payment: true,
+                    ..income()
+                },
+                Flow::Ignored,
+            ),
+            (
+                "12: saída under Economia",
+                CategorySum {
+                    savings: true,
+                    ..bill()
+                },
+                Flow::Saved,
+            ),
+            (
+                "12: saída under an Economia child",
+                CategorySum {
+                    savings: true,
+                    kind: Bill,
+                    ..child(4, "Reserva", (5, "Economia"), "2026-11", "500")
+                },
+                Flow::Saved,
+            ),
+            (
+                "12: deposit into a cofrinho",
+                CategorySum {
+                    cofrinho: true,
+                    ..bill()
+                },
+                Flow::Saved,
+            ),
+            (
+                "13: resgate",
+                CategorySum {
+                    cofrinho: true,
+                    ..income()
+                },
+                Flow::Withdrawn,
+            ),
+            ("18: entrada", income(), Flow::Income),
+        ];
+        for (row, sum, flow) in cases {
+            assert_eq!(sum.flow(), flow, "row {row}");
+        }
+    }
+
+    /// Section 5 of SOL-174: October's card purchase and November's entries.
+    fn seeded_month() -> Vec<CategorySum> {
+        vec![
+            on_card(child(10, "Lazer", (11, "Lazer"), "2026-10", "450.00")),
+            child(20, "Mercado", (21, "Alimentação"), "2026-11", "250.40"),
+            child(22, "Padaria", (21, "Alimentação"), "2026-11", "32.50"),
+            sum(30, "Salário", Income, "2026-11", "6000.00"),
+            CategorySum {
+                savings: true,
+                cofrinho: true,
+                kind: Bill,
+                ..child(40, "Viagem", (41, "Economia"), "2026-11", "500.00")
+            },
+            CategorySum {
+                fatura_payment: true,
+                ..sum(50, "Porto", Bill, "2026-11", "450.00")
+            },
+            CategorySum {
+                kind: Bill,
+                ..child(60, "Luz", (61, "Casa"), "2026-11", "187.35")
+            },
+            CategorySum {
+                savings: true,
+                cofrinho: true,
+                kind: Income,
+                ..child(40, "Viagem", (41, "Economia"), "2026-11", "120.00")
+            },
+            child(70, "Farmácia", (71, "Saúde"), "2026-11", "80.00"),
+        ]
+    }
+
+    #[test]
+    fn d54_the_seeded_month_spends_550_25_and_saves_380() {
+        let rows = seeded_month();
+        let (october, november): (Vec<_>, Vec<_>) =
+            rows.iter().partition(|sum| sum.month == date("2026-10-01"));
+
+        assert_eq!(
+            spending(november),
+            Spending {
+                income: money("6000.00"),
+                spent: money("550.25"),
+                saved: money("380.00"),
+            }
+        );
+        assert_eq!(spending(october).spent, money("450.00"));
+    }
+
+    #[test]
+    fn d54_more_resgates_than_deposits_save_a_negative_amount() {
+        let rows = [
+            CategorySum {
+                cofrinho: true,
+                ..sum(1, "Viagem", Bill, "2026-11", "100")
+            },
+            CategorySum {
+                cofrinho: true,
+                ..sum(1, "Viagem", Income, "2026-11", "150")
+            },
+        ];
+
+        assert_eq!(spending(&rows).saved, money("-50"));
+    }
+
+    #[test]
+    fn d54_para_onde_vai_shows_gastos_by_group_and_guardado_apart() {
+        let report = report(date("2026-11-01"), seeded_month());
+
+        assert_eq!(report.spent_total, money("550.25"));
+        assert_eq!(report.saved, money("380.00"));
+        assert_eq!(report.income_total, money("6000.00"));
+        let groups: Vec<_> = report
+            .groups
+            .iter()
+            .map(|group| {
+                (
+                    group.name.as_str(),
+                    group.amount.to_string(),
+                    group.pct.to_string(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            groups,
+            [
+                ("Alimentação", "282.90".into(), "51.4".into()),
+                ("Casa", "187.35".into(), "34.0".into()),
+                ("Saúde", "80.00".into(), "14.5".into()),
+                ("Salário", "6000.00".into(), "100.0".into()),
+            ]
+        );
+        assert_eq!(report.income.len(), 1);
+    }
+
+    #[test]
+    fn d54_cash_and_card_rows_of_one_category_make_one_share() {
+        let report = report(
+            date("2026-11-01"),
+            vec![
+                sum(1, "Mercado", Daily, "2026-11", "100"),
+                on_card(sum(1, "Mercado", Daily, "2026-11", "50")),
+                sum(1, "Mercado", Daily, "2026-10", "60"),
+                on_card(sum(1, "Mercado", Daily, "2026-10", "40")),
+            ],
+        );
+
+        assert_eq!(
+            rows(&report.spending),
+            [(
+                "Mercado",
+                "150".into(),
+                "100.0".into(),
+                "100".into(),
+                Some("50.0".into())
+            )]
+        );
+        assert_eq!(report.groups.len(), 1);
+        assert_eq!(report.groups[0].previous_amount, money("100"));
     }
 
     fn child(id: u128, name: &str, parent: (u128, &str), month: &str, amount: &str) -> CategorySum {
@@ -462,11 +739,11 @@ mod tests {
         );
 
         assert_eq!(report.month, "2026-11");
-        assert_eq!(report.outflow_total, money("3459.56"));
+        assert_eq!(report.spent_total, money("3459.56"));
         assert_eq!(report.income_total, money("0"));
         assert!(report.income.is_empty());
         assert_eq!(
-            rows(&report.outflow),
+            rows(&report.spending),
             [
                 ("Aluguel", "2259.56".into(), "65.3".into(), "0".into(), None),
                 (
@@ -479,8 +756,8 @@ mod tests {
                 ("Comida fora", "300".into(), "8.7".into(), "0".into(), None),
             ]
         );
-        assert_eq!(report.outflow[0].category_id, Uuid::from_u128(3));
-        assert_eq!(report.outflow[0].kind, Bill);
+        assert_eq!(report.spending[0].category_id, Uuid::from_u128(3));
+        assert_eq!(report.spending[0].kind, Bill);
     }
 
     #[test]
@@ -495,7 +772,7 @@ mod tests {
         );
 
         assert_eq!(report.income_total, money("6000"));
-        assert_eq!(report.outflow_total, money("900"));
+        assert_eq!(report.spent_total, money("900"));
         assert_eq!(
             rows(&report.income),
             [
@@ -503,7 +780,7 @@ mod tests {
                 ("Extra", "1000".into(), "16.7".into(), "0".into(), None),
             ]
         );
-        assert_eq!(report.outflow[0].pct.to_string(), "100.0");
+        assert_eq!(report.spending[0].pct.to_string(), "100.0");
     }
 
     #[test]
@@ -520,7 +797,7 @@ mod tests {
 
         assert_eq!(
             report
-                .outflow
+                .spending
                 .iter()
                 .map(|share| share.delta_pct.map(|delta| delta.to_string()))
                 .collect::<Vec<_>>(),
@@ -545,9 +822,9 @@ mod tests {
             ],
         );
 
-        assert_eq!(report.outflow_total, money("500"));
+        assert_eq!(report.spent_total, money("500"));
         assert_eq!(
-            rows(&report.outflow),
+            rows(&report.spending),
             [
                 ("Mercado", "250".into(), "50.0".into(), "0".into(), None),
                 ("Casa", "100".into(), "20.0".into(), "0".into(), None),
@@ -562,8 +839,8 @@ mod tests {
                 ("Água", "40".into(), "8.0".into(), "0".into(), None),
             ]
         );
-        assert_eq!(report.outflow[2].parent_id, Some(Uuid::from_u128(1)));
-        assert_eq!(report.outflow[1].parent_id, None);
+        assert_eq!(report.spending[2].parent_id, Some(Uuid::from_u128(1)));
+        assert_eq!(report.spending[1].parent_id, None);
         let groups: Vec<_> = report
             .groups
             .iter()

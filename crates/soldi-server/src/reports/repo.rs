@@ -5,8 +5,8 @@ use uuid::Uuid;
 
 use super::domain::{CategorySum, MonthSaving, YearFlow, YearGroupSum};
 
-/// Totals by category and month for the entries dated `from` to `to`, resgates left out (SOL-28)
-/// and card payments left out, their spends already counted (D28).
+/// Totals by month, category, entry kind, card and the flags `CategorySum::flow` reads, for the
+/// entries dated `from` to `to`; every other cut is the rule (D54).
 pub async fn category_sums(
     conn: &mut PgConnection,
     user_id: Uuid,
@@ -15,18 +15,23 @@ pub async fn category_sums(
 ) -> Result<Vec<CategorySum>, sqlx::Error> {
     sqlx::query_as!(
         CategorySum,
-        r#"SELECT c.id AS category_id, c.name, c.icon, c.color, c.kind AS "kind: CategoryKind",
+        r#"SELECT c.id AS category_id, c.name, c.icon, c.color, t.kind AS "kind: CategoryKind",
                   date_trunc('month', t.date::timestamp)::date AS "month!",
                   SUM(t.amount) AS "amount!", c.parent_id,
                   COALESCE(p.name, c.name) AS "group_name!", COALESCE(p.icon, c.icon) AS "group_icon!",
                   COALESCE(p.color, c.color) AS "group_color!",
-                  COALESCE(p.kind, c.kind) AS "group_kind!: CategoryKind"
+                  COALESCE(p.kind, c.kind) AS "group_kind!: CategoryKind",
+                  t.card_id, card.name AS "card_name?",
+                  (c.is_savings OR COALESCE(p.is_savings, false)) AS "savings!",
+                  t.cofrinho_id IS NOT NULL AS "cofrinho!",
+                  b.closing_day IS NOT NULL AS "fatura_payment!"
            FROM transactions t JOIN categories c ON c.user_id = t.user_id AND c.id = t.category_id
            LEFT JOIN categories p ON p.user_id = c.user_id AND p.id = c.parent_id
            LEFT JOIN recurring_bills b ON b.user_id = t.user_id AND b.id = t.recurring_bill_id
-           WHERE t.user_id = $1 AND t.date BETWEEN $2 AND $3 AND t.cofrinho_id IS NULL
-             AND b.closing_day IS NULL
-           GROUP BY c.id, p.id, date_trunc('month', t.date::timestamp)"#,
+           LEFT JOIN recurring_bills card ON card.user_id = t.user_id AND card.id = t.card_id
+           WHERE t.user_id = $1 AND t.date BETWEEN $2 AND $3
+           GROUP BY c.id, p.id, date_trunc('month', t.date::timestamp), t.kind, t.card_id, card.name,
+                    t.cofrinho_id IS NOT NULL, b.closing_day IS NOT NULL"#,
         user_id,
         from,
         to

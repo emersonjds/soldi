@@ -687,7 +687,7 @@ export interface components {
         };
         /**
          * @description A top-level category with its subcategories' amounts rolled in: `amount` and `previous_amount`
-         *     add its own entries and its subcategories'; `pct` is its share of the outflow or income total.
+         *     add its own entries and its subcategories'; `pct` is its share of the spending or income total.
          *     `children` are the subcategories with entries in the month, largest first; `kind` is the
          *     top-level category's own, whatever its subcategories' kinds.
          */
@@ -716,16 +716,20 @@ export interface components {
             category_ids: string[];
         };
         /**
-         * @description `outflow` (bills and daily) and `income`, each by amount, largest first; `groups` the same
-         *     month by top-level category, outflow groups then income groups, each by amount.
+         * @description `spending` (Gastos do mês: Saídas and Diário from the opening date, card purchases on their
+         *     own date, without Economia deposits and fatura payments, D54) and `income` (without resgates),
+         *     each by amount, largest first; `groups` the same month by top-level category, spending groups
+         *     then income groups, each by amount, never Economia or a cofrinho. `saved` is Guardado no mês,
+         *     deposits minus resgates, negative when the resgates are larger; never part of `spent_total`.
          */
         CategoryReport: {
             groups: components["schemas"]["CategoryGroup"][];
             income: components["schemas"]["CategoryShare"][];
             income_total: string;
             month: string;
-            outflow: components["schemas"]["CategoryShare"][];
-            outflow_total: string;
+            saved: string;
+            spending: components["schemas"]["CategoryShare"][];
+            spent_total: string;
         };
         /**
          * @description A category's spending or income in the month. `pct` is its share of the group's total and
@@ -3094,7 +3098,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The month's outflow and income by category, each against the previous month; resgates are not income */
+            /** @description The month's Gastos and income by category from the opening date, each against the previous month, and its Guardado apart; resgates are not income, deposits and fatura payments are not Gastos (D54) */
             200: {
                 headers: {
                     [name: string]: unknown;

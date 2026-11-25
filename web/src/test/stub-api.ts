@@ -333,9 +333,10 @@ const share = (
 /** Ana's November by category: rent fell against October, groceries grew, salary is new. */
 export const REPORT: Schemas["CategoryReport"] = {
   month: "2026-11",
-  outflow_total: "1384.31",
+  spent_total: "1384.31",
+  saved: "0.00",
   income_total: "500.00",
-  outflow: [share(ALUGUEL, "1200.00", "86.7", "1276.60", "-6.0"), share(MERCADO, "184.31", "13.3", "155.67", "18.4")],
+  spending: [share(ALUGUEL, "1200.00", "86.7", "1276.60", "-6.0"), share(MERCADO, "184.31", "13.3", "155.67", "18.4")],
   income: [share(SALARIO, "500.00", "100.0", "0.00", null)],
   groups: [
     { ...share(ALUGUEL, "1200.00", "86.7", "1276.60", "-6.0"), children: [] },

@@ -852,10 +852,10 @@ async fn d30a_an_underpaid_fatura_carries_its_rest_into_the_next_one(pool: PgPoo
     );
     assert_eq!(last_balance(&december), "910.00");
     assert_eq!(december["projected_balance"], "910.00");
-    assert_eq!(october_report["outflow"][0]["name"], "Mercado");
-    assert_eq!(october_report["outflow_total"], "50.00");
-    assert_eq!(november_report["outflow"][0]["name"], "Mercado");
-    assert_eq!(november_report["outflow_total"], "40.00");
+    assert_eq!(october_report["spending"][0]["name"], "Mercado");
+    assert_eq!(october_report["spent_total"], "50.00");
+    assert_eq!(november_report["spending"][0]["name"], "Mercado");
+    assert_eq!(november_report["spent_total"], "40.00");
 }
 
 #[sqlx::test]
