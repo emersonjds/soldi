@@ -12,7 +12,8 @@ The `designer` agent maps these onto the template's shadcn semantic tokens in `w
 |------|-------|-------|
 | background | `#FFFFFF` | app background |
 | card | `#FFFFFF` | radius 16px, shadow `0 4px 16px rgb(31 35 40 / .06)` |
-| secondary / muted / accent | `#F3F4F2` | inputs, chips, segmented control track, the auth page behind the sheet from `lg` |
+| secondary / muted | `#F3F4F2` | inputs, chips, segmented control track, the auth page behind the sheet from `lg` |
+| accent | `#ECEDEA` | hover over a surface or a chip |
 | foreground | `#1F2328` | primary text; 15.80:1 on white, 14.32:1 on secondary, 13.68:1 on brand-soft |
 | muted-foreground | `#5F6670` | captions; 5.80:1 on white, 5.26:1 on secondary, 5.02:1 on brand-soft |
 | primary / brand / ring | `#357A6D` | the one accent: links, active nav, primary buttons, "Lançar", focus ring; white on it 5.05:1 |
