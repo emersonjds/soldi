@@ -162,7 +162,7 @@ const palettes = readFileSync("src/styles/presets/palettes.css", "utf8");
 const blocks = new Map(
   [...palettes.matchAll(/\[data-palette="(\w+)"\] \{([^}]*)\}/g)].map(([, name, body]) => [name, body]),
 );
-const PALETTES = ["ameixa", "indigo", "petroleo", "berinjela", "marinho", "floresta"];
+const PALETTES = ["violeta", "ameixa", "indigo", "petroleo", "berinjela", "marinho", "floresta"];
 const PALETTE_TOKENS = [
   "brand",
   "primary",
@@ -184,7 +184,7 @@ const css = (name: string) => (name === "default" ? preset : (blocks.get(name) ?
 const read = (source: string, name: string) => source.match(new RegExp(`--${name}: ([^;]+);`))?.[1] ?? "";
 
 describe("brand palettes", () => {
-  it("ships the six alternative palettes", () => {
+  it("ships the seven alternative palettes", () => {
     expect([...blocks.keys()]).toEqual(PALETTES);
   });
 

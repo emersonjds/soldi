@@ -11,11 +11,12 @@ afterEach(() => {
 });
 
 describe("PalettePicker", () => {
-  it("offers the seven palettes with Mel e menta checked when nothing is stored", () => {
+  it("offers the eight palettes with Mel e menta checked when nothing is stored", () => {
     render(<PalettePicker />);
 
     expect(screen.getByRole("radiogroup", { name: "Paleta" })).toBeInTheDocument();
-    expect(screen.getAllByRole("radio")).toHaveLength(7);
+    expect(screen.getAllByRole("radio")).toHaveLength(8);
+    expect(screen.getAllByRole("radio")[1]).toHaveAccessibleName("Violeta original");
     expect(screen.getByRole("radio", { name: "Mel e menta" })).toBeChecked();
   });
 
