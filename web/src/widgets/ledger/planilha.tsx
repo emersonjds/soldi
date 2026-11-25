@@ -356,6 +356,8 @@ type RowProps = {
   onFocus: () => void;
   /** Spec §11: the day a RedDayAlert jump landed on. */
   ringed: boolean;
+  /** SOL-172: today's row right after Ir pra hoje. */
+  flashing: boolean;
   /** Takes a focus asked for `date` before its month loaded; true when it is still the person's. */
   claim: (date: string) => boolean;
   /** The Diário previsto per day (SOL-164); absent when off. */
@@ -367,7 +369,7 @@ const FINE_POINTER = "(hover: hover) and (pointer: fine)";
 /** `hover`: the popover a resting pointer opened, which leaves focus where it is. */
 type Shown = "hover" | "popover" | "sheet" | null;
 
-const Row = ({ act, row, today, view, entries, stop, onFocus, ringed, claim, estimate }: RowProps) => {
+const Row = ({ act, row, today, view, entries, stop, onFocus, ringed, flashing, claim, estimate }: RowProps) => {
   const { date, day, income, outflow, daily, landed } = row;
   const estimated = Boolean(estimate) && cents(day?.previsto ?? "0.00") > 0;
   const [shown, setShown] = useState<Shown>(null);
@@ -468,7 +470,14 @@ const Row = ({ act, row, today, view, entries, stop, onFocus, ringed, claim, est
           onPointerEnter={hold}
           onPointerLeave={release}
           aria-current={date === today ? "date" : undefined}
-          className={cn("cursor-pointer", weekend && "bg-muted/50", !day && "text-muted-foreground")}
+          data-flash={flashing ? "" : undefined}
+          className={cn(
+            "cursor-pointer",
+            weekend && "bg-muted/50",
+            !day && "text-muted-foreground",
+            flashing &&
+              "after:bg-ring/18 after:animate-today-flash relative after:pointer-events-none after:absolute after:inset-0 after:z-[1] motion-reduce:after:animate-none",
+          )}
         >
           <td className={cn(LINES, DATA_LINES, "sticky left-0 p-0", weekend ? WEEKEND_OPAQUE : "bg-card")}>
             <button
@@ -583,9 +592,10 @@ type MonthProps = Pick<RowProps, "act" | "today" | "claim" | "estimate"> & {
   month: string;
   openingDate: string;
   highlight: string | null;
+  flash: string | null;
 };
 
-const MonthBody = ({ act, month, today, openingDate, highlight, claim, estimate }: MonthProps) => {
+const MonthBody = ({ act, month, today, openingDate, highlight, flash, claim, estimate }: MonthProps) => {
   const view = useMonth(month);
   const entries = useTransactions(month);
   const [stop, setStop] = useState(today.startsWith(month) ? today : `${month}-01`);
@@ -603,6 +613,7 @@ const MonthBody = ({ act, month, today, openingDate, highlight, claim, estimate 
             stop={row.date === stop}
             onFocus={() => setStop(row.date)}
             ringed={row.date === highlight}
+            flashing={row.date === flash}
             claim={claim}
             estimate={estimate}
           />
@@ -625,7 +636,7 @@ const MonthBody = ({ act, month, today, openingDate, highlight, claim, estimate 
   );
 };
 
-const MonthBlock = ({ act, month, today, openingDate, highlight, claim, estimate }: MonthProps) => {
+const MonthBlock = ({ act, month, today, openingDate, highlight, flash, claim, estimate }: MonthProps) => {
   const [near, setNear] = useState(false);
   const label = monthLabel(month);
 
@@ -675,6 +686,7 @@ const MonthBlock = ({ act, month, today, openingDate, highlight, claim, estimate
           today={today}
           openingDate={openingDate}
           highlight={highlight}
+          flash={flash}
           claim={claim}
           estimate={estimate}
         />
@@ -812,10 +824,21 @@ export const Planilha = ({
     );
   };
 
+  /** SOL-172: today's row flashes for 2.4 s after Ir pra hoje. */
+  const [flashing, setFlashing] = useState(false);
+  const flashTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => () => clearTimeout(flashTimer.current), []);
+
   const goToday = () => {
     replaceUrl(`?m=${current}`);
     place(current, window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth");
     focusDay(today);
+    setFlashing(true);
+    clearTimeout(flashTimer.current);
+    flashTimer.current = setTimeout(() => setFlashing(false), 2400);
+    // A repeated jump replays a running flash; jsdom has no getAnimations.
+    const row = scroller.current && rowOf(scroller.current, today);
+    for (const animation of row?.getAnimations?.({ subtree: true }) ?? []) animation.currentTime = 0;
   };
 
   return (
@@ -834,6 +857,7 @@ export const Planilha = ({
             today={today}
             openingDate={openingDate}
             highlight={highlight}
+            flash={flashing ? today : null}
             claim={claim}
             estimate={estimate}
           />

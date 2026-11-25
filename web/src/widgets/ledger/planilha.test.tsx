@@ -3,7 +3,7 @@ import { useLayoutEffect } from "react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
 import type { Schemas } from "@/shared/api/client";
 import { TIER_STYLE } from "@/shared/lib/tier";
@@ -436,6 +436,31 @@ describe("Planilha position and Ir pra hoje", () => {
     intersection.show(screen.getByRole("table", { name: "Novembro 2026" }));
 
     expect(await screen.findByRole("button", { name: "Quinta-feira, 5 de novembro, hoje" })).toHaveFocus();
+  });
+
+  it("flashes today's row for 2.4 s after Ir pra hoje, restarts on a second click and flashes no other row (SOL-172)", async () => {
+    const { intersection } = place("2027-02");
+    intersection.show(screen.getByRole("table", { name: "Novembro 2026" }));
+    const today = (await screen.findByRole("button", { name: "Quinta-feira, 5 de novembro, hoje" })).closest("tr");
+    const flashed = () => document.querySelectorAll("[data-flash]");
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    onTestFinished(() => {
+      vi.useRealTimers();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Ir pra hoje" }));
+    expect(today).toHaveAttribute("data-flash");
+    expect(today).toHaveClass("motion-reduce:after:animate-none");
+    expect(flashed()).toHaveLength(1);
+
+    act(() => vi.advanceTimersByTime(1200));
+    fireEvent.click(screen.getByRole("button", { name: "Ir pra hoje" }));
+    act(() => vi.advanceTimersByTime(1200));
+    expect(today).toHaveAttribute("data-flash");
+
+    act(() => vi.advanceTimersByTime(1200));
+    expect(today).not.toHaveAttribute("data-flash");
+    expect(flashed()).toHaveLength(0);
   });
 
   it("places the planilha before the observers first look, so the months at the start are not fetched", () => {

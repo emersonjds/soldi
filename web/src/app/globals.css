@@ -109,6 +109,21 @@
   --font-heading: var(--font-sans);
   --font-sans: var(--font-sans);
   --font-wordmark: var(--font-nunito);
+  /* SOL-172: today's row after Ir pra hoje, two soft pulses. */
+  --animate-today-flash: today-flash 2.4s ease-in-out both;
+  @keyframes today-flash {
+    0%,
+    100% {
+      opacity: 0;
+    }
+    25%,
+    75% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.3;
+    }
+  }
 }
 
 /* Default theme styles (used when no data-theme-preset is set or when 'default' is selected).
