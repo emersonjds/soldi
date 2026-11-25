@@ -823,9 +823,8 @@ export const TransactionSheet = ({
   const createBill = useCreateBill();
   const [converting, setConverting] = useState<{ source: Source; parcelado: boolean }>();
   const [editingBill, setEditingBill] = useState<Bill>();
-  const isLg = useIsLg();
   const failed = () => toast.error("Não foi possível salvar o lançamento.");
-  let title = isLg ? "Novo Lançamento" : "Novo Registro";
+  let title = "Lançar";
   if (transaction) title = transaction.series ? "Editar Lançamento Recorrente" : "Editar lançamento";
 
   const save = (fields: NewTransaction, scope?: Scope, moving = false) => {

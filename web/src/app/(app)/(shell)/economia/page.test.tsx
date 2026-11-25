@@ -94,7 +94,7 @@ const detail = async (name: string) => {
   await userEvent.click(screen.getByRole("menuitem", { name: "Movimentos" }));
   return screen.findByRole("dialog", { name });
 };
-const lancar = () => screen.findByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ });
+const lancar = () => screen.findByRole("dialog", { name: "Lançar" });
 
 describe("Cofrinhos", () => {
   beforeEach(() => {
@@ -213,6 +213,7 @@ describe("Cofrinhos", () => {
       await userEvent.click(within(await hero()).getByRole("button", { name: "Guardar Dinheiro" }));
       const picker = await screen.findByRole("dialog", { name: "Guardar Dinheiro" });
       expect(within(picker).getByRole("button", { name: /^Reserva Livre/ })).toBeInTheDocument();
+      expect(within(picker).getByText("Reserva")).toHaveClass("line-clamp-2", "break-words");
       await userEvent.click(within(picker).getByRole("button", { name: /^Reserva\s?R\$/ }));
 
       await lancar();
@@ -481,7 +482,7 @@ describe("Cofrinhos", () => {
       await userEvent.click(within(reserva).getByRole("button", { name: "Guardar em Reserva" }));
 
       expect(await screen.findByText("Não foi possível carregar as categorias.")).toBeInTheDocument();
-      expect(screen.queryByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ })).not.toBeInTheDocument();
+      expect(screen.queryByRole("dialog", { name: "Lançar" })).not.toBeInTheDocument();
       await waitFor(() => expect(fetched().length).toBeGreaterThan(before));
     });
   });

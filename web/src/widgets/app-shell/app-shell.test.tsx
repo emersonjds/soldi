@@ -118,7 +118,7 @@ describe("AppShell", () => {
     const tabs = screen.getByRole("navigation", { name: "Navegação principal" });
     await userEvent.click(within(tabs).getByRole("button", { name: "Lançar" }));
 
-    expect(await screen.findByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ })).toBeInTheDocument();
+    expect(await screen.findByRole("dialog", { name: "Lançar" })).toBeInTheDocument();
   });
 
   it("saves a Diário in three taps from the floating button: Lançar, amount, Salvar", async () => {
@@ -158,7 +158,7 @@ describe("AppShell", () => {
     const sidebar = screen.getByRole("complementary", { name: "Barra lateral" });
     expect(within(sidebar).queryByRole("button", { name: "Lançar" })).not.toBeInTheDocument();
     await userEvent.click(within(screen.getByRole("banner")).getByRole("button", { name: "Lançar" }));
-    expect(await screen.findByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ })).toBeInTheDocument();
+    expect(await screen.findByRole("dialog", { name: "Lançar" })).toBeInTheDocument();
 
     await userEvent.keyboard("{Escape}");
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());

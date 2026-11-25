@@ -90,7 +90,7 @@ const Body = ({ bill, onOpenEntry }: { bill: BillOfMonth; onOpenEntry: (entry: T
                 >
                   <CategoryIcon icon={row.entry.category.icon} color={row.entry.category.color} />
                   <span className="flex min-w-0 flex-1 flex-col">
-                    <span className="truncate text-base font-medium">{row.title}</span>
+                    <span className="line-clamp-2 text-base font-medium break-words">{row.title}</span>
                     <span className="text-muted-foreground truncate text-xs">{row.caption}</span>
                   </span>
                   <Money amount={row.amount} className="text-sm font-semibold whitespace-nowrap" />

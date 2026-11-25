@@ -243,7 +243,7 @@ const Row = ({
           <span
             title={title}
             className={cn(
-              "max-w-full truncate text-base font-medium",
+              "line-clamp-2 max-w-full text-base font-medium break-words",
               bill.paid && "lg:text-muted-foreground lg:line-through",
             )}
           >

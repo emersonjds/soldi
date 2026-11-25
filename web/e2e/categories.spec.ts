@@ -31,10 +31,7 @@ test("a group and a subcategory take two taps each at 375 px, then rename, delet
   await page.getByRole("button", { name: "Pular por agora" }).click();
   await page.getByRole("button", { name: "Ver meu mês" }).click();
   await page.getByRole("button", { name: "Pular" }).click();
-  await page
-    .getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ })
-    .getByRole("button", { name: "Fechar" })
-    .click();
+  await page.getByRole("dialog", { name: "Lançar" }).getByRole("button", { name: "Fechar" }).click();
 
   await page.getByRole("navigation", { name: "Navegação principal" }).getByRole("link", { name: "Ajustes" }).click();
   await page.getByRole("link", { name: /^Categorias/ }).click();
@@ -118,7 +115,7 @@ test("Personalizar pins two categories at the head of Lançar's row, kept after 
   await page.getByRole("button", { name: "Pular por agora" }).click();
   await page.getByRole("button", { name: "Ver meu mês" }).click();
   await page.getByRole("button", { name: "Pular" }).click();
-  const launch = page.getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ });
+  const launch = page.getByRole("dialog", { name: "Lançar" });
   const chips = launch.getByRole("radiogroup", { name: "Categoria" }).getByRole("radio");
 
   await launch.getByRole("radio", { name: "Diário" }).click();

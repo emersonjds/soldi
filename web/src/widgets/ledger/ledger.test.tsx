@@ -181,6 +181,7 @@ describe("Ledger captions (SOL-159)", () => {
     expect(item("Aluguel vencida")).toHaveTextContent("Conta fixa · venceu dia 02/11");
     expect(item("Aluguel antiga de outubro")).toHaveTextContent("Conta fixa · venceu em outubro");
     expect(item("Carro")).toHaveTextContent("Parcela 3/12 · a pagar");
+    expect(within(item("Carro")).getByText("Carro")).toHaveClass("line-clamp-2", "break-words");
     expect(item("Carro vencida")).toHaveTextContent("Parcela 3/12 · venceu dia 02/11");
     expect(item("Carro antiga de outubro")).toHaveTextContent("Parcela 3/12 · venceu em outubro");
     expect(item("Moto")).toHaveTextContent("Última parcela · a pagar");
@@ -250,7 +251,10 @@ describe("Ledger captions (SOL-159)", () => {
     });
 
     expect(screen.getByRole("button", { name: /Parcela 3\/12 · paga/ })).toBeInTheDocument();
-    expect(item("Aluguel Residencial")).toBeInTheDocument();
+    expect(within(item("Aluguel Residencial")).getByText("Aluguel Residencial")).toHaveClass(
+      "line-clamp-2",
+      "break-words",
+    );
     expect(screen.getByText("Parcela 3/12 · paga")).toHaveClass("flex-wrap");
   });
 });

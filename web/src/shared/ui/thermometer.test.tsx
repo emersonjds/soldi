@@ -31,7 +31,8 @@ describe("ThermometerStrip", () => {
     for (const label of ["Crítico", "Atenção", "Apertado", "Folga"]) {
       expect(screen.getByText(label)).not.toHaveClass("font-bold");
     }
-    expect(screen.getByText("Confortável")).toHaveClass("font-bold");
+    expect(screen.getByText("Confortável")).toHaveClass("font-bold", "break-words");
+    expect(screen.getByText("Confortável")).not.toHaveClass("hyphens-auto");
   });
 });
 

@@ -20,10 +20,7 @@ test("a user renames, changes the password, signs out everywhere and signs in wi
   await page.getByRole("button", { name: "Pular por agora" }).click();
   await page.getByRole("button", { name: "Ver meu mês" }).click();
   await page.getByRole("button", { name: "Pular" }).click();
-  await page
-    .getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ })
-    .getByRole("button", { name: "Fechar" })
-    .click();
+  await page.getByRole("dialog", { name: "Lançar" }).getByRole("button", { name: "Fechar" }).click();
 
   const account = page.getByRole("heading", { name: "Minha Conta & Segurança" });
   await page.goto("/ajustes/conta");

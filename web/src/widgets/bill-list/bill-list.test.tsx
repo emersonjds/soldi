@@ -227,7 +227,7 @@ describe("Contas fixas", () => {
       withRows(BILLS_OF_MONTH);
 
       const card = await nextDue();
-      expect(within(card).getByText("Luz (Enel)")).toBeInTheDocument();
+      expect(within(card).getByText("Luz (Enel)")).toHaveClass("line-clamp-2", "break-words");
       expect(within(card).getByText("Vencida")).toBeInTheDocument();
       expect(within(card).getByText("R$ 284,10")).toBeInTheDocument();
       expect(within(card).getByText("Vence no dia 02")).toBeInTheDocument();

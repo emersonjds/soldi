@@ -130,7 +130,7 @@ const DueRow = ({ bill, month, cause }: { bill: Due; month: string; cause: boole
   >
     <CategoryIcon icon={bill.icon} color={bill.color} />
     <span className="flex min-w-0 flex-1 flex-col">
-      <span className="truncate text-base font-medium">{bill.name}</span>
+      <span className="line-clamp-2 text-base font-medium break-words">{bill.name}</span>
       <span className={cn("text-xs", bill.overdue ? "text-expense" : "text-muted-foreground")}>
         {dueCaption(bill, month)}
       </span>
@@ -188,7 +188,7 @@ const Row = ({ transaction, entry, cause, onOpen }: RowProps) => (
     >
       <CategoryIcon icon={transaction.category.icon} color={transaction.category.color} />
       <span className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate text-base font-medium">{titleOf(transaction, entry)}</span>
+        <span className="line-clamp-2 text-base font-medium break-words">{titleOf(transaction, entry)}</span>
         <span className="text-muted-foreground flex flex-wrap items-center gap-1 text-xs">
           {entry.caption}
           {entry.card && (

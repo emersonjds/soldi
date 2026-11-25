@@ -55,7 +55,7 @@ test("signs in, switches months both ways, launches a Diário and deletes it", {
   // A unique note: a leftover from a broken run never hides this one's deletion.
   const note = `smoke ${Date.now()}`;
   await page.getByRole("navigation", { name: "Navegação principal" }).getByRole("button", { name: "Lançar" }).click();
-  const launch = page.getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ });
+  const launch = page.getByRole("dialog", { name: "Lançar" });
   await launch.getByLabel("Valor").fill("1,00");
   await launch.getByLabel("Observação").fill(note);
   await launch.getByRole("button", { name: "Salvar" }).click();

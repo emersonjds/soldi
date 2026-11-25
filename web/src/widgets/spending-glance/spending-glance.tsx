@@ -30,7 +30,7 @@ export const SpendingGlance = ({ month, className }: { month: string; className?
             .map((group) => (
               <li key={group.category_id} className="flex flex-col gap-1.5">
                 <span className="flex items-baseline justify-between gap-3">
-                  <span className="truncate text-base font-medium">{group.name}</span>
+                  <span className="line-clamp-2 text-base font-medium break-words">{group.name}</span>
                   <Money amount={group.amount} className="text-sm font-semibold" />
                 </span>
                 <span aria-hidden className="bg-muted h-2 overflow-hidden rounded-full">

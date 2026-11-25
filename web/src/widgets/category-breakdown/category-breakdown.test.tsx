@@ -140,6 +140,7 @@ describe("CategoryBreakdown", () => {
     await screen.findByText("Total gasto");
 
     expect(pick("Aluguel")).toHaveTextContent("88,3% dos gastos");
+    expect(within(pick("Aluguel")).getByText("Aluguel")).toHaveClass("line-clamp-2", "break-words");
     expect(pick("Aluguel")).toHaveTextContent("−6% vs out em relação ao mês anterior");
     expect(pick("Aluguel")).toHaveTextContent("R$ 12.000,00");
     expect(within(pick("Aluguel")).getByText("−6%", { exact: false })).toHaveClass("text-tier-green-foreground");
@@ -410,7 +411,7 @@ describe("CategoryBreakdown", () => {
       await within(panel("Mercado")).findByRole("button", { name: "Adicionar lançamento em Mercado" }),
     );
 
-    const sheet = await screen.findByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ });
+    const sheet = await screen.findByRole("dialog", { name: "Lançar" });
     expect(await within(sheet).findByRole("radio", { name: "Mercado" })).toHaveAttribute("aria-checked", "true");
     expect(within(sheet).getByRole("radio", { name: "Diário" })).toBeChecked();
     expect(within(sheet).getByRole("button", { name: /^Hoje/ })).toHaveAttribute("aria-pressed", "true");
@@ -424,7 +425,7 @@ describe("CategoryBreakdown", () => {
       await within(panel("Economia")).findByRole("button", { name: "Adicionar lançamento em Economia" }),
     );
 
-    const sheet = await screen.findByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ });
+    const sheet = await screen.findByRole("dialog", { name: "Lançar" });
     expect(within(sheet).getByRole("radio", { name: "Conta" })).toBeChecked();
     expect(await within(sheet).findByRole("radio", { name: "Economia" })).toHaveAttribute("aria-checked", "true");
   });
@@ -437,7 +438,7 @@ describe("CategoryBreakdown", () => {
       await within(panel("Mercado")).findByRole("button", { name: "Adicionar lançamento em Mercado" }),
     );
 
-    const sheet = await screen.findByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ });
+    const sheet = await screen.findByRole("dialog", { name: "Lançar" });
     expect(within(sheet).getByRole("button", { name: "Outra data, 01/10/2026" })).toBeInTheDocument();
     expect(within(sheet).getByRole("button", { name: /^Hoje/ })).toHaveAttribute("aria-pressed", "false");
   });
