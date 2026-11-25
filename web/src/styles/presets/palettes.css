@@ -1,0 +1,132 @@
+/* Brand palettes picked in Ajustes (D52): only brand, hero, wordmark and logo tokens change; soldi.css holds the default. */
+:root[data-theme-preset="soldi"][data-palette="ameixa"] {
+  --brand: #5b3d8f;
+  --primary: #5b3d8f;
+  --ring: #5b3d8f;
+  --sidebar-primary: #5b3d8f;
+  --sidebar-ring: #5b3d8f;
+  --chart-1: #5b3d8f;
+  --brand-hover: #4a2f78;
+  --sidebar-accent-foreground: #4a2f78;
+  --brand-soft: #efe9f7;
+  --sidebar-accent: #efe9f7;
+  --hero: #3a2758;
+  --hero-foreground: #ffffff;
+  --hero-chip: rgb(255 255 255 / 0.12);
+  --wordmark: #4a3d5c;
+  --logo-1: #f2cf7a;
+  --logo-2: #f0a988;
+  --logo-3: #c7a6e0;
+  --logo-4: #8f6cc4;
+  --logo-5: #5b3d8f;
+}
+
+:root[data-theme-preset="soldi"][data-palette="indigo"] {
+  --brand: #1f7a63;
+  --primary: #1f7a63;
+  --ring: #1f7a63;
+  --sidebar-primary: #1f7a63;
+  --sidebar-ring: #1f7a63;
+  --chart-1: #1f7a63;
+  --brand-hover: #1a6653;
+  --sidebar-accent-foreground: #1a6653;
+  --brand-soft: #e4f2ed;
+  --sidebar-accent: #e4f2ed;
+  --hero: #1e1b4b;
+  --hero-foreground: #ffffff;
+  --hero-chip: rgb(255 255 255 / 0.12);
+  --wordmark: #2b2f55;
+  --logo-1: #f2d38a;
+  --logo-2: #f2b48c;
+  --logo-3: #8cc5b0;
+  --logo-4: #3f9a80;
+  --logo-5: #1f7a63;
+}
+
+:root[data-theme-preset="soldi"][data-palette="petroleo"] {
+  --brand: #14706a;
+  --primary: #14706a;
+  --ring: #14706a;
+  --sidebar-primary: #14706a;
+  --sidebar-ring: #14706a;
+  --chart-1: #14706a;
+  --brand-hover: #105e59;
+  --sidebar-accent-foreground: #105e59;
+  --brand-soft: #e2f1ef;
+  --sidebar-accent: #e2f1ef;
+  --hero: #0f3b3d;
+  --hero-foreground: #ffffff;
+  --hero-chip: rgb(255 255 255 / 0.12);
+  --wordmark: #24414a;
+  --logo-1: #f6d07a;
+  --logo-2: #f2956f;
+  --logo-3: #7fc4bb;
+  --logo-4: #3a958c;
+  --logo-5: #14706a;
+}
+
+:root[data-theme-preset="soldi"][data-palette="berinjela"] {
+  --brand: #8a3a6c;
+  --primary: #8a3a6c;
+  --ring: #8a3a6c;
+  --sidebar-primary: #8a3a6c;
+  --sidebar-ring: #8a3a6c;
+  --chart-1: #8a3a6c;
+  --brand-hover: #76305c;
+  --sidebar-accent-foreground: #76305c;
+  --brand-soft: #f6e8f0;
+  --sidebar-accent: #f6e8f0;
+  --hero: #3d1d3a;
+  --hero-foreground: #ffffff;
+  --hero-chip: rgb(255 255 255 / 0.12);
+  --wordmark: #4d3348;
+  --logo-1: #f4cf86;
+  --logo-2: #f2b08c;
+  --logo-3: #e39bb8;
+  --logo-4: #b5628f;
+  --logo-5: #8a3a6c;
+}
+
+:root[data-theme-preset="soldi"][data-palette="marinho"] {
+  --brand: #2456a4;
+  --primary: #2456a4;
+  --ring: #2456a4;
+  --sidebar-primary: #2456a4;
+  --sidebar-ring: #2456a4;
+  --chart-1: #2456a4;
+  --brand-hover: #1e4a8e;
+  --sidebar-accent-foreground: #1e4a8e;
+  --brand-soft: #e6eefa;
+  --sidebar-accent: #e6eefa;
+  --hero: #13294b;
+  --hero-foreground: #ffffff;
+  --hero-chip: rgb(255 255 255 / 0.12);
+  --wordmark: #2a3a55;
+  --logo-1: #f2c95e;
+  --logo-2: #f2a97a;
+  --logo-3: #9dbbe6;
+  --logo-4: #5a86cc;
+  --logo-5: #2456a4;
+}
+
+:root[data-theme-preset="soldi"][data-palette="floresta"] {
+  --brand: #2e6b47;
+  --primary: #2e6b47;
+  --ring: #2e6b47;
+  --sidebar-primary: #2e6b47;
+  --sidebar-ring: #2e6b47;
+  --chart-1: #2e6b47;
+  --brand-hover: #275c3d;
+  --sidebar-accent-foreground: #275c3d;
+  --brand-soft: #e6f1ea;
+  --sidebar-accent: #e6f1ea;
+  --hero: #1d3d2c;
+  --hero-foreground: #ffffff;
+  --hero-chip: rgb(255 255 255 / 0.12);
+  --wordmark: #33443a;
+  --logo-1: #efcf7e;
+  --logo-2: #e4a07a;
+  --logo-3: #9cc8a6;
+  --logo-4: #5f9a72;
+  --logo-5: #2e6b47;
+}
