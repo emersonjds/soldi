@@ -21,8 +21,9 @@ export default defineConfig({
         "src/features/**",
         "src/widgets/**",
         "src/app/page.tsx",
-        "src/app/(app)/**",
-        "src/app/(auth)/**",
+        // Parens are glob syntax; escaped so the route groups match.
+        "src/app/\\(app\\)/**",
+        "src/app/\\(auth\\)/**",
       ],
       exclude: ["src/**/*.test.{ts,tsx}", "src/**/*.d.ts"],
       thresholds: { statements: 90, branches: 90, functions: 90, lines: 90 },
