@@ -7,6 +7,7 @@ export const PALETTE_KEY = "soldi-palette";
 /** SOL-184: the palettes of `styles/presets/palettes.css`; "mel" is the preset's own tokens. */
 export const PALETTES: Palette[] = [
   { value: "mel", name: "Mel e menta", hero: "#ffffff", brand: "#357a6d", soft: "#e6f1ee" },
+  { value: "violeta", name: "Violeta original", hero: "#2a2775", brand: "#5341cd", soft: "#edecff" },
   { value: "ameixa", name: "Ameixa e mel", hero: "#3a2758", brand: "#5b3d8f", soft: "#efe9f7" },
   { value: "indigo", name: "Índigo e menta", hero: "#1e1b4b", brand: "#1f7a63", soft: "#e4f2ed" },
   { value: "petroleo", name: "Petróleo e coral", hero: "#0f3b3d", brand: "#14706a", soft: "#e2f1ef" },

@@ -36,6 +36,7 @@ Picked per device in Ajustes (`localStorage` `soldi-palette`, `data-palette` on 
 | value | Name (pt-BR) | hero | hero-fg | hero-chip | brand | brand ink | soft | wordmark |
 |---|---|---|---|---|---|---|---|---|
 | (none) | Mel e menta | `#ffffff` | `#1f2328` | `#f3f4f2` | `#357a6d` | `#2c6a5e` | `#e6f1ee` | `#555f6e` |
+| `violeta` | Violeta original (SOL-185, the pre-0.72.0 identity) | `#2a2775` | `#ffffff` | `rgb(255 255 255 / 0.12)` | `#5341cd` | `#4534b0` | `#edecff` | `#3b3577` |
 | `ameixa` | Ameixa e mel | `#3a2758` | `#ffffff` | `rgb(255 255 255 / 0.12)` | `#5b3d8f` | `#4a2f78` | `#efe9f7` | `#4a3d5c` |
 | `indigo` | Índigo e menta | `#1e1b4b` | `#ffffff` | `rgb(255 255 255 / 0.12)` | `#1f7a63` | `#1a6653` | `#e4f2ed` | `#2b2f55` |
 | `petroleo` | Petróleo e coral | `#0f3b3d` | `#ffffff` | `rgb(255 255 255 / 0.12)` | `#14706a` | `#105e59` | `#e2f1ef` | `#24414a` |
@@ -48,6 +49,7 @@ Logo dots (`logo-1..5`, from the warm tones to the brand color):
 | palette | 1 | 2 | 3 | 4 | 5 |
 |---|---|---|---|---|---|
 | Mel e menta | `#f2d38a` | `#f2b48c` | `#8cc5b0` | `#5fa894` | `#357a6d` |
+| violeta | `#f2d38a` | `#f2b48c` | `#b8b0f4` | `#8a7cec` | `#5341cd` |
 | ameixa | `#f2cf7a` | `#f0a988` | `#c7a6e0` | `#8f6cc4` | `#5b3d8f` |
 | indigo | `#f2d38a` | `#f2b48c` | `#8cc5b0` | `#3f9a80` | `#1f7a63` |
 | petroleo | `#f6d07a` | `#f2956f` | `#7fc4bb` | `#3a958c` | `#14706a` |

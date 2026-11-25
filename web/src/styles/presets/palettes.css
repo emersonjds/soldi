@@ -1,4 +1,26 @@
 /* Brand palettes picked in Ajustes (D52): only brand, hero, wordmark and logo tokens change; soldi.css holds the default. */
+:root[data-theme-preset="soldi"][data-palette="violeta"] {
+  --brand: #5341cd;
+  --primary: #5341cd;
+  --ring: #5341cd;
+  --sidebar-primary: #5341cd;
+  --sidebar-ring: #5341cd;
+  --chart-1: #5341cd;
+  --brand-hover: #4534b0;
+  --sidebar-accent-foreground: #4534b0;
+  --brand-soft: #edecff;
+  --sidebar-accent: #edecff;
+  --hero: #2a2775;
+  --hero-foreground: #ffffff;
+  --hero-chip: rgb(255 255 255 / 0.12);
+  --wordmark: #3b3577;
+  --logo-1: #f2d38a;
+  --logo-2: #f2b48c;
+  --logo-3: #b8b0f4;
+  --logo-4: #8a7cec;
+  --logo-5: #5341cd;
+}
+
 :root[data-theme-preset="soldi"][data-palette="ameixa"] {
   --brand: #5b3d8f;
   --primary: #5b3d8f;
