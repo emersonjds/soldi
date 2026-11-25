@@ -164,6 +164,9 @@ test("Lançamentos switches to the planilha, remembers it, shows a day's entries
     expect((await target.boundingBox())?.height).toBeGreaterThanOrEqual(44);
 
   await goToday.click();
+  // SOL-172: today's row flashes for 2.4 s, and only today's.
+  await expect(day.locator("xpath=ancestor::tr")).toHaveAttribute("data-flash", "");
+  await expect(ledger.locator("tr[data-flash]")).toHaveCount(1);
   await expect.poll(() => todayInView(page, today)).toBe(true);
   await expect(day).toBeFocused();
   await expect(goToday).toHaveCount(0);
