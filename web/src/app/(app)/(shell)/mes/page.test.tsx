@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Schemas } from "@/shared/api/client";
 import { stubIntersection } from "@/test/intersection";
-import { router, setSearch } from "@/test/next-navigation";
+import { router, setPathname, setSearch } from "@/test/next-navigation";
 import { renderWithQuery } from "@/test/render";
 import {
   ANA,
@@ -33,6 +33,8 @@ import {
   WITH_COFRINHOS,
 } from "@/test/stub-api";
 
+import AppLayout from "../../layout";
+import ShellLayout from "../layout";
 import MesPage from "./page";
 
 vi.mock("next/navigation", () => import("@/test/next-navigation"));
@@ -49,7 +51,7 @@ const page = () => (
   </>
 );
 
-const open = (replies: Record<string, Reply> = {}) => {
+const open = (replies: Record<string, Reply> = {}, ui = page()) => {
   const requests = signedIn({
     "GET /api/months/2026-11": { status: 200, body: MONTH },
     "GET /api/transactions": { status: 200, body: TRANSACTIONS },
@@ -58,7 +60,7 @@ const open = (replies: Record<string, Reply> = {}) => {
     "GET /api/cofrinhos": { status: 200, body: COFRINHOS },
     ...replies,
   });
-  ({ client, rerender } = renderWithQuery(page()));
+  ({ client, rerender } = renderWithQuery(ui));
   return requests;
 };
 
@@ -387,6 +389,30 @@ describe("Mês", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Lançar entrada" }));
     expect(await screen.findByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ })).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: "Entrada" })).toBeChecked();
+  });
+
+  it("shows the month inside the signed-in app and its shell", async () => {
+    setPathname("/mes");
+    open(
+      {},
+      <AppLayout>
+        <ShellLayout>{page()}</ShellLayout>
+      </AppLayout>,
+    );
+
+    expect(await screen.findByRole("region", { name: "Saldo hoje" })).toHaveTextContent("R$ 957,79");
+    expect(screen.getAllByRole("navigation").length).toBeGreaterThan(0);
+  });
+
+  it("opens the conta fixa sheet when a new Conta is saved as Conta fixa from Lançar", async () => {
+    open({ "GET /api/months/2026-11": { status: 200, body: EMPTY } });
+    await userEvent.click(await screen.findByRole("button", { name: "Lançar entrada" }));
+    await userEvent.click(await screen.findByRole("radio", { name: "Conta" }));
+    await userEvent.type(await screen.findByLabelText(/^Valor d/), "9000");
+    await userEvent.click(screen.getByRole("switch", { name: "Conta fixa" }));
+    await userEvent.click(screen.getByRole("button", { name: "Salvar Lançamento" }));
+
+    expect(await screen.findByRole("dialog", { name: "Nova conta" })).toBeInTheDocument();
   });
 
   it("opens Lançar on Entrada with a one-time hint when coming from the tour", async () => {
@@ -927,6 +953,25 @@ describe("Mês", () => {
 
     expect(await screen.findByRole("region", { name: "Alerta do mês" })).toHaveTextContent(
       /^Dia 23 fica no vermelho: -R\$\s675,00\. Diário previsto excede o saldo em caixa projetado\.Ver o dia 23$/,
+    );
+  });
+
+  it("still warns of the red day when the entries fail", async () => {
+    open({
+      "GET /api/settings": { status: 200, body: { ...SETTINGS, daily_estimate: "50.00", daily_estimate_on: true } },
+      "GET /api/months/2026-11": {
+        status: 200,
+        body: {
+          ...FORECAST_MONTH,
+          bills_of_month: [],
+          days: FORECAST_MONTH.days.map((day) => (day.date === "2026-11-23" ? { ...day, previsto: "50.00" } : day)),
+        },
+      },
+      "GET /api/transactions": { status: 500, body: problem(500, "Falhou.") },
+    });
+
+    expect(await screen.findByRole("region", { name: "Alerta do mês" })).toHaveTextContent(
+      /^Dia 23 fica no vermelho: -R\$\s675,00\. Diário previsto \(R\$\s50,00\/dia\) excede o saldo em caixa projetado\.Ver o dia 23$/,
     );
   });
 

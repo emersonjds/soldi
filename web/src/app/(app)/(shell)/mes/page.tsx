@@ -166,8 +166,7 @@ const MonthScreen = () => {
       </div>
       <TransactionSheet
         open={launching !== null}
-        onOpenChange={(open) => {
-          if (open) return;
+        onOpenChange={() => {
           setLaunching(null);
           setHint(false);
         }}
