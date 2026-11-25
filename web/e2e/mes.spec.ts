@@ -1,4 +1,4 @@
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type Locator, type Page, test } from "@playwright/test";
 
 import { expectNoClipped } from "./clipped";
 import { requireServer } from "./server";
@@ -275,6 +275,37 @@ const box = async (page: Page, name: string) => {
   if (!found) throw new Error(`no ${name}`);
   return found;
 };
+
+test("a 60-character conta name and note wrap in full at 375 and nothing clips at any width (SOL-179)", async ({
+  page,
+  request,
+}) => {
+  await requireServer(request);
+  const name = "Financiamento do apartamento novo na Caixa Econômica Federal";
+  const note = "Compra no mercado do bairro pra festa de aniversário da Bia.";
+  expect([name.length, note.length]).toEqual([60, 60]);
+  await signUp(page, "wrap", { name, amount: "300,00", day: "28" });
+
+  await page.getByRole("navigation", { name: "Navegação principal" }).getByRole("button", { name: "Lançar" }).click();
+  const launch = page.getByRole("dialog", { name: "Lançar" });
+  await page.keyboard.type("12,50");
+  await launch.getByLabel("Observação").fill(note);
+  await launch.getByRole("button", { name: "Salvar" }).click();
+
+  const wraps = (text: Locator) =>
+    text.evaluate(
+      (element) =>
+        element.getBoundingClientRect().height > Number.parseFloat(getComputedStyle(element).lineHeight) * 1.5,
+    );
+  const bill = page.getByRole("region", { name: "Contas a pagar" }).getByText(name, { exact: true });
+  const entry = page.getByRole("region", { name: "Lançamentos" }).getByText(note, { exact: true });
+  expect(await wraps(bill)).toBe(true);
+  expect(await wraps(entry)).toBe(true);
+  for (const width of [375, 1024, 1280, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expectNoClipped(page);
+  }
+});
 
 test("a fresh account's Mês shows the hero alone at every width (D25)", async ({ page, request }) => {
   await requireServer(request);
