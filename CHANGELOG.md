@@ -7,6 +7,13 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.74.0
+
+> Headline: the original violet is back, as a palette
+
+### Web
+- Cores do app offers "Violeta original", the pre-0.72.0 identity (violet brand, deep indigo hero, violet logo dots), right after the default (SOL-185, D53).
+
 ## 0.73.0
 
 > Headline: pick Soldi's colors, and meet the day-trail logo
