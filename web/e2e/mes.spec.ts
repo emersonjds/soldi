@@ -179,7 +179,7 @@ test("the hero shows the balance and the summary, and the spending glance opens 
   await page.getByRole("button", { name: "Salvar" }).click();
 
   await expect(monthSummary).toContainText(/Entradas\s*R\$\s2\.000,00/);
-  await expect(monthSummary).toContainText(/Saídas\s*R\$\s12,50/);
+  await expect(monthSummary).toContainText(/Gastos\s*R\$\s12,50/);
   await expect(hero).toContainText(/Saldo hoje em conta\s*R\$\s2\.987,50/);
 
   const spending = page.getByRole("region", { name: "Para Onde Vai" });
@@ -358,7 +358,7 @@ test("Mês follows the mobile frame's order at 375, a stack and a 2-column rail 
     expect(Math.abs(glance.width - rail.width)).toBeLessThan(2);
     expect(Math.abs(rail.y - hero.y)).toBeLessThan(2);
     await expect(page.getByRole("region", { name: "Resumo do mês" })).toBeHidden();
-    await expect(page.getByRole("img", { name: /^Entradas|^Saídas/ })).toHaveCount(0);
+    await expect(page.getByRole("img", { name: /^Entradas|^Gastos/ })).toHaveCount(0);
     await expectNoClipped(page);
   }
 });
