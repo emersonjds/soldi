@@ -86,16 +86,16 @@ describe("YearReview", () => {
     absent("Meses com mais gastos");
   });
 
-  it("splits Saídas over the outflow when it passed the entrada", async () => {
+  it("splits Gastos and Guardado, totalling both, when they passed the entrada", async () => {
     show({
       "GET /api/reports/year": year({
-        totals: totals({ income: "1000.00", spent: "90000.00", performance: "-89000.00" }),
+        totals: totals({ income: "1000.00", spent: "90000.00", saved: "500.00", performance: "-89500.00" }),
       }),
     });
 
     const summary = await region("Resumo do ano");
-    expect(within(summary).getByRole("img", { name: /^Saídas/ })).toBeInTheDocument();
-    expect(summary).toHaveTextContent(/Total: R\$\s90\.000,00/);
+    expect(within(summary).getByRole("img", { name: /^Gastos R\$\s90\.500,00: gastos/ })).toBeInTheDocument();
+    expect(summary).toHaveTextContent(/Total: R\$\s90\.500,00/);
     expect(summary).not.toHaveTextContent("Livre restante");
   });
 

@@ -132,12 +132,14 @@ describe("Mês", () => {
       ?.parentElement as HTMLElement;
     expect(split).toHaveClass("hidden", "lg:flex");
     expect(split).toHaveTextContent(/Total:\sR\$\s1\.384,31/);
-    expect(within(split).getByRole("img", { name: /^Saídas R\$\s1\.384,31: gastos 100,0%$/ })).toBeInTheDocument();
+    expect(within(split).getByRole("img", { name: /^Gastos R\$\s1\.384,31: gastos 100,0%$/ })).toBeInTheDocument();
 
     const summary = within(hero).getByRole("region", { name: "Resumo do mês" });
     expect(summary).toHaveClass("lg:hidden");
     expect(within(summary).getByText("R$ 500,00")).toHaveClass("text-income-text");
     expect(within(summary).getByText("R$ 1.384,31")).toBeInTheDocument();
+    expect(summary).toHaveTextContent(/Gastos/);
+    expect(summary).not.toHaveTextContent(/Saídas/);
     expect(summary).toHaveTextContent(/Projetado-R\$\s312,40Atenção/);
 
     const thermometer = screen.getByRole("region", { name: "Termômetro do Mês" });

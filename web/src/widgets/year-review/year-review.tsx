@@ -72,10 +72,10 @@ const Split = ({ totals }: { totals: Report["totals"] }) => {
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-sm leading-5">
         <h3 className="font-medium">Para onde foi a entrada do ano</h3>
         <p className="font-bold tabular-nums">
-          Total: <Money amount={income ? totals.income : totals.spent} />
+          Total: <Money amount={split.total} />
         </p>
       </div>
-      <SplitBar label={income ? "Entradas" : "Saídas"} segments={split.segments} />
+      <SplitBar label={income ? "Entradas" : "Gastos"} segments={split.segments} />
     </div>
   );
 };

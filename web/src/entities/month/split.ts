@@ -3,8 +3,10 @@ import { cents, fromCents } from "@/shared/lib/tier";
 import type { SplitSegment } from "@/shared/ui/split-bar";
 
 export type Split = {
-  /** `income` while nothing passed it, else the outflow (`spent + saved`). */
-  base: "income" | "outflow";
+  /** `income` while nothing passed it, else Gastos and Guardado. */
+  base: "income" | "spent";
+  /** What the bar draws: the sum of the segments above zero. */
+  total: string;
   segments: SplitSegment[];
 };
 
@@ -23,5 +25,6 @@ export const splitOf = (totals: Schemas["MonthView"]["totals"]): Split | null =>
     ...(saved > 0 ? [{ label: "Guardado", amount: totals.saved, tone: "saved" } satisfies SplitSegment] : []),
     ...(free > 0 ? [{ label: "Livre restante", amount: fromCents(free), tone: "free" } satisfies SplitSegment] : []),
   ];
-  return { base: free < 0 ? "outflow" : "income", segments };
+  const total = fromCents(segments.reduce((sum, segment) => sum + Math.max(cents(segment.amount), 0), 0));
+  return { base: free < 0 ? "spent" : "income", total, segments };
 };
