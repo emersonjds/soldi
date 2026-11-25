@@ -191,6 +191,61 @@ describe("Posso comprar isso?", () => {
     expect(months[4]).toHaveTextContent("Parcela 5/6 (+ Luz/Diário previsto)");
   });
 
+  describe("weighs the month's Diário previsto up to the red day against the contas (SOL-169)", () => {
+    const redOn20th = forecastFixture("2026-11-10", "2026-11-10", "2027-10-31", [
+      ["2026-11-10", "3000.00"],
+      ["2027-03-20", "1500.00"],
+      ["2027-03-25", "3000.00"],
+    ]);
+    const marchDays = (previsto: string) =>
+      Array.from({ length: 21 }, (_, at) => ({
+        ...MONTH.days[0],
+        date: `2027-03-${String(at + 1).padStart(2, "0")}`,
+        previsto,
+      }));
+    const causes = async (bills: Schemas["BillOfMonth"][], previsto: string) => {
+      setup({
+        "GET /api/forecast": { status: 200, body: redOn20th },
+        "GET /api/months/2027-03": {
+          status: 200,
+          body: { ...MARCH, bills_of_month: bills, days: marchDays(previsto) },
+        },
+      });
+      await typeAmount("2400,00");
+      await userEvent.click(screen.getByRole("radio", { name: "6x" }));
+      return calculate();
+    };
+
+    it("20 days × R$ 40,00 (R$ 800,00) beat a R$ 500,00 conta: the previsto is named first", async () => {
+      const verdict = await causes([outflow("Seguro Auto", "500.00"), outflow("Luz", "80.00")], "40.00");
+
+      expect(
+        await within(verdict).findByText(/com as despesas já agendadas \(Diário previsto e Seguro Auto\)/),
+      ).toBeInTheDocument();
+      const months = within(screen.getByRole("list", { name: /^Projeção Mensal/ })).getAllByRole("listitem");
+      expect(months[4]).toHaveTextContent("Parcela 5/6 (+ Diário previsto/Seguro Auto)");
+    });
+
+    it("a conta above the month's previsto stays first; the day after the red day does not count", async () => {
+      const verdict = await causes([outflow("IPVA 2027", "820.00"), outflow("Luz", "80.00")], "40.00");
+
+      expect(
+        await within(verdict).findByText(/com as despesas já agendadas \(IPVA 2027 e Diário previsto\)/),
+      ).toBeInTheDocument();
+    });
+
+    it("a month with no previsto keeps the contas' ranking", async () => {
+      const verdict = await causes(
+        [outflow("Luz", "80.00"), outflow("IPVA 2027", "1000.00"), outflow("Seguro Auto", "500.00")],
+        "0.00",
+      );
+
+      expect(
+        await within(verdict).findByText(/com as despesas já agendadas \(IPVA 2027 e Seguro Auto\)/),
+      ).toBeInTheDocument();
+    });
+  });
+
   it("offers the next count up to 12x only, and Criar Cofrinho opens Novo cofrinho with the name and the total", async () => {
     setup({ "GET /api/forecast": { status: 200, body: forecast("30.00") } });
     await userEvent.click(await screen.findByRole("radio", { name: COMIDA.name }));
