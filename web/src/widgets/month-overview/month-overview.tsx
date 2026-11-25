@@ -164,10 +164,10 @@ export const MonthHero = ({
   const first = useMe().data?.name.trim().split(/\s+/)[0] ?? "";
   return (
     <section aria-label="Saldo hoje" className={cn("flex flex-col", className)}>
-      <div className="bg-card text-card-foreground flex flex-col gap-4 rounded-3xl px-4 pt-5 pb-6 shadow-sm lg:gap-6 lg:p-6">
+      <div className="bg-hero text-hero-foreground lg:bg-card lg:text-card-foreground flex flex-col gap-4 rounded-3xl px-4 pt-5 pb-6 shadow-sm lg:gap-6 lg:p-6">
         <div className="flex items-center gap-2 lg:hidden">
           {first && (
-            <span aria-hidden className={cn(circle, "bg-secondary text-lg font-semibold")}>
+            <span aria-hidden className={cn(circle, "bg-hero-chip text-lg font-semibold")}>
               {first.charAt(0).toUpperCase()}
             </span>
           )}
@@ -176,14 +176,17 @@ export const MonthHero = ({
         <div className="lg:hidden">{switcher}</div>
         <div className="flex flex-col items-center gap-4 lg:flex-row lg:justify-between">
           <div className="flex flex-col items-center gap-2 lg:items-start lg:gap-1">
-            <p className="text-muted-foreground text-[11px] leading-4 font-semibold tracking-[0.12em] uppercase">
+            <p className="text-hero-foreground/80 lg:text-muted-foreground text-[11px] leading-4 font-semibold tracking-[0.12em] uppercase">
               Saldo hoje<span className="hidden lg:inline"> em conta</span>
             </p>
             <div className="flex flex-col items-center gap-3 lg:flex-row lg:flex-wrap lg:items-baseline">
               <Money
                 amount={view.balance_today}
                 size="display"
-                className={view.balance_today.startsWith("-") ? "text-expense" : "text-foreground"}
+                className={cn(
+                  "text-hero-foreground",
+                  view.balance_today.startsWith("-") ? "lg:text-expense" : "lg:text-foreground",
+                )}
               />
               <TierPill tier={view.balance_today_tier} />
             </div>
