@@ -75,7 +75,7 @@ const MonthSummary = ({
 }) => (
   <section
     aria-label="Resumo do mês"
-    className="bg-card relative mx-2 -mt-10 grid grid-cols-3 gap-2 rounded-2xl p-4 shadow-sm sm:mx-4 lg:hidden"
+    className="bg-card relative mt-3 grid grid-cols-3 gap-2 rounded-2xl p-4 shadow-sm lg:hidden"
   >
     <Figure
       label="Entradas"
@@ -164,7 +164,7 @@ export const MonthHero = ({
   const first = useMe().data?.name.trim().split(/\s+/)[0] ?? "";
   return (
     <section aria-label="Saldo hoje" className={cn("flex flex-col", className)}>
-      <div className="bg-card text-card-foreground flex flex-col gap-4 rounded-3xl px-4 pt-5 pb-14 shadow-sm lg:gap-6 lg:p-6">
+      <div className="bg-card text-card-foreground flex flex-col gap-4 rounded-3xl px-4 pt-5 pb-6 shadow-sm lg:gap-6 lg:p-6">
         <div className="flex items-center gap-2 lg:hidden">
           {first && (
             <span aria-hidden className={cn(circle, "bg-secondary text-lg font-semibold")}>
