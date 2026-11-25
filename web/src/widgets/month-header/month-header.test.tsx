@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { PageHero } from "./month-header";
 
 describe("PageHero", () => {
-  it("bands the eyebrow, the title and the switcher in indigo", () => {
+  it("bands the eyebrow, the title and the switcher on the card surface", () => {
     render(
       <PageHero eyebrow="FLUXO DE DESPESAS • CONSOLIDADO" title="Para onde vai">
         <fieldset aria-label="Mês" />
@@ -12,7 +12,7 @@ describe("PageHero", () => {
     );
 
     const hero = screen.getByRole("region", { name: "Para onde vai" });
-    expect(hero).toHaveClass("from-hero-from", "to-hero-to", "text-hero-foreground");
+    expect(hero).toHaveClass("bg-card", "text-card-foreground", "shadow-sm");
     const [eyebrow, title, switcher] = [
       within(hero).getByText("FLUXO DE DESPESAS • CONSOLIDADO"),
       within(hero).getByRole("heading", { level: 1, name: "Para onde vai" }),
