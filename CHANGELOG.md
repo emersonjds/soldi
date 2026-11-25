@@ -7,7 +7,17 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
-## 0.71.0
+## 0.72.0
+
+> Headline: Soldi wears honey, peach and mint
+
+### Web
+- New palette (D51): white page and cards, brand green `#357A6D` for primary actions, links, active navigation and Folga; the indigo/violet tokens and the hero gradient are gone (SOL-181).
+- The month hero, the mobile Saldo hoje and the sign-in top use the white card surface; on phones the month totals sit under the hero instead of overlapping it.
+- Termômetro tiers move to soft families with dark text; every text and background pair is at least 4.5:1 and the tier dots stay apart under color blindness, both checked in a unit test.
+- The brand mark is the "soldi" wordmark in Nunito; new app icon, favicon and Apple touch icon (a white "s" on brand green).
+
+
 
 > Headline: the planilha is editable by cell
 

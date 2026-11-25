@@ -4,7 +4,10 @@ import { describe, expect, it, vi } from "vitest";
 import RootLayout, { viewport } from "./layout";
 import { readFileSync } from "node:fs";
 
-vi.mock("next/font/google", () => ({ Inter: () => ({ variable: "font-inter" }) }));
+vi.mock("next/font/google", () => ({
+  Inter: () => ({ variable: "font-inter" }),
+  Nunito: () => ({ variable: "font-nunito" }),
+}));
 vi.mock("@/components/ui/sonner", () => ({
   Toaster: (props: object) => <output data-props={JSON.stringify(props)} />,
 }));
@@ -46,6 +49,13 @@ describe("light theme only", () => {
     expect(markup).toContain('data-theme-preset="soldi"');
     expect(markup).not.toContain("data-theme-mode");
     expect(markup).not.toContain("prefers-color-scheme");
+  });
+
+  it("loads Inter for text and Nunito for the wordmark on <body>", () => {
+    const markup = renderToStaticMarkup(<RootLayout>conteúdo</RootLayout>);
+
+    expect(markup).toMatch(/<body class="[^"]*font-inter font-nunito/);
+    expect(stylesheet("./globals.css")).toContain("--font-wordmark: var(--font-nunito);");
   });
 
   it("ships no dark token block in the stylesheets", () => {
