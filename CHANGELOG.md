@@ -7,6 +7,16 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.71.0
+
+> Headline: the planilha is editable by cell
+
+### Web
+- A click on a planilha cell acts on that day and column: an empty cell ("-") opens Lançar with Entrada, Saída (Conta, Parcelado, Mensal) or Diário and the row's date; a cell that is exactly one lançamento opens Lista's Editar / Excluir; anything else opens the day detail (SOL-171, D50).
+- The day detail's items open Editar / Excluir (an unpaid conta opens Editar conta), and a new "Lançar neste dia" row adds an Entrada, Saída or Diário on that day. Hover still peeks; focus comes back to the day after any sheet closes.
+- The planilha draws light gridlines on every cell and a muted "-" on empty money cells.
+- With the planilha open, Mês hides the right column (Termômetro do Mês, Próximos meses, Cofrinhos, Para onde vai).
+
 ## 0.70.0
 
 > Headline: the planilha uses the whole screen on wide monitors
