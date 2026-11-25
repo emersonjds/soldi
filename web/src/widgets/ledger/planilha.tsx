@@ -60,7 +60,7 @@ const isMoney = (column?: string): column is Column =>
 const LINES = "border-border border-b border-r";
 const DATA_LINES = "border-l min-w-11";
 
-const MONEY = cn(LINES, "whitespace-nowrap px-1.5 text-right");
+const MONEY = cn(LINES, "px-1.5 text-right whitespace-nowrap");
 
 /** The weekend tint over the card, opaque for the sticky Data cell. */
 const WEEKEND_OPAQUE = "bg-[color-mix(in_oklab,var(--color-muted)_50%,var(--color-card))]";
@@ -326,11 +326,12 @@ const cellAction = (
   act: Act,
 ) => {
   const { day, date } = row;
-  if (!day || !entries.data) return undefined;
+  if (!day || !entries.data || entries.isError) return undefined;
   const items = (
     groupsOf(row, view, entries.data, estimate, act.lookup).find(({ name }) => name === column)?.items ?? []
   ).filter((item) => !item.estimate);
-  if (items.length === 0) return () => act.create(KIND_OF[column], date);
+  const typed = { Entrada: row.income, Saída: row.outflow, Diário: day.daily }[column];
+  if (items.length === 0) return cents(typed) === 0 ? () => act.create(KIND_OF[column], date) : undefined;
   const [only] = items;
   const shown = {
     Entrada: row.income,
@@ -371,7 +372,7 @@ const Row = ({ act, row, today, view, entries, stop, onFocus, ringed, claim, est
   const estimated = Boolean(estimate) && cents(day?.previsto ?? "0.00") > 0;
   const [shown, setShown] = useState<Shown>(null);
   /** The group a money cell's click asked the detail to focus. */
-  const [group, setGroup] = useState<Column>();
+  const [group, setGroup] = useState<Column | undefined>(undefined);
   const tr = useRef<HTMLTableRowElement>(null);
   const button = useRef<HTMLButtonElement>(null);
   const content = useRef<HTMLDivElement>(null);
@@ -417,19 +418,25 @@ const Row = ({ act, row, today, view, entries, stop, onFocus, ringed, claim, est
     setShown(null);
     button.current?.focus();
   };
+  /** Set when an action's sheet replaces the detail: the Planilha gives focus back when that sheet closes. */
+  const handedOff = useRef<boolean>(false);
+  const handOff = () => {
+    handedOff.current = shown === "sheet";
+    setShown(null);
+  };
   /** P5: any action closes the detail before its sheet opens. */
   const detailAct: Act = {
     lookup: act.lookup,
     create: (...args) => {
-      setShown(null);
+      handOff();
       act.create(...args);
     },
     entry: (...args) => {
-      setShown(null);
+      handOff();
       act.entry(...args);
     },
     bill: (...args) => {
-      setShown(null);
+      handOff();
       act.bill(...args);
     },
   };
@@ -543,7 +550,11 @@ const Row = ({ act, row, today, view, entries, stop, onFocus, ringed, claim, est
           aria-describedby={undefined}
           onCloseAutoFocus={(event) => {
             event.preventDefault();
-            button.current?.focus();
+            if (handedOff.current) {
+              handedOff.current = false;
+              return;
+            }
+            button.current?.focus({ preventScroll: true });
           }}
           className="mx-auto max-h-[80dvh] max-w-lg gap-3 overflow-y-auto rounded-t-3xl px-4 pt-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))]"
         >

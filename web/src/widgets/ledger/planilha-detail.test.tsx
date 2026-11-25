@@ -405,6 +405,37 @@ describe("Planilha Diário previsto (SOL-164)", () => {
     vi.useRealTimers();
   });
 
+  it("A10: a Diário cell summing a lançamento and the previsto opens the detail, never Editar / Excluir", async () => {
+    const { client } = show(ESTIMATED, "2026-03-10", "50.00");
+    await ready(client);
+
+    await userEvent.click((await row("Sábado, 7 de novembro")).cells[3]);
+
+    const detail = await screen.findByRole("dialog");
+    expect(detail).toHaveAccessibleName(/7 nov/);
+    expect(within(detail).getByRole("region", { name: "Diário" })).toBeInTheDocument();
+  });
+
+  it("A15: opens the detail, never Lançar or Excluir, on a cell whose entry left the list or is still saving", async () => {
+    const pending = ENTRIES.filter(({ id }) => id !== "p5").map((each) =>
+      each.id === "p4" ? { ...each, id: "optimistic-1" } : each,
+    );
+    const { client } = show({
+      "GET /api/transactions": { status: 200, body: pending },
+      "GET /api/bills": { status: 200, body: [] },
+    });
+    await ready(client);
+
+    await userEvent.click((await row("Quinta-feira, 5 de novembro, hoje")).cells[3]);
+    expect(await screen.findByRole("dialog")).toHaveAccessibleName("Hoje, 5 nov");
+    await userEvent.click(screen.getByRole("button", { name: "Close" }));
+
+    await userEvent.click((await row("Quarta-feira, 4 de novembro")).cells[3]);
+    const detail = await screen.findByRole("dialog", { name: "Ontem, 4 nov" });
+    expect(within(detail).getByText("Feira")).toBeInTheDocument();
+    expect(within(detail).queryByRole("button", { name: /Feira/ })).not.toBeInTheDocument();
+  });
+
   it("A19: takes the keyboard to Ajustar Diário previsto in the popover, and Esc gives focus back to the day", async () => {
     window.matchMedia = (query) => ({ ...media(query), matches: query === "(hover: hover) and (pointer: fine)" });
     show(ESTIMATED, "2026-03-10", "50.00");
