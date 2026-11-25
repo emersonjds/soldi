@@ -56,8 +56,11 @@ describe("MonthSwitcher", () => {
   it("sits on the hero card by default and on a light surface on request, with 44 px arrows", () => {
     const { rerender } = render(<MonthSwitcher month="2026-11" onMonthChange={vi.fn()} />);
 
-    expect(screen.getByRole("group", { name: "Mês" })).toHaveClass("bg-secondary");
-    expect(screen.getByRole("button", { name: "Próximo mês" })).toHaveClass("focus-visible:outline-ring");
+    expect(screen.getByRole("group", { name: "Mês" })).toHaveClass("bg-hero-chip");
+    expect(screen.getByRole("button", { name: "Próximo mês" })).toHaveClass(
+      "hover:bg-hero-chip",
+      "focus-visible:outline-hero-foreground",
+    );
 
     rerender(<MonthSwitcher month="2026-11" tone="surface" onMonthChange={vi.fn()} />);
     expect(screen.getByRole("group", { name: "Mês" })).toHaveClass("bg-muted");

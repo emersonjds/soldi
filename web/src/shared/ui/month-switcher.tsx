@@ -14,9 +14,9 @@ export const monthLabel = (month: string) => {
   return `${name.charAt(0).toUpperCase()}${name.slice(1)} ${year}`;
 };
 
-/** `hero` inside a page hero card, `surface` on a card or the top bar. */
+/** `hero` on the palette's hero color, `surface` on a card or the top bar. */
 const TONE = {
-  hero: { pill: "bg-secondary", button: "hover:bg-accent focus-visible:outline-ring" },
+  hero: { pill: "bg-hero-chip", button: "hover:bg-hero-chip focus-visible:outline-hero-foreground" },
   surface: { pill: "bg-muted ring-1 ring-border", button: "hover:bg-accent focus-visible:outline-ring" },
 };
 

@@ -12,7 +12,7 @@ describe("PageHero", () => {
     );
 
     const hero = screen.getByRole("region", { name: "Para onde vai" });
-    expect(hero).toHaveClass("bg-card", "text-card-foreground", "shadow-sm");
+    expect(hero).toHaveClass("bg-hero", "text-hero-foreground", "shadow-sm");
     const [eyebrow, title, switcher] = [
       within(hero).getByText("FLUXO DE DESPESAS • CONSOLIDADO"),
       within(hero).getByRole("heading", { level: 1, name: "Para onde vai" }),

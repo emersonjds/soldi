@@ -19,6 +19,7 @@ const open = (replies: Record<string, Reply> = {}) => {
 };
 
 const SECTIONS = [
+  ["Cores do app", "cores", "Cores do app"],
   ["Termômetro & Limites", "termometro", "Calibragem do Termômetro Financeiro"],
   ["Diário previsto", "diario-previsto", "Diário previsto"],
   ["Moeda & Saldo Inicial", "moeda", "Moeda & Saldo Inicial"],
@@ -48,7 +49,9 @@ describe("Ajustes", () => {
         .getAllByRole("link")
         .map((link) => [link.textContent, link.getAttribute("href")]),
     ).toEqual(SECTIONS.map(([label, anchor]) => [label, `#${anchor}`]));
-    expect(subNav().getByRole("link", { name: "Termômetro & Limites" })).toHaveAttribute("aria-current", "true");
+    expect(subNav().getByRole("link", { name: "Cores do app" })).toHaveAttribute("aria-current", "true");
+    expect(screen.getByText("Escolha a paleta do Soldi. Vale só neste aparelho.")).toBeInTheDocument();
+    expect(screen.getByRole("radiogroup", { name: "Paleta" })).toBeInTheDocument();
     for (const [, anchor, title] of SECTIONS)
       expect(screen.getByRole("region", { name: title })).toHaveAttribute("id", anchor);
     expect(await screen.findByLabelText("Crítico / Atenção")).toBeInTheDocument();

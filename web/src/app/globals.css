@@ -3,6 +3,7 @@
 @import "shadcn/tailwind.css";
 
 @import "../styles/presets/soldi.css";
+@import "../styles/presets/palettes.css";
 
 /* Template components/ui carry dark: variants; this keeps them inert (Tailwind 4 would map them to prefers-color-scheme). */
 @custom-variant dark (&:is(.dark *));
@@ -50,6 +51,14 @@
   --color-brand-hover: var(--brand-hover);
   --color-brand-foreground: var(--brand-foreground);
   --color-brand-soft: var(--brand-soft);
+  --color-hero: var(--hero);
+  --color-hero-foreground: var(--hero-foreground);
+  --color-hero-chip: var(--hero-chip);
+  --color-logo-1: var(--logo-1);
+  --color-logo-2: var(--logo-2);
+  --color-logo-3: var(--logo-3);
+  --color-logo-4: var(--logo-4);
+  --color-logo-5: var(--logo-5);
   --color-wordmark: var(--wordmark);
   --color-income: var(--income);
   --color-income-soft: var(--income-soft);

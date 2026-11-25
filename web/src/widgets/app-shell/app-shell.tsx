@@ -223,7 +223,7 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
 
         <div className="flex min-w-0 flex-1 flex-col">
           <header className="bg-background/85 sticky top-0 z-30 box-content grid h-14 grid-cols-[1fr_auto_1fr] items-center gap-3 px-4 pt-[env(safe-area-inset-top)] backdrop-blur lg:flex lg:h-16 lg:gap-4 lg:border-b lg:px-6 lg:pt-0">
-            <TodayLink className="-ml-2 lg:hidden" mark="flex-row-reverse text-xl" />
+            <TodayLink className="-ml-2 lg:hidden" mark="text-xl" />
             <p className="text-lg font-semibold lg:hidden">{pageName}</p>
             <div className="hidden lg:mr-auto lg:block">
               {readsMonth && (

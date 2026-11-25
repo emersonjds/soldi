@@ -100,7 +100,7 @@ describe("Mês", () => {
     vi.useRealTimers();
   });
 
-  it("greets on the card-surface hero below 1024 and, from 1024, shows today's balance, the projection box and the split of the outflow", async () => {
+  it("greets on the palette hero below 1024 and, from 1024, shows today's balance, the projection box and the split of the outflow", async () => {
     open({
       "GET /api/months/2026-11": {
         status: 200,
@@ -110,7 +110,13 @@ describe("Mês", () => {
 
     const hero = await screen.findByRole("region", { name: "Saldo hoje" });
     const greeting = await within(hero).findByText("Olá, Ana");
-    expect(greeting.closest(".rounded-3xl")).toHaveClass("bg-card", "text-card-foreground", "shadow-sm");
+    expect(greeting.closest(".rounded-3xl")).toHaveClass(
+      "bg-hero",
+      "text-hero-foreground",
+      "lg:bg-card",
+      "lg:text-card-foreground",
+      "shadow-sm",
+    );
     expect(greeting.closest(".rounded-3xl")).not.toHaveClass("bg-linear-to-br");
     expect(within(hero).getByRole("group", { name: "Mês" }).parentElement).toHaveClass("lg:hidden");
     expect(within(hero).getByText("em conta", { exact: false })).toHaveClass("hidden", "lg:inline");

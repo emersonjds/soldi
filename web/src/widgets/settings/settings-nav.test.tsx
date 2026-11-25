@@ -45,7 +45,7 @@ afterEach(() => {
 describe("SettingsNav", () => {
   it("marks the last section whose top passed the upper 40% of the window", () => {
     open();
-    expect(current()).toHaveTextContent("Termômetro & Limites");
+    expect(current()).toHaveTextContent("Cores do app");
 
     layout([-900, -300, 200, 700, 1400, 2100]);
     expect(current()).toHaveTextContent("Organização (Contas)");

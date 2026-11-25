@@ -5,6 +5,7 @@ import type { Metadata, Viewport } from "next";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { APP_CONFIG } from "@/config/app-config";
+import { paletteBootScript } from "@/features/pick-palette/palettes";
 import { fontVars } from "@/lib/fonts/registry";
 import { QueryProvider } from "@/shared/lib/query-client";
 
@@ -19,7 +20,11 @@ export const viewport: Viewport = { viewportFit: "cover" };
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
   return (
-    <html lang="pt-BR" data-theme-preset="soldi">
+    <html lang="pt-BR" data-theme-preset="soldi" suppressHydrationWarning>
+      <head>
+        {/* biome-ignore lint/security/noDangerouslySetInnerHtml: static boot script, hashed by the server CSP */}
+        <script dangerouslySetInnerHTML={{ __html: paletteBootScript }} />
+      </head>
       <body className={`${fontVars} min-h-screen antialiased`}>
         <TooltipProvider>
           <QueryProvider>{children}</QueryProvider>

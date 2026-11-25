@@ -69,7 +69,7 @@ export const WelcomeTour = () => {
   });
 
   return (
-    <div className="bg-card lg:bg-secondary flex min-h-dvh lg:items-center lg:justify-center lg:p-8">
+    <div className="bg-card lg:bg-hero flex min-h-dvh lg:items-center lg:justify-center lg:p-8">
       <main
         aria-label="Como o Soldi funciona"
         className="lg:bg-card flex w-full flex-col gap-6 px-6 pt-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] lg:max-w-[560px] lg:rounded-3xl lg:p-10 lg:shadow-xl"
