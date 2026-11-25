@@ -56,10 +56,7 @@ test("Lançamentos switches to the planilha, remembers it, shows a day's entries
   await page.getByRole("button", { name: "Pular por agora" }).click();
   await page.getByRole("button", { name: "Ver meu mês" }).click();
   await page.getByRole("button", { name: "Pular" }).click();
-  await page
-    .getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ })
-    .getByRole("button", { name: "Fechar" })
-    .click();
+  await page.getByRole("dialog", { name: "Lançar" }).getByRole("button", { name: "Fechar" }).click();
 
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
   const categories: { id: string; kind: string }[] = await (await page.request.get("/api/categories")).json();
@@ -164,6 +161,9 @@ test("Lançamentos switches to the planilha, remembers it, shows a day's entries
     expect((await target.boundingBox())?.height).toBeGreaterThanOrEqual(44);
 
   await goToday.click();
+  // SOL-172: today's row flashes for 2.4 s, and only today's.
+  await expect(day.locator("xpath=ancestor::tr")).toHaveAttribute("data-flash", "");
+  await expect(ledger.locator("tr[data-flash]")).toHaveCount(1);
   await expect.poll(() => todayInView(page, today)).toBe(true);
   await expect(day).toBeFocused();
   await expect(goToday).toHaveCount(0);
@@ -181,7 +181,7 @@ test("Lançamentos switches to the planilha, remembers it, shows a day's entries
     });
   const before = await scroll();
   await outflow.click();
-  const create = page.getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ });
+  const create = page.getByRole("dialog", { name: "Lançar" });
   await expect(create.getByRole("radio", { name: "Conta" })).toBeChecked();
   await page.keyboard.press("Escape");
   await expect(create).toHaveCount(0);

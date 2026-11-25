@@ -1,4 +1,4 @@
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type Locator, type Page, test } from "@playwright/test";
 
 import { expectNoClipped } from "./clipped";
 import { requireServer } from "./server";
@@ -20,10 +20,7 @@ test("a new user logs a Diário in three taps and sees it with the day balance",
   await page.getByRole("button", { name: "Pular por agora" }).click();
   await page.getByRole("button", { name: "Ver meu mês" }).click();
   await page.getByRole("button", { name: "Pular" }).click();
-  await page
-    .getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ })
-    .getByRole("button", { name: "Fechar" })
-    .click();
+  await page.getByRole("dialog", { name: "Lançar" }).getByRole("button", { name: "Fechar" }).click();
 
   await expect(page.getByRole("region", { name: "Saldo hoje" })).toContainText("R$ 1.000,00");
 
@@ -60,10 +57,7 @@ test("a bill from onboarding shows under Contas a pagar, pays from the round che
   await page.getByRole("button", { name: "Continuar" }).click();
   await page.getByRole("button", { name: "Ver meu mês" }).click();
   await page.getByRole("button", { name: "Pular" }).click();
-  await page
-    .getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ })
-    .getByRole("button", { name: "Fechar" })
-    .click();
+  await page.getByRole("dialog", { name: "Lançar" }).getByRole("button", { name: "Fechar" }).click();
 
   const hero = page.getByRole("region", { name: "Saldo hoje" });
   const bills = page.getByRole("region", { name: "Contas a pagar" });
@@ -114,10 +108,7 @@ test("Lançar fills the cents from the right and a category created from the pic
   await page.getByRole("button", { name: "Pular por agora" }).click();
   await page.getByRole("button", { name: "Ver meu mês" }).click();
   await page.getByRole("button", { name: "Pular" }).click();
-  await page
-    .getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ })
-    .getByRole("button", { name: "Fechar" })
-    .click();
+  await page.getByRole("dialog", { name: "Lançar" }).getByRole("button", { name: "Fechar" }).click();
 
   const tabs = page.getByRole("navigation", { name: "Navegação principal" });
   await tabs.getByRole("button", { name: "Lançar" }).click();
@@ -161,10 +152,7 @@ test("the hero shows the balance and the summary, and the spending glance opens 
   await page.getByRole("button", { name: "Pular por agora" }).click();
   await page.getByRole("button", { name: "Ver meu mês" }).click();
   await page.getByRole("button", { name: "Pular" }).click();
-  await page
-    .getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ })
-    .getByRole("button", { name: "Fechar" })
-    .click();
+  await page.getByRole("dialog", { name: "Lançar" }).getByRole("button", { name: "Fechar" }).click();
 
   const hero = page.getByRole("region", { name: "Saldo hoje" });
   const monthSummary = page.getByRole("region", { name: "Resumo do mês" });
@@ -210,14 +198,11 @@ test("Lançamentos shows only bills under Contas, and Lançar picks from a row o
   await page.getByRole("button", { name: "Pular por agora" }).click();
   await page.getByRole("button", { name: "Ver meu mês" }).click();
   await page.getByRole("button", { name: "Pular" }).click();
-  await page
-    .getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ })
-    .getByRole("button", { name: "Fechar" })
-    .click();
+  await page.getByRole("dialog", { name: "Lançar" }).getByRole("button", { name: "Fechar" }).click();
 
   const tabs = page.getByRole("navigation", { name: "Navegação principal" });
   await tabs.getByRole("button", { name: "Lançar" }).click();
-  const launch = page.getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ });
+  const launch = page.getByRole("dialog", { name: "Lançar" });
   const row = launch.getByRole("radiogroup", { name: "Categoria" });
   await expect(row.getByRole("radio")).toHaveText([
     "Gasto",
@@ -282,10 +267,7 @@ const signUp = async (page: Page, prefix: string, bill?: { name: string; amount:
   }
   await page.getByRole("button", { name: "Ver meu mês" }).click();
   await page.getByRole("button", { name: "Pular" }).click();
-  await page
-    .getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ })
-    .getByRole("button", { name: "Fechar" })
-    .click();
+  await page.getByRole("dialog", { name: "Lançar" }).getByRole("button", { name: "Fechar" }).click();
 };
 
 const box = async (page: Page, name: string) => {
@@ -293,6 +275,37 @@ const box = async (page: Page, name: string) => {
   if (!found) throw new Error(`no ${name}`);
   return found;
 };
+
+test("a 60-character conta name and note wrap in full at 375 and nothing clips at any width (SOL-179)", async ({
+  page,
+  request,
+}) => {
+  await requireServer(request);
+  const name = "Financiamento do apartamento novo na Caixa Econômica Federal";
+  const note = "Compra no mercado do bairro pra festa de aniversário da Bia.";
+  expect([name.length, note.length]).toEqual([60, 60]);
+  await signUp(page, "wrap", { name, amount: "300,00", day: "28" });
+
+  await page.getByRole("navigation", { name: "Navegação principal" }).getByRole("button", { name: "Lançar" }).click();
+  const launch = page.getByRole("dialog", { name: "Lançar" });
+  await page.keyboard.type("12,50");
+  await launch.getByLabel("Observação").fill(note);
+  await launch.getByRole("button", { name: "Salvar" }).click();
+
+  const wraps = (text: Locator) =>
+    text.evaluate(
+      (element) =>
+        element.getBoundingClientRect().height > Number.parseFloat(getComputedStyle(element).lineHeight) * 1.5,
+    );
+  const bill = page.getByRole("region", { name: "Contas a pagar" }).getByText(name, { exact: true });
+  const entry = page.getByRole("region", { name: "Lançamentos" }).getByText(note, { exact: true });
+  expect(await wraps(bill)).toBe(true);
+  expect(await wraps(entry)).toBe(true);
+  for (const width of [375, 1024, 1280, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expectNoClipped(page);
+  }
+});
 
 test("a fresh account's Mês shows the hero alone at every width (D25)", async ({ page, request }) => {
   await requireServer(request);
@@ -381,10 +394,7 @@ test("Contas a pagar groups the month by kind with the paid count, pays and undo
   await page.getByRole("button", { name: "Pular por agora" }).click();
   await page.getByRole("button", { name: "Ver meu mês" }).click();
   await page.getByRole("button", { name: "Pular" }).click();
-  await page
-    .getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ })
-    .getByRole("button", { name: "Fechar" })
-    .click();
+  await page.getByRole("dialog", { name: "Lançar" }).getByRole("button", { name: "Fechar" }).click();
 
   // The server's São Paulo calendar, not the runner's clock.
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
@@ -479,10 +489,7 @@ test("Lançamentos shows the whole month and splits Contas fixas from Valor vari
   await page.getByRole("button", { name: "Pular por agora" }).click();
   await page.getByRole("button", { name: "Ver meu mês" }).click();
   await page.getByRole("button", { name: "Pular" }).click();
-  await page
-    .getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ })
-    .getByRole("button", { name: "Fechar" })
-    .click();
+  await page.getByRole("dialog", { name: "Lançar" }).getByRole("button", { name: "Fechar" }).click();
 
   // The server's São Paulo calendar, not the runner's clock.
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
@@ -562,10 +569,7 @@ test("Contas a pagar and Lançamentos collapse from their chevron and stay that 
   await page.getByRole("button", { name: "Pular por agora" }).click();
   await page.getByRole("button", { name: "Ver meu mês" }).click();
   await page.getByRole("button", { name: "Pular" }).click();
-  await page
-    .getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ })
-    .getByRole("button", { name: "Fechar" })
-    .click();
+  await page.getByRole("dialog", { name: "Lançar" }).getByRole("button", { name: "Fechar" }).click();
 
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
   const api = page.request;

@@ -7,6 +7,20 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.76.0
+
+> Headline: today flashes, long names wrap, one Lançar
+
+### Web
+- Modo planilha: after "Ir pra hoje", today's row flashes twice in the palette's color, over the weekend tint and the Saldo colors; with reduced motion it highlights without moving (SOL-172).
+- Long names (lançamentos, contas, categorias, cofrinhos) wrap to two lines instead of being cut, "Alimentação" and "Confortável" no longer hyphenate, and the entry sheet is titled "Lançar" wherever it opens (SOL-179).
+- Posso comprar isso? weighs the Diário previsto over the same days as the contas, so it names the estimate when a month of it is the real cause (SOL-169).
+- The route-group pages now count in the locked 90% coverage threshold (SOL-167).
+
+### Server
+- A guard test pins one parcela per month in Gastos for card and conta parceladas (SOL-187).
+
+
 ## 0.75.0
 
 > Headline: one Gastos do mês on every screen

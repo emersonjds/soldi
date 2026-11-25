@@ -89,7 +89,7 @@ describe("FaturaSheet", () => {
     const spotify = within(dialog).getByRole("button", { name: /Spotify/ });
     expect(spotify).toHaveTextContent("Todo mês · R$ 478,80 por ano");
     expect(spotify).toHaveClass("min-h-14");
-    expect(within(spotify).getByText("Spotify")).toHaveClass("truncate", "text-base");
+    expect(within(spotify).getByText("Spotify")).toHaveClass("line-clamp-2", "break-words", "text-base");
   });
 
   it("reads Venceu in red for an overdue fatura (D17)", async () => {

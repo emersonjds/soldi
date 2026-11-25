@@ -172,7 +172,7 @@ const Composition = ({ groups, total, saved, active, onSelect }: CompositionProp
               className={cn(rowButton, "flex min-h-11 items-center gap-2")}
             >
               <span aria-hidden className={cn("size-2.5 shrink-0 rounded-full", categoryBg(group.color))} />
-              <span className="min-w-0 flex-1 truncate text-sm">{group.name}</span>
+              <span className="line-clamp-2 min-w-0 flex-1 text-sm break-words">{group.name}</span>
               <span className="text-sm font-semibold tabular-nums">{formatPct(group.pct)}</span>
             </button>
           </li>
@@ -204,7 +204,7 @@ const TopFive = ({ groups }: { groups: Group[] }) => {
           <li key={group.category_id} className={cn("flex flex-col gap-1.5", index === 4 && "max-lg:hidden")}>
             <span className="flex items-baseline gap-3 text-sm">
               <span className="text-muted-foreground font-semibold tabular-nums max-lg:hidden">#{index + 1}</span>
-              <span className="min-w-0 flex-1 truncate font-medium">{group.name}</span>
+              <span className="line-clamp-2 min-w-0 flex-1 font-medium break-words">{group.name}</span>
               <span className="shrink-0 tabular-nums">
                 <Money amount={group.amount} className="font-semibold max-lg:hidden" />{" "}
                 <span className="text-muted-foreground">({formatPct(group.pct)})</span>
@@ -255,7 +255,7 @@ const GroupRow = ({ group, shares, previous, open, picked, onOpen, onPick }: Gro
           <CategoryIcon icon={group.icon} color={group.color} />
           <span className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-3 gap-y-0.5">
             <span className="flex min-w-0 items-center gap-2">
-              <span className="truncate text-base font-medium">{group.name}</span>
+              <span className="line-clamp-2 text-base font-medium break-words">{group.name}</span>
               {picked && (
                 <span className="bg-primary text-primary-foreground rounded-full px-2 text-xs leading-5 font-semibold max-lg:hidden">
                   Ativo
@@ -301,14 +301,14 @@ const GroupRow = ({ group, shares, previous, open, picked, onOpen, onPick }: Gro
               className={cn("flex min-h-11 items-center gap-2", cents(child.amount) === 0 && "text-muted-foreground")}
             >
               <span aria-hidden className={cn("size-2 shrink-0 rounded-full", categoryBg(child.color))} />
-              <span className="min-w-0 flex-1 truncate text-base">{child.name}</span>
+              <span className="line-clamp-2 min-w-0 flex-1 text-base break-words">{child.name}</span>
               <Money amount={child.amount} className="text-base font-semibold" />
             </li>
           ))}
           {own > 0 && (
             <li className="text-muted-foreground flex min-h-11 items-center gap-2">
               <span aria-hidden className="bg-muted-foreground/40 size-2 shrink-0 rounded-full" />
-              <span className="min-w-0 flex-1 truncate text-base">{group.name} (sem subcategoria)</span>
+              <span className="line-clamp-2 min-w-0 flex-1 text-base break-words">{group.name} (sem subcategoria)</span>
               <Money amount={fromCents(own)} className="text-base font-semibold" />
             </li>
           )}
@@ -337,7 +337,7 @@ const EntryRow = ({ entry, heading, note, status, reference, className }: EntryR
       <CategoryIcon icon={entry.category.icon} color={entry.category.color} />
     )}
     <span className="flex min-w-0 flex-1 flex-col">
-      <span className="truncate text-base font-medium">{heading}</span>
+      <span className="line-clamp-2 text-base font-medium break-words">{heading}</span>
       <span className="text-muted-foreground text-xs">{note}</span>
     </span>
     <span className="flex shrink-0 flex-col items-end">

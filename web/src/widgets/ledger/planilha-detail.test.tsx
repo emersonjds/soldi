@@ -274,14 +274,14 @@ describe("Planilha cell actions (SOL-171)", () => {
     await ready(client);
 
     await userEvent.click((await row("Domingo, 1 de novembro")).cells[1]);
-    const income = await screen.findByRole("dialog", { name: /^Novo/ });
+    const income = await screen.findByRole("dialog", { name: "Lançar" });
     expect(within(income).getByRole("radio", { name: "Entrada" })).toBeChecked();
     expect(within(income).getByRole("button", { name: /01\/11\/2026/ })).toBeInTheDocument();
     await userEvent.keyboard("{Escape}");
     await waitFor(() => expect(screen.getByRole("button", { name: "Domingo, 1 de novembro" })).toHaveFocus());
 
     await userEvent.click((await row("Quarta-feira, 11 de novembro")).cells[2]);
-    const bill = await screen.findByRole("dialog", { name: /^Novo/ });
+    const bill = await screen.findByRole("dialog", { name: "Lançar" });
     expect(within(bill).getByRole("radio", { name: "Conta" })).toBeChecked();
     expect(await within(bill).findByRole("switch", { name: "Conta fixa" })).toBeInTheDocument();
     expect(within(bill).getByRole("button", { name: /11\/11\/2026/ })).toBeInTheDocument();
@@ -289,7 +289,7 @@ describe("Planilha cell actions (SOL-171)", () => {
 
     await userEvent.click((await row("Quarta-feira, 11 de novembro")).cells[3]);
     expect(
-      within(await screen.findByRole("dialog", { name: /^Novo/ })).getByRole("radio", { name: "Diário" }),
+      within(await screen.findByRole("dialog", { name: "Lançar" })).getByRole("radio", { name: "Diário" }),
     ).toBeChecked();
   });
 
@@ -357,7 +357,7 @@ describe("Planilha cell actions (SOL-171)", () => {
     const first = await tap("Domingo, 1 de novembro");
     await userEvent.click(within(first).getByRole("button", { name: "Lançar Diário em 1 de novembro" }));
     expect(
-      within(await screen.findByRole("dialog", { name: /^Novo/ })).getByRole("radio", { name: "Diário" }),
+      within(await screen.findByRole("dialog", { name: "Lançar" })).getByRole("radio", { name: "Diário" }),
     ).toBeChecked();
   });
 

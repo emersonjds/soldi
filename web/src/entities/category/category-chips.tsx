@@ -57,7 +57,7 @@ const ranked = (tops: Category[], entries: Entry[], list: Category[]) => {
   return [...tops].sort((a, b) => score(b).count - score(a).count || score(b).latest.localeCompare(score(a).latest));
 };
 
-const name = "line-clamp-2 hyphens-auto text-center text-xs leading-4 wrap-break-word";
+const name = "line-clamp-2 text-center text-xs leading-4 wrap-break-word";
 
 /**
  * One kind's parents as a scrolling row of up to eight circles, the most used this month first, and the picked

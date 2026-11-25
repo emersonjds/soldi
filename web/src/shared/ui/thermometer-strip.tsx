@@ -57,7 +57,7 @@ export const ThermometerStrip = ({
             />
             <span
               className={cn(
-                "max-w-full text-center text-[11px] leading-3.5 break-words hyphens-auto",
+                "max-w-full text-center text-[11px] leading-3.5 break-words",
                 current ? "font-bold" : "font-medium",
                 marker && [TIER_STYLE[segment].label, "lg:text-muted-foreground"],
                 !marker && (current ? "text-foreground" : "text-muted-foreground"),
