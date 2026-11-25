@@ -143,7 +143,7 @@ pub struct YearMonth {
 }
 
 /// A top-level category's total in the year, its subcategories rolled in; `pct` is its share of
-/// `spent` (outflow) or `totals.income` (income) with one decimal.
+/// `totals.spent` (outflow) or `totals.income` (income) with one decimal.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct YearGroup {
     pub category_id: Uuid,
@@ -165,11 +165,9 @@ pub struct YearCard {
     pub amount: Decimal,
 }
 
-/// The year's Entradas and Gastos by purchase date (D31), over whole months from the opening month
-/// or January to today's month or December. `totals` has the month view's shape, Economia deposits
-/// inside `bills`, but follows D31: `bills` leaves fatura payments out and `daily` holds card
-/// purchases, so it does not equal the sum of the month views. `spent` (Gastos) leaves deposits and
-/// fatura payments out. `first_month` and `last_month` are null when nothing is counted.
+/// The year's Entradas, Gastos and Guardado by purchase date (D31, D54), over whole months from the
+/// opening month or January to today's month or December; `totals` is the sum of the month views'.
+/// `first_month` and `last_month` are null when nothing is counted.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct YearReport {
     #[schema(example = 2026)]
@@ -179,8 +177,6 @@ pub struct YearReport {
     #[schema(example = "2026-11")]
     pub last_month: Option<String>,
     pub totals: crate::months::Totals,
-    #[serde(serialize_with = "crate::money")]
-    pub spent: Decimal,
     pub top_months: Vec<YearMonth>,
     pub spending: Vec<YearGroup>,
     pub income: Vec<YearGroup>,

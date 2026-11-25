@@ -48,25 +48,20 @@ pub struct Day {
     pub is_future: bool,
 }
 
-/// `income` leaves the month's resgates out, `withdrawn` sums them (SOL-28); `outflow` is bills
-/// plus daily; `performance` is income minus outflow; `saved` is the bills under `Economia`
-/// minus `withdrawn`, already inside `bills`.
+/// Entradas, Gastos and Guardado (D54). `income` leaves resgates out; `spent` (Gastos) is the
+/// Saídas and Diários from the opening date, card purchases on their own date, without Economia
+/// deposits and fatura payments; `saved` (Guardado) is the deposits minus the resgates and may be
+/// negative; `performance` (Resultado) is `income - spent - saved`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct Totals {
     #[serde(serialize_with = "crate::money")]
     pub income: Decimal,
     #[serde(serialize_with = "crate::money")]
-    pub bills: Decimal,
-    #[serde(serialize_with = "crate::money")]
-    pub daily: Decimal,
-    #[serde(serialize_with = "crate::money")]
-    pub outflow: Decimal,
-    #[serde(serialize_with = "crate::money")]
-    pub performance: Decimal,
+    pub spent: Decimal,
     #[serde(serialize_with = "crate::money")]
     pub saved: Decimal,
     #[serde(serialize_with = "crate::money")]
-    pub withdrawn: Decimal,
+    pub performance: Decimal,
 }
 
 /// An active recurring bill in the month. `amount` is what was paid, or the bill's amount while

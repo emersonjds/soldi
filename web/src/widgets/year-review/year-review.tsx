@@ -72,7 +72,7 @@ const Split = ({ totals }: { totals: Report["totals"] }) => {
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-sm leading-5">
         <h3 className="font-medium">Para onde foi a entrada do ano</h3>
         <p className="font-bold tabular-nums">
-          Total: <Money amount={income ? totals.income : totals.outflow} />
+          Total: <Money amount={income ? totals.income : totals.spent} />
         </p>
       </div>
       <SplitBar label={income ? "Entradas" : "Saídas"} segments={split.segments} />
@@ -93,7 +93,7 @@ const Summary = ({ data, first, last }: { data: Report; first: string; last: str
       <div className="flex min-w-0 flex-col gap-1">
         <dt className="text-muted-foreground text-sm">Gastos</dt>
         <dd>
-          <Money amount={data.spent} outflow size="figure" />
+          <Money amount={data.totals.spent} outflow size="figure" />
         </dd>
       </div>
     </dl>
@@ -186,8 +186,8 @@ const OnCard = ({ data }: { data: Report }) => {
   );
 };
 
-const nothing = ({ income, outflow, withdrawn }: Report["totals"]) =>
-  cents(income) === 0 && cents(outflow) === 0 && cents(withdrawn) === 0;
+const nothing = ({ income, spent, saved }: Report["totals"]) =>
+  cents(income) === 0 && cents(spent) === 0 && cents(saved) === 0;
 
 const Body = ({ data }: { data: Report }) => {
   if (!data.first_month || !data.last_month || nothing(data.totals))

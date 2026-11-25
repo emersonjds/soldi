@@ -99,7 +99,7 @@ const MonthSummary = ({
         </span>
       }
     >
-      <Money amount={view.totals.outflow} className={amount} />
+      <Money amount={view.totals.spent} className={amount} />
     </Figure>
     <Figure
       label="Projetado"
@@ -135,7 +135,7 @@ const Split = ({ totals }: { totals: MonthView["totals"] }) => {
       <div className="flex items-center justify-between gap-4 text-sm leading-5">
         <h2 className="font-medium">Para onde foi a entrada deste mês</h2>
         <p className="font-bold tabular-nums">
-          Total: <Money amount={income ? totals.income : totals.outflow} />
+          Total: <Money amount={income ? totals.income : totals.spent} />
         </p>
       </div>
       <SplitBar label={income ? "Entradas" : "Saídas"} segments={split.segments} />
@@ -228,7 +228,7 @@ export const ThermometerCard = ({
   className?: string;
 }) => {
   const currency = useCurrency();
-  const { income, outflow, performance } = view.totals;
+  const { income, spent: outflow, performance } = view.totals;
   const base = cents(income);
   const result = cents(performance);
   if (base === 0 && cents(outflow) === 0) return null;

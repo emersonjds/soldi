@@ -4133,27 +4133,15 @@
       },
       "Totals": {
         "type": "object",
-        "description": "`income` leaves the month's resgates out, `withdrawn` sums them (SOL-28); `outflow` is bills\nplus daily; `performance` is income minus outflow; `saved` is the bills under `Economia`\nminus `withdrawn`, already inside `bills`.",
+        "description": "Entradas, Gastos and Guardado (D54). `income` leaves resgates out; `spent` (Gastos) is the\nSaídas and Diários from the opening date, card purchases on their own date, without Economia\ndeposits and fatura payments; `saved` (Guardado) is the deposits minus the resgates and may be\nnegative; `performance` (Resultado) is `income - spent - saved`.",
         "required": [
           "income",
-          "bills",
-          "daily",
-          "outflow",
-          "performance",
+          "spent",
           "saved",
-          "withdrawn"
+          "performance"
         ],
         "properties": {
-          "bills": {
-            "type": "string"
-          },
-          "daily": {
-            "type": "string"
-          },
           "income": {
-            "type": "string"
-          },
-          "outflow": {
             "type": "string"
           },
           "performance": {
@@ -4162,7 +4150,7 @@
           "saved": {
             "type": "string"
           },
-          "withdrawn": {
+          "spent": {
             "type": "string"
           }
         }
@@ -4695,7 +4683,7 @@
       },
       "YearGroup": {
         "type": "object",
-        "description": "A top-level category's total in the year, its subcategories rolled in; `pct` is its share of\n`spent` (outflow) or `totals.income` (income) with one decimal.",
+        "description": "A top-level category's total in the year, its subcategories rolled in; `pct` is its share of\n`totals.spent` (outflow) or `totals.income` (income) with one decimal.",
         "required": [
           "category_id",
           "name",
@@ -4746,11 +4734,10 @@
       },
       "YearReport": {
         "type": "object",
-        "description": "The year's Entradas and Gastos by purchase date (D31), over whole months from the opening month\nor January to today's month or December. `totals` has the month view's shape, Economia deposits\ninside `bills`, but follows D31: `bills` leaves fatura payments out and `daily` holds card\npurchases, so it does not equal the sum of the month views. `spent` (Gastos) leaves deposits and\nfatura payments out. `first_month` and `last_month` are null when nothing is counted.",
+        "description": "The year's Entradas, Gastos and Guardado by purchase date (D31, D54), over whole months from the\nopening month or January to today's month or December; `totals` is the sum of the month views'.\n`first_month` and `last_month` are null when nothing is counted.",
         "required": [
           "year",
           "totals",
-          "spent",
           "top_months",
           "spending",
           "income",
@@ -4799,9 +4786,6 @@
             "items": {
               "$ref": "#/components/schemas/YearGroup"
             }
-          },
-          "spent": {
-            "type": "string"
           },
           "top_months": {
             "type": "array",

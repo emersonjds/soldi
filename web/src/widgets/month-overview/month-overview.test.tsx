@@ -17,12 +17,9 @@ const STITCH: MonthView = {
   projected_tier: "light_green",
   totals: {
     income: "6361.60",
-    withdrawn: "0.00",
-    bills: "2708.00",
-    daily: "1548.50",
-    outflow: "4256.50",
-    performance: "2105.10",
+    spent: "4256.50",
     saved: "0.00",
+    performance: "2105.10",
   },
 };
 
@@ -101,7 +98,7 @@ describe("Termômetro do Mês", () => {
 
   it("renders nothing on a month with no entrada and no saída (D25)", () => {
     const { container } = render(
-      <ThermometerCard view={{ ...MONTH, totals: { ...MONTH.totals, income: "0.00", outflow: "0.00" } }} />,
+      <ThermometerCard view={{ ...MONTH, totals: { ...MONTH.totals, income: "0.00", spent: "0.00" } }} />,
     );
 
     expect(container).toBeEmptyDOMElement();

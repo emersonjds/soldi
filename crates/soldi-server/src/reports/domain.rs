@@ -87,6 +87,17 @@ pub fn spending<'a>(sums: impl IntoIterator<Item = &'a CategorySum>) -> Spending
     total
 }
 
+impl Spending {
+    pub fn totals(self) -> Totals {
+        Totals {
+            income: self.income,
+            spent: self.spent,
+            saved: self.saved,
+            performance: self.income - self.spent - self.saved,
+        }
+    }
+}
+
 /// `part` as a percentage of `whole` with one decimal, half to even; none when `whole` is 0.
 pub fn percent(part: Decimal, whole: Decimal) -> Option<Decimal> {
     if whole.is_zero() {
@@ -104,29 +115,6 @@ pub struct MonthSaving {
     pub income: Decimal,
     pub deposited: Decimal,
     pub withdrawn: Decimal,
-}
-
-/// One month and card of the year by purchase date (D31); `card_id`/`card_name` only on a card's spends.
-pub struct YearFlow {
-    pub month: NaiveDate,
-    pub card_id: Option<Uuid>,
-    pub card_name: Option<String>,
-    pub income: Decimal,
-    pub withdrawn: Decimal,
-    pub deposited: Decimal,
-    /// Saídas without deposits and fatura payments.
-    pub bills: Decimal,
-    pub daily: Decimal,
-}
-
-/// A top-level category's total in the year; `income` tells an income group from an outflow one.
-pub struct YearGroupSum {
-    pub category_id: Uuid,
-    pub name: String,
-    pub icon: String,
-    pub color: String,
-    pub income: bool,
-    pub amount: Decimal,
 }
 
 /// A year from 2000 to 2100 (SOL-30's bound).
@@ -226,38 +214,49 @@ pub fn savings_target(pct: Decimal, income_total: Decimal, saved_total: Decimal)
     }
 }
 
-/// The year's totals in the month view's shape, its Gastos (D31), the top three months, the top
-/// five outflow and income groups and the card spends.
+/// The year's totals as its months' (D54), the top three months, the top five outflow and income
+/// groups and the card spends.
 pub fn year_report(
     year: i32,
     range: Option<(NaiveDate, NaiveDate)>,
-    flows: Vec<YearFlow>,
-    groups: Vec<YearGroupSum>,
+    sums: Vec<CategorySum>,
 ) -> YearReport {
     let zero = Decimal::ZERO;
-    let (mut income, mut withdrawn, mut deposited, mut bills, mut daily) =
-        (zero, zero, zero, zero, zero);
+    let totals = spending(&sums).totals();
     let mut by_month: BTreeMap<NaiveDate, Decimal> = BTreeMap::new();
     let mut by_card: HashMap<Uuid, YearCard> = HashMap::new();
-    for flow in flows {
-        income += flow.income;
-        withdrawn += flow.withdrawn;
-        deposited += flow.deposited;
-        bills += flow.bills;
-        daily += flow.daily;
-        *by_month.entry(flow.month).or_default() += flow.bills + flow.daily;
-        if let Some(card_id) = flow.card_id {
-            by_card
-                .entry(card_id)
-                .or_insert_with(|| YearCard {
-                    card_id,
-                    name: flow.card_name.unwrap_or_default(),
-                    amount: zero,
-                })
-                .amount += flow.daily;
+    let mut by_group: HashMap<(Uuid, bool), YearGroup> = HashMap::new();
+    for sum in &sums {
+        let flow = sum.flow();
+        if !matches!(flow, Flow::Spent | Flow::Income) {
+            continue;
         }
+        let income = flow == Flow::Income;
+        if !income {
+            *by_month.entry(sum.month).or_default() += sum.amount;
+            if let Some(card_id) = sum.card_id {
+                by_card
+                    .entry(card_id)
+                    .or_insert_with(|| YearCard {
+                        card_id,
+                        name: sum.card_name.clone().unwrap_or_default(),
+                        amount: zero,
+                    })
+                    .amount += sum.amount;
+            }
+        }
+        by_group
+            .entry((sum.group_id(), income))
+            .or_insert_with(|| YearGroup {
+                category_id: sum.group_id(),
+                name: sum.group_name.clone(),
+                icon: sum.group_icon.clone(),
+                color: sum.group_color.clone(),
+                amount: zero,
+                pct: zero,
+            })
+            .amount += sum.amount;
     }
-    let spent = bills + daily;
     let mut top_months: Vec<YearMonth> = by_month
         .into_iter()
         .filter(|(_, spent)| *spent > zero)
@@ -280,49 +279,33 @@ pub fn year_report(
     });
     let card_spent: Decimal = cards.iter().map(|card| card.amount).sum();
     let (income_groups, spending_groups): (Vec<_>, Vec<_>) =
-        groups.into_iter().partition(|group| group.income);
-    let top = |mut groups: Vec<YearGroupSum>, base: Decimal| -> Vec<YearGroup> {
+        by_group.into_iter().partition(|((_, income), _)| *income);
+    let top = |groups: Vec<((Uuid, bool), YearGroup)>, base: Decimal| -> Vec<YearGroup> {
+        let mut groups: Vec<YearGroup> = groups.into_iter().map(|(_, group)| group).collect();
         groups.sort_by(|a, b| {
             b.amount
                 .cmp(&a.amount)
                 .then_with(|| a.name.cmp(&b.name))
                 .then_with(|| a.category_id.cmp(&b.category_id))
         });
+        groups.truncate(5);
+        for group in &mut groups {
+            group.pct = percent(group.amount, base).unwrap_or(Decimal::new(0, 1));
+        }
         groups
-            .into_iter()
-            .take(5)
-            .map(|group| YearGroup {
-                category_id: group.category_id,
-                name: group.name,
-                icon: group.icon,
-                color: group.color,
-                pct: percent(group.amount, base).unwrap_or(Decimal::new(0, 1)),
-                amount: group.amount,
-            })
-            .collect()
     };
-    let outflow = bills + deposited + daily;
     let month = |date: NaiveDate| date.format("%Y-%m").to_string();
     YearReport {
         year,
         first_month: range.map(|(from, _)| month(from)),
         last_month: range.map(|(_, to)| month(to)),
-        totals: Totals {
-            income,
-            bills: bills + deposited,
-            daily,
-            outflow,
-            performance: income - outflow,
-            saved: deposited - withdrawn,
-            withdrawn,
-        },
-        spent,
         top_months,
-        spending: top(spending_groups, spent),
-        income: top(income_groups, income),
+        spending: top(spending_groups, totals.spent),
+        income: top(income_groups, totals.income),
         card_spent,
-        card_pct: percent(card_spent, spent),
+        card_pct: percent(card_spent, totals.spent),
         cards,
+        totals,
     }
 }
 
@@ -1142,28 +1125,18 @@ mod tests {
         assert_eq!(year.rate_pct, None);
     }
 
-    fn flow(month: &str, card: Option<(u128, &str)>, amounts: [&str; 5]) -> YearFlow {
-        let [income, withdrawn, deposited, bills, daily] = amounts.map(money);
-        YearFlow {
-            month: date(&format!("{month}-01")),
-            card_id: card.map(|(id, _)| Uuid::from_u128(id)),
-            card_name: card.map(|(_, name)| name.into()),
-            income,
-            withdrawn,
-            deposited,
-            bills,
-            daily,
+    fn with_card(id: u128, name: &str, row: CategorySum) -> CategorySum {
+        CategorySum {
+            card_id: Some(Uuid::from_u128(id)),
+            card_name: Some(name.into()),
+            ..row
         }
     }
 
-    fn group(id: u128, name: &str, income: bool, amount: &str) -> YearGroupSum {
-        YearGroupSum {
-            category_id: Uuid::from_u128(id),
-            name: name.into(),
-            icon: "tag".into(),
-            color: "cat-1".into(),
-            income,
-            amount: money(amount),
+    fn deposit(month: &str, amount: &str) -> CategorySum {
+        CategorySum {
+            savings: true,
+            ..sum(90, "Economia", Bill, month, amount)
         }
     }
 
@@ -1209,21 +1182,65 @@ mod tests {
     }
 
     #[test]
+    fn d54_the_seeded_year_spends_1000_25_and_saves_380() {
+        let report = year_report(
+            2026,
+            Some((date("2026-10-01"), date("2026-11-30"))),
+            seeded_month(),
+        );
+
+        assert_eq!(
+            (
+                report.totals.spent,
+                report.totals.saved,
+                report.totals.income
+            ),
+            (money("1000.25"), money("380.00"), money("6000.00"))
+        );
+        assert_eq!(report.totals.performance, money("4619.75"));
+        assert_eq!(
+            months(&report),
+            [("2026-11", "550.25".into()), ("2026-10", "450.00".into())]
+        );
+        let cards: Vec<(&str, String)> = report
+            .cards
+            .iter()
+            .map(|card| (card.name.as_str(), card.amount.to_string()))
+            .collect();
+        assert_eq!(cards, [("Porto", "450.00".into())]);
+        assert_eq!(report.card_pct.unwrap().to_string(), "45.0");
+        assert_eq!(
+            groups(&report.spending),
+            [
+                ("Lazer", "450.00".into(), "45.0".into()),
+                ("Alimentação", "282.90".into(), "28.3".into()),
+                ("Casa", "187.35".into(), "18.7".into()),
+                ("Saúde", "80.00".into(), "8.0".into()),
+            ]
+        );
+        assert_eq!(
+            groups(&report.income),
+            [("Salário", "6000.00".into(), "100.0".into())]
+        );
+    }
+
+    #[test]
     fn card_rows_fold_into_their_month_and_ties_go_to_the_older_month() {
-        let porto = Some((1, "Porto"));
+        let porto = |row| with_card(1, "Porto", row);
         let report = year_report(
             2025,
             Some((date("2025-01-01"), date("2025-12-31"))),
             vec![
-                flow("2025-01", None, ["1000", "0", "0", "400", "50"]),
-                flow("2025-01", porto, ["0", "0", "0", "0", "30"]),
-                flow("2025-03", None, ["0", "0", "0", "200", "0"]),
-                flow("2025-03", porto, ["0", "0", "0", "0", "280"]),
-                flow("2025-05", None, ["0", "0", "0", "100", "0"]),
-                flow("2025-07", None, ["0", "0", "0", "480", "0"]),
-                flow("2025-09", None, ["0", "0", "900", "0", "0"]),
+                sum(1, "Salário", Income, "2025-01", "1000"),
+                sum(2, "Aluguel", Bill, "2025-01", "400"),
+                sum(3, "Mercado", Daily, "2025-01", "50"),
+                porto(sum(3, "Mercado", Daily, "2025-01", "30")),
+                sum(2, "Aluguel", Bill, "2025-03", "200"),
+                porto(sum(3, "Mercado", Daily, "2025-03", "280")),
+                sum(2, "Aluguel", Bill, "2025-05", "100"),
+                sum(2, "Aluguel", Bill, "2025-07", "480"),
+                deposit("2025-09", "900"),
             ],
-            Vec::new(),
         );
 
         assert_eq!(
@@ -1243,17 +1260,16 @@ mod tests {
         let report = year_report(
             2025,
             Some((date("2025-01-01"), date("2025-12-31"))),
-            vec![flow("2025-01", None, ["800", "0", "0", "400", "300"])],
             vec![
-                group(1, "Casa", false, "100"),
-                group(2, "Lazer", false, "100"),
-                group(3, "Alimentação", false, "250"),
-                group(4, "Saúde", false, "50"),
-                group(5, "Veículo", false, "150"),
-                group(6, "Gasto", false, "30"),
-                group(7, "Pets", false, "20"),
-                group(8, "Salário", true, "797"),
-                group(9, "Extra", true, "3"),
+                sum(1, "Casa", Bill, "2025-01", "100"),
+                sum(2, "Lazer", Daily, "2025-01", "100"),
+                sum(3, "Alimentação", Daily, "2025-01", "250"),
+                sum(4, "Saúde", Bill, "2025-01", "50"),
+                sum(5, "Veículo", Bill, "2025-01", "150"),
+                sum(6, "Gasto", Daily, "2025-01", "30"),
+                sum(7, "Pets", Bill, "2025-01", "20"),
+                sum(8, "Salário", Income, "2025-01", "797"),
+                sum(9, "Extra", Income, "2025-01", "3"),
             ],
         );
 
@@ -1281,10 +1297,9 @@ mod tests {
         let report = year_report(
             2025,
             Some((date("2025-01-01"), date("2025-12-31"))),
-            vec![flow("2025-01", None, ["0", "0", "0", "400", "0"])],
             vec![
-                group(1, "Casa", false, "397"),
-                group(2, "Lazer", false, "3"),
+                sum(1, "Casa", Bill, "2025-01", "397"),
+                sum(2, "Lazer", Bill, "2025-01", "3"),
             ],
         );
 
@@ -1299,34 +1314,43 @@ mod tests {
 
     #[test]
     fn deposits_are_saving_not_spending_and_the_totals_read_like_a_month() {
-        let porto = Some((1, "Porto"));
-        let itau = Some((2, "Itaú"));
+        let porto = |row| with_card(1, "Porto", row);
+        let itau = |row| with_card(2, "Itaú", row);
+        let mercado = |month| sum(3, "Mercado", Daily, month, "0");
+        let resgate = CategorySum {
+            cofrinho: true,
+            ..sum(4, "Resgate", Income, "2025-03", "50")
+        };
         let report = year_report(
             2025,
             Some((date("2025-03-15"), date("2025-12-31"))),
             vec![
-                flow("2025-03", None, ["2300", "50", "200", "800", "50"]),
-                flow("2025-03", porto, ["0", "0", "0", "0", "120"]),
-                flow("2025-04", itau, ["0", "0", "0", "0", "120"]),
-                flow("2025-04", porto, ["0", "0", "0", "0", "30"]),
-                flow("2025-06", None, ["0", "0", "500", "0", "0"]),
+                sum(1, "Salário", Income, "2025-03", "2300"),
+                resgate,
+                deposit("2025-03", "200"),
+                sum(2, "Aluguel", Bill, "2025-03", "800"),
+                sum(3, "Mercado", Daily, "2025-03", "50"),
+                porto(CategorySum {
+                    amount: money("120"),
+                    ..mercado("2025-03")
+                }),
+                itau(CategorySum {
+                    amount: money("120"),
+                    ..mercado("2025-04")
+                }),
+                porto(CategorySum {
+                    amount: money("30"),
+                    ..mercado("2025-04")
+                }),
+                deposit("2025-06", "500"),
             ],
-            Vec::new(),
         );
 
         let totals = &report.totals;
         assert_eq!(totals.income, money("2300"));
-        assert_eq!(totals.bills, money("1500"));
-        assert_eq!(totals.daily, money("320"));
-        assert_eq!(totals.outflow, money("1820"));
-        assert_eq!(totals.performance, money("480"));
+        assert_eq!(totals.spent, money("1120"));
         assert_eq!(totals.saved, money("650"));
-        assert_eq!(totals.withdrawn, money("50"));
-        assert_eq!(report.spent, money("1120"));
-        assert_eq!(
-            totals.outflow - totals.saved - totals.withdrawn,
-            report.spent
-        );
+        assert_eq!(totals.performance, money("530"));
         assert_eq!(
             months(&report),
             [("2025-03", "970".into()), ("2025-04", "150".into())]
@@ -1350,24 +1374,23 @@ mod tests {
         let report = year_report(
             2025,
             Some((date("2025-01-01"), date("2025-12-31"))),
-            vec![flow("2025-02", None, ["0", "0", "300", "0", "0"])],
-            Vec::new(),
+            vec![deposit("2025-02", "300")],
         );
 
-        assert_eq!(report.spent, Decimal::ZERO);
+        assert_eq!(report.totals.spent, Decimal::ZERO);
+        assert_eq!(report.totals.saved, money("300"));
         assert!(report.top_months.is_empty());
         assert_eq!(report.card_pct, None);
     }
 
     #[test]
     fn a_year_without_a_range_is_empty() {
-        let report = year_report(2023, None, Vec::new(), Vec::new());
+        let report = year_report(2023, None, Vec::new());
 
         assert_eq!(report.year, 2023);
         assert_eq!(report.first_month, None);
         assert_eq!(report.last_month, None);
-        assert_eq!(report.totals.outflow, Decimal::ZERO);
-        assert_eq!(report.spent, Decimal::ZERO);
+        assert_eq!(report.totals, Spending::default().totals());
         assert!(report.top_months.is_empty());
         assert!(report.spending.is_empty());
         assert!(report.income.is_empty());
@@ -1381,11 +1404,10 @@ mod tests {
             2025,
             Some((date("2025-01-01"), date("2025-12-31"))),
             vec![
-                flow("2025-01", Some((2, "Porto")), ["0", "0", "0", "0", "50"]),
-                flow("2025-01", Some((1, "Porto")), ["0", "0", "0", "0", "50"]),
-                flow("2025-01", Some((3, "Itaú")), ["0", "0", "0", "0", "0"]),
+                with_card(2, "Porto", sum(2, "Casa", Daily, "2025-01", "50")),
+                with_card(1, "Porto", sum(1, "Casa", Daily, "2025-01", "50")),
+                with_card(3, "Itaú", sum(1, "Casa", Daily, "2025-01", "0")),
             ],
-            vec![group(2, "Casa", false, "50"), group(1, "Casa", false, "50")],
         );
 
         let cards: Vec<Uuid> = report.cards.iter().map(|card| card.card_id).collect();
@@ -1403,8 +1425,7 @@ mod tests {
         let report = year_report(
             2025,
             Some((date("2025-01-01"), date("2025-12-31"))),
-            Vec::new(),
-            vec![group(1, "Salário", true, "100")],
+            vec![sum(1, "Salário", Income, "2025-01", "0")],
         );
 
         assert_eq!(report.income[0].pct.to_string(), "0.0");

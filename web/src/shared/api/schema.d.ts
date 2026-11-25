@@ -1179,18 +1179,16 @@ export interface components {
          */
         Tier: "red" | "light_red" | "yellow" | "light_green" | "green";
         /**
-         * @description `income` leaves the month's resgates out, `withdrawn` sums them (SOL-28); `outflow` is bills
-         *     plus daily; `performance` is income minus outflow; `saved` is the bills under `Economia`
-         *     minus `withdrawn`, already inside `bills`.
+         * @description Entradas, Gastos and Guardado (D54). `income` leaves resgates out; `spent` (Gastos) is the
+         *     Saídas and Diários from the opening date, card purchases on their own date, without Economia
+         *     deposits and fatura payments; `saved` (Guardado) is the deposits minus the resgates and may be
+         *     negative; `performance` (Resultado) is `income - spent - saved`.
          */
         Totals: {
-            bills: string;
-            daily: string;
             income: string;
-            outflow: string;
             performance: string;
             saved: string;
-            withdrawn: string;
+            spent: string;
         };
         /** @description `category` is the entry's category as it is now, archived or not. */
         Transaction: {
@@ -1394,7 +1392,7 @@ export interface components {
         };
         /**
          * @description A top-level category's total in the year, its subcategories rolled in; `pct` is its share of
-         *     `spent` (outflow) or `totals.income` (income) with one decimal.
+         *     `totals.spent` (outflow) or `totals.income` (income) with one decimal.
          */
         YearGroup: {
             amount: string;
@@ -1413,11 +1411,9 @@ export interface components {
             spent: string;
         };
         /**
-         * @description The year's Entradas and Gastos by purchase date (D31), over whole months from the opening month
-         *     or January to today's month or December. `totals` has the month view's shape, Economia deposits
-         *     inside `bills`, but follows D31: `bills` leaves fatura payments out and `daily` holds card
-         *     purchases, so it does not equal the sum of the month views. `spent` (Gastos) leaves deposits and
-         *     fatura payments out. `first_month` and `last_month` are null when nothing is counted.
+         * @description The year's Entradas, Gastos and Guardado by purchase date (D31, D54), over whole months from the
+         *     opening month or January to today's month or December; `totals` is the sum of the month views'.
+         *     `first_month` and `last_month` are null when nothing is counted.
          */
         YearReport: {
             /** @example 15.0 */
@@ -1430,7 +1426,6 @@ export interface components {
             /** @example 2026-11 */
             last_month?: string | null;
             spending: components["schemas"]["YearGroup"][];
-            spent: string;
             top_months: components["schemas"]["YearMonth"][];
             totals: components["schemas"]["Totals"];
             /**

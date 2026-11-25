@@ -7,7 +7,7 @@ use super::domain::{self, MonthInput};
 use super::repo;
 use crate::error::AppError;
 use crate::extract::CurrentUser;
-use crate::{settings, transactions};
+use crate::{reports, settings, transactions};
 
 pub async fn get(pool: &PgPool, user: &CurrentUser, month: &str) -> Result<MonthView, AppError> {
     let month = domain::parse_month(month)?;
@@ -29,14 +29,16 @@ pub async fn get(pool: &PgPool, user: &CurrentUser, month: &str) -> Result<Month
     .await?;
     let bills = repo::bills(&mut conn, user.id).await?;
     let payments = repo::payments(&mut conn, user.id, domain::first_of(opening), end).await?;
-    let saved = repo::saved(&mut conn, user.id, month.max(opening), end).await?;
+    let spending = reports::domain::spending(
+        &reports::repo::category_sums(&mut conn, user.id, month.max(opening), end).await?,
+    );
     Ok(domain::month_view(MonthInput {
         month,
         settings,
         sums,
         bills,
         payments,
-        saved,
+        spending,
         today,
     }))
 }

@@ -65,7 +65,7 @@ describe("YearReview", () => {
 
   it.each([
     ["no month counted", year({ first_month: null, last_month: null })],
-    ["only zeros", year({ totals: totals({ income: "0.00", outflow: "0.00", withdrawn: "0.00" }) })],
+    ["only zeros", year({ totals: totals({ income: "0.00", spent: "0.00", saved: "0.00" }) })],
   ])("says there is nothing to show with %s", async (_, reply) => {
     show({ "GET /api/reports/year": reply });
 
@@ -89,7 +89,7 @@ describe("YearReview", () => {
   it("splits Saídas over the outflow when it passed the entrada", async () => {
     show({
       "GET /api/reports/year": year({
-        totals: totals({ income: "1000.00", outflow: "90000.00", performance: "-89000.00", withdrawn: "0.00" }),
+        totals: totals({ income: "1000.00", spent: "90000.00", performance: "-89000.00" }),
       }),
     });
 

@@ -684,10 +684,8 @@ async fn the_year_counts_gastos_by_purchase_date_without_deposits_or_faturas(poo
     );
     assert_eq!(
         report["totals"],
-        json!({ "income": "2500.00", "bills": "1000.00", "daily": "360.00", "outflow": "1360.00",
-                "performance": "1140.00", "saved": "150.00", "withdrawn": "50.00" })
+        json!({ "income": "2500.00", "spent": "1160.00", "saved": "150.00", "performance": "1190.00" })
     );
-    assert_eq!(report["spent"], "1160.00");
     assert_eq!(
         amounts(&report["top_months"], "month"),
         [pair("2025-03", "620.00"), pair("2025-01", "540.00")]
@@ -728,7 +726,7 @@ async fn the_year_counts_gastos_by_purchase_date_without_deposits_or_faturas(poo
     assert_eq!(amounts(&report["cards"], "name"), [pair("Porto", "150.00")]);
 
     let (_, theirs) = year_report(&bia, "2025").await;
-    assert_eq!(theirs["spent"], "789.00");
+    assert_eq!(theirs["totals"]["spent"], "789.00");
     assert_eq!(theirs["totals"]["income"], "1.00");
     assert_eq!(amounts(&theirs["cards"], "name"), [pair("Porto", "3.00")]);
 }
@@ -742,16 +740,8 @@ async fn a_past_year_matches_economia_do_ano(pool: PgPool) {
     let (_, savings) = savings(&ana, "2025").await;
 
     assert_eq!(
-        (
-            &report["totals"]["income"],
-            &report["totals"]["saved"],
-            &report["totals"]["withdrawn"]
-        ),
-        (
-            &savings["income_total"],
-            &savings["saved_total"],
-            &savings["withdrawn_total"]
-        )
+        (&report["totals"]["income"], &report["totals"]["saved"]),
+        (&savings["income_total"], &savings["saved_total"])
     );
 }
 
@@ -777,7 +767,7 @@ async fn the_current_year_counts_up_to_the_end_of_todays_month(pool: PgPool) {
     let (status, report) = year_report(&ana, &year).await;
 
     assert_eq!(status, StatusCode::OK, "{report}");
-    assert_eq!(report["spent"], "100.00");
+    assert_eq!(report["totals"]["spent"], "100.00");
     assert_eq!(report["first_month"], format!("{year}-01"));
     assert_eq!(report["last_month"], today.format("%Y-%m").to_string());
 }
@@ -793,9 +783,8 @@ async fn a_year_report_before_the_opening_or_after_today_is_empty(pool: PgPool) 
         assert_eq!(
             body,
             json!({ "year": year.parse::<i32>().unwrap(), "first_month": null, "last_month": null,
-                    "totals": { "income": "0.00", "bills": "0.00", "daily": "0.00", "outflow": "0.00",
-                                "performance": "0.00", "saved": "0.00", "withdrawn": "0.00" },
-                    "spent": "0.00", "top_months": [], "spending": [], "income": [],
+                    "totals": { "income": "0.00", "spent": "0.00", "saved": "0.00", "performance": "0.00" },
+                    "top_months": [], "spending": [], "income": [],
                     "card_spent": "0.00", "card_pct": null, "cards": [] })
         );
     }
@@ -820,7 +809,7 @@ async fn a_bad_year_report_is_422_none_is_400_and_no_session_401(pool: PgPool) {
     );
 }
 
-/// Two `GROUP BY` queries; the bound only catches a per-entry or per-month loop in a debug build.
+/// One `GROUP BY` query; the bound only catches a per-entry or per-month loop in a debug build.
 #[sqlx::test]
 async fn ten_thousand_entries_make_a_year_report_in_under_a_second(pool: PgPool) {
     let ana = TestApp::signed_in(pool.clone(), "ana@example.com").await;
@@ -844,7 +833,7 @@ async fn ten_thousand_entries_make_a_year_report_in_under_a_second(pool: PgPool)
 
     assert_eq!(status, StatusCode::OK, "{report}");
     assert_eq!(report["top_months"].as_array().unwrap().len(), 3);
-    assert_eq!(report["spent"], "33330.00");
+    assert_eq!(report["totals"]["spent"], "33330.00");
     assert_eq!(report["totals"]["income"], "33340.00");
     assert_eq!(report["totals"]["saved"], "33330.00");
     assert!(elapsed < std::time::Duration::from_secs(1), "{elapsed:?}");
@@ -875,8 +864,7 @@ async fn an_archived_cards_spends_stay_in_the_year(pool: PgPool) {
         json!([{ "card_id": porto, "name": "Porto", "amount": "70.00" }])
     );
     assert_eq!(report["card_pct"], "100.0");
-    assert_eq!(report["spent"], "70.00");
-    assert_eq!(report["totals"]["bills"], "0.00");
+    assert_eq!(report["totals"]["spent"], "70.00");
     assert_eq!(
         amounts(&report["spending"], "name"),
         [pair("Alimentação", "70.00")]
@@ -922,18 +910,21 @@ async fn a_fatura_payment_edited_to_diario_or_entrada_never_counts(pool: PgPool)
     force("daily", &mercado).await;
     let (_, report) = year_report(&ana, "2025").await;
 
-    assert_eq!(report["spent"], "30.00");
+    assert_eq!(report["totals"]["spent"], "30.00");
     assert_eq!(
         amounts(&report["top_months"], "month"),
         [pair("2025-01", "30.00")]
     );
-    assert_eq!(cents(&report["spending"]), money_cents(&report["spent"]));
+    assert_eq!(
+        cents(&report["spending"]),
+        money_cents(&report["totals"]["spent"])
+    );
 
     let salario = ana.category_id("Salário").await;
     force("income", &salario).await;
     let (_, report) = year_report(&ana, "2025").await;
 
-    assert_eq!(report["spent"], "30.00");
+    assert_eq!(report["totals"]["spent"], "30.00");
     assert_eq!(
         cents(&report["income"]),
         money_cents(&report["totals"]["income"])
@@ -965,4 +956,118 @@ async fn p5_the_savings_year_carries_the_target_on_the_summarys_totals(pool: PgP
     let (status, before_opening) = savings(&ana, "2024").await;
     assert_eq!(status, StatusCode::OK, "{before_opening}");
     assert_eq!(before_opening["target"], serde_json::Value::Null);
+}
+
+/// SOL-174 section 5: one Gastos and one Guardado on every screen.
+#[sqlx::test]
+async fn sol_174_one_gastos_and_one_guardado_on_mes_meu_ano_and_para_onde_vai(pool: PgPool) {
+    let ana = TestApp::signed_in(pool, "ana@example.com").await;
+    let bia = ana.another_user("bia@example.com").await;
+    ana.open_at("5000", "2026-10-01").await;
+    bia.open_at("0", "2026-10-01").await;
+    let porto = card(&ana, "Porto").await;
+    let economia = ana.category_id("Economia").await;
+    let (_, reserva) = ana
+        .post(
+            "/api/categories",
+            json!({ "name": "Reserva", "kind": "bill", "parent_id": economia }),
+        )
+        .await;
+    let reserva = reserva["id"].as_str().unwrap().to_string();
+    let mut contas = Vec::new();
+    for (name, amount, due_day) in [("Luz", "200", 15), ("Internet", "120", 25)] {
+        let category = ana.category_id(name).await;
+        let (status, conta) = ana
+            .post(
+                "/api/bills",
+                json!({ "name": name, "amount": amount, "due_day": due_day, "category_id": category }),
+            )
+            .await;
+        assert_eq!(status, StatusCode::CREATED, "{conta}");
+        contas.push(conta["id"].as_str().unwrap().to_string());
+    }
+    let lazer = ana.category_id("Lazer").await;
+    let (status, created) = ana
+        .post(
+            "/api/transactions",
+            json!({ "date": "2026-10-28", "amount": "450.00", "kind": "daily",
+                    "category_id": lazer, "card_id": porto }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{created}");
+    log(&ana, "2026-11-03", "daily", "250.40", "Mercado").await;
+    log(&ana, "2026-11-05", "income", "6000.00", "Salário").await;
+    log(&ana, "2026-11-06", "bill", "500.00", "Reserva").await;
+    for (bill, date, amount) in [
+        (&porto, "2026-11-12", "450.00"),
+        (&contas[0], "2026-11-14", "187.35"),
+    ] {
+        let (status, paid) = ana
+            .post(
+                &format!("/api/bills/{bill}/pay?month=2026-11"),
+                json!({ "date": date, "amount": amount }),
+            )
+            .await;
+        assert_eq!(status, StatusCode::CREATED, "{paid}");
+    }
+    withdraw(&ana, &reserva, "2026-11-18", "120.00").await;
+    log(&ana, "2026-11-20", "daily", "32.50", "Mercado").await;
+    log(&ana, "2026-11-27", "daily", "80.00", "Farmácia").await;
+    log(&bia, "2026-11-03", "daily", "999.00", "Mercado").await;
+
+    let (_, month) = ana.get("/api/months/2026-11").await;
+    let (_, october) = ana.get("/api/months/2026-10").await;
+    let (_, report) = ana.get("/api/reports/categories?month=2026-11").await;
+    let (_, year) = year_report(&ana, "2026").await;
+
+    let totals = &month["totals"];
+    assert_eq!(
+        [
+            &totals["spent"],
+            &totals["saved"],
+            &totals["income"],
+            &totals["performance"],
+            &month["savings"]["saved"]
+        ]
+        .map(money_cents),
+        [55_025, 38_000, 600_000, 506_975, 38_000],
+        "{totals}"
+    );
+    assert_eq!(money_cents(&october["totals"]["spent"]), 45_000);
+    assert_eq!(
+        [&report["spent_total"], &report["saved"]].map(money_cents),
+        [55_025, 38_000]
+    );
+    let groups: Vec<(&str, i64, &str)> = report["groups"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|group| group["kind"] != "income")
+        .map(|group| {
+            (
+                group["name"].as_str().unwrap(),
+                money_cents(&group["amount"]),
+                group["pct"].as_str().unwrap(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        groups,
+        [
+            ("Alimentação", 28_290, "51.4"),
+            ("Casa", 18_735, "34.0"),
+            ("Saúde", 8_000, "14.5")
+        ]
+    );
+    assert_eq!(
+        [&year["totals"]["spent"], &year["totals"]["saved"]].map(money_cents),
+        [100_025, 38_000],
+        "{year}"
+    );
+    assert_eq!(
+        amounts(&year["top_months"], "month"),
+        [pair("2026-11", "550.25"), pair("2026-10", "450.00")]
+    );
+    assert_eq!(amounts(&year["cards"], "name"), [pair("Porto", "450.00")]);
+    assert_eq!(year["card_pct"], "45.0");
 }

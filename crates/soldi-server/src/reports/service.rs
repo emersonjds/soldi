@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use chrono::Months;
 use soldi_types::reports::{CategoryReport, SavingsYear, YearReport};
-use sqlx::{Connection, PgPool};
+use sqlx::PgPool;
 
 use super::{domain, repo};
 use crate::error::AppError;
@@ -56,25 +56,15 @@ pub async fn savings(
     Ok(year)
 }
 
-/// 3 queries: the opening date, then in one read-only snapshot one row per month and card and one
-/// per top-level category, so both agree.
+/// 2 queries: the opening date and the year's `category_sums`.
 pub async fn year(pool: &PgPool, user: &CurrentUser, year: &str) -> Result<YearReport, AppError> {
     let year = domain::parse_year(year)?;
     let mut conn = pool.acquire().await?;
     let opening = settings::repo::find(&mut conn, user.id).await?.opening_date;
     let range = domain::counted_range(year, opening, crate::today_sao_paulo());
-    let (flows, groups) = match range {
-        Some((from, to)) => {
-            let mut snapshot = conn.begin().await?;
-            sqlx::query("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
-                .execute(&mut *snapshot)
-                .await?;
-            (
-                repo::year_flows(&mut snapshot, user.id, from, to).await?,
-                repo::year_groups(&mut snapshot, user.id, from, to).await?,
-            )
-        }
-        None => (Vec::new(), Vec::new()),
+    let sums = match range {
+        Some((from, to)) => repo::category_sums(&mut conn, user.id, from, to).await?,
+        None => Vec::new(),
     };
-    Ok(domain::year_report(year, range, flows, groups))
+    Ok(domain::year_report(year, range, sums))
 }
