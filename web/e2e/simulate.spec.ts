@@ -29,7 +29,7 @@ test("Lançar a Conta Parcelado 3x pays this month's parcela and leaves the next
   await page.getByRole("button", { name: "Pular por agora" }).click();
   await page.getByRole("button", { name: "Ver meu mês" }).click();
   await page.getByRole("button", { name: "Pular" }).click();
-  const launch = page.getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ });
+  const launch = page.getByRole("dialog", { name: "Lançar" });
   await launch.getByRole("button", { name: "Fechar" }).click();
 
   const tabs = page.getByRole("navigation", { name: "Navegação principal" });
@@ -82,7 +82,7 @@ test("Posso comprar isso? from the sidebar: 6× R$ 12.000,00 names the red month
   await page.getByRole("button", { name: "Pular por agora" }).click();
   await page.getByRole("button", { name: "Ver meu mês" }).click();
   await page.getByRole("button", { name: "Pular" }).click();
-  const launch = page.getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ });
+  const launch = page.getByRole("dialog", { name: "Lançar" });
   await launch.getByRole("button", { name: "Fechar" }).click();
 
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -142,10 +142,7 @@ test("Histórico keeps a simulation in this browser, restores it and leaves with
   await page.getByRole("button", { name: "Pular por agora" }).click();
   await page.getByRole("button", { name: "Ver meu mês" }).click();
   await page.getByRole("button", { name: "Pular" }).click();
-  await page
-    .getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ })
-    .getByRole("button", { name: "Fechar" })
-    .click();
+  await page.getByRole("dialog", { name: "Lançar" }).getByRole("button", { name: "Fechar" }).click();
 
   await page.goto("/posso-comprar");
   const history = page.getByRole("button", { name: "Histórico" });

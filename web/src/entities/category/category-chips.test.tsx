@@ -145,6 +145,8 @@ describe("CategoryChips", () => {
     const row = await screen.findByRole("radiogroup", { name: "Categoria" });
     expect(chips()).toEqual(["Gasto", "Comida fora", "Mercado", "Pets", "Carro", "Lazer", "Saúde", "Casa"]);
     expect(row).toHaveClass("overflow-x-auto", "snap-x");
+    expect(within(row).getByText("Comida fora")).toHaveClass("line-clamp-2");
+    expect(within(row).getByText("Comida fora")).not.toHaveClass("hyphens-auto");
     expect(within(row).queryByRole("radio", { checked: true })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Ver todas" })).toHaveAttribute("aria-expanded", "false");
     expect(screen.queryByRole("button", { name: "Nova categoria" })).not.toBeInTheDocument();

@@ -98,7 +98,7 @@ const Row = ({
         <span className="flex min-w-0 flex-col">
           <span className="flex min-w-0 flex-wrap items-center gap-x-2">
             <span
-              className={cn("truncate text-base font-semibold", !active && "text-muted-foreground")}
+              className={cn("line-clamp-2 text-base font-semibold break-words", !active && "text-muted-foreground")}
               title={bill.name}
             >
               {bill.name}
@@ -231,7 +231,7 @@ const NextDue = ({ rows: month, today }: { rows: Schemas["BillOfMonth"][]; today
     >
       {next ? (
         <p className="flex flex-col gap-1">
-          <span className="truncate text-base font-bold" title={next.name}>
+          <span className="line-clamp-2 text-base font-bold break-words" title={next.name}>
             {next.name}
           </span>
           <Money amount={next.amount} className="text-lg font-bold" />

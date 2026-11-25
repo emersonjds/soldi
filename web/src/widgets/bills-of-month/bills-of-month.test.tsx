@@ -130,6 +130,7 @@ describe("Contas a pagar", () => {
     expect(within(card()).queryByRole("heading", { level: 3 })).not.toBeInTheDocument();
 
     const rent = rowOf("Aluguel Residencial");
+    expect(within(rent).getByText("Aluguel Residencial")).toHaveClass("line-clamp-2", "break-words");
     expect(rent).toHaveTextContent("Vence dia 10/11");
     expect(rent).toHaveTextContent("Vence dia 10");
     expect(within(rent).getByRole("button", { name: "Pagar Aluguel Residencial" })).toHaveTextContent("Pagar");

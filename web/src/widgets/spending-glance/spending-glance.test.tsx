@@ -49,6 +49,7 @@ describe("Para Onde Vai glance", () => {
     show({ status: 200, body: { ...REPORT, spent_total: "2500.00", groups: GROUPS } });
 
     const rows = await within(await screen.findByRole("region")).findAllByRole("listitem");
+    expect(within(rows[0]).getByText("Aluguel")).toHaveClass("line-clamp-2", "break-words");
     expect(rows.map((row) => row.textContent?.replace(/\s/g, " "))).toEqual([
       "AluguelR$ 1.200,0048,0%",
       "MercadoR$ 650,0026,0%",

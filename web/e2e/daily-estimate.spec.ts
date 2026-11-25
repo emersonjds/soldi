@@ -17,10 +17,7 @@ const signUp = async (page: Page, name: string) => {
   await page.getByRole("button", { name: "Pular por agora" }).click();
   await page.getByRole("button", { name: "Ver meu mês" }).click();
   await page.getByRole("button", { name: "Pular" }).click();
-  await page
-    .getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ })
-    .getByRole("button", { name: "Fechar" })
-    .click();
+  await page.getByRole("dialog", { name: "Lançar" }).getByRole("button", { name: "Fechar" }).click();
 };
 
 const atEveryWidth = async (page: Page) => {

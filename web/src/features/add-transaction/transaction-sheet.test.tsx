@@ -117,7 +117,7 @@ describe("TransactionSheet", () => {
   it("saves a Diário with the defaults: type the amount, tap Salvar", async () => {
     const { onOpenChange, sent } = setup();
 
-    const dialog = await screen.findByRole("dialog", { name: "Novo Registro" });
+    const dialog = await screen.findByRole("dialog", { name: "Lançar" });
     expect(dialog).toHaveAttribute("data-slot", "sheet-content");
     expect(dialog).toHaveAccessibleDescription(DESCRIPTION);
     expect(within(dialog).getByText(DESCRIPTION)).toHaveClass("sr-only");
@@ -261,7 +261,7 @@ describe("TransactionSheet", () => {
   it("offers no day before the opening date: Ontem leaves and the calendar disables it", async () => {
     setup({}, { "GET /api/settings": { status: 200, body: { ...SETTINGS, opening_date: "2026-11-05" } } });
 
-    const dialog = await screen.findByRole("dialog", { name: "Novo Registro" });
+    const dialog = await screen.findByRole("dialog", { name: "Lançar" });
     await waitFor(() => expect(within(dialog).queryByRole("button", { name: "Ontem" })).not.toBeInTheDocument());
     expect(within(dialog).getByRole("button", { name: "Hoje" })).toBeInTheDocument();
     await userEvent.click(within(dialog).getByRole("button", { name: "Outra data" }));
@@ -427,7 +427,7 @@ describe("TransactionSheet", () => {
     await userEvent.type(within(create).getByLabelText("Nome"), "Carro{Enter}");
 
     expect(await screen.findByRole("radio", { name: "Carro" })).toHaveAttribute("aria-checked", "true");
-    expect(screen.getByRole("dialog", { name: "Novo Registro" })).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Lançar" })).toBeInTheDocument();
     expect(requests.filter((request) => request.url.endsWith("/api/transactions"))).toHaveLength(0);
   });
 
@@ -1666,11 +1666,11 @@ describe("TransactionSheet", () => {
     expect(await sent("POST")).toMatchObject({ amount: "35.90", kind: "daily" });
   });
 
-  it("is a 560px centered dialog from 1024px: Novo Lançamento, its description shown, Hoje with the day, no Quando foi?, no Enter hint", async () => {
+  it("is a 560px centered dialog from 1024px: titled Lançar, its description shown, Hoje with the day, no Quando foi?, no Enter hint", async () => {
     window.innerWidth = 1440;
     setup();
 
-    const dialog = await screen.findByRole("dialog", { name: "Novo Lançamento" });
+    const dialog = await screen.findByRole("dialog", { name: "Lançar" });
     expect(dialog).toHaveAttribute("data-slot", "dialog-content");
     expect(within(dialog).getByText(DESCRIPTION)).not.toHaveClass("sr-only");
     expect(screen.getByRole("button", { name: "Hoje (5 nov)" })).toHaveAttribute("aria-pressed", "true");

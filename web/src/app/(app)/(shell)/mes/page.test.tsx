@@ -387,7 +387,7 @@ describe("Mês", () => {
   it("opens Lançar on Entrada from the Entradas card", async () => {
     open({ "GET /api/months/2026-11": { status: 200, body: EMPTY } });
     await userEvent.click(await screen.findByRole("button", { name: "Lançar entrada" }));
-    expect(await screen.findByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ })).toBeInTheDocument();
+    expect(await screen.findByRole("dialog", { name: "Lançar" })).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: "Entrada" })).toBeChecked();
   });
 
@@ -420,14 +420,14 @@ describe("Mês", () => {
     window.history.replaceState(null, "", "/mes?lancar=1");
     open({ "GET /api/months/2026-11": { status: 200, body: EMPTY } });
 
-    const sheet = await screen.findByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ });
+    const sheet = await screen.findByRole("dialog", { name: "Lançar" });
     expect(within(sheet).getByText("Comece pela sua primeira entrada do mês")).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: "Entrada" })).toBeChecked();
     expect(`${window.location.pathname}${window.location.search}`).toBe("/mes");
 
     await userEvent.click(within(sheet).getByRole("button", { name: "Fechar" }));
     await userEvent.click(await screen.findByRole("button", { name: "Lançar entrada" }));
-    expect(await screen.findByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ })).toBeInTheDocument();
+    expect(await screen.findByRole("dialog", { name: "Lançar" })).toBeInTheDocument();
     expect(screen.queryByText("Comece pela sua primeira entrada do mês")).not.toBeInTheDocument();
   });
 

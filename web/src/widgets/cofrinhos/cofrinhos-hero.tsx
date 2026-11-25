@@ -144,7 +144,7 @@ export const CofrinhoPicker = ({ title, options, open, onOpenChange, onPick }: P
             className="focus-visible:ring-ring flex min-h-14 w-full items-center gap-3 rounded-lg py-2 text-left outline-none focus-visible:ring-2"
           >
             <CategoryIcon icon={option.icon} color={option.color} />
-            <span className="min-w-0 flex-1 truncate text-base font-medium">{option.name}</span>
+            <span className="line-clamp-2 min-w-0 flex-1 text-base font-medium break-words">{option.name}</span>
             <Money amount={option.balance} className="text-base font-semibold" />
           </button>
         </li>

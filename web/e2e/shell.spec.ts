@@ -60,10 +60,7 @@ test.describe("on a touch screen", () => {
     await page.getByRole("button", { name: "Pular por agora" }).click();
     await page.getByRole("button", { name: "Ver meu mês" }).click();
     await page.getByRole("button", { name: "Pular" }).click();
-    await page
-      .getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ })
-      .getByRole("button", { name: "Fechar" })
-      .click();
+    await page.getByRole("dialog", { name: "Lançar" }).getByRole("button", { name: "Fechar" }).click();
 
     await seed(page);
     for (const path of ["/mes", "/para-onde-vai", "/economia", "/ajustes"]) {
@@ -78,7 +75,7 @@ test.describe("on a touch screen", () => {
     }
 
     await page.getByRole("navigation", { name: "Navegação principal" }).getByRole("button", { name: "Lançar" }).click();
-    const launch = page.getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ });
+    const launch = page.getByRole("dialog", { name: "Lançar" });
     await launch.getByRole("switch", { name: "Recorrente" }).click();
     await launch.getByRole("radio", { name: "12", exact: true }).click();
     await expect(launch.getByRole("button", { name: "Apagar" })).toBeVisible();
@@ -107,10 +104,7 @@ test("the shell follows Stitch from 375 to 1440: app bar and tab bar on mobile, 
   const today = page.waitForResponse((response) => /\/api\/months\/\d{4}-\d{2}$/.test(response.url()));
   await page.getByRole("button", { name: "Ver meu mês" }).click();
   await page.getByRole("button", { name: "Pular" }).click();
-  await page
-    .getByRole("dialog", { name: /^Novo (Registro|Lançamento)$/ })
-    .getByRole("button", { name: "Fechar" })
-    .click();
+  await page.getByRole("dialog", { name: "Lançar" }).getByRole("button", { name: "Fechar" }).click();
   await today;
 
   const bar = page.getByRole("banner");
