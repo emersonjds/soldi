@@ -485,3 +485,7 @@ The indigo/violet identity and the hero gradient go away. White page and cards, 
 ## D52 — The palette is the user's pick; the symbol is the day trail (2026-11-25, owner + SOL-184; amends D51)
 
 D51's white hero lost identity. Seven palettes ship (Mel e menta, the default, plus Ameixa e mel, Índigo e menta, Petróleo e coral, Berinjela e pêssego, Marinho e mel, Floresta e terracota); Ajustes → Cores do app picks one per device (`localStorage`), applied before paint. Only brand tokens change: hero (colored again, flat), brand, soft, wordmark and the logo dots; tiers, money colors, categories and the white page stay. The logo symbol is the day trail (five dots growing from warm tones to the brand color), next to the "soldi" wordmark; browser and home-screen icons show it on white in the default palette. Trade-off: the choice does not follow the account across devices (follow-up if asked). Detail: `docs/specs/cards/SOL-184.md`.
+
+## D53 — The original violet is one of the palettes (2026-11-25, owner + SOL-185; amends D52)
+
+The pre-0.72.0 identity comes back as "Violeta original" in Cores do app, right after the default: flat hero `#2a2775` (the middle of the old `#1e1b4b → #312e81` gradient), brand `#5341cd`, soft `#edecff`, wordmark `#3b3577`, logo dots ending in the brand violet. The lavender page `#fbf8ff` does not return: every palette keeps the white page (D52).

@@ -11,9 +11,10 @@ afterEach(() => {
 });
 
 describe("palettes", () => {
-  it("lists the seven palettes with Mel e menta first, keyed in soldi-palette", () => {
+  it("lists the eight palettes with Mel e menta first, keyed in soldi-palette", () => {
     expect(PALETTES.map(({ value }) => value)).toEqual([
       "mel",
+      "violeta",
       "ameixa",
       "indigo",
       "petroleo",
@@ -22,11 +23,11 @@ describe("palettes", () => {
       "floresta",
     ]);
     expect(PALETTES[1]).toEqual({
-      value: "ameixa",
-      name: "Ameixa e mel",
-      hero: "#3a2758",
-      brand: "#5b3d8f",
-      soft: "#efe9f7",
+      value: "violeta",
+      name: "Violeta original",
+      hero: "#2a2775",
+      brand: "#5341cd",
+      soft: "#edecff",
     });
     expect(PALETTE_KEY).toBe("soldi-palette");
   });
