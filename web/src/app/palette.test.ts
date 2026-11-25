@@ -4,8 +4,11 @@ import { readFileSync } from "node:fs";
 
 const preset = readFileSync("src/styles/presets/soldi.css", "utf8");
 const palette = new Map([...preset.matchAll(/--(cat-\d+): (#[0-9a-f]{6});/g)].map(([, name, hex]) => [name, hex]));
-const card = preset.match(/--card: (#[0-9a-f]{6});/)?.[1] ?? "";
+const token = (name: string) => preset.match(new RegExp(`--${name}: (#[0-9a-f]{6});`))?.[1] ?? "";
+const card = token("card");
 const glyph = "#ffffff";
+/** Wordmark slate, set in shared/ui/wordmark.tsx (SOL-181). */
+const wordmark = "#555f6e";
 
 type Rgb = [number, number, number];
 type Matrix = [Rgb, Rgb, Rgb];
@@ -127,6 +130,48 @@ describe("category palette", () => {
   it("keeps the 12 defaults at least 0.05 apart under tritan vision", () => {
     for (const [one, other] of pairs(range(1, 12))) {
       expect(distance(hex(one), hex(other), "tritan"), `${one} ${other}`).toBeGreaterThanOrEqual(0.05);
+    }
+  });
+});
+
+describe("brand and text contrast", () => {
+  it.each([
+    ["foreground", "background"],
+    ["foreground", "secondary"],
+    ["foreground", "brand-soft"],
+    ["muted-foreground", "background"],
+    ["muted-foreground", "secondary"],
+    ["muted-foreground", "brand-soft"],
+    ["brand-foreground", "brand"],
+    ["brand-foreground", "brand-hover"],
+    ["primary-foreground", "primary"],
+    ["brand-hover", "brand-soft"],
+    ["sidebar-accent-foreground", "sidebar-accent"],
+    ["income-text", "card"],
+    ["expense-text", "card"],
+  ])("%s on %s reaches 4.5:1", (text, surface) => {
+    expect(contrast(token(text), token(surface))).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it("paints the wordmark at 4.5:1 on the card", () => {
+    expect(contrast(wordmark, card)).toBeGreaterThanOrEqual(4.5);
+  });
+});
+
+const TIERS = ["tier-red", "tier-light-red", "tier-yellow", "tier-light-green", "tier-green"];
+
+describe("termômetro tiers", () => {
+  it.each(TIERS)("%s foreground on its soft reaches 4.5:1", (tier) => {
+    expect(contrast(token(`${tier}-foreground`), token(`${tier}-soft`))).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it("carries white text on the solid Folga pill at 4.5:1", () => {
+    expect(contrast(glyph, token("tier-green"))).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it.each(Object.keys(VISION))("keeps the five solids at least 0.05 apart under %s vision", (vision) => {
+    for (const [one, other] of pairs(TIERS)) {
+      expect(distance(token(one), token(other), vision), `${one} ${other}`).toBeGreaterThanOrEqual(0.05);
     }
   });
 });
