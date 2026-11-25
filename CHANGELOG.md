@@ -7,6 +7,17 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.73.0
+
+> Headline: pick Soldi's colors, and meet the day-trail logo
+
+### Web
+- Ajustes → Cores do app picks one of seven palettes: Mel e menta (default), Ameixa e mel, Índigo e menta, Petróleo e coral, Berinjela e pêssego, Marinho e mel, Floresta e terracota. The choice applies at once, stays on the device and loads before the first paint (SOL-184, D52).
+- The month hero, Saldo hoje on phones and the sign-in top are colored again from the palette, flat; the Termômetro, money colors and categories stay the same in every palette.
+- New logo symbol, the day trail: five dots growing from honey to the brand color, next to "soldi" in the app and stacked on the sign-in screens, in the palette's colors.
+- New app icon, favicon and Apple touch icon with the day trail on white.
+- Every palette's text and background pairs are checked at 4.5:1 in a unit test.
+
 ## 0.72.0
 
 > Headline: Soldi wears honey, peach and mint
