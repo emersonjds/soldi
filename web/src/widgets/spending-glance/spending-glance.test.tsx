@@ -46,7 +46,7 @@ const card = () => screen.getByRole("region", { name: "Para Onde Vai" });
 
 describe("Para Onde Vai glance", () => {
   it("shows the four largest outflow groups with amount and share, and links the month's full screen", async () => {
-    show({ status: 200, body: { ...REPORT, outflow_total: "2500.00", groups: GROUPS } });
+    show({ status: 200, body: { ...REPORT, spent_total: "2500.00", groups: GROUPS } });
 
     const rows = await within(await screen.findByRole("region")).findAllByRole("listitem");
     expect(rows.map((row) => row.textContent?.replace(/\s/g, " "))).toEqual([
@@ -63,7 +63,7 @@ describe("Para Onde Vai glance", () => {
   });
 
   it("shows the report's share with one decimal, never recomputed from the amounts", async () => {
-    show({ status: 200, body: { ...REPORT, outflow_total: "1000.00", groups: [group(ALUGUEL, "125.00", "12.4")] } });
+    show({ status: 200, body: { ...REPORT, spent_total: "1000.00", groups: [group(ALUGUEL, "125.00", "12.4")] } });
 
     const row = await within(await screen.findByRole("region")).findByRole("listitem");
     expect(row).toHaveTextContent(/12,4%$/);
@@ -79,7 +79,7 @@ describe("Para Onde Vai glance", () => {
   it("renders nothing when the month has no outflow (D25)", async () => {
     const { client } = show({
       status: 200,
-      body: { ...REPORT, outflow_total: "0.00", groups: [group(SALARIO, "500.00", "100.0")] },
+      body: { ...REPORT, spent_total: "0.00", groups: [group(SALARIO, "500.00", "100.0")] },
     });
     await waitFor(() => expect(client.isFetching()).toBe(0));
     expect(screen.queryByRole("region")).not.toBeInTheDocument();

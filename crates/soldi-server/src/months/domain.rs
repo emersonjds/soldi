@@ -5,8 +5,7 @@ use chrono::{Datelike, Months, NaiveDate};
 use rust_decimal::Decimal;
 use soldi_types::categories::CategoryKind;
 use soldi_types::months::{
-    BillOfMonth, CardFatura, Day, FaturaAhead, Forecast, ForecastDay, MonthSavings, MonthView,
-    Tier, Totals,
+    BillOfMonth, CardFatura, Day, FaturaAhead, Forecast, ForecastDay, MonthSavings, MonthView, Tier,
 };
 use soldi_types::settings::Settings;
 use soldi_types::transactions::Transaction;
@@ -14,7 +13,7 @@ use uuid::Uuid;
 
 use crate::bills::domain::{due_date, fatura_due, installment_of};
 use crate::error::AppError;
-use crate::reports::domain::percent;
+use crate::reports::domain::{Spending, percent};
 
 /// What the ledger holds for one kind on one date; `withdrawn` marks the resgates' sum and
 /// `card_id` the spends on a card (D28).
@@ -53,14 +52,14 @@ pub struct Payment {
 /// `month` is its first day; `sums` cover `opening_date` to the month's end (a card's spends
 /// from `cards_from(opening_date)`), `payments` the
 /// opening date's month to the month's end;
-/// `saved` is the month's bills under `Economia` minus its resgates.
+/// `spending` is the month's Entradas, Gastos and Guardado (D54).
 pub struct MonthInput {
     pub month: NaiveDate,
     pub settings: Settings,
     pub sums: Vec<DaySum>,
     pub bills: Vec<MonthBill>,
     pub payments: Vec<Payment>,
-    pub saved: Decimal,
+    pub spending: Spending,
     pub today: NaiveDate,
 }
 
@@ -381,7 +380,7 @@ pub fn month_view(input: MonthInput) -> MonthView {
         sums,
         bills,
         payments,
-        saved,
+        spending,
         today,
     } = input;
     let faturas = faturas(&bills, &sums, &payments);
@@ -462,7 +461,6 @@ pub fn month_view(input: MonthInput) -> MonthView {
             .range(..month)
             .map(|(_, flow)| flow.net())
             .sum::<Decimal>();
-    let mut totals = Flows::default();
     let days = month
         .iter_days()
         .take_while(|date| *date <= end)
@@ -473,10 +471,6 @@ pub fn month_view(input: MonthInput) -> MonthView {
             let previsto = previsto_on(&settings, today, date, flow.daily);
             estimated += previsto;
             let projected_balance = balance - pending - estimated;
-            totals.income += flow.income;
-            totals.withdrawn += flow.withdrawn;
-            totals.bills += flow.bills;
-            totals.daily += flow.daily;
             Day {
                 date,
                 income: flow.income,
@@ -508,21 +502,13 @@ pub fn month_view(input: MonthInput) -> MonthView {
         days,
         balance_today,
         balance_today_tier: tier(balance_today, &settings),
-        totals: Totals {
-            income: totals.income,
-            bills: totals.bills,
-            daily: totals.daily,
-            outflow: totals.bills + totals.daily,
-            performance: totals.performance(),
-            saved,
-            withdrawn: totals.withdrawn,
-        },
+        totals: spending.totals(),
         projected_balance: projected,
         projected_tier: tier(projected, &settings),
         bills_of_month,
         savings: MonthSavings {
-            saved,
-            rate_pct: percent(saved, totals.income),
+            saved: spending.saved,
+            rate_pct: percent(spending.saved, spending.income),
         },
     }
 }
@@ -616,6 +602,7 @@ pub fn month_end(first: NaiveDate) -> NaiveDate {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use soldi_types::months::Totals;
 
     fn date(text: &str) -> NaiveDate {
         text.parse().unwrap()
@@ -720,7 +707,7 @@ mod tests {
             sums,
             bills,
             payments,
-            saved: Decimal::ZERO,
+            spending: Spending::default(),
             today: date(today),
         })
     }
@@ -800,7 +787,6 @@ mod tests {
                 .iter()
                 .all(|day| day.balance == money("1000") && day.daily == money("0"))
         );
-        assert_eq!(november.totals.daily, money("0"));
         assert_eq!(
             fatura_rows(&november),
             [(
@@ -862,8 +848,6 @@ mod tests {
         assert_eq!(november.days[8].balance, money("1000"));
         assert_eq!(november.days[9].balance, money("948"));
         assert_eq!(november.projected_balance, money("948"));
-        assert_eq!(november.totals.bills, money("52"));
-        assert_eq!(november.totals.daily, money("0"));
         assert!(october.bills_of_month.is_empty());
         assert_eq!(october.projected_balance, money("1000"));
     }
@@ -1636,26 +1620,7 @@ mod tests {
             (money("0"), money("300"), money("50"))
         );
         assert_eq!(view.days[1].income, money("500"));
-        assert_eq!(
-            view.totals,
-            Totals {
-                income: money("500"),
-                bills: money("300"),
-                daily: money("50"),
-                outflow: money("350"),
-                performance: money("150"),
-                saved: money("0"),
-                withdrawn: money("0"),
-            }
-        );
         assert!(view.bills_of_month.is_empty());
-        assert_eq!(
-            view.savings,
-            MonthSavings {
-                saved: money("0"),
-                rate_pct: Some(money("0.0"))
-            }
-        );
         assert!(
             view.days
                 .iter()
@@ -1669,21 +1634,30 @@ mod tests {
             month_view(MonthInput {
                 month: date("2026-11-01"),
                 settings: settings("0", "2026-11-01"),
-                sums: vec![
-                    sum("2026-11-02", Income, income),
-                    sum("2026-11-03", Bill, "400.55"),
-                ],
+                sums: vec![],
                 bills: vec![],
                 payments: vec![],
-                saved: money(saved),
+                spending: Spending {
+                    income: money(income),
+                    spent: money("1000"),
+                    saved: money(saved),
+                },
                 today: date("2026-11-05"),
             })
         };
 
         let view = at("400.55", "3000");
 
-        assert_eq!(view.totals.saved, money("400.55"));
-        assert_eq!(view.totals.outflow, money("400.55"));
+        assert_eq!(
+            view.totals,
+            Totals {
+                income: money("3000"),
+                spent: money("1000"),
+                saved: money("400.55"),
+                performance: money("1599.45"),
+            }
+        );
+        assert_eq!(view.savings.saved, money("400.55"));
         assert_eq!(view.savings.rate_pct.unwrap().to_string(), "13.4");
         assert_eq!(at("1", "8").savings.rate_pct.unwrap().to_string(), "12.5");
         assert_eq!(
@@ -1704,15 +1678,10 @@ mod tests {
             ],
             bills: vec![],
             payments: vec![],
-            saved: money("4370"),
+            spending: Spending::default(),
             today: date("2026-11-20"),
         });
 
-        assert_eq!(view.totals.income, money("1000"));
-        assert_eq!(view.totals.withdrawn, money("50"));
-        assert_eq!(view.totals.saved, money("4370"));
-        assert_eq!(view.totals.performance, money("-3420"));
-        assert_eq!(view.savings.rate_pct.unwrap().to_string(), "437.0");
         let day_10 = &view.days[9];
         assert_eq!(
             (day_10.income, day_10.withdrawn, day_10.balance),
@@ -1741,11 +1710,6 @@ mod tests {
             (view.days[1].income, view.days[1].bills),
             (money("715"), money("715"))
         );
-        assert_eq!(
-            (view.totals.income, view.totals.bills),
-            (money("715"), money("715"))
-        );
-        assert_eq!(view.totals.performance, money("0"));
     }
 
     #[test]
@@ -1780,7 +1744,7 @@ mod tests {
 
         assert_eq!(november.projected_balance, money("320"));
         assert_eq!(december.days[0].balance, money("300"));
-        assert_eq!(december.totals.daily, money("20"));
+        assert_eq!(december.days[0].daily, money("20"));
     }
 
     #[test]
@@ -1794,8 +1758,7 @@ mod tests {
 
         assert_eq!(january.days[0].balance, money("4920"));
         assert_eq!(january.days[0].tier, Tier::Green);
-        assert_eq!(january.totals.income, money("5000"));
-        assert_eq!(january.totals.bills, money("0"));
+        assert_eq!(january.days[0].income, money("5000"));
     }
 
     #[test]
@@ -1816,8 +1779,6 @@ mod tests {
                 .iter()
                 .all(|day| day.balance == money("950") && day.is_future && !day.is_today)
         );
-        assert_eq!(march.totals.outflow, money("0"));
-        assert_eq!(march.totals.performance, money("0"));
         assert_eq!(march.balance_today, money("950"));
     }
 
@@ -1873,22 +1834,22 @@ mod tests {
     }
 
     #[test]
-    fn rule_15_a_month_without_income_performs_at_minus_outflow() {
-        let sums = vec![
-            sum("2026-11-02", Bill, "100"),
-            sum("2026-11-03", Daily, "50"),
-        ];
+    fn rule_15_a_month_without_income_performs_at_minus_spent_and_saved() {
+        let view = month_view(MonthInput {
+            month: date("2026-11-01"),
+            settings: settings("1000", "2026-11-01"),
+            sums: vec![],
+            bills: vec![],
+            payments: vec![],
+            spending: Spending {
+                income: money("0"),
+                spent: money("150"),
+                saved: money("20"),
+            },
+            today: date("2026-11-05"),
+        });
 
-        let view = view(
-            "2026-11",
-            settings("1000", "2026-11-01"),
-            sums,
-            "2026-11-05",
-        );
-
-        assert_eq!(view.totals.income, money("0"));
-        assert_eq!(view.totals.outflow, money("150"));
-        assert_eq!(view.totals.performance, money("-150"));
+        assert_eq!(view.totals.performance, money("-170"));
         assert_eq!(view.savings.rate_pct, None);
     }
 

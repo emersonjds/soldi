@@ -147,8 +147,7 @@ async fn a_deposit_then_a_resgate_leave_the_balance_progress_and_month(pool: PgP
     let (_, month) = user.get(&format!("/api/months/{}", &today[..7])).await;
     assert_eq!(month["totals"]["saved"], "300.00");
     assert_eq!(month["totals"]["income"], "0.00");
-    assert_eq!(month["totals"]["withdrawn"], "200.00");
-    assert_eq!(month["totals"]["outflow"], "500.00");
+    assert_eq!(month["totals"]["spent"], "0.00");
     let (_, entries) = user
         .get(&format!("/api/transactions?month={}", &today[..7]))
         .await;
@@ -182,9 +181,8 @@ async fn a_resgate_is_not_income_on_the_month_nor_in_the_report(pool: PgPool) {
         .await;
 
     assert_eq!(month["totals"]["income"], "1000.00");
-    assert_eq!(month["totals"]["withdrawn"], "50.00");
     assert_eq!(month["totals"]["saved"], "4370.00");
-    assert_eq!(month["totals"]["performance"], "-3420.00");
+    assert_eq!(month["totals"]["performance"], "-3370.00");
     assert_eq!(month["savings"]["rate_pct"], "437.0");
     let day = month["days"]
         .as_array()

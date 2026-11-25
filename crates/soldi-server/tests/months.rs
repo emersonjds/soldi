@@ -55,7 +55,7 @@ async fn the_sheets_first_days_come_back_with_balances_tiers_and_totals(pool: Pg
     );
     assert_eq!(
         view["totals"],
-        json!({ "income": "500.00", "bills": "300.00", "daily": "50.00", "outflow": "350.00", "performance": "150.00", "saved": "0.00", "withdrawn": "0.00" })
+        json!({ "income": "500.00", "spent": "350.00", "saved": "0.00", "performance": "150.00" })
     );
     assert_eq!(view["projected_balance"], "1150.00");
     assert_eq!(view["projected_tier"], "light_green");
@@ -93,7 +93,7 @@ async fn bills_under_economia_are_the_months_savings_and_still_leave_the_balance
     let (_, view) = user.get("/api/months/2026-11").await;
 
     assert_eq!(view["totals"]["saved"], "400.55");
-    assert_eq!(view["totals"]["outflow"], "1400.55");
+    assert_eq!(view["totals"]["spent"], "1000.00");
     assert_eq!(view["totals"]["performance"], "1599.45");
     assert_eq!(
         view["savings"],
@@ -110,7 +110,7 @@ async fn saving_before_a_moved_opening_is_not_the_months_saving(pool: PgPool) {
 
     let (_, view) = user.get("/api/months/2026-11").await;
 
-    assert_eq!(view["totals"]["bills"], "0.00");
+    assert_eq!(view["totals"]["spent"], "0.00");
     assert_eq!(view["totals"]["saved"], "0.00");
 }
 
@@ -256,7 +256,7 @@ async fn rule_1_end_to_end_unpaid_then_paid_then_unpaid(pool: PgPool) {
     assert_eq!(paid["bills_of_month"][0]["transaction_id"], entry["id"]);
     assert_eq!(last_balance(&paid), "-1259.56");
     assert_eq!(paid["projected_balance"], "-1259.56");
-    assert_eq!(paid["totals"]["bills"], "2259.56");
+    assert_eq!(paid["totals"]["spent"], "2259.56");
 
     user.delete(&format!("{pay}?month=2026-11")).await;
     let (_, again) = user.get("/api/months/2026-11").await;
@@ -342,7 +342,7 @@ async fn d35_a_stopped_bill_keeps_its_paid_month_and_leaves_the_next(pool: PgPoo
         (&listed[0]["name"], &listed[0]["paid"], &listed[0]["amount"]),
         (&json!("Internet"), &json!(true), &json!("100.00"))
     );
-    assert_eq!(november["totals"]["bills"], "150.00");
+    assert_eq!(november["totals"]["spent"], "150.00");
     assert_eq!(november["projected_balance"], "850.00");
     assert_eq!(december["bills_of_month"], json!([]));
     assert_eq!(december["projected_balance"], "850.00");
@@ -734,7 +734,7 @@ async fn d28_card_spends_move_the_balance_on_the_faturas_due_date_only(pool: PgP
             .iter()
             .all(|balance| *balance == "1000.00")
     );
-    assert_eq!(november["totals"]["daily"], "0.00");
+    assert_eq!(november["totals"]["spent"], "80.00");
     assert_eq!(november["projected_balance"], "950.00");
     assert_eq!(
         faturas(&december),
@@ -758,8 +758,7 @@ async fn d28_card_spends_move_the_balance_on_the_faturas_due_date_only(pool: PgP
 
     assert_eq!(faturas(&paid), [row("Porto", "52.00", "2026-11-10", true)]);
     assert_eq!(balances(&paid, 10)[8..], ["1000.00", "948.00"]);
-    assert_eq!(paid["totals"]["bills"], "52.00");
-    assert_eq!(paid["totals"]["daily"], "0.00");
+    assert_eq!(paid["totals"]["spent"], "80.00");
     assert_eq!(paid["projected_balance"], "948.00");
 }
 
@@ -852,10 +851,10 @@ async fn d30a_an_underpaid_fatura_carries_its_rest_into_the_next_one(pool: PgPoo
     );
     assert_eq!(last_balance(&december), "910.00");
     assert_eq!(december["projected_balance"], "910.00");
-    assert_eq!(october_report["outflow"][0]["name"], "Mercado");
-    assert_eq!(october_report["outflow_total"], "50.00");
-    assert_eq!(november_report["outflow"][0]["name"], "Mercado");
-    assert_eq!(november_report["outflow_total"], "40.00");
+    assert_eq!(october_report["spending"][0]["name"], "Mercado");
+    assert_eq!(october_report["spent_total"], "50.00");
+    assert_eq!(november_report["spending"][0]["name"], "Mercado");
+    assert_eq!(november_report["spent_total"], "40.00");
 }
 
 #[sqlx::test]

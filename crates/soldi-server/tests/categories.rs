@@ -861,7 +861,8 @@ async fn a_daily_subcategory_becomes_bill_alone_and_its_group_takes_a_color_free
     )
     .await;
     let (_, before) = user.get("/api/months/2026-11").await;
-    assert_eq!(before["totals"]["daily"], "150.00");
+    assert_eq!(before["days"][2]["daily"], "150.00");
+    assert_eq!(before["totals"]["spent"], "150.00");
 
     let (status, moved) = change_kind(&user, &id_of(&porto), "bill").await;
 
@@ -873,18 +874,19 @@ async fn a_daily_subcategory_becomes_bill_alone_and_its_group_takes_a_color_free
     assert_eq!(moved["color"], find(&categories, "Nubank")["color"]);
     assert_eq!(find(&categories, "Clube")["color"], "cat-20");
     let (_, november) = user.get("/api/months/2026-11").await;
-    assert_eq!(november["totals"]["daily"], "100.00");
-    assert_eq!(november["totals"]["bills"], "50.00");
+    assert_eq!(november["days"][2]["daily"], "100.00");
+    assert_eq!(november["days"][2]["bills"], "50.00");
     let balances = |month: &Value| -> Vec<Value> {
         let days = month["days"].as_array().unwrap();
         days.iter().map(|day| day["balance"].clone()).collect()
     };
     assert_eq!(balances(&november), balances(&before));
     assert_eq!(november["projected_balance"], before["projected_balance"]);
+    assert_eq!(november["totals"]["spent"], "150.00");
     for month in ["2026-12", "2027-01"] {
         let (_, later) = user.get(&format!("/api/months/{month}")).await;
-        assert_eq!(later["totals"]["daily"], "0.00", "{month}");
-        assert_eq!(later["totals"]["bills"], "50.00", "{month}");
+        assert_eq!(later["days"][2]["daily"], "0.00", "{month}");
+        assert_eq!(later["days"][2]["bills"], "50.00", "{month}");
     }
 }
 
@@ -904,6 +906,8 @@ async fn a_bill_group_becomes_daily_alone_keeping_a_color_free_in_both(pool: PgP
         json!({ "date": "2026-11-04", "amount": "80", "kind": "bill", "category_id": moto }),
     )
     .await;
+    let (_, before) = user.get("/api/months/2026-11").await;
+    assert_eq!(before["totals"]["spent"], "380.00");
 
     let (status, moved) = change_kind(&user, &moto, "daily").await;
 
@@ -914,8 +918,9 @@ async fn a_bill_group_becomes_daily_alone_keeping_a_color_free_in_both(pool: PgP
     assert_eq!(find(&categories, "Prestação")["kind"], "bill");
     assert_eq!(find(&categories, "Prestação")["color"], "cat-16");
     let (_, november) = user.get("/api/months/2026-11").await;
-    assert_eq!(november["totals"]["bills"], "300.00");
-    assert_eq!(november["totals"]["daily"], "80.00");
+    assert_eq!(november["days"][2]["bills"], "300.00");
+    assert_eq!(november["days"][3]["daily"], "80.00");
+    assert_eq!(november["totals"]["spent"], "380.00");
 }
 
 #[sqlx::test]
@@ -939,6 +944,8 @@ async fn a_top_level_with_no_free_color_in_the_new_kind_keeps_its_kind_and_entri
             break;
         }
     }
+    let (_, before) = user.get("/api/months/2026-11").await;
+    assert_eq!(before["totals"]["spent"], "100.00");
 
     let (status, problem) = change_kind(&user, &gasto, "bill").await;
 
@@ -947,8 +954,9 @@ async fn a_top_level_with_no_free_color_in_the_new_kind_keeps_its_kind_and_entri
     let (_, categories) = user.get("/api/categories").await;
     assert_eq!(find(&categories, "Gasto")["kind"], "daily");
     let (_, november) = user.get("/api/months/2026-11").await;
-    assert_eq!(november["totals"]["daily"], "100.00");
-    assert_eq!(november["totals"]["bills"], "0.00");
+    assert_eq!(november["days"][2]["daily"], "100.00");
+    assert_eq!(november["days"][2]["bills"], "0.00");
+    assert_eq!(november["totals"]["spent"], "100.00");
 }
 
 #[sqlx::test]
@@ -1163,7 +1171,7 @@ async fn another_users_category_keeps_its_kind_and_entries(pool: PgPool) {
 
     assert_eq!(status, StatusCode::NOT_FOUND);
     let (_, november) = ana.get("/api/months/2026-11").await;
-    assert_eq!(november["totals"]["daily"], "100.00");
+    assert_eq!(november["days"][2]["daily"], "100.00");
     assert_eq!(
         find(&ana.get("/api/categories").await.1, "Moradia")["kind"],
         "daily"

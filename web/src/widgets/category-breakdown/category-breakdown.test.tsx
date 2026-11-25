@@ -48,9 +48,10 @@ const group = (
 /** Economia holds 1.000,10 in Reserva, 250,20 in Viagem and 149,70 of its own: 1.400,00. */
 const REPORT: Schemas["CategoryReport"] = {
   month: "2026-11",
-  outflow_total: "13584.31",
+  spent_total: "13584.31",
+  saved: "0.00",
   income_total: "500.00",
-  outflow: [
+  spending: [
     share(ALUGUEL, "12000.00", "88.3", "-6.0"),
     share(RESERVA, "1000.10", "7.4"),
     share(VIAGEM, "250.20", "1.8", "10.0"),
@@ -138,7 +139,7 @@ describe("CategoryBreakdown", () => {
     show();
     await screen.findByText("Total gasto");
 
-    expect(pick("Aluguel")).toHaveTextContent("88,3% das despesas");
+    expect(pick("Aluguel")).toHaveTextContent("88,3% dos gastos");
     expect(pick("Aluguel")).toHaveTextContent("−6% vs out em relação ao mês anterior");
     expect(pick("Aluguel")).toHaveTextContent("R$ 12.000,00");
     expect(within(pick("Aluguel")).getByText("−6%", { exact: false })).toHaveClass("text-tier-green-foreground");
@@ -148,7 +149,8 @@ describe("CategoryBreakdown", () => {
     expect(within(legend()).queryByRole("button", { name: /^Salário/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("radio", { name: "Entradas" })).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 1, name: "Para Onde Vai" })).toBeInTheDocument();
-    expect(screen.getByText("Total Saídas:")).toHaveTextContent("Total Saídas: R$ 13.584,31");
+    expect(screen.getByText("Gastos:")).toHaveTextContent("Gastos: R$ 13.584,31");
+    expect(screen.queryByText("Guardado no mês")).not.toBeInTheDocument();
   });
 
   it("names December from January, and a flat change as estável", async () => {
@@ -169,7 +171,7 @@ describe("CategoryBreakdown", () => {
     show();
     const composition = await screen.findByRole("region", { name: "Composição de Gastos" });
 
-    expect(composition).toHaveTextContent("Total de saídas");
+    expect(composition).toHaveTextContent("Total de gastos");
     expect(composition).toHaveTextContent("R$ 13.584,31");
     expect(composition).toHaveTextContent("3 categorias");
     expect(composition).toHaveTextContent("3 Categorias");
@@ -187,7 +189,7 @@ describe("CategoryBreakdown", () => {
     show();
     const top = await screen.findByRole("region", { name: /^Top/ });
 
-    expect(top).toHaveTextContent("Representa 100,0% das despesas");
+    expect(top).toHaveTextContent("Representa 100,0% dos gastos");
     expect(rows(top)).toEqual([
       "#1AluguelR$ 12.000,00 (88,3%)",
       "#2EconomiaR$ 1.400,00 (10,3%)",
@@ -349,7 +351,7 @@ describe("CategoryBreakdown", () => {
     show({
       report: {
         ...REPORT,
-        outflow: [share(odd, "12000.00", "88.3", "-6.0"), share(formula, "184.31", "1.4")],
+        spending: [share(odd, "12000.00", "88.3", "-6.0"), share(formula, "184.31", "1.4")],
         groups: [group(odd, "12000.00", "88.3", "-6.0"), group(formula, "184.31", "1.4", null)],
       },
     });
@@ -362,11 +364,41 @@ describe("CategoryBreakdown", () => {
     expect(lines.slice(1, 3)).toEqual(['"Casa; ""Reforma""";"";12000,00;88,3', '"\'=SOMA(A1)";"";184,31;1,4']);
   });
 
+  it("adds Guardado no mês under the donut, outside the shares and the Top 5", async () => {
+    show({ report: { ...REPORT, saved: "380.00" } });
+    const composition = await screen.findByRole("region", { name: "Composição de Gastos" });
+
+    expect(composition).toHaveTextContent("Guardado no mêsR$ 380,00");
+    expect(within(legend()).queryByRole("button", { name: /^Guardado/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("region", { name: /^Top/ })).not.toHaveTextContent("Guardado");
+  });
+
+  it("signs a negative Guardado no mês in red when resgates pass the deposits", async () => {
+    show({ report: { ...REPORT, saved: "-120.00" } });
+    const composition = await screen.findByRole("region", { name: "Composição de Gastos" });
+
+    expect(within(composition).getByText("- R$ 120,00")).toHaveClass("text-expense");
+  });
+
+  it("ends the CSV with the Guardado no mês line, without a percentage", async () => {
+    const created = vi.fn((_blob: Blob | MediaSource) => "blob:soldi");
+    URL.createObjectURL = created;
+    URL.revokeObjectURL = vi.fn();
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
+    show({ report: { ...REPORT, saved: "-120.00" } });
+
+    await userEvent.click(await screen.findByRole("button", { name: "Exportar CSV" }));
+
+    const blob = created.mock.calls[0][0];
+    if (!(blob instanceof Blob)) throw new Error("no blob");
+    expect((await blob.text()).split("\r\n").slice(-2)).toEqual(["Guardado no mês;;-120,00;", ""]);
+  });
+
   it("says when nothing was spent, keeping the header", async () => {
-    show({ report: { ...REPORT, outflow: [], outflow_total: "0.00", groups: REPORT.groups.slice(3) } });
+    show({ report: { ...REPORT, spending: [], spent_total: "0.00", groups: REPORT.groups.slice(3) } });
 
     expect(await screen.findByText("Nenhum gasto neste mês ainda.")).toBeInTheDocument();
-    expect(screen.getByText("Total Saídas:")).toBeInTheDocument();
+    expect(screen.getByText("Gastos:")).toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Composição de Gastos" })).not.toBeInTheDocument();
   });
 

@@ -49,7 +49,7 @@ describe("Para onde vai", () => {
     expect(window.location.pathname + window.location.search).toBe("/para-onde-vai?m=2026-12");
 
     expect(await screen.findByText("Total gasto")).toBeInTheDocument();
-    expect(row("Aluguel")).toHaveTextContent("86,7% das despesas");
+    expect(row("Aluguel")).toHaveTextContent("86,7% dos gastos");
     expect(row("Mercado")).toHaveTextContent("R$ 184,31");
     expect(within(legend()).queryByRole("button", { name: /^Salário/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("radio", { name: "Entradas" })).not.toBeInTheDocument();

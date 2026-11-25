@@ -22,7 +22,7 @@ import { formatDelta, formatPct } from "@/shared/lib/percent";
 import { plain } from "@/shared/lib/text";
 import { cents, fromCents } from "@/shared/lib/tier";
 import { CategoryIcon, categoryBg, categoryFill } from "@/shared/ui/category-icon";
-import { Money } from "@/shared/ui/money";
+import { Money, SignedMoney } from "@/shared/ui/money";
 import { PageError, PageLoading } from "@/shared/ui/page-state";
 
 type Group = Schemas["CategoryGroup"];
@@ -48,7 +48,7 @@ const previousShort = (month: string) => monthShort(addMonths(month, -1)).toLowe
 
 const exportCsv = (report: Report) => {
   const groupName = new Map(report.groups.map((group) => [group.category_id, group.name]));
-  const lines = report.outflow.map((share) => {
+  const lines = report.spending.map((share) => {
     const parent = share.parent_id ? groupName.get(share.parent_id) : undefined;
     return [
       csvCell(parent ?? share.name),
@@ -57,7 +57,8 @@ const exportCsv = (report: Report) => {
       commaDecimal(share.pct),
     ].join(";");
   });
-  downloadCsv(`soldi-para-onde-vai-${report.month}.csv`, ["Grupo;Subcategoria;Valor;Percentual", ...lines]);
+  const saved = cents(report.saved) === 0 ? [] : [`Guardado no mês;;${commaDecimal(report.saved)};`];
+  downloadCsv(`soldi-para-onde-vai-${report.month}.csv`, ["Grupo;Subcategoria;Valor;Percentual", ...lines, ...saved]);
 };
 
 /** Spending that fell is good news; no change stays neutral. */
@@ -123,9 +124,15 @@ const Donut = ({ groups, active, onSelect, children }: DonutProps) => {
 const rowButton =
   "w-full rounded-xl px-2 py-2 text-left transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring aria-pressed:bg-secondary";
 
-type CompositionProps = { groups: Group[]; total: string; active?: string; onSelect: (id: string) => void };
+type CompositionProps = {
+  groups: Group[];
+  total: string;
+  saved: string;
+  active?: string;
+  onSelect: (id: string) => void;
+};
 
-const Composition = ({ groups, total, active, onSelect }: CompositionProps) => {
+const Composition = ({ groups, total, saved, active, onSelect }: CompositionProps) => {
   const titleId = useId();
   return (
     <section aria-labelledby={titleId} className={card}>
@@ -141,7 +148,7 @@ const Composition = ({ groups, total, active, onSelect }: CompositionProps) => {
       <Donut groups={groups} active={active} onSelect={onSelect}>
         <span className={caption}>
           <span className="max-lg:hidden">Total gasto</span>
-          <span className="lg:hidden">Total de saídas</span>
+          <span className="lg:hidden">Total de gastos</span>
         </span>
         <Money amount={total} size="figure" className="text-[length:min(1.75rem,10cqi)]" />
         <span className="text-income-text flex items-center gap-1 text-sm font-semibold max-lg:hidden">
@@ -149,6 +156,12 @@ const Composition = ({ groups, total, active, onSelect }: CompositionProps) => {
           {groups.length} categorias
         </span>
       </Donut>
+      {cents(saved) !== 0 && (
+        <p className="flex items-center justify-between gap-3 text-sm">
+          <span className="text-muted-foreground">Guardado no mês</span>
+          <SignedMoney amount={saved} className="font-semibold" />
+        </p>
+      )}
       <ul aria-label="Legenda" className="grid grid-cols-2 gap-1 max-lg:hidden">
         {groups.slice(0, 4).map((group) => (
           <li key={group.category_id} className="min-w-0">
@@ -183,7 +196,7 @@ const TopFive = ({ groups }: { groups: Group[] }) => {
             <span className="lg:hidden">Categorias</span>
           </h2>
         </div>
-        <p className="text-muted-foreground text-sm max-lg:hidden">Representa {formatPct(share)} das despesas</p>
+        <p className="text-muted-foreground text-sm max-lg:hidden">Representa {formatPct(share)} dos gastos</p>
         <p className="text-muted-foreground text-sm lg:hidden">Peso relativo</p>
       </header>
       <ol className="flex flex-col gap-4">
@@ -254,10 +267,10 @@ const GroupRow = ({ group, shares, previous, open, picked, onOpen, onPick }: Gro
               {picked ? (
                 <>
                   <span className="text-primary max-lg:hidden">{formatPct(group.pct)} do total gasto</span>
-                  <span className="lg:hidden">{formatPct(group.pct)} das despesas</span>
+                  <span className="lg:hidden">{formatPct(group.pct)} dos gastos</span>
                 </>
               ) : (
-                <span>{formatPct(group.pct)} das despesas</span>
+                <span>{formatPct(group.pct)} dos gastos</span>
               )}
               {folds && (
                 <span className="max-lg:hidden">{plural(group.children.length, "subcategoria", "subcategorias")}</span>
@@ -467,7 +480,7 @@ const HeaderRow = ({ report, groups, picked, onPick }: HeaderRowProps) => (
     <p className="text-muted-foreground text-sm">Visão analítica de despesas e alocação de capital</p>
     <span className="bg-expense-soft text-tier-red-foreground ml-auto flex min-h-11 items-center gap-2 rounded-full px-4 text-sm font-semibold">
       <span aria-hidden className="bg-expense size-2 rounded-full" />
-      Total Saídas: <Money amount={report.outflow_total} />
+      Gastos: <Money amount={report.spent_total} />
     </span>
     <Select value={picked ?? ALL} onValueChange={(value) => onPick(value === ALL ? undefined : value)}>
       <SelectTrigger aria-label="Categoria" className="bg-card min-h-11 text-base">
@@ -510,7 +523,7 @@ export const CategoryBreakdown = ({ month, group: asked }: { month: string; grou
     );
   if (!report.data) return null;
 
-  const shares = report.data.outflow;
+  const shares = report.data.spending;
   const groups = report.data.groups.filter((group) => group.kind !== "income");
   const savingsId = categories.data?.find((each) => each.is_savings && !each.parent_id)?.id;
   const wanted = asked && plain(asked);
@@ -534,7 +547,13 @@ export const CategoryBreakdown = ({ month, group: asked }: { month: string; grou
       ) : (
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-2 xl:items-start">
           <div className="flex min-w-0 flex-col gap-6">
-            <Composition groups={groups} total={report.data.outflow_total} active={picked} onSelect={toggle} />
+            <Composition
+              groups={groups}
+              total={report.data.spent_total}
+              saved={report.data.saved}
+              active={picked}
+              onSelect={toggle}
+            />
             <section aria-labelledby={detailId} className={card}>
               <header className="flex items-end justify-between gap-3">
                 <div className="flex flex-col gap-1">
