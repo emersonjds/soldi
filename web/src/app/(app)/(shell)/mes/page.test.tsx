@@ -80,7 +80,7 @@ const spent = (date: string): Schemas["Transaction"] => ({
 
 const EMPTY = {
   ...MONTH,
-  totals: { ...MONTH.totals, income: "0.00", bills: "0.00", daily: "0.00", outflow: "0.00", performance: "0.00" },
+  totals: { ...MONTH.totals, income: "0.00", spent: "0.00", performance: "0.00" },
 };
 
 const withTotals = (totals: Partial<Schemas["MonthView"]["totals"]>) => ({
@@ -132,14 +132,14 @@ describe("Mês", () => {
       ?.parentElement as HTMLElement;
     expect(split).toHaveClass("hidden", "lg:flex");
     expect(split).toHaveTextContent(/Total:\sR\$\s1\.384,31/);
-    expect(
-      within(split).getByRole("img", { name: /^Saídas R\$\s1\.384,31: contas fixas 86,7%, gastos diários 13,3%$/ }),
-    ).toBeInTheDocument();
+    expect(within(split).getByRole("img", { name: /^Gastos R\$\s1\.384,31: gastos 100,0%$/ })).toBeInTheDocument();
 
     const summary = within(hero).getByRole("region", { name: "Resumo do mês" });
     expect(summary).toHaveClass("lg:hidden");
     expect(within(summary).getByText("R$ 500,00")).toHaveClass("text-income-text");
     expect(within(summary).getByText("R$ 1.384,31")).toBeInTheDocument();
+    expect(summary).toHaveTextContent(/Gastos/);
+    expect(summary).not.toHaveTextContent(/Saídas/);
     expect(summary).toHaveTextContent(/Projetado-R\$\s312,40Atenção/);
 
     const thermometer = screen.getByRole("region", { name: "Termômetro do Mês" });
@@ -148,14 +148,12 @@ describe("Mês", () => {
     expect(document.body).not.toHaveTextContent(/ritmo/i);
   });
 
-  it("splits the entrada into Contas fixas, Guardado, Gastos diários and Livre restante, each with one decimal", async () => {
+  it("splits the entrada into Gastos, Guardado and Livre restante, each with one decimal", async () => {
     open(
       withTotals({
         income: "6361.60",
-        bills: "3484.13",
+        spent: "4256.50",
         saved: "776.13",
-        daily: "1548.50",
-        outflow: "5032.63",
         performance: "1328.97",
       }),
     );
@@ -164,7 +162,7 @@ describe("Mês", () => {
     expect(hero).toHaveTextContent(/Total:\sR\$\s6\.361,60/);
     expect(
       within(hero).getByRole("img", {
-        name: /^Entradas R\$\s6\.361,60: contas fixas 42,6%, guardado 12,2%, gastos diários 24,3%, livre restante 20,9%$/,
+        name: /^Entradas R\$\s6\.361,60: gastos 66,9%, guardado 12,2%, livre restante 20,9%$/,
       }),
     ).toBeInTheDocument();
   });
@@ -349,7 +347,7 @@ describe("Mês", () => {
   });
 
   it("rounds the committed share half to even", async () => {
-    open(withTotals({ income: "1040.00", bills: "130.00", daily: "0.00", outflow: "130.00", performance: "910.00" }));
+    open(withTotals({ income: "1040.00", spent: "130.00", performance: "910.00" }));
 
     expect(
       within(await screen.findByRole("region", { name: "Termômetro do Mês" })).getByText("12% Gasto"),
@@ -362,7 +360,7 @@ describe("Mês", () => {
       "GET /api/transactions": { status: 200, body: [] },
       "GET /api/reports/categories": {
         status: 200,
-        body: { ...REPORT, outflow_total: "0.00", income_total: "0.00", groups: [] },
+        body: { ...REPORT, spent_total: "0.00", income_total: "0.00", groups: [] },
       },
       "GET /api/cofrinhos": {
         status: 200,

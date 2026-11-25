@@ -17,12 +17,9 @@ const STITCH: MonthView = {
   projected_tier: "light_green",
   totals: {
     income: "6361.60",
-    withdrawn: "0.00",
-    bills: "2708.00",
-    daily: "1548.50",
-    outflow: "4256.50",
-    performance: "2105.10",
+    spent: "4256.50",
     saved: "0.00",
+    performance: "2105.10",
   },
 };
 
@@ -42,12 +39,14 @@ describe("Termômetro do Mês", () => {
     expect(within(card()).getByText("67% Comprometido")).toHaveClass("lg:hidden", "bg-tier-light-green-soft");
   });
 
-  it("boxes Entradas, Saídas and a signed Resultado from 1024, wrapping a row rather than clipping five digits", () => {
+  it("boxes Entradas, Gastos, Guardado and a signed Resultado from 1024, wrapping a row rather than clipping five digits", () => {
     render(<ThermometerCard view={STITCH} />);
 
     const box = within(card()).getByText("Resultado").parentElement?.parentElement as HTMLElement;
     expect(box).toHaveClass("hidden", "lg:flex", "flex-wrap");
-    expect(box.textContent?.replace(/\s/g, " ")).toBe("EntradasR$ 6.361,60SaídasR$ 4.256,50Resultado+ R$ 2.105,10");
+    expect(box.textContent?.replace(/\s/g, " ")).toBe(
+      "EntradasR$ 6.361,60GastosR$ 4.256,50GuardadoR$ 0,00Resultado+ R$ 2.105,10",
+    );
     expect(within(box).getByText("R$ 6.361,60")).toHaveClass("text-income-text");
     expect(within(box).getByText("+ R$ 2.105,10")).toHaveClass("text-income-text");
   });
@@ -90,7 +89,7 @@ describe("Termômetro do Mês", () => {
     render(<ThermometerCard view={{ ...MONTH, totals: { ...MONTH.totals, income: "0.00" } }} />);
 
     expect(sentence("Nenhuma entrada ainda este mês.")).toBeInTheDocument();
-    expect(card()).not.toHaveTextContent(/Gasto|Comprometido|comprometeu/);
+    expect(card()).not.toHaveTextContent(/% Gasto|Comprometido|comprometeu/);
   });
 
   it("S12: names the Diário previsto in the sentence when the projection counts it", () => {
@@ -99,12 +98,22 @@ describe("Termômetro do Mês", () => {
     expect(sentence("Com as contas em aberto e o Diário previsto, o caixa fecha o mês no verde.")).toBeInTheDocument();
   });
 
-  it("renders nothing on a month with no entrada and no saída (D25)", () => {
-    const { container } = render(
-      <ThermometerCard view={{ ...MONTH, totals: { ...MONTH.totals, income: "0.00", outflow: "0.00" } }} />,
+  it("writes a negative Guardado in red with a minus when resgates pass the deposits", () => {
+    render(
+      <ThermometerCard view={{ ...STITCH, totals: { ...STITCH.totals, saved: "-120.00", performance: "2225.10" } }} />,
     );
 
+    const box = within(card()).getByText("Guardado").parentElement as HTMLElement;
+    expect(within(box).getByText("- R$ 120,00")).toHaveClass("text-expense");
+  });
+
+  it("renders nothing on a month with no entrada, no Gastos and no Guardado (D25)", () => {
+    const empty = { ...MONTH.totals, income: "0.00", spent: "0.00" };
+    const { container, rerender } = render(<ThermometerCard view={{ ...MONTH, totals: empty }} />);
+
     expect(container).toBeEmptyDOMElement();
+    rerender(<ThermometerCard view={{ ...MONTH, totals: { ...empty, saved: "300.00", performance: "-300.00" } }} />);
+    expect(card()).toHaveTextContent("GuardadoR$ 300,00");
   });
 });
 

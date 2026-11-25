@@ -65,3 +65,11 @@ export const Money = ({
     </span>
   );
 };
+
+/** A figure that may fall below zero (Guardado): `- R$ …` in red, as Mês writes a negative Resultado. */
+export const SignedMoney = ({ amount, className }: { amount: string; className?: string }) =>
+  amount.startsWith("-") ? (
+    <Money amount={amount.slice(1)} outflow className={cn("text-expense", className)} />
+  ) : (
+    <Money amount={amount} className={className} />
+  );

@@ -7,7 +7,7 @@
       "name": "AGPL-3.0-only",
       "identifier": "AGPL-3.0-only"
     },
-    "version": "0.74.0"
+    "version": "0.75.0"
   },
   "paths": {
     "/api/auth/email-verification/confirm": {
@@ -1940,7 +1940,7 @@
         ],
         "responses": {
           "200": {
-            "description": "The month's outflow and income by category, each against the previous month; resgates are not income",
+            "description": "The month's Gastos and income by category from the opening date, each against the previous month, and its Guardado apart; resgates are not income, deposits and fatura payments are not Gastos (D54)",
             "content": {
               "application/json": {
                 "schema": {
@@ -2915,7 +2915,7 @@
       },
       "CategoryGroup": {
         "type": "object",
-        "description": "A top-level category with its subcategories' amounts rolled in: `amount` and `previous_amount`\nadd its own entries and its subcategories'; `pct` is its share of the outflow or income total.\n`children` are the subcategories with entries in the month, largest first; `kind` is the\ntop-level category's own, whatever its subcategories' kinds.",
+        "description": "A top-level category with its subcategories' amounts rolled in: `amount` and `previous_amount`\nadd its own entries and its subcategories'; `pct` is its share of the spending or income total.\n`children` are the subcategories with entries in the month, largest first; `kind` is the\ntop-level category's own, whatever its subcategories' kinds.",
         "required": [
           "category_id",
           "name",
@@ -2997,12 +2997,13 @@
       },
       "CategoryReport": {
         "type": "object",
-        "description": "`outflow` (bills and daily) and `income`, each by amount, largest first; `groups` the same\nmonth by top-level category, outflow groups then income groups, each by amount.",
+        "description": "`spending` (Gastos do mês: Saídas and Diário from the opening date, card purchases on their\nown date, without Economia deposits and fatura payments, D54) and `income` (without resgates),\neach by amount, largest first; `groups` the same month by top-level category, spending groups\nthen income groups, each by amount, never Economia or a cofrinho. `saved` is Guardado no mês,\ndeposits minus resgates, negative when the resgates are larger; never part of `spent_total`.",
         "required": [
           "month",
-          "outflow_total",
+          "spent_total",
           "income_total",
-          "outflow",
+          "saved",
+          "spending",
           "income",
           "groups"
         ],
@@ -3025,13 +3026,16 @@
           "month": {
             "type": "string"
           },
-          "outflow": {
+          "saved": {
+            "type": "string"
+          },
+          "spending": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/CategoryShare"
             }
           },
-          "outflow_total": {
+          "spent_total": {
             "type": "string"
           }
         }
@@ -4129,27 +4133,15 @@
       },
       "Totals": {
         "type": "object",
-        "description": "`income` leaves the month's resgates out, `withdrawn` sums them (SOL-28); `outflow` is bills\nplus daily; `performance` is income minus outflow; `saved` is the bills under `Economia`\nminus `withdrawn`, already inside `bills`.",
+        "description": "Entradas, Gastos and Guardado (D54). `income` leaves resgates out; `spent` (Gastos) is the\nSaídas and Diários from the opening date, card purchases on their own date, without Economia\ndeposits and fatura payments; `saved` (Guardado) is the deposits minus the resgates and may be\nnegative; `performance` (Resultado) is `income - spent - saved`.",
         "required": [
           "income",
-          "bills",
-          "daily",
-          "outflow",
-          "performance",
+          "spent",
           "saved",
-          "withdrawn"
+          "performance"
         ],
         "properties": {
-          "bills": {
-            "type": "string"
-          },
-          "daily": {
-            "type": "string"
-          },
           "income": {
-            "type": "string"
-          },
-          "outflow": {
             "type": "string"
           },
           "performance": {
@@ -4158,7 +4150,7 @@
           "saved": {
             "type": "string"
           },
-          "withdrawn": {
+          "spent": {
             "type": "string"
           }
         }
@@ -4691,7 +4683,7 @@
       },
       "YearGroup": {
         "type": "object",
-        "description": "A top-level category's total in the year, its subcategories rolled in; `pct` is its share of\n`spent` (outflow) or `totals.income` (income) with one decimal.",
+        "description": "A top-level category's total in the year, its subcategories rolled in; `pct` is its share of\n`totals.spent` (outflow) or `totals.income` (income) with one decimal.",
         "required": [
           "category_id",
           "name",
@@ -4742,11 +4734,10 @@
       },
       "YearReport": {
         "type": "object",
-        "description": "The year's Entradas and Gastos by purchase date (D31), over whole months from the opening month\nor January to today's month or December. `totals` has the month view's shape, Economia deposits\ninside `bills`, but follows D31: `bills` leaves fatura payments out and `daily` holds card\npurchases, so it does not equal the sum of the month views. `spent` (Gastos) leaves deposits and\nfatura payments out. `first_month` and `last_month` are null when nothing is counted.",
+        "description": "The year's Entradas, Gastos and Guardado by purchase date (D31, D54), over whole months from the\nopening month or January to today's month or December; `totals` is the sum of the month views'.\n`first_month` and `last_month` are null when nothing is counted.",
         "required": [
           "year",
           "totals",
-          "spent",
           "top_months",
           "spending",
           "income",
@@ -4795,9 +4786,6 @@
             "items": {
               "$ref": "#/components/schemas/YearGroup"
             }
-          },
-          "spent": {
-            "type": "string"
           },
           "top_months": {
             "type": "array",

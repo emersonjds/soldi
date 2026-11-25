@@ -14,7 +14,7 @@ import { PageError } from "@/shared/ui/page-state";
 export const SpendingGlance = ({ month, className }: { month: string; className?: string }) => {
   const report = useCategoryReport(month);
   const failed = report.isError && !report.data;
-  if (!failed && (!report.data || cents(report.data.outflow_total) === 0)) return null;
+  if (!failed && (!report.data || cents(report.data.spent_total) === 0)) return null;
   return (
     <DashCard
       title="Para Onde Vai"

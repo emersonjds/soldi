@@ -7,6 +7,21 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.75.0
+
+> Headline: one Gastos do mês on every screen
+
+### Server
+- One rule for a month's spending (D54): Saídas and Diário dated in the month, from the opening date, card purchases on their purchase date; fatura payments and cofrinho deposits never count. Guardado (deposits minus resgates) is reported apart. Mês, Meu ano and Para onde vai read the same rule, so the same month shows the same total everywhere (SOL-174).
+- API: the month `totals` are `income`, `spent`, `saved` and `performance`; Para onde vai returns `spent_total`, `spending` and `saved`; the year report drops `spent`.
+- A resgate logged without a cofrinho and a fatura payment edited to Entrada no longer skew Economia do ano.
+
+### Web
+- Mês, Meu ano and Para onde vai say "Gastos"; the Termômetro do Mês shows Entradas, Gastos, Guardado and Resultado, and Entradas − Gastos − Guardado = Resultado on screen.
+- Para onde vai no longer lists Economia as a share of expenses: a "Guardado no mês" line sits apart, and the CSV carries it too.
+- The split bar's "Total" always equals what the bar draws.
+
+
 ## 0.74.0
 
 > Headline: the original violet is back, as a palette

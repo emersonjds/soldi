@@ -12,7 +12,7 @@ import { formatMoney } from "@/shared/lib/money";
 import { wholeShare } from "@/shared/lib/percent";
 import { cents, fromCents, TIER_STYLE, type Tier } from "@/shared/lib/tier";
 import { EstimateNote } from "@/shared/ui/estimate-note";
-import { Money } from "@/shared/ui/money";
+import { Money, SignedMoney } from "@/shared/ui/money";
 import { SplitBar } from "@/shared/ui/split-bar";
 import { ThermometerStrip } from "@/shared/ui/thermometer-strip";
 import { TierPill } from "@/shared/ui/tier-pill";
@@ -63,7 +63,7 @@ const Figure = ({
 const circle = "flex size-10 shrink-0 items-center justify-center rounded-full";
 const amount = "whitespace-nowrap font-bold text-sm leading-5 tracking-tight sm:text-base";
 
-/** Below 1024 only: Entradas, Saídas (bills + daily) and Projetado, overlapping the hero card. */
+/** Below 1024 only: Entradas, Gastos and Projetado, overlapping the hero card. */
 const MonthSummary = ({
   view,
   onLaunch,
@@ -90,7 +90,7 @@ const MonthSummary = ({
       <Money amount={view.totals.income} className={cn(amount, "text-income-text")} />
     </Figure>
     <Figure
-      label="Saídas"
+      label="Gastos"
       action="Lançar saída"
       onClick={() => onLaunch("bill")}
       icon={
@@ -99,7 +99,7 @@ const MonthSummary = ({
         </span>
       }
     >
-      <Money amount={view.totals.outflow} className={amount} />
+      <Money amount={view.totals.spent} className={amount} />
     </Figure>
     <Figure
       label="Projetado"
@@ -135,10 +135,10 @@ const Split = ({ totals }: { totals: MonthView["totals"] }) => {
       <div className="flex items-center justify-between gap-4 text-sm leading-5">
         <h2 className="font-medium">Para onde foi a entrada deste mês</h2>
         <p className="font-bold tabular-nums">
-          Total: <Money amount={income ? totals.income : totals.outflow} />
+          Total: <Money amount={split.total} />
         </p>
       </div>
-      <SplitBar label={income ? "Entradas" : "Saídas"} segments={split.segments} />
+      <SplitBar label={income ? "Entradas" : "Gastos"} segments={split.segments} />
     </div>
   );
 };
@@ -228,10 +228,10 @@ export const ThermometerCard = ({
   className?: string;
 }) => {
   const currency = useCurrency();
-  const { income, outflow, performance } = view.totals;
+  const { income, spent: outflow, saved, performance } = view.totals;
   const base = cents(income);
   const result = cents(performance);
-  if (base === 0 && cents(outflow) === 0) return null;
+  if (base === 0 && cents(outflow) === 0 && cents(saved) === 0) return null;
   const spent = base > 0 ? `${wholeShare(cents(outflow), base)}%` : null;
   return (
     <section
@@ -267,9 +267,15 @@ export const ThermometerCard = ({
           </dd>
         </div>
         <div className="flex flex-col">
-          <dt className="text-muted-foreground text-xs">Saídas</dt>
+          <dt className="text-muted-foreground text-xs">Gastos</dt>
           <dd>
             <Money amount={outflow} className="font-bold" />
+          </dd>
+        </div>
+        <div className="flex flex-col">
+          <dt className="text-muted-foreground text-xs">Guardado</dt>
+          <dd>
+            <SignedMoney amount={saved} className="font-bold" />
           </dd>
         </div>
         <div className="flex flex-col">

@@ -164,12 +164,9 @@ export const MONTH: Schemas["MonthView"] = {
   balance_today_tier: "yellow",
   totals: {
     income: "500.00",
-    withdrawn: "0.00",
-    bills: "1200.00",
-    daily: "184.31",
-    outflow: "1384.31",
-    performance: "-884.31",
+    spent: "1384.31",
     saved: "0.00",
+    performance: "-884.31",
   },
   projected_balance: "957.79",
   projected_tier: "yellow",
@@ -333,9 +330,10 @@ const share = (
 /** Ana's November by category: rent fell against October, groceries grew, salary is new. */
 export const REPORT: Schemas["CategoryReport"] = {
   month: "2026-11",
-  outflow_total: "1384.31",
+  spent_total: "1384.31",
+  saved: "0.00",
   income_total: "500.00",
-  outflow: [share(ALUGUEL, "1200.00", "86.7", "1276.60", "-6.0"), share(MERCADO, "184.31", "13.3", "155.67", "18.4")],
+  spending: [share(ALUGUEL, "1200.00", "86.7", "1276.60", "-6.0"), share(MERCADO, "184.31", "13.3", "155.67", "18.4")],
   income: [share(SALARIO, "500.00", "100.0", "0.00", null)],
   groups: [
     { ...share(ALUGUEL, "1200.00", "86.7", "1276.60", "-6.0"), children: [] },
@@ -417,14 +415,10 @@ export const YEAR_REPORT: Schemas["YearReport"] = {
   last_month: "2025-12",
   totals: {
     income: "1234567.89",
-    bills: "60000.00",
-    daily: "30000.00",
-    outflow: "90000.00",
-    performance: "1144567.89",
+    spent: "78000.00",
     saved: "11500.00",
-    withdrawn: "500.00",
+    performance: "1145067.89",
   },
-  spent: "78000.00",
   top_months: [
     { month: "2025-03", spent: "7200.00" },
     { month: "2025-07", spent: "6800.00" },
