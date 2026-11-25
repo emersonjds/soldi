@@ -59,6 +59,7 @@ impl CategorySum {
             _ if self.fatura_payment => Flow::Ignored,
             CategoryKind::Bill if self.savings || self.cofrinho => Flow::Saved,
             _ if self.cofrinho => Flow::Withdrawn,
+            CategoryKind::Income if self.savings => Flow::Withdrawn,
             CategoryKind::Income => Flow::Income,
             CategoryKind::Bill | CategoryKind::Daily => Flow::Spent,
         }
@@ -557,11 +558,69 @@ mod tests {
                 },
                 Flow::Withdrawn,
             ),
+            (
+                "13: entrada under Resgate without a cofrinho",
+                CategorySum {
+                    savings: true,
+                    ..income()
+                },
+                Flow::Withdrawn,
+            ),
+            (
+                "6: diário under Economia",
+                CategorySum {
+                    savings: true,
+                    ..daily()
+                },
+                Flow::Spent,
+            ),
+            ("14: diário typed ahead in the month", daily(), Flow::Spent),
             ("18: entrada", income(), Flow::Income),
         ];
         for (row, sum, flow) in cases {
             assert_eq!(sum.flow(), flow, "row {row}");
         }
+        assert_eq!(
+            counted_range(2026, date("2026-10-01"), date("2026-11-20")),
+            Some((date("2026-10-01"), date("2026-11-30"))),
+            "rows 15, 17: Meu ano reads from the opening date to the end of today's month"
+        );
+    }
+
+    #[test]
+    fn d54_section_4_edge_cases() {
+        let purchase = on_card(sum(2, "Lazer", Daily, "2026-12", "450"));
+        let payment = CategorySum {
+            fatura_payment: true,
+            ..sum(6, "Porto", Bill, "2027-01", "450")
+        };
+        assert_eq!(spending([&purchase]).spent, money("450"));
+        assert_eq!(spending([&payment]), Spending::default());
+
+        let same_day = [
+            sum(3, "Salário", Income, "2026-11", "6000"),
+            sum(1, "Luz", Bill, "2026-11", "187.35"),
+        ];
+        assert_eq!(
+            spending(&same_day),
+            Spending {
+                income: money("6000"),
+                spent: money("187.35"),
+                saved: Decimal::ZERO,
+            }
+        );
+
+        let no_income = [
+            sum(1, "Luz", Bill, "2026-11", "100"),
+            CategorySum {
+                savings: true,
+                ..sum(5, "Economia", Bill, "2026-11", "50")
+            },
+        ];
+        let totals = spending(&no_income).totals();
+        assert_eq!(totals.performance, money("-150"));
+        assert_eq!(percent(totals.saved, totals.income), None);
+        assert_eq!(percent(totals.spent, totals.income), None);
     }
 
     /// Section 5 of SOL-174: October's card purchase and November's entries.

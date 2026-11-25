@@ -929,6 +929,55 @@ async fn a_fatura_payment_edited_to_diario_or_entrada_never_counts(pool: PgPool)
         cents(&report["income"]),
         money_cents(&report["totals"]["income"])
     );
+    let (_, economia) = savings(&ana, "2025").await;
+    let february = economia["months"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| row["month"] == "2025-02")
+        .unwrap();
+    assert_eq!(february["income"], "0.00", "{economia}");
+}
+
+#[sqlx::test]
+async fn an_entrada_under_resgate_without_a_cofrinho_lowers_guardado_on_every_screen(pool: PgPool) {
+    let ana = TestApp::signed_in(pool.clone(), "ana@example.com").await;
+    ana.open_at("0", "2025-01-01").await;
+    log(&ana, "2025-03-05", "income", "6000.00", "Salário").await;
+    log(&ana, "2025-03-06", "bill", "500.00", "Economia").await;
+    log(&ana, "2025-03-07", "income", "120.00", "Salário").await;
+    sqlx::query(
+        "UPDATE transactions t SET category_id = c.id FROM categories c
+         WHERE c.user_id = t.user_id AND c.name = 'Resgate' AND t.amount = 120",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let (_, month) = ana.get("/api/months/2025-03").await;
+    let (_, year) = year_report(&ana, "2025").await;
+    let (_, economia) = savings(&ana, "2025").await;
+
+    assert_eq!(
+        [&month["totals"]["income"], &month["totals"]["saved"]].map(money_cents),
+        [600_000, 38_000],
+        "{month}"
+    );
+    assert_eq!(
+        [&year["totals"]["income"], &year["totals"]["saved"]].map(money_cents),
+        [600_000, 38_000]
+    );
+    let march = economia["months"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| row["month"] == "2025-03")
+        .unwrap();
+    assert_eq!(
+        [&march["income"], &march["withdrawn"], &march["saved"]].map(money_cents),
+        [600_000, 12_000, 38_000],
+        "{economia}"
+    );
 }
 
 #[sqlx::test]
@@ -1070,4 +1119,83 @@ async fn sol_174_one_gastos_and_one_guardado_on_mes_meu_ano_and_para_onde_vai(po
     );
     assert_eq!(amounts(&year["cards"], "name"), [pair("Porto", "450.00")]);
     assert_eq!(year["card_pct"], "45.0");
+    assert_eq!(month["savings"]["rate_pct"], "6.3");
+
+    let days = |view: &serde_json::Value| view["days"].as_array().unwrap().clone();
+    let balance_on = |view: &serde_json::Value, date: &str| {
+        days(view)
+            .into_iter()
+            .find(|day| day["date"] == date)
+            .unwrap()["balance"]
+            .clone()
+    };
+    assert_eq!(
+        [
+            balance_on(&october, "2026-10-31"),
+            balance_on(&month, "2026-11-20"),
+            balance_on(&month, "2026-11-30"),
+        ],
+        [json!("5000.00"), json!("9699.75"), json!("9619.75")]
+    );
+    let internet = if days(&month).iter().any(|day| day["is_today"] == true) {
+        12_000
+    } else {
+        0
+    };
+    assert_eq!(
+        money_cents(&month["projected_balance"]),
+        961_975 - internet,
+        "{month}"
+    );
+
+    let (status, _) = ana
+        .patch(
+            "/api/settings",
+            json!({ "daily_estimate": "40.00", "daily_estimate_on": true }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    let (_, planned) = ana.get("/api/months/2026-11").await;
+    let (_, planned_report) = ana.get("/api/reports/categories?month=2026-11").await;
+    let previsto: Vec<(String, String)> = days(&planned)
+        .iter()
+        .filter(|day| day["is_future"] == true)
+        .map(|day| {
+            (
+                day["date"].as_str().unwrap().into(),
+                day["previsto"].as_str().unwrap().into(),
+            )
+        })
+        .collect();
+    let expected: Vec<(String, String)> = previsto
+        .iter()
+        .map(|(date, _)| {
+            let amount = if date == "2026-11-27" {
+                "0.00"
+            } else {
+                "40.00"
+            };
+            (date.clone(), amount.into())
+        })
+        .collect();
+    assert_eq!(previsto, expected);
+    let planned_days = expected
+        .iter()
+        .filter(|(_, amount)| amount != "0.00")
+        .count() as i64;
+    assert_eq!(
+        money_cents(&planned["projected_balance"]),
+        money_cents(&month["projected_balance"]) - 4_000 * planned_days
+    );
+    let balances = |view: &serde_json::Value| -> Vec<serde_json::Value> {
+        days(view)
+            .iter()
+            .map(|day| day["balance"].clone())
+            .collect()
+    };
+    assert_eq!(balances(&planned), balances(&month));
+    assert_eq!(planned["totals"], month["totals"]);
+    assert_eq!(planned["savings"], month["savings"]);
+    assert_eq!(planned["balance_today"], month["balance_today"]);
+    assert_eq!(planned_report["spent_total"], report["spent_total"]);
 }
