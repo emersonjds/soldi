@@ -58,6 +58,12 @@ describe("light theme only", () => {
     expect(stylesheet("./globals.css")).toContain("--font-wordmark: var(--font-nunito);");
   });
 
+  it("applies the stored palette from an inline <head> script before paint (SOL-184)", () => {
+    const markup = renderToStaticMarkup(<RootLayout>conteúdo</RootLayout>);
+
+    expect(markup).toMatch(/<html[^>]*><head><script>[^<]*soldi-palette[^<]*<\/script><\/head>/);
+  });
+
   it("ships no dark token block in the stylesheets", () => {
     for (const path of ["./globals.css", "../styles/presets/soldi.css"]) {
       expect(stylesheet(path)).not.toMatch(/^\s*\.dark\b/m);
