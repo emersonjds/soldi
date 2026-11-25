@@ -14,9 +14,9 @@ export const monthLabel = (month: string) => {
   return `${name.charAt(0).toUpperCase()}${name.slice(1)} ${year}`;
 };
 
-/** `hero` on the indigo gradient, `surface` on a card or the top bar. */
+/** `hero` inside a page hero card, `surface` on a card or the top bar. */
 const TONE = {
-  hero: { pill: "bg-white/10", button: "hover:bg-white/10 focus-visible:outline-white" },
+  hero: { pill: "bg-secondary", button: "hover:bg-accent focus-visible:outline-ring" },
   surface: { pill: "bg-muted ring-1 ring-border", button: "hover:bg-accent focus-visible:outline-ring" },
 };
 

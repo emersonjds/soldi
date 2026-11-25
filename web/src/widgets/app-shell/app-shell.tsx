@@ -92,7 +92,7 @@ const MONTHLESS_PAGES = ["/ajustes/categorias"];
 /** Month pages whose own hero carries the switcher below 1024 px; the rest get it in a card under the app bar. */
 const HERO_SWITCHER_PAGES = ["/mes", "/para-onde-vai"];
 
-/** The month of `?m=`, moved in place; `hero` on Mês's indigo hero. */
+/** The month of `?m=`, moved in place; `hero` inside Mês's hero card. */
 export const ShellMonthSwitcher = ({ pathname, tone = "surface" }: { pathname: string; tone?: "hero" | "surface" }) => {
   const search = useSearchParams();
   const month = monthParam(search.get("m"));

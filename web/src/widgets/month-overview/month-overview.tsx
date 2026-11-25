@@ -63,7 +63,7 @@ const Figure = ({
 const circle = "flex size-10 shrink-0 items-center justify-center rounded-full";
 const amount = "whitespace-nowrap font-bold text-sm leading-5 tracking-tight sm:text-base";
 
-/** Below 1024 only: Entradas, Saídas (bills + daily) and Projetado, overlapping the indigo hero. */
+/** Below 1024 only: Entradas, Saídas (bills + daily) and Projetado, overlapping the hero card. */
 const MonthSummary = ({
   view,
   onLaunch,
@@ -75,7 +75,7 @@ const MonthSummary = ({
 }) => (
   <section
     aria-label="Resumo do mês"
-    className="bg-card relative mx-2 -mt-10 grid grid-cols-3 gap-2 rounded-2xl p-4 shadow-sm sm:mx-4 lg:hidden"
+    className="bg-card relative mt-3 grid grid-cols-3 gap-2 rounded-2xl p-4 shadow-sm lg:hidden"
   >
     <Figure
       label="Entradas"
@@ -144,8 +144,8 @@ const Split = ({ totals }: { totals: MonthView["totals"] }) => {
 };
 
 /**
- * C1 (SOL-79 §2.3). Below 1024 the indigo hero: the greeting, `switcher`, today's balance and the summary over its
- * edge. From 1024 a white card: today's balance, the Projetado box and the split.
+ * C1 (SOL-79 §2.3). A white card. Below 1024: the greeting, `switcher`, today's balance and the summary over its
+ * edge. From 1024: today's balance, the Projetado box and the split.
  */
 export const MonthHero = ({
   view,
@@ -164,10 +164,10 @@ export const MonthHero = ({
   const first = useMe().data?.name.trim().split(/\s+/)[0] ?? "";
   return (
     <section aria-label="Saldo hoje" className={cn("flex flex-col", className)}>
-      <div className="from-hero-from to-hero-to text-hero-foreground lg:bg-card lg:text-card-foreground flex flex-col gap-4 rounded-3xl bg-linear-to-br px-4 pt-5 pb-14 lg:gap-6 lg:bg-none lg:p-6 lg:shadow-sm">
+      <div className="bg-card text-card-foreground flex flex-col gap-4 rounded-3xl px-4 pt-5 pb-6 shadow-sm lg:gap-6 lg:p-6">
         <div className="flex items-center gap-2 lg:hidden">
           {first && (
-            <span aria-hidden className={cn(circle, "bg-white/15 text-lg font-semibold")}>
+            <span aria-hidden className={cn(circle, "bg-secondary text-lg font-semibold")}>
               {first.charAt(0).toUpperCase()}
             </span>
           )}
@@ -176,17 +176,14 @@ export const MonthHero = ({
         <div className="lg:hidden">{switcher}</div>
         <div className="flex flex-col items-center gap-4 lg:flex-row lg:justify-between">
           <div className="flex flex-col items-center gap-2 lg:items-start lg:gap-1">
-            <p className="text-hero-foreground/80 lg:text-muted-foreground text-[11px] leading-4 font-semibold tracking-[0.12em] uppercase">
+            <p className="text-muted-foreground text-[11px] leading-4 font-semibold tracking-[0.12em] uppercase">
               Saldo hoje<span className="hidden lg:inline"> em conta</span>
             </p>
             <div className="flex flex-col items-center gap-3 lg:flex-row lg:flex-wrap lg:items-baseline">
               <Money
                 amount={view.balance_today}
                 size="display"
-                className={cn(
-                  "text-hero-foreground",
-                  view.balance_today.startsWith("-") ? "lg:text-expense" : "lg:text-foreground",
-                )}
+                className={view.balance_today.startsWith("-") ? "text-expense" : "text-foreground"}
               />
               <TierPill tier={view.balance_today_tier} />
             </div>

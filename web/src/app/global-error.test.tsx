@@ -7,7 +7,10 @@ import { captureError } from "@/shared/lib/sentry";
 import GlobalError from "./global-error";
 
 vi.mock("@/shared/lib/sentry", () => ({ captureError: vi.fn() }));
-vi.mock("next/font/google", () => ({ Inter: () => ({ variable: "font-inter" }) }));
+vi.mock("next/font/google", () => ({
+  Inter: () => ({ variable: "font-inter" }),
+  Nunito: () => ({ variable: "font-nunito" }),
+}));
 
 describe("GlobalError", () => {
   it("reports the render error and offers a retry in the app's own words", async () => {
