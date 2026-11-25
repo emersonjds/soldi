@@ -158,6 +158,56 @@ describe("brand and text contrast", () => {
   });
 });
 
+const palettes = readFileSync("src/styles/presets/palettes.css", "utf8");
+const blocks = new Map(
+  [...palettes.matchAll(/\[data-palette="(\w+)"\] \{([^}]*)\}/g)].map(([, name, body]) => [name, body]),
+);
+const PALETTES = ["ameixa", "indigo", "petroleo", "berinjela", "marinho", "floresta"];
+const PALETTE_TOKENS = [
+  "brand",
+  "primary",
+  "ring",
+  "sidebar-primary",
+  "sidebar-ring",
+  "chart-1",
+  "brand-hover",
+  "sidebar-accent-foreground",
+  "brand-soft",
+  "sidebar-accent",
+  "hero",
+  "hero-foreground",
+  "hero-chip",
+  "wordmark",
+  ...range(1, 5).map((dot) => dot.replace("cat", "logo")),
+];
+const css = (name: string) => (name === "default" ? preset : (blocks.get(name) ?? ""));
+const read = (source: string, name: string) => source.match(new RegExp(`--${name}: ([^;]+);`))?.[1] ?? "";
+
+describe("brand palettes", () => {
+  it("ships the six alternative palettes", () => {
+    expect([...blocks.keys()]).toEqual(PALETTES);
+  });
+
+  it.each(["default", ...PALETTES])("%s sets every palette token", (name) => {
+    for (const tokenName of PALETTE_TOKENS) {
+      expect(read(css(name), tokenName), tokenName).not.toBe("");
+    }
+  });
+
+  it.each(["default", ...PALETTES])("%s keeps brand, hero and wordmark text at 4.5:1", (name) => {
+    const value = (tokenName: string) => read(css(name), tokenName);
+    for (const [text, surface] of [
+      [glyph, value("brand")],
+      [glyph, value("brand-hover")],
+      [value("brand-hover"), value("brand-soft")],
+      [value("hero-foreground"), value("hero")],
+      [value("wordmark"), glyph],
+    ]) {
+      expect(contrast(text, surface), `${text} on ${surface}`).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+});
+
 const TIERS = ["tier-red", "tier-light-red", "tier-yellow", "tier-light-green", "tier-green"];
 
 describe("termômetro tiers", () => {

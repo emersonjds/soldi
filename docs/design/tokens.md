@@ -19,7 +19,8 @@ The `designer` agent maps these onto the template's shadcn semantic tokens in `w
 | primary / brand / ring | `#357A6D` | the one accent: links, active nav, primary buttons, "Lançar", focus ring; white on it 5.05:1 |
 | brand-hover | `#2C6A5E` | hover; white on it 6.31:1; brand text on brand-soft (5.46:1, `#357A6D` there is 4.37:1) |
 | brand-soft | `#E6F1EE` | active sidebar item, brand tint surfaces |
-| hero | `card` | the month hero on `Mês`, `Para onde vai` header: white card, `shadow-sm`, dark text; auth top on white |
+| hero / hero-foreground / hero-chip | `#FFFFFF` / `#1F2328` / `#F3F4F2` | flat hero (`bg-hero text-hero-foreground`, secondary text `/80`): `Mês` hero below 1024 (from 1024 the card), `Para onde vai` header, auth and onboarding top and the `lg` page behind their sheet; `hero-chip` = avatar and month-switcher pill on the hero. Per palette below |
+| logo-1..5 | `#F2D38A` `#F2B48C` `#8CC5B0` `#5FA894` `#357A6D` | the five dots of the logo mark. Per palette below |
 | income | `#16A34A` on `#DCFCE7` | entradas, "Pago" |
 | income-text | `#15803D` on white, 5.02:1 | income amounts (`Money income`), the Entradas total, a cofrinho's gain; `income` stays for fills and icons (3.30:1 on white) |
 | expense | `#DC2626` on `#FEE2E2` | saídas, "Vencido", negative projected |
@@ -27,6 +28,32 @@ The `designer` agent maps these onto the template's shadcn semantic tokens in `w
 | border / input | `#E6E7EA` | dividers, outlines |
 | shadow | `rgb(31 35 40 / a)` | same alphas as before, `sm`/default `.06`, `lg` `.12` |
 | split-daily | `#0891B2` | `SplitBar` Diário segment only (D21); 3:1 on white |
+
+## Palettes (D52)
+
+Picked per device in Ajustes (`localStorage` `soldi-palette`, `data-palette` on `<html>`). `web/src/styles/presets/palettes.css` holds one `:root[data-theme-preset="soldi"][data-palette="<value>"]` block per row; no value = the `soldi.css` default. Each block sets `brand`, `primary`, `ring`, `sidebar-primary`, `sidebar-ring`, `chart-1` = brand; `brand-hover`, `sidebar-accent-foreground` = brand ink; `brand-soft`, `sidebar-accent` = soft; `hero`, `hero-foreground`, `hero-chip`; `wordmark`; `logo-1..5`. Tiers, income/expense, categories, neutrals and the white page never change. `palette.test.ts` holds every row to 4.5:1 for white on brand and brand ink, brand ink on soft, hero-foreground on hero and wordmark on white.
+
+| value | Name (pt-BR) | hero | hero-fg | hero-chip | brand | brand ink | soft | wordmark |
+|---|---|---|---|---|---|---|---|---|
+| (none) | Mel e menta | `#ffffff` | `#1f2328` | `#f3f4f2` | `#357a6d` | `#2c6a5e` | `#e6f1ee` | `#555f6e` |
+| `ameixa` | Ameixa e mel | `#3a2758` | `#ffffff` | `rgb(255 255 255 / 0.12)` | `#5b3d8f` | `#4a2f78` | `#efe9f7` | `#4a3d5c` |
+| `indigo` | Índigo e menta | `#1e1b4b` | `#ffffff` | `rgb(255 255 255 / 0.12)` | `#1f7a63` | `#1a6653` | `#e4f2ed` | `#2b2f55` |
+| `petroleo` | Petróleo e coral | `#0f3b3d` | `#ffffff` | `rgb(255 255 255 / 0.12)` | `#14706a` | `#105e59` | `#e2f1ef` | `#24414a` |
+| `berinjela` | Berinjela e pêssego | `#3d1d3a` | `#ffffff` | `rgb(255 255 255 / 0.12)` | `#8a3a6c` | `#76305c` | `#f6e8f0` | `#4d3348` |
+| `marinho` | Marinho e mel | `#13294b` | `#ffffff` | `rgb(255 255 255 / 0.12)` | `#2456a4` | `#1e4a8e` | `#e6eefa` | `#2a3a55` |
+| `floresta` | Floresta e terracota | `#1d3d2c` | `#ffffff` | `rgb(255 255 255 / 0.12)` | `#2e6b47` | `#275c3d` | `#e6f1ea` | `#33443a` |
+
+Logo dots (`logo-1..5`, from the warm tones to the brand color):
+
+| palette | 1 | 2 | 3 | 4 | 5 |
+|---|---|---|---|---|---|
+| Mel e menta | `#f2d38a` | `#f2b48c` | `#8cc5b0` | `#5fa894` | `#357a6d` |
+| ameixa | `#f2cf7a` | `#f0a988` | `#c7a6e0` | `#8f6cc4` | `#5b3d8f` |
+| indigo | `#f2d38a` | `#f2b48c` | `#8cc5b0` | `#3f9a80` | `#1f7a63` |
+| petroleo | `#f6d07a` | `#f2956f` | `#7fc4bb` | `#3a958c` | `#14706a` |
+| berinjela | `#f4cf86` | `#f2b08c` | `#e39bb8` | `#b5628f` | `#8a3a6c` |
+| marinho | `#f2c95e` | `#f2a97a` | `#9dbbe6` | `#5a86cc` | `#2456a4` |
+| floresta | `#efcf7e` | `#e4a07a` | `#9cc8a6` | `#5f9a72` | `#2e6b47` |
 
 ## Split bar (`SplitBar`, "Para onde foi a entrada")
 

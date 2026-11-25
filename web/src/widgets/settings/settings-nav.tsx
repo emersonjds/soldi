@@ -7,6 +7,7 @@ import {
   ChevronRight,
   CircleHelp,
   Coins,
+  Palette,
   Shapes,
   ShieldAlert,
   Thermometer,
@@ -17,6 +18,7 @@ import { useSettings } from "@/entities/settings/settings-query";
 import { cn } from "@/lib/utils";
 
 const SECTIONS = [
+  { id: "cores", label: "Cores do app", icon: Palette },
   { id: "termometro", label: "Termômetro & Limites", icon: Thermometer },
   { id: "diario-previsto", label: "Diário previsto", icon: CalendarClock },
   { id: "moeda", label: "Moeda & Saldo Inicial", icon: Coins },

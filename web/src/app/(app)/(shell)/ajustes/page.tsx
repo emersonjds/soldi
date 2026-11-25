@@ -8,6 +8,7 @@ import {
   CircleHelp,
   Coins,
   type LucideIcon,
+  Palette,
   ReceiptText,
   Shapes,
   Tags,
@@ -30,6 +31,7 @@ import { CurrencyForm } from "@/features/edit-settings/currency-form";
 import { DailyEstimateForm } from "@/features/edit-settings/daily-estimate-form";
 import { OpeningForm } from "@/features/edit-settings/opening-form";
 import { ThermometerForm } from "@/features/edit-settings/thermometer-form";
+import { PalettePicker } from "@/features/pick-palette/palette-picker";
 import { monthParam } from "@/shared/lib/date";
 import { MonthLink } from "@/shared/ui/month-link";
 import { AccountSection } from "@/widgets/settings/account-section";
@@ -100,6 +102,14 @@ const AjustesPage = () => {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_3fr] lg:items-start">
         <SettingsNav />
         <div className="flex min-w-0 flex-col gap-6">
+          <SettingsSection
+            id="cores"
+            icon={Palette}
+            title="Cores do app"
+            subtitle="Escolha a paleta do Soldi. Vale só neste aparelho."
+          >
+            <PalettePicker />
+          </SettingsSection>
           <SettingsSection
             id="termometro"
             icon={Thermometer}

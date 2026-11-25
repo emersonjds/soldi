@@ -43,6 +43,14 @@ value: soldi
   --brand-foreground: #ffffff;
   --brand-soft: #e6f1ee;
   --wordmark: #555f6e;
+  --hero: #ffffff;
+  --hero-foreground: #1f2328;
+  --hero-chip: #f3f4f2;
+  --logo-1: #f2d38a;
+  --logo-2: #f2b48c;
+  --logo-3: #8cc5b0;
+  --logo-4: #5fa894;
+  --logo-5: #357a6d;
   --income: #16a34a;
   --income-soft: #dcfce7;
   --income-text: #15803d;
