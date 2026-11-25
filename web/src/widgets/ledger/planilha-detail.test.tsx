@@ -124,7 +124,7 @@ const groups = (detail: HTMLElement) =>
       text(within(group).getByRole("heading")),
       ...within(group)
         .getAllByRole("listitem")
-        .map((item) => [...item.children].map(text).join(" | ")),
+        .map((item) => [...(item.firstElementChild?.children ?? [])].map(text).join(" | ")),
     ]);
 
 describe("Planilha day detail", () => {
@@ -327,6 +327,40 @@ describe("Planilha cell actions (SOL-171)", () => {
     expect(await screen.findByRole("dialog")).toHaveAccessibleName("1 nov");
   });
 
+  it("A6/A8/A11: the detail's items open Lista's sheet or Editar conta, and Lançar neste dia creates on that day", async () => {
+    const internet = VIEW.bills_of_month.find(({ name }) => name === "Internet");
+    const { client } = show({
+      "GET /api/transactions": { status: 200, body: [...ENTRIES, ...CARD_SPENDS] },
+      "GET /api/bills": {
+        status: 200,
+        body: [CARD, { ...BILL_ALUGUEL, id: internet?.bill_id ?? "", name: "Internet" }],
+      },
+    });
+    await ready(client);
+
+    await userEvent.click((await row("Segunda-feira, 2 de novembro")).cells[1]);
+    const detail = await screen.findByRole("dialog", { name: "2 nov" });
+    const salario = within(detail).getByRole("button", { name: /Salário/ });
+    await waitFor(() => expect(salario).toHaveFocus());
+    await userEvent.click(salario);
+    const sheet = await screen.findByRole("dialog", { name: "Salário" });
+    expect(within(sheet).getByRole("button", { name: "Editar" })).toBeInTheDocument();
+    expect(within(sheet).getByRole("button", { name: "Excluir" })).toBeInTheDocument();
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => expect(screen.getByRole("button", { name: "Segunda-feira, 2 de novembro" })).toHaveFocus());
+
+    const today = await tap("Quinta-feira, 5 de novembro, hoje");
+    await userEvent.click(within(today).getByRole("button", { name: /Internet/ }));
+    expect(await screen.findByRole("dialog", { name: /Editar conta/ })).toBeInTheDocument();
+    await userEvent.keyboard("{Escape}");
+
+    const first = await tap("Domingo, 1 de novembro");
+    await userEvent.click(within(first).getByRole("button", { name: "Lançar Diário em 1 de novembro" }));
+    expect(
+      within(await screen.findByRole("dialog", { name: /^Novo/ })).getByRole("radio", { name: "Diário" }),
+    ).toBeChecked();
+  });
+
   it("A14: opens the detail, never Lançar, while the entries cannot be read", async () => {
     show({ "GET /api/transactions": { status: 500, body: problem(500, "boom") } });
 
@@ -381,7 +415,8 @@ describe("Planilha Diário previsto (SOL-164)", () => {
     const popover = await screen.findByRole("dialog");
 
     expect(popover).toHaveAttribute("data-slot", "popover-content");
-    await userEvent.tab();
+    expect(within(popover).getByRole("button", { name: "Lançar Entrada em 6 de novembro" })).toHaveFocus();
+    await userEvent.tab({ shift: true });
     expect(within(popover).getByRole("link", { name: "Ajustar Diário previsto" })).toHaveFocus();
     await userEvent.keyboard("{Escape}");
     expect(day).toHaveFocus();

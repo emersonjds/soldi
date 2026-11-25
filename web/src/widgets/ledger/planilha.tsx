@@ -12,7 +12,7 @@ import {
 } from "react";
 
 import { useQuery } from "@tanstack/react-query";
-import { CalendarCheck, TriangleAlert } from "lucide-react";
+import { CalendarCheck, Plus, TriangleAlert } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
@@ -50,6 +50,8 @@ const COLUMNS = ["Data", "Entrada", "Saída", "Diário", "Saldo"];
 type Column = "Entrada" | "Saída" | "Diário";
 
 const KIND_OF: Record<Column, Schemas["CategoryKind"]> = { Entrada: "income", Saída: "bill", Diário: "daily" };
+
+const MONEY_COLUMNS: Column[] = ["Entrada", "Saída", "Diário"];
 
 const isMoney = (column?: string): column is Column =>
   column === "Entrada" || column === "Saída" || column === "Diário";
@@ -186,16 +188,26 @@ const DayDetail = ({
   view,
   entries,
   estimate,
+  act,
 }: {
   row: PlanilhaRow;
   view: Schemas["MonthView"];
   entries: Entries;
   estimate?: string | null;
+  act: Act;
 }) => {
-  const lookup = useLookup();
   if (!row.day) return <p className="text-muted-foreground">Este dia é anterior ao seu saldo inicial.</p>;
-  const groups = groupsOf(row, view, entries.data, estimate, lookup).filter(({ items }) => items.length > 0);
+  const groups = groupsOf(row, view, entries.data, estimate, act.lookup).filter(({ items }) => items.length > 0);
   const previsto = groups.some(({ items }) => items.some((item) => item.estimate));
+  const day = `${Number(row.date.slice(8))} de ${monthName(row.date, row.date).toLowerCase()}`;
+  /** P4: a lançamento opens Lista's sheet, an unpaid conta its Editar conta; faturas, the previsto and a pending save stay text. */
+  const actionOf = ({ transaction, entry, due }: Item) => {
+    if (transaction && entry && !transaction.id.startsWith("optimistic-"))
+      return () => act.entry(transaction, entry, row.date);
+    const bill = due && !due.is_card && act.lookup.bills?.find(({ id }) => id === due.bill_id);
+    if (bill) return () => act.bill(bill, row.date);
+    return undefined;
+  };
 
   return (
     <>
@@ -206,13 +218,33 @@ const DayDetail = ({
             <span>{name}</span> {total && <Money amount={total} />}
           </h3>
           <ul className="flex flex-col gap-2">
-            {items.map((item) => (
-              <li key={item.key} className="grid grid-cols-[1fr_auto] gap-x-3">
-                <span className={cn("text-base font-medium break-words", item.estimate && "italic")}>{item.title}</span>
-                <Money amount={item.amount} income={income} outflow={!income} className="row-span-2 font-semibold" />
-                <span className="text-muted-foreground text-xs">{item.caption}</span>
-              </li>
-            ))}
+            {items.map((item) => {
+              const action = actionOf(item);
+              const cells = (
+                <>
+                  <span className={cn("text-base font-medium break-words", item.estimate && "italic")}>
+                    {item.title}
+                  </span>
+                  <Money amount={item.amount} income={income} outflow={!income} className="row-span-2 font-semibold" />
+                  <span className="text-muted-foreground text-xs">{item.caption}</span>
+                </>
+              );
+              return (
+                <li key={item.key}>
+                  {action ? (
+                    <button
+                      type="button"
+                      onClick={action}
+                      className="hover:bg-muted focus-visible:outline-ring -mx-2 grid min-h-11 w-[calc(100%+1rem)] grid-cols-[1fr_auto] gap-x-3 rounded-md px-2 py-1 text-left focus-visible:outline-2"
+                    >
+                      {cells}
+                    </button>
+                  ) : (
+                    <div className="grid grid-cols-[1fr_auto] gap-x-3">{cells}</div>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         </section>
       ))}
@@ -232,6 +264,23 @@ const DayDetail = ({
       {entries.isError && (
         <PageError message="Não foi possível carregar os lançamentos deste dia." onRetry={() => entries.refetch()} />
       )}
+      <div className="flex flex-col gap-2">
+        <p className="text-sm font-semibold">Lançar neste dia</p>
+        <div className="grid grid-cols-3 gap-2">
+          {MONEY_COLUMNS.map((column) => (
+            <Button
+              key={column}
+              variant="outline"
+              className="min-h-11"
+              aria-label={`Lançar ${column} em ${day}`}
+              onClick={() => act.create(KIND_OF[column], row.date)}
+            >
+              <Plus aria-hidden="true" />
+              {column}
+            </Button>
+          ))}
+        </div>
+      </div>
     </>
   );
 };
@@ -264,6 +313,7 @@ type Act = {
   lookup: Lookup;
   create: (kind: Schemas["CategoryKind"], date: string) => void;
   entry: (transaction: Transaction, entry: Entry, date: string) => void;
+  bill: (bill: Schemas["Bill"], date: string) => void;
 };
 
 /** P2: a cell's own action, or none when it opens the detail. */
@@ -367,6 +417,22 @@ const Row = ({ act, row, today, view, entries, stop, onFocus, ringed, claim, est
     setShown(null);
     button.current?.focus();
   };
+  /** P5: any action closes the detail before its sheet opens. */
+  const detailAct: Act = {
+    lookup: act.lookup,
+    create: (...args) => {
+      setShown(null);
+      act.create(...args);
+    },
+    entry: (...args) => {
+      setShown(null);
+      act.entry(...args);
+    },
+    bill: (...args) => {
+      setShown(null);
+      act.bill(...args);
+    },
+  };
   const autoFocus = (event: Event, container: HTMLElement | null) => {
     if (shown === "hover") return event.preventDefault();
     if (!group) return;
@@ -467,7 +533,7 @@ const Row = ({ act, row, today, view, entries, stop, onFocus, ringed, claim, est
         className="w-80 max-w-[calc(100vw-2rem)] gap-3 p-4"
       >
         <p className="text-base font-semibold">{title}</p>
-        <DayDetail row={row} view={view} entries={entries} estimate={estimate} />
+        <DayDetail row={row} view={view} entries={entries} estimate={estimate} act={detailAct} />
       </PopoverContent>
       <Sheet open={shown === "sheet"} onOpenChange={close}>
         <SheetContent
@@ -482,7 +548,7 @@ const Row = ({ act, row, today, view, entries, stop, onFocus, ringed, claim, est
           className="mx-auto max-h-[80dvh] max-w-lg gap-3 overflow-y-auto rounded-t-3xl px-4 pt-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))]"
         >
           <SheetTitle className="pr-12 text-lg font-bold">{title}</SheetTitle>
-          <DayDetail row={row} view={view} entries={entries} estimate={estimate} />
+          <DayDetail row={row} view={view} entries={entries} estimate={estimate} act={detailAct} />
         </SheetContent>
       </Sheet>
     </Popover>
@@ -696,6 +762,8 @@ export const Planilha = ({
   const entryActions = useEntryActions(giveBack);
   const [creating, setCreating] = useState(false);
   const [draft, setDraft] = useState<{ kind: Schemas["CategoryKind"]; date: string }>({ kind: "daily", date: today });
+  const [editingBill, setEditingBill] = useState<Schemas["Bill"]>();
+  const [billOpen, setBillOpen] = useState(false);
   const act: Act = {
     lookup: useLookup(),
     create: (kind, date) => {
@@ -706,6 +774,11 @@ export const Planilha = ({
     entry: (transaction, entry, date) => {
       back.current = date;
       entryActions.open(transaction, entry);
+    },
+    bill: (bill, date) => {
+      back.current = date;
+      setEditingBill(bill);
+      setBillOpen(true);
     },
   };
 
@@ -769,6 +842,15 @@ export const Planilha = ({
         initialKind={draft.kind}
         initialDate={draft.date}
         billSheet={(props) => <EditBillSheet open {...props} />}
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          giveBack();
+        }}
+      />
+      <EditBillSheet
+        open={billOpen}
+        onOpenChange={setBillOpen}
+        bill={editingBill}
         onCloseAutoFocus={(event) => {
           event.preventDefault();
           giveBack();
