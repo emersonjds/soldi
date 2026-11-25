@@ -148,24 +148,21 @@ const MonthScreen = () => {
             />
           )}
         </div>
-        <div
-          className={cn(
-            "contents lg:grid lg:grid-cols-2 lg:items-start lg:gap-6 lg:[&>:last-child:nth-child(odd)]:col-span-2",
-            !planilha.open && "xl:flex xl:flex-col xl:items-stretch",
-          )}
-        >
-          {view.data && <ThermometerCard view={view.data} estimate={estimate} className="max-lg:order-2" />}
-          <MonthsAhead
-            viewing={month}
-            onOpen={(next) => {
-              replaceUrl(`/mes?m=${next}`);
-              window.scrollTo({ top: 0 });
-            }}
-            className="max-lg:order-4"
-          />
-          <CofrinhosGlance className="max-lg:order-4" />
-          <SpendingGlance month={month} className="max-lg:order-4" />
-        </div>
+        {!planilha.open && (
+          <div className="contents lg:grid lg:grid-cols-2 lg:items-start lg:gap-6 xl:flex xl:flex-col xl:items-stretch lg:[&>:last-child:nth-child(odd)]:col-span-2">
+            {view.data && <ThermometerCard view={view.data} estimate={estimate} className="max-lg:order-2" />}
+            <MonthsAhead
+              viewing={month}
+              onOpen={(next) => {
+                replaceUrl(`/mes?m=${next}`);
+                window.scrollTo({ top: 0 });
+              }}
+              className="max-lg:order-4"
+            />
+            <CofrinhosGlance className="max-lg:order-4" />
+            <SpendingGlance month={month} className="max-lg:order-4" />
+          </div>
+        )}
       </div>
       <TransactionSheet
         open={launching !== null}
