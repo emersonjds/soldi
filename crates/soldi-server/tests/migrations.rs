@@ -637,12 +637,19 @@ async fn auto_paid_through_starts_the_day_before_the_migration(pool: PgPool) {
     .await
     .unwrap();
 
+    let today = "SELECT (now() AT TIME ZONE 'America/Sao_Paulo')::date";
+    let before: chrono::NaiveDate = sqlx::query_scalar(today).fetch_one(&pool).await.unwrap();
+
     migrate_from(&pool, 32).await;
 
+    let after: chrono::NaiveDate = sqlx::query_scalar(today).fetch_one(&pool).await.unwrap();
     let through: chrono::NaiveDate =
         sqlx::query_scalar("SELECT auto_paid_through FROM recurring_bills")
             .fetch_one(&pool)
             .await
             .unwrap();
-    assert_eq!(through, soldi_server::today_sao_paulo().pred_opt().unwrap());
+    assert!(
+        (before..=after).contains(&through.succ_opt().unwrap()),
+        "{through}"
+    );
 }
