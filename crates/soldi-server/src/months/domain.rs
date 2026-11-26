@@ -285,6 +285,28 @@ pub fn unpaid<'a>(
     found
 }
 
+/// D55: the due dates in `(after, today]` of a fixed-amount conta fixa; never a card or a variable one.
+pub fn auto_paid(
+    bill: &MonthBill,
+    after: NaiveDate,
+    opening: NaiveDate,
+    today: NaiveDate,
+) -> Vec<NaiveDate> {
+    let Some(amount) = bill
+        .amount
+        .filter(|_| bill.closing_day.is_none() && !bill.variable)
+    else {
+        return Vec::new();
+    };
+    std::iter::successors(Some(first_of(after)), |month| {
+        month.checked_add_months(Months::new(1))
+    })
+    .take_while(|month| *month <= today)
+    .map(|month| due_date(month, bill.due_day))
+    .filter(|due| after < *due && *due <= today && owed(bill, amount, *due, opening))
+    .collect()
+}
+
 /// What `unpaid` took before `from`, and what it takes on each day `from..=to`.
 fn landing(
     unpaid: &[Unpaid],
@@ -1058,6 +1080,101 @@ mod tests {
         assert_eq!(on("2026-11-05"), [false, false]);
         assert_eq!(on("2026-11-06"), [true, false]);
         assert_eq!(on("2026-11-07"), [true, true]);
+    }
+
+    fn auto(bill: &MonthBill, after: &str, today: &str) -> Vec<NaiveDate> {
+        auto_paid(bill, date(after), date("2026-01-01"), date(today))
+    }
+
+    #[test]
+    fn d55_a_fixed_conta_pays_on_each_due_day_after_the_watermark() {
+        let on = |due_day| {
+            auto(
+                &bill(1, "Aluguel", "1500", due_day),
+                "2026-09-20",
+                "2026-11-25",
+            )
+        };
+
+        assert_eq!(on(10), [date("2026-10-10"), date("2026-11-10")]);
+        assert_eq!(on(20), [date("2026-10-20"), date("2026-11-20")]);
+        assert_eq!(
+            on(25),
+            [date("2026-09-25"), date("2026-10-25"), date("2026-11-25")]
+        );
+        assert_eq!(on(26), [date("2026-09-26"), date("2026-10-26")]);
+    }
+
+    #[test]
+    fn d55_variable_and_cards_never_pay_themselves() {
+        let variable = MonthBill {
+            variable: true,
+            ..bill(1, "Luz", "200", 10)
+        };
+
+        assert!(auto(&variable, "2026-09-20", "2026-11-25").is_empty());
+        assert!(auto(&card(2, "Nubank", 3, 10), "2026-09-20", "2026-11-25").is_empty());
+    }
+
+    #[test]
+    fn d55_auto_pay_keeps_the_owed_gates() {
+        let rent = || bill(1, "Aluguel", "1500", 10);
+        let opened = auto_paid(
+            &rent(),
+            date("2026-08-01"),
+            date("2026-10-01"),
+            date("2026-11-25"),
+        );
+        let started = MonthBill {
+            active_since: date("2026-10-11"),
+            ..rent()
+        };
+        let stopped = MonthBill {
+            last_month: Some(date("2026-09-01")),
+            ..rent()
+        };
+        let parcelas = MonthBill {
+            last_month: Some(date("2027-01-01")),
+            installments: Some(3),
+            ..rent()
+        };
+        let february = MonthBill {
+            due_day: 31,
+            ..rent()
+        };
+
+        assert_eq!(opened, [date("2026-10-10"), date("2026-11-10")]);
+        assert_eq!(
+            auto(&started, "2026-08-01", "2026-11-25"),
+            [date("2026-11-10")]
+        );
+        assert_eq!(
+            auto(&stopped, "2026-08-01", "2026-11-25"),
+            [date("2026-08-10"), date("2026-09-10")]
+        );
+        assert_eq!(
+            auto(&parcelas, "2026-08-01", "2026-11-25"),
+            [date("2026-11-10")]
+        );
+        assert_eq!(
+            auto(&february, "2027-02-01", "2027-03-01"),
+            [date("2027-02-28")]
+        );
+        assert_eq!(
+            auto(&february, "2028-02-01", "2028-03-01"),
+            [date("2028-02-29")]
+        );
+    }
+
+    #[test]
+    fn d55_the_watermark_day_itself_is_never_paid_again() {
+        let rent = bill(1, "Aluguel", "1500", 10);
+
+        assert_eq!(
+            auto(&rent, "2026-10-10", "2026-11-25"),
+            [date("2026-11-10")]
+        );
+        assert!(auto(&rent, "2026-11-10", "2026-11-25").is_empty());
     }
 
     #[test]
