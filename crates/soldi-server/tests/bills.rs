@@ -2418,13 +2418,13 @@ async fn d55_an_early_payment_is_kept(pool: PgPool) {
 #[sqlx::test]
 async fn d55_parar_and_the_last_parcela_bound_auto_pay(pool: PgPool) {
     let ana = TestApp::signed_in(pool.clone(), "ana@example.com").await;
-    let rent = rent_behind(&pool, &ana).await;
     let fies = create(
         &ana,
         json!({ "name": "Fies", "amount": "300", "due_day": 1,
                 "category_id": category_id(&ana, "Aluguel").await }),
     )
     .await;
+    let rent = rent_behind(&pool, &ana).await;
     sqlx::query("UPDATE recurring_bills SET last_month = $1")
         .bind(previous_month())
         .execute(&pool)
@@ -2432,6 +2432,10 @@ async fn d55_parar_and_the_last_parcela_bound_auto_pay(pool: PgPool) {
         .unwrap();
     sqlx::query("UPDATE recurring_bills SET installments = 2 WHERE id = $1::uuid")
         .bind(fies["id"].as_str().unwrap())
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("DELETE FROM transactions")
         .execute(&pool)
         .await
         .unwrap();
@@ -2469,8 +2473,8 @@ async fn d55_a_category_no_longer_bill_is_not_paid(pool: PgPool) {
 async fn d55_only_the_callers_bills_pay_themselves(pool: PgPool) {
     let ana = TestApp::signed_in(pool.clone(), "ana@example.com").await;
     let bia = ana.another_user("bia@example.com").await;
-    let theirs = rent_behind(&pool, &bia).await;
     let bia_id = user_id(&bia).await;
+    let theirs = rent_behind(&pool, &bia).await;
     let rent = rent_behind(&pool, &ana).await;
 
     auto_pay_on(&pool, &ana, today()).await;
@@ -2510,4 +2514,63 @@ async fn d55_a_caught_up_user_takes_no_entry_lock(pool: PgPool) {
 
     assert!(matches!(caught_up, Ok(Ok(()))));
     lock.rollback().await.unwrap();
+}
+
+#[sqlx::test]
+async fn d55_any_signed_in_request_catches_up(pool: PgPool) {
+    let ana = TestApp::signed_in(pool.clone(), "ana@example.com").await;
+    rent_behind(&pool, &ana).await;
+
+    let (status, report) = ana
+        .get(&format!(
+            "/api/reports/categories?month={}",
+            month_text(this_month())
+        ))
+        .await;
+
+    assert_eq!(status, StatusCode::OK, "{report}");
+    assert_eq!(report["spent_total"], "1500.00");
+}
+
+#[sqlx::test]
+async fn d55_concurrent_reads_write_one_payment(pool: PgPool) {
+    let ana = TestApp::signed_in(pool.clone(), "ana@example.com").await;
+    let id = user_id(&ana).await;
+    let rent = rent_behind(&pool, &ana).await;
+    let mut lock = pool.begin().await.unwrap();
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended('entries:' || $1::text, 0))")
+        .bind(id.to_string())
+        .execute(&mut *lock)
+        .await
+        .unwrap();
+    let uri = format!("/api/months/{}", month_text(this_month()));
+
+    let both = async { tokio::join!(ana.get(&uri), ana.get(&uri)) };
+    let (one, other) = behind(&pool, lock, 2, both).await;
+
+    assert_eq!((one.0, other.0), (StatusCode::OK, StatusCode::OK));
+    assert_eq!(
+        payments_of(&pool, &rent).await,
+        paid_on(&[previous_month(), this_month()], "1500.00")
+    );
+}
+
+#[sqlx::test]
+async fn d55_a_failing_catch_up_answers_without_server_detail(pool: PgPool) {
+    let ana = TestApp::signed_in(pool.clone(), "ana@example.com").await;
+    rent_behind(&pool, &ana).await;
+    sqlx::raw_sql(
+        "CREATE FUNCTION refuse() RETURNS trigger LANGUAGE plpgsql AS
+           $$ BEGIN RAISE EXCEPTION 'secret detail'; END $$;
+         CREATE TRIGGER refuse BEFORE INSERT ON transactions FOR EACH ROW EXECUTE FUNCTION refuse();",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let (status, problem) = ana.get("/api/bills").await;
+
+    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+    assert_eq!(problem["title"], "Internal error");
+    assert!(!problem.to_string().contains("secret"), "{problem}");
 }

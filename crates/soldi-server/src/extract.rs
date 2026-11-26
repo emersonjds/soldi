@@ -71,6 +71,8 @@ impl FromRequestParts<AppState> for CurrentUser {
         if spends_write_budget(&parts.method, parts.uri.path()) {
             (state.limiter).check(&crate::limits::write_keys(user.id.to_string()))?;
         }
+        drop(conn);
+        crate::bills::service::auto_pay(&state.pool, &user, crate::today_sao_paulo()).await?;
         Ok(user)
     }
 }
