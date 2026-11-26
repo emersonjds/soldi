@@ -315,11 +315,11 @@ export const BillForm = ({
             <span id="bill-variable" className="text-base font-medium">
               Valor varia todo mês
             </span>
-            {draft.variable && (
-              <span className="text-muted-foreground text-xs">
-                Ex.: luz, água, cartão. O valor fica como estimativa e você ajusta ao pagar.
-              </span>
-            )}
+            <span className="text-muted-foreground text-xs">
+              {draft.variable
+                ? "Ex.: luz, água, cartão. O valor fica como estimativa e você ajusta ao pagar."
+                : "Paga sozinha no dia do vencimento."}
+            </span>
           </span>
           <Switch
             id="bill-variable-switch"

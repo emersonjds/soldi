@@ -246,6 +246,33 @@ describe("EditBillSheet switches a conta between fixa and parcelada (SOL-161)", 
 
     expect(within(form).queryByRole("button", { name: "Excluir conta fixa" })).not.toBeInTheDocument();
   });
+
+  describe("says a fixed amount pays itself (SOL-186)", () => {
+    const SELF = "Paga sozinha no dia do vencimento.";
+    const VARIES = "Ex.: luz, água, cartão. O valor fica como estimativa e você ajusta ao pagar.";
+
+    it("on Editar conta with Valor varia off, and swaps it for the estimate helper once on", async () => {
+      const { form } = await edit(BILL_ALUGUEL);
+
+      expect(within(form).getByText(SELF)).toBeInTheDocument();
+      await userEvent.click(within(form).getByRole("switch", { name: "Valor varia todo mês" }));
+      expect(within(form).queryByText(SELF)).not.toBeInTheDocument();
+      expect(within(form).getByText(VARIES)).toBeInTheDocument();
+    });
+
+    it("on Nova conta", async () => {
+      create({ ...PORTO, due_day: 10 });
+
+      expect(within(await sheet()).getByText(SELF)).toBeInTheDocument();
+    });
+
+    it("never on a card", async () => {
+      const { form } = await edit({ ...BILL_ALUGUEL, name: "Porto", amount: null, closing_day: 3 });
+
+      expect(within(form).queryByText(SELF)).not.toBeInTheDocument();
+      expect(within(form).queryByText(VARIES)).not.toBeInTheDocument();
+    });
+  });
 });
 
 describe("useArchiveLater (SOL-153)", () => {
