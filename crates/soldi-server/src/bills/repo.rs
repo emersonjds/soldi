@@ -367,17 +367,23 @@ pub async fn behind(
         .collect())
 }
 
-/// D55: every bill of the user counts as auto-paid through `today`.
+/// D55: the bills `read` behind under the lock count as auto-paid through `today`, each only if
+/// its watermark did not move since; one created or resumed meanwhile pays on the next request.
 pub async fn paid_through(
     conn: &mut PgConnection,
     user_id: Uuid,
+    read: &[(Uuid, chrono::NaiveDate)],
     today: chrono::NaiveDate,
 ) -> Result<(), sqlx::Error> {
+    let (ids, olds): (Vec<Uuid>, Vec<chrono::NaiveDate>) = read.iter().copied().unzip();
     sqlx::query!(
-        "UPDATE recurring_bills SET auto_paid_through = $2
-         WHERE user_id = $1 AND auto_paid_through < $2",
+        "UPDATE recurring_bills b SET auto_paid_through = $2
+         FROM UNNEST($3::uuid[], $4::date[]) AS r(id, old)
+         WHERE b.user_id = $1 AND b.id = r.id AND b.auto_paid_through = r.old",
         user_id,
-        today
+        today,
+        &ids,
+        &olds
     )
     .execute(&mut *conn)
     .await?;
@@ -568,7 +574,8 @@ mod tests {
             [(rent, day("2026-09-20"))]
         );
 
-        paid_through(&mut conn, ana, day("2026-11-25"))
+        let read = behind(&mut conn, ana, day("2026-11-25")).await.unwrap();
+        paid_through(&mut conn, ana, &read, day("2026-11-25"))
             .await
             .unwrap();
 
@@ -582,6 +589,45 @@ mod tests {
         assert_eq!(
             behind(&mut conn, bia, day("2026-11-25")).await.unwrap(),
             [(theirs, day("2026-09-20"))]
+        );
+    }
+
+    #[sqlx::test]
+    async fn d55_a_bill_created_or_resumed_after_the_read_keeps_its_watermark(pool: PgPool) {
+        let mut conn = pool.acquire().await.unwrap();
+        let (ana, rent) = rent_of(&mut conn, "ana@example.com").await;
+        let light = category(&mut conn, ana, "Luz").await;
+        insert_all(&mut conn, ana, &[bill("Luz", "200", 24, light)])
+            .await
+            .unwrap();
+        sqlx::query!(
+            "UPDATE recurring_bills SET auto_paid_through = '2026-11-25' WHERE id <> $1",
+            rent
+        )
+        .execute(&mut *conn)
+        .await
+        .unwrap();
+        let read = behind(&mut conn, ana, day("2026-11-25")).await.unwrap();
+        insert_all(&mut conn, ana, &[bill("Água", "90", 24, light)])
+            .await
+            .unwrap();
+        sqlx::query!(
+            "UPDATE recurring_bills SET auto_paid_through = '2026-11-24' WHERE id <> $1",
+            rent
+        )
+        .execute(&mut *conn)
+        .await
+        .unwrap();
+
+        paid_through(&mut conn, ana, &read, day("2026-11-25"))
+            .await
+            .unwrap();
+
+        let left = behind(&mut conn, ana, day("2026-11-25")).await.unwrap();
+        assert_eq!(left.len(), 2, "{left:?}");
+        assert!(
+            left.iter()
+                .all(|(id, through)| *id != rent && *through == day("2026-11-24"))
         );
     }
 

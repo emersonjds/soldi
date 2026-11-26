@@ -374,14 +374,12 @@ pub async fn auto_pay(pool: &PgPool, user: &CurrentUser, today: NaiveDate) -> Re
     let opening = settings::repo::find(&mut tx, user.id).await?.opening_date;
     transactions::repo::lock_entries(&mut tx, user.id).await?;
     // Re-read under the lock: a concurrent request may have caught up already.
-    let behind: std::collections::HashMap<Uuid, NaiveDate> = repo::behind(&mut tx, user.id, today)
-        .await?
-        .into_iter()
-        .collect();
-    if behind.is_empty() {
+    let read = repo::behind(&mut tx, user.id, today).await?;
+    if read.is_empty() {
         tx.commit().await?;
         return Ok(());
     }
+    let behind: std::collections::HashMap<Uuid, NaiveDate> = read.iter().copied().collect();
     let mut due: Vec<(NaiveDate, Uuid)> = months::repo::bills(&mut tx, user.id)
         .await?
         .iter()
@@ -399,7 +397,7 @@ pub async fn auto_pay(pool: &PgPool, user: &CurrentUser, today: NaiveDate) -> Re
         let (dates, ids): (Vec<NaiveDate>, Vec<Uuid>) = due.into_iter().unzip();
         transactions::repo::insert_auto_payments(&mut tx, user.id, &ids, &dates).await?;
     }
-    repo::paid_through(&mut tx, user.id, today).await?;
+    repo::paid_through(&mut tx, user.id, &read, today).await?;
     tx.commit().await?;
     Ok(())
 }
