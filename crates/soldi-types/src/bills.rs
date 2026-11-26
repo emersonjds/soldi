@@ -23,7 +23,8 @@ pub struct Bill {
     pub last_month: Option<chrono::NaiveDate>,
     /// Set on a parcelado bill: `last_month` holds parcela `installments`.
     pub installments: Option<i16>,
-    /// The amount is an estimate that changes every month (D44); never on a card.
+    /// The amount is an estimate that changes every month (D44); never on a card. D55: a
+    /// fixed-amount conta fixa is paid on its due day with no tap; a variable one stays manual.
     pub variable: bool,
 }
 

@@ -21,7 +21,7 @@ import {
 import { BillStatus } from "@/entities/bill/bill-status";
 import { billKey } from "@/entities/month/forecast-alert";
 import { ALL_BILLS_PAID, dueDays, nextDue } from "@/entities/month/schedule";
-import { useTransactions } from "@/entities/transaction/transaction-queries";
+import { type Transaction, useTransactions } from "@/entities/transaction/transaction-queries";
 import { TransactionSheet } from "@/features/add-transaction/transaction-sheet";
 import { FaturaSheet } from "@/features/card-fatura/fatura-sheet";
 import { EditBillSheet, useArchiveLater } from "@/features/edit-bill/edit-bill-sheet";
@@ -115,7 +115,7 @@ const Caption = ({ bill, paidOn }: { bill: BillOfMonth; paidOn?: string }) => {
     let timing = "";
     if (paidOn) timing = paidOn <= bill.due_date ? " · Pago no prazo" : " · Pago com atraso";
     desktop = `${bill.due_date <= todayISO() ? "Venceu" : "Vence"} dia ${day}${timing}`;
-  }
+  } else if (kindOf(bill) === "fixed" && bill.due_date > todayISO()) desktop += " · paga sozinha";
   return (
     <>
       <span
@@ -147,6 +147,9 @@ const Caption = ({ bill, paidOn }: { bill: BillOfMonth; paidOn?: string }) => {
 const payLabel = (bill: BillOfMonth, label: string) =>
   bill.is_card || bill.variable ? `Pagar ${label}` : `Marcar ${label} como paga`;
 
+/** SOL-186: a fixa pays itself on its due day, so undoing it reads Não paguei. */
+const unpayWord = (bill: BillOfMonth) => (kindOf(bill) === "fixed" ? "Não paguei" : "Desmarcar");
+
 /** A 24 px circle inside a 44 px target; the fill and the tick scale in 150 ms (spec §4.7). */
 const RoundCheck = ({
   bill,
@@ -162,7 +165,8 @@ const RoundCheck = ({
   <button
     type="button"
     aria-pressed={bill.paid}
-    aria-label={bill.paid ? `Desmarcar ${label}` : payLabel(bill, label)}
+    aria-label={bill.paid ? `${unpayWord(bill)} ${label}` : payLabel(bill, label)}
+    title={bill.paid && kindOf(bill) === "fixed" ? "Não paguei" : undefined}
     onClick={onToggle}
     disabled={busy}
     className="group/check focus-visible:outline-ring -ml-2 hidden size-11 shrink-0 items-center justify-center rounded-full focus-visible:outline-2 disabled:opacity-60 lg:flex"
@@ -198,6 +202,7 @@ const Row = ({
   onPay,
   onUnpay,
   onAdjust,
+  onFixPayment,
   onOpenName,
   busy,
 }: {
@@ -207,6 +212,8 @@ const Row = ({
   onPay: () => void;
   onUnpay: () => void;
   onAdjust: () => void;
+  /** SOL-186: a paid fixa's amount opens its payment; unset until the payment loads. */
+  onFixPayment?: () => void;
   /** SOL-119: a card's name area opens its fatura; SOL-153: any other bill's opens Editar conta, disabled while unset. */
   onOpenName?: () => void;
   busy: boolean;
@@ -288,9 +295,19 @@ const Row = ({
         {name}
         {onOpenName && <ChevronRight className="text-muted-foreground size-4 shrink-0" aria-hidden />}
       </button>
-      {bill.paid ? (
-        amount
-      ) : (
+      {bill.paid && kindOf(bill) === "fixed" && (
+        <button
+          type="button"
+          aria-label={`${formatMoney(bill.amount, currency)}: ajustar valor pago de ${label}`}
+          onClick={onFixPayment}
+          disabled={!onFixPayment || busy}
+          className="hover:bg-muted focus-visible:outline-ring min-h-11 shrink-0 rounded-lg px-1 transition-colors focus-visible:outline-2"
+        >
+          {amount}
+        </button>
+      )}
+      {bill.paid && kindOf(bill) !== "fixed" && amount}
+      {!bill.paid && (
         <button
           type="button"
           aria-label={`${estimated ? "valor estimado " : ""}${formatMoney(bill.amount, currency)}: ajustar pagamento de ${label}`}
@@ -330,7 +347,9 @@ export const BillsOfMonth = ({ view, className }: { view: Schemas["MonthView"]; 
   const unpay = useUnpayBill();
   const currency = useCurrency();
   const transactions = useTransactions(view.month);
-  const paidOn = new Map(transactions.data?.map((transaction) => [transaction.id, transaction.date]));
+  const payments = new Map(transactions.data?.map((transaction) => [transaction.id, transaction]));
+  const [payment, setPayment] = useState<Transaction>();
+  const [paymentOpen, setPaymentOpen] = useState(false);
   const bills = view.bills_of_month.filter((bill) => !hidden.includes(bill.bill_id));
   const day = chosen?.month === view.month && bills.some((bill) => bill.due_date === chosen.date) ? chosen.date : null;
   const shown = bills.filter((bill) => day === null || bill.due_date === day);
@@ -347,24 +366,44 @@ export const BillsOfMonth = ({ view, className }: { view: Schemas["MonthView"]; 
     setSheetOpen(true);
   };
 
+  const payFailed = (error: unknown) => toast.error(problemMessage(error) ?? "Não foi possível marcar como paga.");
+
   // A fatura and a variable bill are paid only through the sheet (D28, D44).
   const payNow = (bill: BillOfMonth) => {
     if (bill.is_card || bill.variable) return adjust(bill);
     const month = bill.due_date.slice(0, 7);
-    pay.mutate(
-      { billId: bill.bill_id, month, date: payDateFor(month, bill.due_date) },
-      { onError: (error) => toast.error(problemMessage(error) ?? "Não foi possível marcar como paga.") },
-    );
+    pay.mutate({ billId: bill.bill_id, month, date: payDateFor(month, bill.due_date) }, { onError: payFailed });
   };
 
-  const undo = (bill: BillOfMonth) =>
+  /** SOL-186: Desfazer books the payment again on its own date and amount; a fatura's has none. */
+  const undo = (bill: BillOfMonth, paidOn?: string) => {
+    const month = bill.due_date.slice(0, 7);
+    const again = () =>
+      pay.mutate(
+        { billId: bill.bill_id, month, date: paidOn ?? bill.due_date, amount: bill.amount },
+        { onError: payFailed },
+      );
     unpay.mutate(
-      { billId: bill.bill_id, month: bill.due_date.slice(0, 7) },
+      { billId: bill.bill_id, month },
       {
-        onSuccess: () => toast("Pagamento desfeito"),
+        onSuccess: () =>
+          toast(
+            "Pagamento desfeito",
+            bill.is_card ? undefined : { duration: 5000, action: { label: "Desfazer", onClick: again } },
+          ),
         onError: (error) => toast.error(problemMessage(error) ?? "Não foi possível desfazer o pagamento."),
       },
     );
+  };
+
+  const fixPayment = (bill: BillOfMonth) => {
+    const found = payments.get(bill.transaction_id ?? "");
+    if (!found) return undefined;
+    return () => {
+      setPayment(found);
+      setPaymentOpen(true);
+    };
+  };
 
   const choose = (date: string) => {
     setChosen(date ? { month: view.month, date } : null);
@@ -394,10 +433,11 @@ export const BillsOfMonth = ({ view, className }: { view: Schemas["MonthView"]; 
           key={billKey(bill)}
           bill={bill}
           month={view.month}
-          paidOn={paidOn.get(bill.transaction_id ?? "")}
+          paidOn={payments.get(bill.transaction_id ?? "")?.date}
           onPay={() => payNow(bill)}
-          onUnpay={() => undo(bill)}
+          onUnpay={() => undo(bill, payments.get(bill.transaction_id ?? "")?.date)}
           onAdjust={() => adjust(bill)}
+          onFixPayment={fixPayment(bill)}
           onOpenName={openName(bill)}
           busy={pay.isPending || unpay.isPending}
         />
@@ -528,6 +568,7 @@ export const BillsOfMonth = ({ view, className }: { view: Schemas["MonthView"]; 
         onOpenChange={setFaturaOpen}
         entrySheet={(props) => <TransactionSheet {...props} />}
       />
+      {payment && <TransactionSheet open={paymentOpen} onOpenChange={setPaymentOpen} transaction={payment} />}
     </DashCard>
   );
 };

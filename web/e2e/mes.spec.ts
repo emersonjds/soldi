@@ -1,7 +1,7 @@
 import { expect, type Locator, type Page, test } from "@playwright/test";
 
 import { expectNoClipped } from "./clipped";
-import { requireServer } from "./server";
+import { dueDay, requireServer } from "./server";
 
 const SHOTS = process.env.E2E_SHOTS;
 
@@ -40,6 +40,7 @@ test("a bill from onboarding shows under Contas a pagar, pays from the round che
   request,
 }) => {
   await requireServer(request);
+  const day = dueDay(new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date()), 28);
 
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/criar-conta");
@@ -52,7 +53,7 @@ test("a bill from onboarding shows under Contas a pagar, pays from the round che
   await page.getByRole("button", { name: "Continuar" }).click();
   await page.getByLabel("Nome").fill("Aluguel");
   await page.getByLabel("Valor").fill("300,00");
-  await page.getByLabel("Dia").fill("28");
+  await page.getByLabel("Dia").fill(String(day));
   await page.getByRole("radio", { name: "Aluguel" }).check({ force: true });
   await page.getByRole("button", { name: "Continuar" }).click();
   await page.getByRole("button", { name: "Ver meu mês" }).click();
@@ -66,18 +67,18 @@ test("a bill from onboarding shows under Contas a pagar, pays from the round che
   await expect(bills).toContainText("0 de 1 paga");
   await expect(hero).toContainText(/Projetado no fim do mês\s*R\$\s700,00/);
 
-  const chip = bills.getByRole("radio", { name: "dia 28, 1 conta a pagar" });
+  const chip = bills.getByRole("radio", { name: `dia ${String(day).padStart(2, "0")}, 1 conta a pagar` });
   await chip.click();
   await expect(chip).toHaveAttribute("aria-checked", "true");
   await chip.click();
   await expect(chip).toHaveAttribute("aria-checked", "false");
 
   await bill.getByRole("button", { name: "Marcar Aluguel como paga" }).click();
-  await expect(bill.getByRole("button", { name: "Desmarcar Aluguel" })).toHaveAttribute("aria-pressed", "true");
+  await expect(bill.getByRole("button", { name: "Não paguei Aluguel" })).toHaveAttribute("aria-pressed", "true");
   await expect(bills).toContainText("1 de 1 paga");
   await expect(hero).toContainText("R$ 700,00");
 
-  await bill.getByRole("button", { name: "Desmarcar Aluguel" }).click();
+  await bill.getByRole("button", { name: "Não paguei Aluguel" }).click();
   await expect(page.getByText("Pagamento desfeito")).toBeVisible();
   await expect(hero).toContainText("R$ 1.000,00");
 
@@ -86,7 +87,7 @@ test("a bill from onboarding shows under Contas a pagar, pays from the round che
   await sheet.getByLabel("Valor").fill("350,00");
   await sheet.getByRole("button", { name: "Confirmar" }).click();
 
-  await expect(bill.getByRole("button", { name: "Desmarcar Aluguel" })).toHaveAttribute("aria-pressed", "true");
+  await expect(bill.getByRole("button", { name: "Não paguei Aluguel" })).toHaveAttribute("aria-pressed", "true");
   await expect(hero).toContainText(/Projetado no fim do mês\s*R\$\s650,00/);
 });
 
@@ -422,9 +423,10 @@ test("Contas a pagar groups the month by kind with the paid count, pays and undo
   const bills = page.getByRole("region", { name: "Contas a pagar" });
   const title = bills.getByRole("heading", { level: 2 });
   const fixed = bills.getByRole("button", { name: /^Valor fixo/ });
-  await expect(title).toContainText("0 de 2 pagas");
+  // D55: the fixed parcela due today is already paid.
+  await expect(title).toContainText("1 de 2 pagas");
   await expect(fixed).toHaveAttribute("aria-expanded", "true");
-  await expect(fixed).toContainText(/0 de 1 paga · falta R\$\s99\.999,99/);
+  await expect(fixed).toContainText("1 de 1 paga");
   await expect(bills.getByRole("button", { name: /^Valor variável/ })).toContainText(/falta ≈ R\$\s180,00/);
   await expect(bills.getByRole("link", { name: "Gerenciar contas fixas" })).toHaveAttribute("href", "/ajustes/contas");
   await expect(bills.getByRole("listitem", { name: "Internet da casa de praia em Ubatuba SP" })).toContainText(
@@ -434,12 +436,16 @@ test("Contas a pagar groups the month by kind with the paid count, pays and undo
   await expectNoClipped(page);
 
   const internet = bills.getByRole("listitem", { name: "Internet da casa de praia em Ubatuba SP" });
+  await internet.getByRole("button", { name: "Pago, Internet da casa de praia em Ubatuba SP: não paguei" }).click();
+  await expect(page.getByText("Pagamento desfeito")).toBeVisible();
+  await expect(title).toContainText("0 de 2 pagas");
+  await expect(fixed).toContainText(/0 de 1 paga · falta R\$\s99\.999,99/);
   await internet.getByRole("button", { name: "Pagar Internet da casa de praia em Ubatuba SP" }).click();
   await expect(fixed).toContainText("1 de 1 paga");
   await expect(fixed).toHaveAttribute("aria-expanded", "true");
   await expect(title).toContainText("1 de 2 pagas");
-  await internet.getByRole("button", { name: "Pago, Internet da casa de praia em Ubatuba SP" }).click();
-  await expect(page.getByText("Pagamento desfeito")).toBeVisible();
+  await internet.getByRole("button", { name: "Pago, Internet da casa de praia em Ubatuba SP: não paguei" }).click();
+  await expect(page.getByText("Pagamento desfeito").first()).toBeVisible();
   await expect(title).toContainText("0 de 2 pagas");
 
   await bills.getByRole("button", { name: "Editar Internet da casa de praia em Ubatuba SP" }).click();
@@ -455,7 +461,10 @@ test("Contas a pagar groups the month by kind with the paid count, pays and undo
   await expect(page.getByText("Conta fixa excluída")).toBeVisible();
   await expect(renamed).toBeHidden();
   await expect(title).toContainText("0 de 1 paga");
-  await page.getByRole("button", { name: "Desfazer" }).click();
+  await page
+    .locator("[data-sonner-toast]", { hasText: "Conta fixa excluída" })
+    .getByRole("button", { name: "Desfazer" })
+    .click();
   await expect(renamed).toBeVisible();
   await expect(title).toContainText("0 de 2 pagas");
 
@@ -531,8 +540,10 @@ test("Lançamentos shows the whole month and splits Contas fixas from Valor vari
   const header = ledger.locator(`#dia-${today}`).getByRole("heading", { level: 3 });
   const projection = await header.textContent();
 
+  // D55: the fixed Internet due today is already paid, an entry like Luz's.
+  const internet = ledger.getByRole("button", { name: /R\$\s99\.999,99/ });
   await ledger.getByRole("radio", { name: "Contas fixas" }).click();
-  await expect(ledger.getByRole("listitem", { name: "Internet da casa de praia em Ubatuba SP" })).toBeVisible();
+  await expect(internet).toBeVisible();
   await expect(ledger.getByRole("listitem", { name: "Gás" })).toHaveCount(0);
   await expect(ledger.getByRole("button", { name: /R\$\s175,40/ })).toHaveCount(0);
   await expect(ledger.getByRole("button", { name: /Feira/ })).toHaveCount(0);
@@ -542,7 +553,7 @@ test("Lançamentos shows the whole month and splits Contas fixas from Valor vari
   await ledger.getByRole("radio", { name: "Valor variável" }).click();
   await expect(ledger.getByRole("listitem", { name: "Gás" })).toBeVisible();
   await expect(ledger.getByRole("button", { name: /R\$\s175,40/ })).toBeVisible();
-  await expect(ledger.getByRole("listitem", { name: "Internet da casa de praia em Ubatuba SP" })).toHaveCount(0);
+  await expect(internet).toHaveCount(0);
   await expect(header).toHaveText(projection ?? "");
   for (const width of [375, 1024, 1280, 1440]) {
     await page.setViewportSize({ width, height: 900 });
@@ -591,7 +602,7 @@ test("Contas a pagar and Lançamentos collapse from their chevron and stay that 
         data: {
           name: "Internet da casa de praia em Ubatuba SP",
           amount: "99999.99",
-          due_day: 28,
+          due_day: dueDay(today, 28),
           category_id: bill?.id,
         },
       })

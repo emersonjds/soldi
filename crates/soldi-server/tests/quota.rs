@@ -274,3 +274,33 @@ async fn a_read_at_the_ceiling_takes_no_series_lock(pool: PgPool) {
     lock.commit().await.unwrap();
     assert_eq!(count(&ana).await, CEILING);
 }
+
+#[sqlx::test]
+async fn d55_auto_pay_stops_at_the_ceiling_and_reads_still_answer(pool: PgPool) {
+    let ana = opened(pool.clone(), "ana@example.com").await;
+    let body = json!({ "name": "Aluguel", "amount": "1500", "due_day": 1,
+                       "category_id": ana.category_id("Aluguel").await });
+    let (status, rent) = ana.post("/api/bills", body).await;
+    assert_eq!(status, StatusCode::CREATED, "{rent}");
+    let (_, entry) = spend(&ana, json!({})).await;
+    fill_to(&pool, &ana, &entry, CEILING - 1).await;
+    let since = chrono::Datelike::with_day(&today(), 1).unwrap() - chrono::Months::new(1);
+    sqlx::query("UPDATE recurring_bills SET active_since = $1, auto_paid_through = $1 - 1")
+        .bind(since)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let (status, _) = ana
+        .get(&format!("/api/months/{}", today().format("%Y-%m")))
+        .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(count(&ana).await, CEILING);
+    let through: chrono::NaiveDate =
+        sqlx::query_scalar("SELECT auto_paid_through FROM recurring_bills")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(through, today());
+}

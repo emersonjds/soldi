@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE categories SET kind = 'daily' WHERE user_id = $1 AND name = 'Aluguel'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "623d8c8cbbea2fa7bc5995fcfeb1b129f67e3367620190130c8846d7c53350bc"
+}

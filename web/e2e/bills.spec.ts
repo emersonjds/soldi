@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 import { expectNoClipped } from "./clipped";
-import { requireServer } from "./server";
+import { dueDay, requireServer } from "./server";
 
 const SHOTS = process.env.E2E_SHOTS;
 
@@ -36,13 +36,14 @@ test("Contas fixas sums the active bills against the month's income, pauses one 
     data: { date: today, amount: "64482.80", kind: "income", category_id: salary?.id },
   });
   expect(income.ok()).toBe(true);
-  for (const [name, amount, day] of [
-    ["Aluguel Residencial", "12345.67", Number(today.slice(8))],
-    ["Condomínio", "23456.78", 1],
-    ["Academia", "10987.65", 28],
+  // A variable Aluguel stays due Hoje: D55 pays a fixed one on its due day.
+  for (const [name, amount, day, variable] of [
+    ["Aluguel Residencial", "12345.67", Number(today.slice(8)), true],
+    ["Condomínio", "23456.78", 1, false],
+    ["Academia", "10987.65", 28, false],
   ] as const) {
     const created = await page.request.post("/api/bills", {
-      data: { name, amount, due_day: day, category_id: bill?.id },
+      data: { name, amount, due_day: day, variable, category_id: bill?.id },
     });
     expect(created.ok()).toBe(true);
   }
@@ -180,7 +181,7 @@ test("a parcelada becomes a conta fixa from its payment's Editar conta (SOL-161)
     data: {
       name: "Fies",
       amount: "500.00",
-      due_day: 28,
+      due_day: dueDay(today, 28),
       category_id: category?.id,
       installments: 3,
       last_month: `${month(1)}-01`,
@@ -220,4 +221,63 @@ test("a parcelada becomes a conta fixa from its payment's Editar conta (SOL-161)
   await page.goto(`/mes?m=${month(2)}`);
   await expect(fies).toBeVisible();
   await expectNoClipped(page);
+});
+
+test("a conta fixa pays itself on its due day; Não paguei opens it again and Desfazer pays it back (SOL-186)", async ({
+  page,
+  request,
+}) => {
+  await requireServer(request);
+  test.setTimeout(90_000);
+  // The server's São Paulo calendar, not the runner's clock.
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
+  const api = page.request;
+  await api.post("/api/auth/sign-up", {
+    data: { email: `e2e-auto-paid-${Date.now()}@example.com`, password: "uma-senha-bem-longa" },
+  });
+  await api.post("/api/onboarding", { data: { opening_balance: "1000.00", opening_date: `${today.slice(0, 7)}-01` } });
+  await api.post("/api/me/tour-seen");
+  const categories: { id: string; kind: string; is_savings: boolean }[] = await (
+    await api.get("/api/categories")
+  ).json();
+  const category = categories.find((each) => each.kind === "bill" && !each.is_savings);
+  for (const data of [
+    { name: "Aluguel", amount: "1500.00", due_day: Number(today.slice(8)) },
+    { name: "Luz", amount: "180.00", due_day: Number(today.slice(8)), variable: true },
+    { name: "Internet", amount: "99.90", due_day: dueDay(today, Number(today.slice(8))) },
+  ]) {
+    expect((await api.post("/api/bills", { data: { ...data, category_id: category?.id } })).ok()).toBe(true);
+  }
+
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto("/mes");
+  await page.reload();
+  const bills = page.getByRole("region", { name: "Contas a pagar" });
+  const rent = bills.getByRole("listitem", { name: "Aluguel" });
+  await expect(rent.getByRole("button", { name: "Pago, Aluguel: não paguei" })).toHaveText("✓ Pago");
+  await expect(bills.getByRole("listitem", { name: "Luz" }).getByRole("button", { name: "Pagar Luz" })).toBeVisible();
+  await expect(
+    bills.getByRole("listitem", { name: "Internet" }).getByRole("button", { name: "Pagar Internet" }),
+  ).toBeVisible();
+  for (const width of [375, 1024, 1280, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expectNoClipped(page);
+  }
+
+  const check = rent.getByRole("button", { name: "Não paguei Aluguel" });
+  await expect(check).toHaveAttribute("title", "Não paguei");
+  await check.click();
+  await expect(page.getByText("Pagamento desfeito")).toBeVisible();
+  const open = rent.getByRole("button", { name: "Marcar Aluguel como paga" });
+  await expect(open).toHaveAttribute("aria-pressed", "false");
+  await expect(rent).not.toContainText("Vencido");
+
+  await page.getByRole("button", { name: "Desfazer" }).click();
+  await expect(check).toHaveAttribute("aria-pressed", "true");
+  await expect(check).toBeEnabled();
+  await check.click();
+  await expect(open).toHaveAttribute("aria-pressed", "false");
+  await page.reload();
+  await expect(open).toHaveAttribute("aria-pressed", "false");
+  await expect(rent).not.toContainText("Vencido");
 });
