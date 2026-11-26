@@ -2586,8 +2586,9 @@ async fn d55_a_catch_up_and_a_pay_never_deadlock(pool: PgPool) {
 
 #[sqlx::test]
 async fn d55_a_failing_catch_up_answers_without_server_detail(pool: PgPool) {
+    let log = common::Log::capture();
     let ana = TestApp::signed_in(pool.clone(), "ana@example.com").await;
-    rent_behind(&pool, &ana).await;
+    let rent = rent_behind(&pool, &ana).await;
     sqlx::raw_sql(
         "CREATE FUNCTION refuse() RETURNS trigger LANGUAGE plpgsql AS
            $$ BEGIN RAISE EXCEPTION 'secret detail'; END $$;
@@ -2597,11 +2598,14 @@ async fn d55_a_failing_catch_up_answers_without_server_detail(pool: PgPool) {
     .await
     .unwrap();
 
-    let (status, problem) = ana.get("/api/bills").await;
+    let (status, bills) = ana.get("/api/bills").await;
 
-    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
-    assert_eq!(problem["title"], "Internal error");
-    assert!(!problem.to_string().contains("secret"), "{problem}");
+    assert_eq!(status, StatusCode::OK, "{bills}");
+    assert!(!bills.to_string().contains("secret"), "{bills}");
+    assert!(payments_of(&pool, &rent).await.is_empty());
+    let line = log.line("auto-pay catch-up failed").await;
+    assert!(line.contains("ERROR"), "{line}");
+    assert!(!line.contains("secret"), "{line}");
 }
 
 #[sqlx::test]
