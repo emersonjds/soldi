@@ -2556,6 +2556,35 @@ async fn d55_concurrent_reads_write_one_payment(pool: PgPool) {
 }
 
 #[sqlx::test]
+async fn d55_a_catch_up_and_a_pay_never_deadlock(pool: PgPool) {
+    let ana = TestApp::signed_in(pool.clone(), "ana@example.com").await;
+    let id = user_id(&ana).await;
+    let rent = rent_behind(&pool, &ana).await;
+    let mut lock = pool.begin().await.unwrap();
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended('entries:' || $1::text, 0))")
+        .bind(id.to_string())
+        .execute(&mut *lock)
+        .await
+        .unwrap();
+    let catch_up = ana.get("/api/bills");
+    let pay = async {
+        common::waiting(&pool, 1).await;
+        set_auto_paid_through(&pool, today()).await;
+        ana.post(
+            &format!("{}?month={}", pay_uri(&rent), month_text(this_month())),
+            json!({ "date": this_month() }),
+        )
+        .await
+    };
+
+    let both = async { tokio::join!(catch_up, pay) };
+    let (caught_up, paid) = behind(&pool, lock, 2, both).await;
+
+    assert_eq!(caught_up.0, StatusCode::OK, "{}", caught_up.1);
+    assert_eq!(paid.0, StatusCode::CREATED, "{}", paid.1);
+}
+
+#[sqlx::test]
 async fn d55_a_failing_catch_up_answers_without_server_detail(pool: PgPool) {
     let ana = TestApp::signed_in(pool.clone(), "ana@example.com").await;
     rent_behind(&pool, &ana).await;

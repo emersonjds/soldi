@@ -370,13 +370,18 @@ pub async fn auto_pay(pool: &PgPool, user: &CurrentUser, today: NaiveDate) -> Re
     }
     drop(conn);
     let mut tx = pool.begin().await?;
+    // Settings before entries, the order of `pay` and every other writer.
+    let opening = settings::repo::find(&mut tx, user.id).await?.opening_date;
     transactions::repo::lock_entries(&mut tx, user.id).await?;
     // Re-read under the lock: a concurrent request may have caught up already.
     let behind: std::collections::HashMap<Uuid, NaiveDate> = repo::behind(&mut tx, user.id, today)
         .await?
         .into_iter()
         .collect();
-    let opening = settings::repo::find(&mut tx, user.id).await?.opening_date;
+    if behind.is_empty() {
+        tx.commit().await?;
+        return Ok(());
+    }
     let mut due: Vec<(NaiveDate, Uuid)> = months::repo::bills(&mut tx, user.id)
         .await?
         .iter()
@@ -387,10 +392,10 @@ pub async fn auto_pay(pool: &PgPool, user: &CurrentUser, today: NaiveDate) -> Re
                 .map(|date| (date, bill.id))
         })
         .collect();
-    due.sort_unstable();
-    let held = transactions::repo::count_period(&mut tx, user.id, None).await?;
-    due.truncate(usize::try_from(transactions::domain::MAX_ENTRIES - held).unwrap_or(0));
     if !due.is_empty() {
+        due.sort_unstable();
+        let held = transactions::repo::count_period(&mut tx, user.id, None).await?;
+        due.truncate(usize::try_from(transactions::domain::MAX_ENTRIES - held).unwrap_or(0));
         let (dates, ids): (Vec<NaiveDate>, Vec<Uuid>) = due.into_iter().unzip();
         transactions::repo::insert_auto_payments(&mut tx, user.id, &ids, &dates).await?;
     }
