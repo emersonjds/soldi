@@ -64,7 +64,7 @@ export const BillStatus = ({
       <>
         <span className={cn(statusPill, PAID_TONE, "hidden lg:inline-flex")}>Pago</span>
         <PillButton
-          label={`Pago, ${label}`}
+          label={`Pago, ${label}${bill.variable || bill.is_card ? "" : ": não paguei"}`}
           pressed
           onClick={onUnpay}
           busy={busy}
