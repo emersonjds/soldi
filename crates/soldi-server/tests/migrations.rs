@@ -621,3 +621,28 @@ async fn sol164_the_daily_estimate_starts_empty_and_off_and_on_needs_a_value(poo
         Some("settings_daily_estimate_check")
     );
 }
+
+#[sqlx::test(migrations = false)]
+async fn auto_paid_through_starts_the_day_before_the_migration(pool: PgPool) {
+    migrate_before(&pool, 32).await;
+    let ana = user(&pool, "ana@example.com").await;
+    let luz = category(&pool, ana, "Luz", "bill", "cat-1", None, false).await;
+    sqlx::query(
+        "INSERT INTO recurring_bills (user_id, name, amount, due_day, category_id, created_at)
+         VALUES ($1, 'Luz', 100, 10, $2, '2026-03-01T01:00:00Z')",
+    )
+    .bind(ana)
+    .bind(luz)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    migrate_from(&pool, 32).await;
+
+    let through: chrono::NaiveDate =
+        sqlx::query_scalar("SELECT auto_paid_through FROM recurring_bills")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(through, soldi_server::today_sao_paulo().pred_opt().unwrap());
+}
