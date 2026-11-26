@@ -2574,3 +2574,26 @@ async fn d55_a_failing_catch_up_answers_without_server_detail(pool: PgPool) {
     assert_eq!(problem["title"], "Internal error");
     assert!(!problem.to_string().contains("secret"), "{problem}");
 }
+
+#[sqlx::test]
+async fn d55_retomar_and_variable_off_restart_from_yesterday(pool: PgPool) {
+    let ana = TestApp::signed_in(pool.clone(), "ana@example.com").await;
+    let created = create(&ana, rent(category_id(&ana, "Aluguel").await)).await;
+    let uri = bill_uri(&created);
+    let yesterday = today().pred_opt().unwrap();
+    ana.patch(&uri, json!({ "active": false })).await;
+    end_last_month(&pool).await;
+    ana.get("/api/bills").await;
+    assert_eq!(auto_paid_through(&pool, &created).await, today());
+
+    let (status, resumed) = ana.patch(&uri, json!({ "active": true })).await;
+    assert_eq!(status, StatusCode::OK, "{resumed}");
+    assert_eq!(auto_paid_through(&pool, &created).await, yesterday);
+    ana.patch(&uri, json!({ "variable": true })).await;
+    assert_eq!(auto_paid_through(&pool, &created).await, today());
+    ana.patch(&uri, json!({ "name": "Casa" })).await;
+    assert_eq!(auto_paid_through(&pool, &created).await, today());
+    let (status, fixed) = ana.patch(&uri, json!({ "variable": false })).await;
+    assert_eq!(status, StatusCode::OK, "{fixed}");
+    assert_eq!(auto_paid_through(&pool, &created).await, yesterday);
+}

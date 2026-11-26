@@ -116,7 +116,7 @@ pub async fn insert(
 }
 
 /// `Ok(None)` when the user has no unarchived bill with this id. D13: `restart` moves
-/// `active_since` to the São Paulo today.
+/// `active_since` to the São Paulo today; D55: it and `variable` turning off auto-pay from today.
 pub async fn update(
     conn: &mut PgConnection,
     user_id: Uuid,
@@ -132,6 +132,9 @@ pub async fn update(
              last_month = $8, installments = $10, variable = $11,
              active_since = CASE WHEN $9 THEN (now() AT TIME ZONE 'America/Sao_Paulo')::date
                                  ELSE active_since END,
+             auto_paid_through = CASE WHEN $9 OR (variable AND NOT $11)
+                 THEN LEAST(auto_paid_through, (now() AT TIME ZONE 'America/Sao_Paulo')::date - 1)
+                 ELSE auto_paid_through END,
              updated_at = now()
          WHERE user_id = $1 AND id = $2 AND archived_at IS NULL
          RETURNING id, category_id, name, amount, due_day,
