@@ -10,7 +10,7 @@ use super::{domain, repo};
 use crate::error::AppError;
 use crate::extract::CurrentUser;
 use crate::months::domain::{first_of, month_end, parse_month};
-use crate::{categories, transactions};
+use crate::{categories, months, settings, transactions};
 
 pub async fn list(
     pool: &PgPool,
@@ -359,6 +359,44 @@ pub async fn pay(
         .ok_or(AppError::NotFound)?;
     conn.commit().await?;
     Ok(paid)
+}
+
+/// D55: pays each fixed-amount conta fixa due in `(auto_paid_through, today]` on its due date,
+/// then moves every bill of the user to `today`. D42: stops silently at the ceiling, as D36.
+pub async fn auto_pay(pool: &PgPool, user: &CurrentUser, today: NaiveDate) -> Result<(), AppError> {
+    let mut conn = pool.acquire().await?;
+    if !repo::any_behind(&mut conn, user.id, today).await? {
+        return Ok(());
+    }
+    drop(conn);
+    let mut tx = pool.begin().await?;
+    transactions::repo::lock_entries(&mut tx, user.id).await?;
+    // Re-read under the lock: a concurrent request may have caught up already.
+    let behind: std::collections::HashMap<Uuid, NaiveDate> = repo::behind(&mut tx, user.id, today)
+        .await?
+        .into_iter()
+        .collect();
+    let opening = settings::repo::find(&mut tx, user.id).await?.opening_date;
+    let mut due: Vec<(NaiveDate, Uuid)> = months::repo::bills(&mut tx, user.id)
+        .await?
+        .iter()
+        .filter_map(|bill| behind.get(&bill.id).map(|after| (bill, *after)))
+        .flat_map(|(bill, after)| {
+            months::domain::auto_paid(bill, after, opening, today)
+                .into_iter()
+                .map(|date| (date, bill.id))
+        })
+        .collect();
+    due.sort_unstable();
+    let held = transactions::repo::count_period(&mut tx, user.id, None).await?;
+    due.truncate(usize::try_from(transactions::domain::MAX_ENTRIES - held).unwrap_or(0));
+    if !due.is_empty() {
+        let (dates, ids): (Vec<NaiveDate>, Vec<Uuid>) = due.into_iter().unzip();
+        transactions::repo::insert_auto_payments(&mut tx, user.id, &ids, &dates).await?;
+    }
+    repo::paid_through(&mut tx, user.id, today).await?;
+    tx.commit().await?;
+    Ok(())
 }
 
 /// Rule 5: deletes the bill's entry of `month`.
