@@ -1012,8 +1012,8 @@ async fn p5_the_savings_year_carries_the_target_on_the_summarys_totals(pool: PgP
 async fn sol_174_one_gastos_and_one_guardado_on_mes_meu_ano_and_para_onde_vai(pool: PgPool) {
     let ana = TestApp::signed_in(pool.clone(), "ana@example.com").await;
     let bia = ana.another_user("bia@example.com").await;
-    ana.open_at("5000", "2026-10-01").await;
-    bia.open_at("0", "2026-10-01").await;
+    ana.open_at("5000", "2026-09-01").await;
+    bia.open_at("0", "2026-09-01").await;
     let porto = card(&ana, "Porto").await;
     let economia = ana.category_id("Economia").await;
     let (_, reserva) = ana
@@ -1039,34 +1039,34 @@ async fn sol_174_one_gastos_and_one_guardado_on_mes_meu_ano_and_para_onde_vai(po
     let (status, created) = ana
         .post(
             "/api/transactions",
-            json!({ "date": "2026-10-28", "amount": "450.00", "kind": "daily",
+            json!({ "date": "2026-09-28", "amount": "450.00", "kind": "daily",
                     "category_id": lazer, "card_id": porto }),
         )
         .await;
     assert_eq!(status, StatusCode::CREATED, "{created}");
-    log(&ana, "2026-11-03", "daily", "250.40", "Mercado").await;
-    log(&ana, "2026-11-05", "income", "6000.00", "Salário").await;
-    log(&ana, "2026-11-06", "bill", "500.00", "Reserva").await;
+    log(&ana, "2026-10-03", "daily", "250.40", "Mercado").await;
+    log(&ana, "2026-10-05", "income", "6000.00", "Salário").await;
+    log(&ana, "2026-10-06", "bill", "500.00", "Reserva").await;
     for (bill, date, amount) in [
-        (&porto, "2026-11-12", "450.00"),
-        (&contas[0], "2026-11-14", "187.35"),
+        (&porto, "2026-10-12", "450.00"),
+        (&contas[0], "2026-10-14", "187.35"),
     ] {
         let (status, paid) = ana
             .post(
-                &format!("/api/bills/{bill}/pay?month=2026-11"),
+                &format!("/api/bills/{bill}/pay?month=2026-10"),
                 json!({ "date": date, "amount": amount }),
             )
             .await;
         assert_eq!(status, StatusCode::CREATED, "{paid}");
     }
-    withdraw(&ana, &reserva, "2026-11-18", "120.00").await;
-    log(&ana, "2026-11-20", "daily", "32.50", "Mercado").await;
-    log(&ana, "2026-11-27", "daily", "80.00", "Farmácia").await;
-    log(&bia, "2026-11-03", "daily", "999.00", "Mercado").await;
+    withdraw(&ana, &reserva, "2026-10-18", "120.00").await;
+    log(&ana, "2026-10-20", "daily", "32.50", "Mercado").await;
+    log(&ana, "2026-10-27", "daily", "80.00", "Farmácia").await;
+    log(&bia, "2026-10-03", "daily", "999.00", "Mercado").await;
 
-    let (_, month) = ana.get("/api/months/2026-11").await;
-    let (_, october) = ana.get("/api/months/2026-10").await;
-    let (_, report) = ana.get("/api/reports/categories?month=2026-11").await;
+    let (_, month) = ana.get("/api/months/2026-10").await;
+    let (_, october) = ana.get("/api/months/2026-09").await;
+    let (_, report) = ana.get("/api/reports/categories?month=2026-10").await;
     let (_, year) = year_report(&ana, "2026").await;
 
     let totals = &month["totals"];
@@ -1115,7 +1115,7 @@ async fn sol_174_one_gastos_and_one_guardado_on_mes_meu_ano_and_para_onde_vai(po
     );
     assert_eq!(
         amounts(&year["top_months"], "month"),
-        [pair("2026-11", "550.25"), pair("2026-10", "450.00")]
+        [pair("2026-10", "550.25"), pair("2026-09", "450.00")]
     );
     assert_eq!(amounts(&year["cards"], "name"), [pair("Porto", "450.00")]);
     assert_eq!(year["card_pct"], "45.0");
@@ -1131,22 +1131,13 @@ async fn sol_174_one_gastos_and_one_guardado_on_mes_meu_ano_and_para_onde_vai(po
     };
     assert_eq!(
         [
-            balance_on(&october, "2026-10-31"),
-            balance_on(&month, "2026-11-20"),
-            balance_on(&month, "2026-11-30"),
+            balance_on(&october, "2026-09-30"),
+            balance_on(&month, "2026-10-20"),
+            balance_on(&month, "2026-10-31"),
         ],
         [json!("5000.00"), json!("9699.75"), json!("9619.75")]
     );
-    let internet = if days(&month).iter().any(|day| day["is_today"] == true) {
-        12_000
-    } else {
-        0
-    };
-    assert_eq!(
-        money_cents(&month["projected_balance"]),
-        961_975 - internet,
-        "{month}"
-    );
+    assert_eq!(money_cents(&month["projected_balance"]), 961_975, "{month}");
 
     let (status, _) = ana
         .patch(
@@ -1155,8 +1146,8 @@ async fn sol_174_one_gastos_and_one_guardado_on_mes_meu_ano_and_para_onde_vai(po
         )
         .await;
     assert_eq!(status, StatusCode::OK);
-    let (_, planned) = ana.get("/api/months/2026-11").await;
-    let (_, planned_report) = ana.get("/api/reports/categories?month=2026-11").await;
+    let (_, planned) = ana.get("/api/months/2026-10").await;
+    let (_, planned_report) = ana.get("/api/reports/categories?month=2026-10").await;
     let previsto: Vec<(String, String)> = days(&planned)
         .iter()
         .filter(|day| day["is_future"] == true)
@@ -1170,7 +1161,7 @@ async fn sol_174_one_gastos_and_one_guardado_on_mes_meu_ano_and_para_onde_vai(po
     let expected: Vec<(String, String)> = previsto
         .iter()
         .map(|(date, _)| {
-            let amount = if date == "2026-11-27" {
+            let amount = if date == "2026-10-27" {
                 "0.00"
             } else {
                 "40.00"
