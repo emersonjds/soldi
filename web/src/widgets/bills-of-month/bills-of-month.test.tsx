@@ -232,7 +232,7 @@ describe("Contas a pagar", () => {
     await userEvent.click(within(rowOf("Aluguel Residencial")).getByRole("button", { name: /^Marcar/ }));
 
     const check = await within(rowOf("Aluguel Residencial")).findByRole("button", {
-      name: "Desmarcar Aluguel Residencial",
+      name: "Não paguei Aluguel Residencial",
     });
     expect(check).toHaveAttribute("aria-pressed", "true");
     expect(rowOf("Aluguel Residencial")).toHaveTextContent("Pago");
@@ -265,7 +265,7 @@ describe("Contas a pagar", () => {
     serverHas(BILLS_OF_MONTH);
 
     await userEvent.click(
-      within(rowOf("Aluguel Residencial")).getByRole("button", { name: "Desmarcar Aluguel Residencial" }),
+      within(rowOf("Aluguel Residencial")).getByRole("button", { name: "Não paguei Aluguel Residencial" }),
     );
 
     expect(await screen.findByText("Pagamento desfeito")).toBeInTheDocument();
@@ -280,9 +280,134 @@ describe("Contas a pagar", () => {
     });
     await loaded();
 
-    await userEvent.click(within(rowOf("Aluguel Residencial")).getByRole("button", { name: /^Desmarcar/ }));
+    await userEvent.click(within(rowOf("Aluguel Residencial")).getByRole("button", { name: /^Não paguei/ }));
 
     expect(await screen.findByText("Não foi possível desfazer o pagamento.")).toBeInTheDocument();
+    expect(within(rowOf("Aluguel Residencial")).getByRole("button", { name: /^Não paguei/ })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+  });
+
+  describe("a conta fixa pays itself on its due day (SOL-186)", () => {
+    const PAID_ON = { ...PAYMENT, date: "2026-11-03" };
+    const ON_THE_3RD = { "GET /api/transactions": { status: 200, body: [PAID_ON] } };
+    const LUZ: Schemas["BillOfMonth"] = {
+      ...BILLS_OF_MONTH[1],
+      bill_id: "b-luz",
+      name: "Luz",
+      amount: "180.00",
+      due_date: "2026-11-25",
+      variable: true,
+    };
+
+    it("tells on desktop that an open fixa pays itself, but not one due today, a variable one or a paid one", async () => {
+      const today = { ...BILLS_OF_MONTH[1], bill_id: "b-net", name: "Internet", due_date: "2026-11-05" };
+      show([BILLS_OF_MONTH[1], today, LUZ, { ...PAID_RENT, bill_id: "b-paid", name: "Água" }]);
+      await loaded();
+
+      const rent = rowOf("Aluguel Residencial");
+      expect(within(rent).getByText("Vence dia 10 · paga sozinha")).toHaveClass("hidden", "lg:flex");
+      expect(within(rent).getByText("Vence dia 10/11")).toHaveClass("lg:hidden", "whitespace-nowrap");
+      expect(within(rent).getByRole("button", { name: "Marcar Aluguel Residencial como paga" })).toBeInTheDocument();
+      for (const name of ["Internet", "Luz", "Água"]) expect(rowOf(name)).not.toHaveTextContent("paga sozinha");
+    });
+
+    it("names a paid fixa's check and pill Não paguei; one tap undoes, and Desfazer pays it again on its date and amount", async () => {
+      const { requests, serverHas } = show([PAID_RENT], {
+        ...ON_THE_3RD,
+        [`DELETE /api/bills/${BILL_ALUGUEL.id}/pay`]: { status: 204 },
+        [`POST /api/bills/${BILL_ALUGUEL.id}/pay`]: { status: 201, body: PAID_ON },
+      });
+      await loaded();
+      const rent = rowOf("Aluguel Residencial");
+      await waitFor(() => expect(rent).toHaveTextContent("Pago no prazo"));
+      const check = within(rent).getByRole("button", { name: "Não paguei Aluguel Residencial" });
+      expect(check).toHaveAttribute("title", "Não paguei");
+      expect(check).toHaveAttribute("aria-pressed", "true");
+      expect(within(rent).getByRole("button", { name: "Pago, Aluguel Residencial: não paguei" })).toHaveTextContent(
+        "✓ Pago",
+      );
+      serverHas(BILLS_OF_MONTH.slice(1));
+
+      await userEvent.click(check);
+      expect(await screen.findByText("Pagamento desfeito")).toBeInTheDocument();
+      expect(requests.filter((request) => request.method === "DELETE")).toHaveLength(1);
+      await userEvent.click(screen.getByRole("button", { name: "Desfazer" }));
+
+      await waitFor(() => expect(requests.some((request) => request.method === "POST")).toBe(true));
+      const post = requests.find((request) => request.method === "POST");
+      expect(new URL(post?.url ?? "").searchParams.get("month")).toBe("2026-11");
+      expect(await post?.json()).toEqual({ date: "2026-11-03", amount: "2259.56" });
+    });
+
+    it("says so when Desfazer fails", async () => {
+      const { serverHas } = show([PAID_RENT], {
+        [`DELETE /api/bills/${BILL_ALUGUEL.id}/pay`]: { status: 204 },
+        [`POST /api/bills/${BILL_ALUGUEL.id}/pay`]: { status: 500, body: problem(500, "Falhou.") },
+      });
+      await loaded();
+      serverHas(BILLS_OF_MONTH.slice(1));
+
+      await userEvent.click(within(rowOf("Aluguel Residencial")).getByRole("button", { name: /^Não paguei/ }));
+      await userEvent.click(await screen.findByRole("button", { name: "Desfazer" }));
+
+      expect(await screen.findByText("Não foi possível marcar como paga.")).toBeInTheDocument();
+    });
+
+    it("opens a paid fixa's payment from its amount to fix the value, with no Excluir, once the payment is loaded", async () => {
+      show([PAID_RENT, { ...PAID_RENT, bill_id: "b-missing", name: "Água", transaction_id: "t-missing" }], {
+        ...ON_THE_3RD,
+        "GET /api/categories": { status: 200, body: CATEGORIES },
+      });
+      await loaded();
+
+      expect(
+        within(rowOf("Água")).getByRole("button", { name: /^R\$\s2\.259,56: ajustar valor pago de Água$/ }),
+      ).toBeDisabled();
+      const amount = within(rowOf("Aluguel Residencial")).getByRole("button", {
+        name: /^R\$\s2\.259,56: ajustar valor pago de Aluguel Residencial$/,
+      });
+      await waitFor(() => expect(amount).toBeEnabled());
+      await userEvent.click(amount);
+
+      const sheet = await screen.findByRole("dialog", { name: "Editar lançamento" });
+      expect(within(sheet).queryByRole("button", { name: /Excluir/ })).not.toBeInTheDocument();
+    });
+
+    it("keeps Desmarcar on a paid variable bill, with no amount button, and its toast's Desfazer re-pays the paid amount", async () => {
+      const { requests } = show([{ ...LUZ, paid: true, transaction_id: "t-paid" }], {
+        ...ON_THE_3RD,
+        "DELETE /api/bills/b-luz/pay": { status: 204 },
+        "POST /api/bills/b-luz/pay": { status: 201, body: PAID_ON },
+      });
+      await loaded();
+      const row = rowOf("Luz");
+      await waitFor(() => expect(row).toHaveTextContent("Pago no prazo"));
+      expect(within(row).getByRole("button", { name: "Pago, Luz" })).toBeInTheDocument();
+      expect(within(row).queryByRole("button", { name: /ajustar/ })).not.toBeInTheDocument();
+
+      await userEvent.click(within(row).getByRole("button", { name: "Desmarcar Luz" }));
+      await userEvent.click(await screen.findByRole("button", { name: "Desfazer" }));
+
+      await waitFor(() => expect(requests.some((request) => request.method === "POST")).toBe(true));
+      expect(await requests.find((request) => request.method === "POST")?.json()).toEqual({
+        date: "2026-11-03",
+        amount: "180.00",
+      });
+    });
+
+    it("undoes a fatura's payment with no Desfazer", async () => {
+      show([{ ...FATURA, paid: true, transaction_id: "t-paid" }], {
+        "DELETE /api/bills/card-porto/pay": { status: 204 },
+      });
+      await loaded();
+
+      await userEvent.click(within(rowOf("Fatura Porto")).getByRole("button", { name: "Desmarcar Fatura Porto" }));
+
+      expect(await screen.findByText("Pagamento desfeito")).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Desfazer" })).not.toBeInTheDocument();
+    });
   });
 
   it("opens Pagar from the amount to pay another value on another day", async () => {
@@ -392,7 +517,7 @@ describe("Contas a pagar", () => {
 
     await userEvent.click(within(rowOf("Aluguel Residencial de outubro")).getByRole("button", { name: /^Marcar/ }));
     const paid = await within(rowOf("Aluguel Residencial de outubro")).findByRole("button", {
-      name: "Desmarcar Aluguel Residencial de outubro",
+      name: "Não paguei Aluguel Residencial de outubro",
     });
     expect(paid).toBeDisabled();
     await userEvent.click(paid);
@@ -468,7 +593,7 @@ describe("Contas a pagar", () => {
     );
 
     const toggle = await within(rowOf("Aluguel Residencial")).findByRole("button", {
-      name: "Pago, Aluguel Residencial",
+      name: "Pago, Aluguel Residencial: não paguei",
     });
     expect(toggle).toHaveAttribute("aria-pressed", "true");
     const post = requests.find((request) => request.method === "POST");
@@ -559,7 +684,7 @@ describe("Contas a pagar", () => {
       show([{ ...FIES, name: "Inglês", installment: null, installments: null }], {}, "2026-12");
       await loaded();
       expect(within(rowOf("Inglês")).getByText("Inglês")).toHaveTextContent(/^Inglês$/);
-      expect(rowOf("Inglês")).not.toHaveTextContent("·");
+      expect(rowOf("Inglês")).not.toHaveTextContent(/·(?! paga sozinha)/);
     });
   });
 
@@ -659,9 +784,9 @@ describe("Contas a pagar", () => {
 
       serverHas([PAID_RENT, { ...paidLuz, paid: false, transaction_id: null }, AGUA]);
       await waitFor(() =>
-        expect(within(rowOf("Luz (Enel)")).getByRole("button", { name: /^Desmarcar/ })).toBeEnabled(),
+        expect(within(rowOf("Luz (Enel)")).getByRole("button", { name: /^Não paguei/ })).toBeEnabled(),
       );
-      await userEvent.click(within(rowOf("Luz (Enel)")).getByRole("button", { name: /^Desmarcar/ }));
+      await userEvent.click(within(rowOf("Luz (Enel)")).getByRole("button", { name: /^Não paguei/ }));
 
       expect(await screen.findByText("Pagamento desfeito")).toBeInTheDocument();
       await waitFor(() => expect(header("Valor fixo")).toHaveTextContent("1 de 2 pagas · falta R$ 2.259,56"));

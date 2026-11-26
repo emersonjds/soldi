@@ -29,12 +29,17 @@ describe("BillStatus", () => {
   it("shows a Pago badge on desktop and a pressed ✓ Pago toggle on mobile that undoes", async () => {
     const { onUnpay } = status({ ...RENT, paid: true });
     expect(screen.getByText("Pago", { exact: true })).toHaveClass("hidden", "lg:inline-flex", "bg-income-soft");
-    const toggle = screen.getByRole("button", { name: "Pago, Aluguel Residencial" });
+    const toggle = screen.getByRole("button", { name: "Pago, Aluguel Residencial: não paguei" });
     expect(toggle).toHaveTextContent("✓ Pago");
     expect(toggle).toHaveAttribute("aria-pressed", "true");
     expect(toggle).toHaveClass("lg:hidden", "min-h-11");
     await userEvent.click(toggle);
     expect(onUnpay).toHaveBeenCalledOnce();
+  });
+
+  it("keeps a paid variable bill's and a fatura's toggle named Pago, with no não paguei (SOL-186)", () => {
+    status({ ...RENT, paid: true, variable: true });
+    expect(screen.getByRole("button", { name: "Pago, Aluguel Residencial" })).toHaveTextContent("✓ Pago");
   });
 
   it("shows a red Vencido badge on desktop and a Vencido button that pays on mobile", async () => {

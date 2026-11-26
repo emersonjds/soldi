@@ -7,7 +7,7 @@
       "name": "AGPL-3.0-only",
       "identifier": "AGPL-3.0-only"
     },
-    "version": "0.76.0"
+    "version": "0.77.0"
   },
   "paths": {
     "/api/auth/email-verification/confirm": {
@@ -2723,7 +2723,7 @@
           },
           "variable": {
             "type": "boolean",
-            "description": "The amount is an estimate that changes every month (D44); never on a card."
+            "description": "The amount is an estimate that changes every month (D44); never on a card. D55: a\nfixed-amount conta fixa is paid on its due day with no tap; a variable one stays manual."
           }
         }
       },
@@ -2797,7 +2797,8 @@
             "type": "boolean"
           },
           "paid": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "D55: a fixed-amount conta fixa is paid on its due day with no tap; a variable one stays\nmanual."
           },
           "transaction_id": {
             "type": [
@@ -2808,7 +2809,7 @@
           },
           "variable": {
             "type": "boolean",
-            "description": "The conta fixa's amount is an estimate (D44); false on a card."
+            "description": "The conta fixa's amount is an estimate (D44); false on a card. D55: a fixed-amount conta\nfixa is paid on its due day with no tap; a variable one stays manual."
           }
         }
       },

@@ -71,6 +71,12 @@ impl FromRequestParts<AppState> for CurrentUser {
         if spends_write_budget(&parts.method, parts.uri.path()) {
             (state.limiter).check(&crate::limits::write_keys(user.id.to_string()))?;
         }
+        drop(conn);
+        let caught_up =
+            crate::bills::service::auto_pay(&state.pool, &user, crate::today_sao_paulo());
+        if let Err(error) = caught_up.await {
+            tracing::error!(error = %error.log_cause(), "auto-pay catch-up failed");
+        }
         Ok(user)
     }
 }

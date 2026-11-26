@@ -220,6 +220,30 @@ pub async fn insert(
     .await
 }
 
+/// D55: the user's bill `bill_ids[i]` paid on `dates[i]` with its amount and category; a month
+/// already paid, another user's bill or a category no longer `bill` writes nothing.
+pub async fn insert_auto_payments(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    bill_ids: &[Uuid],
+    dates: &[NaiveDate],
+) -> Result<u64, sqlx::Error> {
+    let result = sqlx::query!(
+        "INSERT INTO transactions (user_id, date, amount, kind, category_id, recurring_bill_id)
+         SELECT b.user_id, d.date, b.amount, 'bill', b.category_id, b.id
+         FROM UNNEST($2::uuid[], $3::date[]) AS d(bill_id, date)
+         JOIN recurring_bills b ON b.user_id = $1 AND b.id = d.bill_id
+         JOIN categories c ON c.user_id = b.user_id AND c.id = b.category_id AND c.kind = 'bill'
+         ON CONFLICT DO NOTHING",
+        user_id,
+        bill_ids,
+        dates
+    )
+    .execute(&mut *conn)
+    .await?;
+    Ok(result.rows_affected())
+}
+
 /// Copies of `entry` on each of `dates`, in `series_id`, with `amounts[i]` on `dates[i]`; they
 /// take the series' `series_open` and `series_offset` from a member already written.
 pub async fn insert_copies(

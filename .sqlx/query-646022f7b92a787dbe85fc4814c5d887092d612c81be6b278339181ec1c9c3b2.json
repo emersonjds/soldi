@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE recurring_bills b SET auto_paid_through = $2\n         FROM UNNEST($3::uuid[], $4::date[]) AS r(id, old)\n         WHERE b.user_id = $1 AND b.id = r.id AND b.auto_paid_through = r.old",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Date",
+        "UuidArray",
+        "DateArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "646022f7b92a787dbe85fc4814c5d887092d612c81be6b278339181ec1c9c3b2"
+}

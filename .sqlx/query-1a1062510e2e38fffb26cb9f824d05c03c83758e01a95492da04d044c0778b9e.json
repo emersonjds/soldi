@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE recurring_bills SET auto_paid_through = '2026-09-20' WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1a1062510e2e38fffb26cb9f824d05c03c83758e01a95492da04d044c0778b9e"
+}

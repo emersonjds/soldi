@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO transactions (user_id, date, amount, kind, category_id, recurring_bill_id)\n             VALUES ($1, '2026-10-05', 1400, 'bill', $2, $3)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "bb67a0f6f202c6da304c5dd249e2e8411b50dca2d2bf7a3f3c91b74a779f16e7"
+}

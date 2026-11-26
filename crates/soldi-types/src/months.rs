@@ -81,6 +81,8 @@ pub struct BillOfMonth {
     #[serde(serialize_with = "crate::money")]
     pub amount: Decimal,
     pub due_date: NaiveDate,
+    /// D55: a fixed-amount conta fixa is paid on its due day with no tap; a variable one stays
+    /// manual.
     pub paid: bool,
     pub transaction_id: Option<Uuid>,
     pub overdue: bool,
@@ -93,7 +95,8 @@ pub struct BillOfMonth {
     pub installment: Option<i16>,
     /// The parcelado bill's number of parcelas.
     pub installments: Option<i16>,
-    /// The conta fixa's amount is an estimate (D44); false on a card.
+    /// The conta fixa's amount is an estimate (D44); false on a card. D55: a fixed-amount conta
+    /// fixa is paid on its due day with no tap; a variable one stays manual.
     pub variable: bool,
 }
 

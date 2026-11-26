@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "UPDATE recurring_bills\n         SET name = $3, amount = $4, due_day = $5, category_id = $6, closing_day = $7,\n             last_month = $8, installments = $10, variable = $11,\n             active_since = CASE WHEN $9 THEN (now() AT TIME ZONE 'America/Sao_Paulo')::date\n                                 ELSE active_since END,\n             updated_at = now()\n         WHERE user_id = $1 AND id = $2 AND archived_at IS NULL\n         RETURNING id, category_id, name, amount, due_day,\n                   (last_month IS NULL OR installments IS NOT NULL) AS \"active!\", closing_day,\n                   last_month, installments, variable",
+  "query": "UPDATE recurring_bills\n         SET name = $3, amount = $4, due_day = $5, category_id = $6, closing_day = $7,\n             last_month = $8, installments = $10, variable = $11,\n             active_since = CASE WHEN $9 THEN (now() AT TIME ZONE 'America/Sao_Paulo')::date\n                                 ELSE active_since END,\n             auto_paid_through = CASE WHEN $9 OR (variable AND NOT $11)\n                 THEN LEAST(auto_paid_through, (now() AT TIME ZONE 'America/Sao_Paulo')::date - 1)\n                 ELSE auto_paid_through END,\n             updated_at = now()\n         WHERE user_id = $1 AND id = $2 AND archived_at IS NULL\n         RETURNING id, category_id, name, amount, due_day,\n                   (last_month IS NULL OR installments IS NOT NULL) AS \"active!\", closing_day,\n                   last_month, installments, variable",
   "describe": {
     "columns": [
       {
@@ -137,5 +137,5 @@
       false
     ]
   },
-  "hash": "ad9e99c9ce354f8be96771cfa98dc6cef0fcf6a0cf9e1b2c5beba2cbd3c3656a"
+  "hash": "3fc2cf728bc0e674ff310543cd431b53fd672018ca73a7fb7423424d5d1b497c"
 }

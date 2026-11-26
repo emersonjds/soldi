@@ -7,6 +7,19 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.77.0
+
+> Headline: contas fixas pay themselves
+
+### Web
+- A conta fixa or parcelada with a fixed amount reads paid on its due day with no tap. Its check now says "Não paguei" to undo, the toast offers "Desfazer", and tapping the amount opens the payment to fix it (SOL-186).
+- Before the due day the row says "paga sozinha", and the conta form says "Paga sozinha no dia do vencimento." when the amount is fixed. Variable contas and faturas still wait for Pagar (SOL-186).
+
+### Server
+- Every signed-in request catches up the user's fixed contas due since the last catch-up and books each payment on its own due date, the same entry Pagar writes, under the entry lock and inside the entry ceiling. Months left unpaid before this release stay overdue (D55, SOL-186).
+- Migration `0032_bill_auto_paid_through` adds the catch-up watermark to `recurring_bills` (SOL-186).
+- Tests no longer depend on the day of the month they run on (SOL-186).
+
 ## 0.76.0
 
 > Headline: today flashes, long names wrap, one Lançar

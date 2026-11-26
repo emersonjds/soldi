@@ -25,7 +25,16 @@ impl TestApp {
         }
     }
 
+    /// D55: a bill registered in a test never pays itself on its registration day, whatever the
+    /// day of the month; tests of auto-pay set the watermark themselves.
     pub async fn signed_in(pool: PgPool, email: &str) -> Self {
+        sqlx::query(
+            "ALTER TABLE recurring_bills ALTER COLUMN auto_paid_through
+             SET DEFAULT ((now() AT TIME ZONE 'America/Sao_Paulo')::date)",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
         TestApp::anonymous(pool).another_user(email).await
     }
 

@@ -2166,3 +2166,480 @@ async fn sol140_inserting_onboarding_bills_without_a_category_is_a_bug(pool: PgP
     )
     .await;
 }
+
+fn today() -> chrono::NaiveDate {
+    soldi_server::today_sao_paulo()
+}
+
+fn two_months_back() -> chrono::NaiveDate {
+    this_month() - chrono::Months::new(2)
+}
+
+async fn set_auto_paid_through(pool: &PgPool, date: chrono::NaiveDate) {
+    sqlx::query("UPDATE recurring_bills SET auto_paid_through = $1")
+        .bind(date)
+        .execute(pool)
+        .await
+        .unwrap();
+}
+
+async fn auto_paid_through(pool: &PgPool, bill: &serde_json::Value) -> chrono::NaiveDate {
+    sqlx::query_scalar("SELECT auto_paid_through FROM recurring_bills WHERE id = $1::uuid")
+        .bind(bill["id"].as_str().unwrap())
+        .fetch_one(pool)
+        .await
+        .unwrap()
+}
+
+/// Every bill owes from `since` and was auto-paid through the day before.
+async fn owing_since(pool: &PgPool, since: chrono::NaiveDate) {
+    sqlx::query("UPDATE recurring_bills SET active_since = $1, auto_paid_through = $1 - 1")
+        .bind(since)
+        .execute(pool)
+        .await
+        .unwrap();
+}
+
+fn caller(id: Uuid) -> soldi_server::extract::CurrentUser {
+    soldi_server::extract::CurrentUser {
+        id,
+        session_id: Uuid::nil(),
+    }
+}
+
+async fn auto_pay_on(pool: &PgPool, app: &TestApp, on: chrono::NaiveDate) {
+    let user = caller(user_id(app).await);
+    soldi_server::bills::service::auto_pay(pool, &user, on)
+        .await
+        .unwrap();
+}
+
+async fn payments_of(pool: &PgPool, bill: &serde_json::Value) -> Vec<(chrono::NaiveDate, String)> {
+    sqlx::query_as(
+        "SELECT date, amount::text FROM transactions WHERE recurring_bill_id = $1::uuid
+         ORDER BY date",
+    )
+    .bind(bill["id"].as_str().unwrap())
+    .fetch_all(pool)
+    .await
+    .unwrap()
+}
+
+fn paid_on(dates: &[chrono::NaiveDate], amount: &str) -> Vec<(chrono::NaiveDate, String)> {
+    dates
+        .iter()
+        .map(|date| (*date, amount.to_owned()))
+        .collect()
+}
+
+/// The caller opened two months back with a R$ 1.500,00 rent due on the 1st, owing since last
+/// month and auto-paid through the day before.
+async fn rent_behind(pool: &PgPool, app: &TestApp) -> serde_json::Value {
+    app.open_at("1000", &two_months_back().to_string()).await;
+    let body = json!({ "name": "Aluguel", "amount": "1500", "due_day": 1,
+                       "category_id": category_id(app, "Aluguel").await });
+    let rent = create(app, body).await;
+    owing_since(pool, previous_month()).await;
+    rent
+}
+
+/// The month view's row of the bill due on `due`.
+async fn row_due(
+    app: &TestApp,
+    month: chrono::NaiveDate,
+    due: chrono::NaiveDate,
+) -> serde_json::Value {
+    let (_, view) = app.get(&format!("/api/months/{}", month_text(month))).await;
+    view["bills_of_month"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| row["due_date"] == due.to_string())
+        .cloned()
+        .unwrap_or_default()
+}
+
+#[sqlx::test]
+async fn d55_a_fixed_conta_due_after_the_watermark_is_paid_on_its_due_date(pool: PgPool) {
+    let ana = TestApp::signed_in(pool.clone(), "ana@example.com").await;
+    let rent = rent_behind(&pool, &ana).await;
+
+    auto_pay_on(&pool, &ana, today()).await;
+    auto_pay_on(&pool, &ana, today()).await;
+
+    assert_eq!(
+        payments_of(&pool, &rent).await,
+        paid_on(&[previous_month(), this_month()], "1500.00")
+    );
+    let row = row_due(&ana, this_month(), this_month()).await;
+    assert_eq!(row["paid"], true, "{row}");
+    assert!(row["transaction_id"].is_string());
+    assert_eq!(auto_paid_through(&pool, &rent).await, today());
+}
+
+#[sqlx::test]
+async fn d55_months_before_the_watermark_stay_venceu(pool: PgPool) {
+    let ana = TestApp::signed_in(pool.clone(), "ana@example.com").await;
+    let rent = rent_behind(&pool, &ana).await;
+    set_auto_paid_through(&pool, today().pred_opt().unwrap()).await;
+
+    auto_pay_on(&pool, &ana, today()).await;
+
+    assert!(
+        payments_of(&pool, &rent)
+            .await
+            .iter()
+            .all(|(date, _)| *date >= this_month())
+    );
+    let carried = row_due(&ana, this_month(), previous_month()).await;
+    assert_eq!(carried["paid"], false, "{carried}");
+    assert_eq!(carried["overdue"], true);
+}
+
+#[sqlx::test]
+async fn d55_variable_contas_and_cards_stay_open(pool: PgPool) {
+    let ana = TestApp::signed_in(pool.clone(), "ana@example.com").await;
+    ana.open_at("1000", &two_months_back().to_string()).await;
+    let light = create(
+        &ana,
+        json!({ "name": "Luz", "amount": "200", "due_day": 1, "variable": true,
+                "category_id": category_id(&ana, "Luz").await }),
+    )
+    .await;
+    let card = create(&ana, uncategorized_card()).await;
+    owing_since(&pool, two_months_back()).await;
+
+    auto_pay_on(&pool, &ana, today()).await;
+
+    assert!(payments_of(&pool, &light).await.is_empty());
+    assert!(payments_of(&pool, &card).await.is_empty());
+    assert_eq!(auto_paid_through(&pool, &light).await, today());
+}
+
+#[sqlx::test]
+async fn d55_nao_paguei_keeps_the_month_open(pool: PgPool) {
+    let ana = TestApp::signed_in(pool.clone(), "ana@example.com").await;
+    let rent = rent_behind(&pool, &ana).await;
+    auto_pay_on(&pool, &ana, today()).await;
+    let unpay = format!("{}?month={}", pay_uri(&rent), month_text(previous_month()));
+
+    assert_eq!(ana.delete(&unpay).await.0, StatusCode::NO_CONTENT);
+    auto_pay_on(&pool, &ana, today()).await;
+    auto_pay_on(&pool, &ana, today()).await;
+
+    assert_eq!(
+        payments_of(&pool, &rent).await,
+        paid_on(&[this_month()], "1500.00")
+    );
+    let open = row_due(&ana, this_month(), previous_month()).await;
+    assert_eq!(open["paid"], false, "{open}");
+    assert_eq!(open["overdue"], true);
+}
+
+#[sqlx::test]
+async fn d55_excluir_of_an_auto_payment_keeps_the_month_open(pool: PgPool) {
+    let ana = TestApp::signed_in(pool.clone(), "ana@example.com").await;
+    let rent = rent_behind(&pool, &ana).await;
+    auto_pay_on(&pool, &ana, today()).await;
+    let paid = row_due(&ana, previous_month(), previous_month()).await;
+    let entry = format!(
+        "/api/transactions/{}",
+        paid["transaction_id"].as_str().unwrap()
+    );
+
+    assert_eq!(ana.delete(&entry).await.0, StatusCode::NO_CONTENT);
+    auto_pay_on(&pool, &ana, today()).await;
+
+    assert_eq!(
+        payments_of(&pool, &rent).await,
+        paid_on(&[this_month()], "1500.00")
+    );
+    let open = row_due(&ana, this_month(), previous_month()).await;
+    assert_eq!(
+        (open["paid"].clone(), open["overdue"].clone()),
+        (json!(false), json!(true))
+    );
+}
+
+#[sqlx::test]
+async fn d55_pagar_after_nao_paguei_books_another_amount(pool: PgPool) {
+    let ana = TestApp::signed_in(pool.clone(), "ana@example.com").await;
+    let rent = rent_behind(&pool, &ana).await;
+    auto_pay_on(&pool, &ana, today()).await;
+    let month = month_text(previous_month());
+    ana.delete(&format!("{}?month={month}", pay_uri(&rent)))
+        .await;
+    let on = previous_month() + chrono::Days::new(14);
+
+    let (status, paid) = ana
+        .post(
+            &format!("{}?month={month}", pay_uri(&rent)),
+            json!({ "date": on, "amount": "1550.00" }),
+        )
+        .await;
+    auto_pay_on(&pool, &ana, today()).await;
+
+    assert_eq!(status, StatusCode::CREATED, "{paid}");
+    assert_eq!(
+        payments_of(&pool, &rent).await,
+        [
+            (on, "1550.00".to_owned()),
+            (this_month(), "1500.00".to_owned())
+        ]
+    );
+}
+
+#[sqlx::test]
+async fn d55_an_early_payment_is_kept(pool: PgPool) {
+    let ana = TestApp::signed_in(pool.clone(), "ana@example.com").await;
+    let rent = rent_behind(&pool, &ana).await;
+    let next = this_month() + chrono::Months::new(1);
+    let (status, early) = ana
+        .post(
+            &format!("{}?month={}", pay_uri(&rent), month_text(next)),
+            json!({ "date": next, "amount": "1400.00" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{early}");
+    owing_since(&pool, previous_month()).await;
+
+    auto_pay_on(&pool, &ana, next).await;
+
+    assert_eq!(
+        payments_of(&pool, &rent).await,
+        [
+            (previous_month(), "1500.00".to_owned()),
+            (this_month(), "1500.00".to_owned()),
+            (next, "1400.00".to_owned())
+        ]
+    );
+}
+
+#[sqlx::test]
+async fn d55_parar_and_the_last_parcela_bound_auto_pay(pool: PgPool) {
+    let ana = TestApp::signed_in(pool.clone(), "ana@example.com").await;
+    let fies = create(
+        &ana,
+        json!({ "name": "Fies", "amount": "300", "due_day": 1,
+                "category_id": category_id(&ana, "Aluguel").await }),
+    )
+    .await;
+    let rent = rent_behind(&pool, &ana).await;
+    sqlx::query("UPDATE recurring_bills SET last_month = $1")
+        .bind(previous_month())
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("UPDATE recurring_bills SET installments = 2 WHERE id = $1::uuid")
+        .bind(fies["id"].as_str().unwrap())
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("DELETE FROM transactions")
+        .execute(&pool)
+        .await
+        .unwrap();
+    owing_since(&pool, two_months_back() - chrono::Months::new(1)).await;
+
+    auto_pay_on(&pool, &ana, today()).await;
+
+    assert_eq!(
+        payments_of(&pool, &rent).await,
+        paid_on(&[two_months_back(), previous_month()], "1500.00")
+    );
+    assert_eq!(
+        payments_of(&pool, &fies).await,
+        paid_on(&[two_months_back(), previous_month()], "300.00")
+    );
+}
+
+#[sqlx::test]
+async fn d55_a_category_no_longer_bill_is_not_paid(pool: PgPool) {
+    let ana = TestApp::signed_in(pool.clone(), "ana@example.com").await;
+    let rent = rent_behind(&pool, &ana).await;
+    sqlx::query("UPDATE categories SET kind = 'daily', color = 'cat-24' WHERE id = $1::uuid")
+        .bind(rent["category_id"].as_str().unwrap())
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    auto_pay_on(&pool, &ana, today()).await;
+
+    assert!(payments_of(&pool, &rent).await.is_empty());
+    assert_eq!(auto_paid_through(&pool, &rent).await, today());
+}
+
+#[sqlx::test]
+async fn d55_only_the_callers_bills_pay_themselves(pool: PgPool) {
+    let ana = TestApp::signed_in(pool.clone(), "ana@example.com").await;
+    let bia = ana.another_user("bia@example.com").await;
+    let bia_id = user_id(&bia).await;
+    let theirs = rent_behind(&pool, &bia).await;
+    let rent = rent_behind(&pool, &ana).await;
+
+    auto_pay_on(&pool, &ana, today()).await;
+
+    assert_eq!(payments_of(&pool, &rent).await.len(), 2);
+    assert!(payments_of(&pool, &theirs).await.is_empty());
+    assert_eq!(
+        auto_paid_through(&pool, &theirs).await,
+        previous_month().pred_opt().unwrap()
+    );
+    soldi_server::bills::service::auto_pay(&pool, &caller(bia_id), today())
+        .await
+        .unwrap();
+    assert_eq!(payments_of(&pool, &theirs).await.len(), 2);
+}
+
+#[sqlx::test]
+async fn d55_a_caught_up_user_takes_no_entry_lock(pool: PgPool) {
+    let ana = TestApp::signed_in(pool.clone(), "ana@example.com").await;
+    rent_behind(&pool, &ana).await;
+    let user = caller(user_id(&ana).await);
+    soldi_server::bills::service::auto_pay(&pool, &user, today())
+        .await
+        .unwrap();
+    let mut lock = pool.begin().await.unwrap();
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended('entries:' || $1::text, 0))")
+        .bind(user.id.to_string())
+        .execute(&mut *lock)
+        .await
+        .unwrap();
+
+    let caught_up = tokio::time::timeout(
+        std::time::Duration::from_secs(5),
+        soldi_server::bills::service::auto_pay(&pool, &user, today()),
+    )
+    .await;
+
+    assert!(matches!(caught_up, Ok(Ok(()))));
+    lock.rollback().await.unwrap();
+}
+
+#[sqlx::test]
+async fn d55_any_signed_in_request_catches_up(pool: PgPool) {
+    let ana = TestApp::signed_in(pool.clone(), "ana@example.com").await;
+    rent_behind(&pool, &ana).await;
+
+    let (status, report) = ana
+        .get(&format!(
+            "/api/reports/categories?month={}",
+            month_text(this_month())
+        ))
+        .await;
+
+    assert_eq!(status, StatusCode::OK, "{report}");
+    assert_eq!(report["spent_total"], "1500.00");
+}
+
+#[sqlx::test]
+async fn d55_concurrent_reads_write_one_payment(pool: PgPool) {
+    let ana = TestApp::signed_in(pool.clone(), "ana@example.com").await;
+    let id = user_id(&ana).await;
+    let rent = rent_behind(&pool, &ana).await;
+    let mut lock = pool.begin().await.unwrap();
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended('entries:' || $1::text, 0))")
+        .bind(id.to_string())
+        .execute(&mut *lock)
+        .await
+        .unwrap();
+    let uri = format!("/api/months/{}", month_text(this_month()));
+
+    let both = async { tokio::join!(ana.get(&uri), ana.get(&uri)) };
+    let (one, other) = behind(&pool, lock, 2, both).await;
+
+    assert_eq!((one.0, other.0), (StatusCode::OK, StatusCode::OK));
+    assert_eq!(
+        payments_of(&pool, &rent).await,
+        paid_on(&[previous_month(), this_month()], "1500.00")
+    );
+}
+
+#[sqlx::test]
+async fn d55_a_catch_up_and_a_pay_never_deadlock(pool: PgPool) {
+    let ana = TestApp::signed_in(pool.clone(), "ana@example.com").await;
+    let id = user_id(&ana).await;
+    let rent = rent_behind(&pool, &ana).await;
+    let mut lock = pool.begin().await.unwrap();
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended('entries:' || $1::text, 0))")
+        .bind(id.to_string())
+        .execute(&mut *lock)
+        .await
+        .unwrap();
+    let catch_up = ana.get("/api/bills");
+    let pay = async {
+        common::waiting(&pool, 1).await;
+        set_auto_paid_through(&pool, today()).await;
+        ana.post(
+            &format!("{}?month={}", pay_uri(&rent), month_text(this_month())),
+            json!({ "date": this_month() }),
+        )
+        .await
+    };
+
+    let both = async { tokio::join!(catch_up, pay) };
+    let (caught_up, paid) = behind(&pool, lock, 2, both).await;
+
+    assert_eq!(caught_up.0, StatusCode::OK, "{}", caught_up.1);
+    assert_eq!(paid.0, StatusCode::CREATED, "{}", paid.1);
+}
+
+#[sqlx::test]
+async fn d55_a_failing_catch_up_answers_without_server_detail(pool: PgPool) {
+    let log = common::Log::capture();
+    let ana = TestApp::signed_in(pool.clone(), "ana@example.com").await;
+    let rent = rent_behind(&pool, &ana).await;
+    sqlx::raw_sql(
+        "CREATE FUNCTION refuse() RETURNS trigger LANGUAGE plpgsql AS
+           $$ BEGIN RAISE EXCEPTION 'secret detail'; END $$;
+         CREATE TRIGGER refuse BEFORE INSERT ON transactions FOR EACH ROW EXECUTE FUNCTION refuse();",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let (status, bills) = ana.get("/api/bills").await;
+
+    assert_eq!(status, StatusCode::OK, "{bills}");
+    assert!(!bills.to_string().contains("secret"), "{bills}");
+    assert!(payments_of(&pool, &rent).await.is_empty());
+    let line = log.line("auto-pay catch-up failed").await;
+    assert!(line.contains("ERROR"), "{line}");
+    assert!(!line.contains("secret"), "{line}");
+}
+
+/// The day before today in São Paulo by the database clock, the one `bills::repo::update` reads.
+async fn yesterday_in_db(pool: &PgPool) -> chrono::NaiveDate {
+    sqlx::query_scalar("SELECT (now() AT TIME ZONE 'America/Sao_Paulo')::date - 1")
+        .fetch_one(pool)
+        .await
+        .unwrap()
+}
+
+#[sqlx::test]
+async fn d55_retomar_and_variable_off_restart_from_yesterday(pool: PgPool) {
+    let ana = TestApp::signed_in(pool.clone(), "ana@example.com").await;
+    let created = create(&ana, rent(category_id(&ana, "Aluguel").await)).await;
+    let uri = bill_uri(&created);
+    ana.patch(&uri, json!({ "active": false })).await;
+    end_last_month(&pool).await;
+    ana.get("/api/bills").await;
+    assert_eq!(auto_paid_through(&pool, &created).await, today());
+
+    let (status, resumed) = ana.patch(&uri, json!({ "active": true })).await;
+    assert_eq!(status, StatusCode::OK, "{resumed}");
+    assert_eq!(
+        auto_paid_through(&pool, &created).await,
+        yesterday_in_db(&pool).await
+    );
+    ana.patch(&uri, json!({ "variable": true })).await;
+    assert_eq!(auto_paid_through(&pool, &created).await, today());
+    ana.patch(&uri, json!({ "name": "Casa" })).await;
+    assert_eq!(auto_paid_through(&pool, &created).await, today());
+    let (status, fixed) = ana.patch(&uri, json!({ "variable": false })).await;
+    assert_eq!(status, StatusCode::OK, "{fixed}");
+    assert_eq!(
+        auto_paid_through(&pool, &created).await,
+        yesterday_in_db(&pool).await
+    );
+}
