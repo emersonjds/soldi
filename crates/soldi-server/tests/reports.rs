@@ -1035,11 +1035,6 @@ async fn sol_174_one_gastos_and_one_guardado_on_mes_meu_ano_and_para_onde_vai(po
         assert_eq!(status, StatusCode::CREATED, "{conta}");
         contas.push(conta["id"].as_str().unwrap().to_string());
     }
-    // D55: Internet stays unpaid on the 25th, as if registered the day after its due day.
-    sqlx::query("UPDATE recurring_bills SET auto_paid_through = (now() AT TIME ZONE 'America/Sao_Paulo')::date")
-        .execute(&pool)
-        .await
-        .unwrap();
     let lazer = ana.category_id("Lazer").await;
     let (status, created) = ana
         .post(
