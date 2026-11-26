@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE recurring_bills SET auto_paid_through = $2\n         WHERE user_id = $1 AND auto_paid_through < $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Date"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "018c146732cff6882a873b9f4da2ee2a4be64674b077e14f044f87faac681eb1"
+}

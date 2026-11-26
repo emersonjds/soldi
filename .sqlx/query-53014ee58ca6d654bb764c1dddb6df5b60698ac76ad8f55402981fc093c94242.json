@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, auto_paid_through FROM recurring_bills\n         WHERE user_id = $1 AND auto_paid_through < $2 ORDER BY id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "recurring_bills",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "auto_paid_through",
+        "type_info": "Date",
+        "origin": {
+          "Table": {
+            "table": "recurring_bills",
+            "name": "auto_paid_through"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Date"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "53014ee58ca6d654bb764c1dddb6df5b60698ac76ad8f55402981fc093c94242"
+}

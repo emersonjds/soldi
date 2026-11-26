@@ -328,6 +328,59 @@ pub async fn find_any_card(
     .await
 }
 
+/// D55: whether a bill of the user was last auto-paid before `today`.
+pub async fn any_behind(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    today: chrono::NaiveDate,
+) -> Result<bool, sqlx::Error> {
+    sqlx::query_scalar!(
+        r#"SELECT EXISTS (SELECT 1 FROM recurring_bills
+           WHERE user_id = $1 AND auto_paid_through < $2) AS "exists!""#,
+        user_id,
+        today
+    )
+    .fetch_one(&mut *conn)
+    .await
+}
+
+/// D55: each bill of the user last auto-paid before `today`, with that day.
+pub async fn behind(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    today: chrono::NaiveDate,
+) -> Result<Vec<(Uuid, chrono::NaiveDate)>, sqlx::Error> {
+    let rows = sqlx::query!(
+        "SELECT id, auto_paid_through FROM recurring_bills
+         WHERE user_id = $1 AND auto_paid_through < $2 ORDER BY id",
+        user_id,
+        today
+    )
+    .fetch_all(&mut *conn)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .map(|row| (row.id, row.auto_paid_through))
+        .collect())
+}
+
+/// D55: every bill of the user counts as auto-paid through `today`.
+pub async fn paid_through(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    today: chrono::NaiveDate,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        "UPDATE recurring_bills SET auto_paid_through = $2
+         WHERE user_id = $1 AND auto_paid_through < $2",
+        user_id,
+        today
+    )
+    .execute(&mut *conn)
+    .await?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -459,5 +512,136 @@ mod tests {
             .unwrap();
 
         assert_eq!(found, [light]);
+    }
+
+    fn day(text: &str) -> chrono::NaiveDate {
+        text.parse().unwrap()
+    }
+
+    async fn rent_of(conn: &mut PgConnection, email: &str) -> (Uuid, Uuid) {
+        let user = user_with_categories(conn, email).await;
+        let rent = category(conn, user, "Aluguel").await;
+        insert_all(conn, user, &[bill("Aluguel", "1500", 10, rent)])
+            .await
+            .unwrap();
+        let id = sqlx::query_scalar!("SELECT id FROM recurring_bills WHERE user_id = $1", user)
+            .fetch_one(&mut *conn)
+            .await
+            .unwrap();
+        sqlx::query!(
+            "UPDATE recurring_bills SET auto_paid_through = '2026-09-20' WHERE id = $1",
+            id
+        )
+        .execute(&mut *conn)
+        .await
+        .unwrap();
+        (user, id)
+    }
+
+    async fn payments(conn: &mut PgConnection, bill_id: Uuid) -> Vec<(chrono::NaiveDate, String)> {
+        sqlx::query!(
+            "SELECT date, amount::text AS \"amount!\" FROM transactions
+             WHERE recurring_bill_id = $1 ORDER BY date",
+            bill_id
+        )
+        .fetch_all(&mut *conn)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|row| (row.date, row.amount))
+        .collect()
+    }
+
+    #[sqlx::test]
+    async fn d55_only_the_users_bills_behind_today_are_found_and_moved(pool: PgPool) {
+        let mut conn = pool.acquire().await.unwrap();
+        let (ana, rent) = rent_of(&mut conn, "ana@example.com").await;
+        let (bia, theirs) = rent_of(&mut conn, "bia@example.com").await;
+
+        assert!(any_behind(&mut conn, ana, day("2026-11-25")).await.unwrap());
+        assert!(!any_behind(&mut conn, ana, day("2026-09-20")).await.unwrap());
+        assert_eq!(
+            behind(&mut conn, ana, day("2026-11-25")).await.unwrap(),
+            [(rent, day("2026-09-20"))]
+        );
+
+        paid_through(&mut conn, ana, day("2026-11-25"))
+            .await
+            .unwrap();
+
+        assert!(!any_behind(&mut conn, ana, day("2026-11-25")).await.unwrap());
+        assert!(
+            behind(&mut conn, ana, day("2026-11-25"))
+                .await
+                .unwrap()
+                .is_empty()
+        );
+        assert_eq!(
+            behind(&mut conn, bia, day("2026-11-25")).await.unwrap(),
+            [(theirs, day("2026-09-20"))]
+        );
+    }
+
+    #[sqlx::test]
+    async fn d55_auto_payments_insert_only_own_open_bill_months(pool: PgPool) {
+        let mut conn = pool.acquire().await.unwrap();
+        let (ana, rent) = rent_of(&mut conn, "ana@example.com").await;
+        let (_, theirs) = rent_of(&mut conn, "bia@example.com").await;
+        let rent_category = category(&mut conn, ana, "Aluguel").await;
+        sqlx::query!(
+            "INSERT INTO transactions (user_id, date, amount, kind, category_id, recurring_bill_id)
+             VALUES ($1, '2026-10-05', 1400, 'bill', $2, $3)",
+            ana,
+            rent_category,
+            rent
+        )
+        .execute(&mut *conn)
+        .await
+        .unwrap();
+        let dates = [day("2026-10-10"), day("2026-11-10")];
+
+        let written = crate::transactions::repo::insert_auto_payments(
+            &mut conn,
+            ana,
+            &[rent, rent, theirs],
+            &[dates[0], dates[1], dates[1]],
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(written, 1);
+        assert_eq!(
+            payments(&mut conn, rent).await,
+            [
+                (day("2026-10-05"), "1400.00".to_owned()),
+                (dates[1], "1500.00".to_owned())
+            ]
+        );
+        assert!(payments(&mut conn, theirs).await.is_empty());
+    }
+
+    #[sqlx::test]
+    async fn d55_a_bill_on_a_category_no_longer_bill_is_not_auto_paid(pool: PgPool) {
+        let mut conn = pool.acquire().await.unwrap();
+        let (ana, rent) = rent_of(&mut conn, "ana@example.com").await;
+        sqlx::query!(
+            "UPDATE categories SET kind = 'daily' WHERE user_id = $1 AND name = 'Aluguel'",
+            ana
+        )
+        .execute(&mut *conn)
+        .await
+        .unwrap();
+
+        let written = crate::transactions::repo::insert_auto_payments(
+            &mut conn,
+            ana,
+            &[rent],
+            &[day("2026-11-10")],
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(written, 0);
+        assert!(payments(&mut conn, rent).await.is_empty());
     }
 }
