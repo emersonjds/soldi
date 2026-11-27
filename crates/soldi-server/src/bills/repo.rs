@@ -275,6 +275,24 @@ pub async fn paid_in(
     .await
 }
 
+/// D56: `month`'s own amount of the user's bill, when one is set.
+pub async fn month_amount(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    bill_id: Uuid,
+    month: chrono::NaiveDate,
+) -> Result<Option<rust_decimal::Decimal>, sqlx::Error> {
+    Ok(sqlx::query_scalar!(
+        "SELECT amount FROM bill_months WHERE user_id = $1 AND bill_id = $2 AND month = $3",
+        user_id,
+        bill_id,
+        month
+    )
+    .fetch_optional(&mut *conn)
+    .await?
+    .flatten())
+}
+
 /// D56: stores `month`'s own amount or skip of the user's bill.
 pub async fn set_month(
     conn: &mut PgConnection,

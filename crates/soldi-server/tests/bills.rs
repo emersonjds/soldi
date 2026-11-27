@@ -2801,3 +2801,84 @@ async fn d56_a_month_override_waits_for_the_entry_lock(pool: PgPool) {
 
     assert_eq!(status, StatusCode::NO_CONTENT, "{body}");
 }
+
+#[sqlx::test]
+async fn d56_pagar_without_an_amount_books_the_months_own_amount(pool: PgPool) {
+    let (ana, rent) = ana_with_rent(pool).await;
+    let own = json!({ "amount": "2300.00", "skipped": false });
+    ana.put(&month_uri(&rent, next_month()), own).await;
+
+    let pay = format!("{}?month={}", pay_uri(&rent), month_text(next_month()));
+    let (status, paid) = ana
+        .post(&pay, json!({ "date": next_month().to_string() }))
+        .await;
+
+    assert_eq!(status, StatusCode::CREATED, "{paid}");
+    assert_eq!(paid["amount"], "2300.00");
+}
+
+/// Writes a month override straight to the table: any HTTP request would run the catch-up first.
+async fn set_month_row(
+    pool: &PgPool,
+    bill: &serde_json::Value,
+    month: chrono::NaiveDate,
+    amount: Option<&str>,
+    skipped: bool,
+) {
+    sqlx::query(
+        "INSERT INTO bill_months (user_id, bill_id, month, amount, skipped)
+         SELECT user_id, id, $2, $3::numeric, $4 FROM recurring_bills WHERE id = $1::uuid",
+    )
+    .bind(bill["id"].as_str().unwrap())
+    .bind(month)
+    .bind(amount.map(str::to_owned))
+    .bind(skipped)
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+#[sqlx::test]
+async fn d56_the_catch_up_pays_the_months_own_amount_and_never_a_skipped_month(pool: PgPool) {
+    let ana = TestApp::signed_in(pool.clone(), "ana@example.com").await;
+    let rent = rent_behind(&pool, &ana).await;
+    set_month_row(&pool, &rent, previous_month(), None, true).await;
+    set_month_row(&pool, &rent, this_month(), Some("1600.00"), false).await;
+
+    auto_pay_on(&pool, &ana, today()).await;
+
+    assert_eq!(
+        payments_of(&pool, &rent).await,
+        paid_on(&[this_month()], "1600.00")
+    );
+    let carried = row_due(&ana, this_month(), previous_month()).await;
+    assert_eq!(
+        carried,
+        serde_json::Value::Null,
+        "a skipped month is never carried"
+    );
+    let own = row_due(&ana, previous_month(), previous_month()).await;
+    assert_eq!(
+        (
+            own["paid"].clone(),
+            own["overdue"].clone(),
+            own["skipped"].clone()
+        ),
+        (json!(false), json!(false), json!(true))
+    );
+}
+
+#[sqlx::test]
+async fn d56_a_variable_conta_with_its_own_amount_stays_manual(pool: PgPool) {
+    let ana = TestApp::signed_in(pool.clone(), "ana@example.com").await;
+    ana.open_at("1000", &two_months_back().to_string()).await;
+    let body = json!({ "name": "Luz", "amount": "200", "due_day": 1, "variable": true,
+                       "category_id": category_id(&ana, "Aluguel").await });
+    let light = create(&ana, body).await;
+    owing_since(&pool, previous_month()).await;
+    set_month_row(&pool, &light, this_month(), Some("180.00"), false).await;
+
+    auto_pay_on(&pool, &ana, today()).await;
+
+    assert!(payments_of(&pool, &light).await.is_empty());
+}

@@ -4003,7 +4003,7 @@
       },
       "PayBill": {
         "type": "object",
-        "description": "`amount` defaults to the bill's amount and is required for a card; the bill never changes.",
+        "description": "`amount` defaults to the month's own amount (D56), then the bill's, and is required for a\ncard; the bill never changes.",
         "required": [
           "date"
         ],

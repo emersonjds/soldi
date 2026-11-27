@@ -324,10 +324,14 @@ pub async fn pay(
         .await?
         .ok_or(AppError::NotFound)?;
     check_bill_kind(&mut conn, user, bill.category_id).await?;
-    let amount = input
-        .amount
-        .or(bill.amount)
-        .ok_or_else(|| AppError::invalid("amount", "required for a card"))?;
+    let paid_month = month.unwrap_or(first_of(input.date));
+    let amount = match input.amount {
+        Some(amount) => Some(amount),
+        None => repo::month_amount(&mut conn, user.id, bill.id, paid_month)
+            .await?
+            .or(bill.amount),
+    }
+    .ok_or_else(|| AppError::invalid("amount", "required for a card"))?;
     let entry = transactions::domain::check(CreateTransaction {
         date: input.date,
         amount,
@@ -344,7 +348,6 @@ pub async fn pay(
     if month.is_some_and(|first| !(first..=month_end(first)).contains(&entry.date)) {
         return Err(AppError::invalid("date", "must be in the month"));
     }
-    let paid_month = month.unwrap_or(first_of(entry.date));
     if bill.last_month.is_some_and(|last| paid_month > last) {
         return Err(domain::bill_ended());
     }
