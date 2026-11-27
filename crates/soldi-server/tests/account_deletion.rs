@@ -80,6 +80,15 @@ async fn fill_account(pool: &PgPool, user: &TestApp, email: &str) {
     assert_eq!(status, StatusCode::NO_CONTENT);
 
     sqlx::query(
+        "INSERT INTO bill_months (user_id, bill_id, month, skipped)
+         SELECT user_id, id, '2027-01-01', true FROM recurring_bills WHERE id = $1",
+    )
+    .bind(bill["id"].as_str().unwrap().parse::<Uuid>().unwrap())
+    .execute(pool)
+    .await
+    .unwrap();
+
+    sqlx::query(
         "INSERT INTO password_resets (user_id, token_hash)
          SELECT id, sha256(convert_to(email, 'UTF8')) FROM users WHERE email = $1",
     )
