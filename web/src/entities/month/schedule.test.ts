@@ -15,6 +15,8 @@ const bill = (name: string, due_date: string, rest: Partial<Schemas["BillOfMonth
   overdue: false,
   is_card: false,
   variable: false,
+  adjusted: false,
+  skipped: false,
   ...rest,
 });
 

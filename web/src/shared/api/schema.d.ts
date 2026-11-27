@@ -164,6 +164,22 @@ export interface paths {
         patch: operations["update_bill"];
         trace?: never;
     };
+    "/api/bills/{id}/months/{month}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["set_bill_month"];
+        post?: never;
+        delete: operations["restore_bill_month"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/bills/{id}/pay": {
         parameters: {
             query?: never;
@@ -599,7 +615,10 @@ export interface components {
              */
             last_month?: string | null;
             name: string;
-            /** @description The amount is an estimate that changes every month (D44); never on a card. */
+            /**
+             * @description The amount is an estimate that changes every month (D44); never on a card. D55: a
+             *     fixed-amount conta fixa is paid on its due day with no tap; a variable one stays manual.
+             */
             variable: boolean;
         };
         /**
@@ -611,6 +630,8 @@ export interface components {
          *     month without spends or payment is not listed.
          */
         BillOfMonth: {
+            /** @description D56: this unpaid month has its own amount; `amount` is it. */
+            adjusted: boolean;
             amount: string;
             /** Format: uuid */
             bill_id: string;
@@ -640,10 +661,19 @@ export interface components {
             lands_on?: string | null;
             name: string;
             overdue: boolean;
+            /**
+             * @description D55: a fixed-amount conta fixa is paid on its due day with no tap; a variable one stays
+             *     manual.
+             */
             paid: boolean;
+            /** @description D56: this month is skipped: no `lands_on`, never overdue or auto-paid, counted nowhere. */
+            skipped: boolean;
             /** Format: uuid */
             transaction_id?: string | null;
-            /** @description The conta fixa's amount is an estimate (D44); false on a card. */
+            /**
+             * @description The conta fixa's amount is an estimate (D44); false on a card. D55: a fixed-amount conta
+             *     fixa is paid on its due day with no tap; a variable one stays manual.
+             */
             variable: boolean;
         };
         /** @description SOL-119: a card's fatura due in `month`, what fills it, and the next six months' committed totals. */
@@ -1050,7 +1080,10 @@ export interface components {
             /** Format: date */
             opening_date: string;
         };
-        /** @description `amount` defaults to the bill's amount and is required for a card; the bill never changes. */
+        /**
+         * @description `amount` defaults to the month's own amount (D56), then the bill's, and is required for a
+         *     card; the bill never changes.
+         */
         PayBill: {
             amount?: string | null;
             /** Format: date */
@@ -1133,6 +1166,12 @@ export interface components {
          * @enum {string}
          */
         Scope: "this" | "following" | "all";
+        /** @description D56: one month's own amount, or a skip; `amount` null needs `skipped`. */
+        SetBillMonth: {
+            /** @description Greater than zero, up to two decimal places; kept under a skip. */
+            amount?: string | null;
+            skipped: boolean;
+        };
         /**
          * @description Money is a decimal string with up to two places (`"-500.00"`). The tiers are the lower
          *     bounds of the thermometer colors and are strictly increasing:
@@ -1942,6 +1981,159 @@ export interface operations {
                 };
             };
             /** @description Same rules as create, on the bill after the change; `closing_day` on a conta fixa, `active: false` on a card, `active` on a parcelado bill or with `installments`/`last_month`; `installments` or `last_month` on a card, sent apart or as a value with a `null`, or `last_month` before the latest paid month; both `null` on a bill without parcelas (`installments`); `variable` on a card; `fatura-paid` when a card's `closing_day` changes while a fatura from this month on is paid (D30b) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Rate limited with the account's write budget; wait `Retry-After` seconds */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    set_bill_month: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Bill id */
+                id: string;
+                /**
+                 * @description The month, `YYYY-MM`
+                 * @example 2026-12
+                 */
+                month: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetBillMonth"];
+            };
+        };
+        responses: {
+            /** @description The month's own amount or skip is stored (D56); every other month keeps the bill's */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `id` is not a UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Missing, archived or another user's */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The month is already paid (`bill-already-paid`): edit its payment */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description `month` not `YYYY-MM` from 2000 to 2100, `amount` missing while `skipped` is false, not above zero or with more than two places (`validation`); `card-month` on a card; `month-outside-bill` before `active_since`'s month or outside the bill's run (D35) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Rate limited with the account's write budget; wait `Retry-After` seconds */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    restore_bill_month: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Bill id */
+                id: string;
+                /**
+                 * @description The month, `YYYY-MM`
+                 * @example 2026-12
+                 */
+                month: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The month follows the bill again, also when it had nothing of its own */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `id` is not a UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Missing, archived or another user's */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description `month` is not `YYYY-MM` */
             422: {
                 headers: {
                     [name: string]: unknown;
