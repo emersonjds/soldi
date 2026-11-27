@@ -2781,6 +2781,29 @@ async fn d56_another_users_or_an_archived_bill_takes_no_month_override(pool: PgP
         StatusCode::NOT_FOUND
     );
     assert_eq!(ana.delete(&uri).await.0, StatusCode::NOT_FOUND);
+
+    let card = create(&ana, porto(&ana.category_id("Cartão").await)).await;
+    assert_eq!(ana.delete(&bill_uri(&card)).await.0, StatusCode::NO_CONTENT);
+    let card_month = month_uri(&card, next_month());
+    assert_eq!(
+        ana.put(&card_month, json!({ "skipped": true })).await.0,
+        StatusCode::NOT_FOUND
+    );
+}
+
+#[sqlx::test]
+async fn d56_pagar_on_a_skipped_month_books_the_bills_amount_and_wins(pool: PgPool) {
+    let (ana, rent) = ana_with_rent(pool).await;
+    ana.put(&month_uri(&rent, next_month()), json!({ "skipped": true }))
+        .await;
+
+    let pay = format!("{}?month={}", pay_uri(&rent), month_text(next_month()));
+    let (status, paid) = ana
+        .post(&pay, json!({ "date": next_month().to_string() }))
+        .await;
+
+    assert_eq!(status, StatusCode::CREATED, "{paid}");
+    assert_eq!(paid["amount"], rent["amount"]);
 }
 
 #[sqlx::test]

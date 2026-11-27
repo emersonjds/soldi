@@ -325,6 +325,8 @@ pub async fn pay(
         .ok_or(AppError::NotFound)?;
     check_bill_kind(&mut conn, user, bill.category_id).await?;
     let paid_month = month.unwrap_or(first_of(input.date));
+    // D56: a PUT on this month commits before the amount is read, or waits for this payment.
+    transactions::repo::lock_entries(&mut conn, user.id).await?;
     let amount = match input.amount {
         Some(amount) => Some(amount),
         None => repo::month_amount(&mut conn, user.id, bill.id, paid_month)
@@ -439,6 +441,10 @@ pub async fn set_month(
     let mut tx = pool.begin().await?;
     // D55's order is settings → entries → bill rows; a catch-up or a Pagar sees this month before or after.
     transactions::repo::lock_entries(&mut tx, user.id).await?;
+    // `months::repo::bills` keeps archived cards; an archived bill is not found (R4).
+    repo::find(&mut tx, user.id, id)
+        .await?
+        .ok_or(AppError::NotFound)?;
     let bills = months::repo::bills(&mut tx, user.id).await?;
     let bill = bills
         .iter()

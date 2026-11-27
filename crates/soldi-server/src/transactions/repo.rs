@@ -237,6 +237,7 @@ pub async fn insert_auto_payments(
          JOIN categories c ON c.user_id = b.user_id AND c.id = b.category_id AND c.kind = 'bill'
          LEFT JOIN bill_months m ON m.user_id = b.user_id AND m.bill_id = b.id
               AND m.month = date_trunc('month', d.date)::date
+         WHERE NOT COALESCE(m.skipped, false)
          ON CONFLICT DO NOTHING",
         user_id,
         bill_ids,
