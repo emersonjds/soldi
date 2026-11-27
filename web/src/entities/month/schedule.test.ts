@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { Schemas } from "@/shared/api/client";
 
-import { dueDays, nextDue } from "./schedule";
+import { ALL_BILLS_PAID, dueDays, nextDue, subtitleOf } from "./schedule";
 
 const bill = (name: string, due_date: string, rest: Partial<Schemas["BillOfMonth"]> = {}): Schemas["BillOfMonth"] => ({
   bill_id: `id-${name}`,
@@ -85,5 +85,19 @@ describe("nextDue", () => {
     const december = [bill("Aluguel", "2026-12-10"), bill("Luz", "2026-12-02")];
     expect(nextDue(december, today)?.name).toBe("Luz");
     expect(nextDue([bill("Luz", "2026-10-02", { overdue: true })], today)).toBeUndefined();
+  });
+});
+
+describe("a skipped month (D56)", () => {
+  const today = "2026-11-05";
+  const skipped = bill("Aluguel", "2026-11-10", { skipped: true });
+
+  it("owes nothing on its day and is never the next bill", () => {
+    expect(dueDays([skipped, bill("Luz", "2026-11-10")])).toEqual([{ date: "2026-11-10", unpaid: 1 }]);
+    expect(nextDue([skipped, bill("Luz", "2026-11-20")], today)?.name).toBe("Luz");
+  });
+
+  it("leaves every bill paid when the others are", () => {
+    expect(subtitleOf([skipped, bill("Luz", "2026-11-02", { paid: true })], today)).toBe(ALL_BILLS_PAID);
   });
 });

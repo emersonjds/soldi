@@ -1181,6 +1181,64 @@ describe("Contas a pagar", () => {
       );
     });
   });
+
+  describe("a month of its own (D56)", () => {
+    const SKIPPED_RENT: Schemas["BillOfMonth"] = { ...BILLS_OF_MONTH[1], skipped: true, lands_on: null };
+    const ADJUSTED_LUZ: Schemas["BillOfMonth"] = {
+      ...BILLS_OF_MONTH[0],
+      name: "Luz",
+      amount: "180.00",
+      adjusted: true,
+      variable: true,
+      overdue: false,
+      due_date: "2026-11-25",
+    };
+    const rent = BILLS_OF_MONTH[1].name;
+
+    it("leaves a skipped month out of the counts and the total, and an adjusted one drops the estimate", async () => {
+      show([SKIPPED_RENT, ADJUSTED_LUZ]);
+      await loaded();
+
+      expect(card()).toHaveTextContent("Contas a pagar0 de 1 paga");
+      expect(screen.getByRole("button", { name: /^Valor variável/ })).toHaveTextContent(
+        "0 de 1 paga · falta R$ 180,00",
+      );
+      expect(card()).toHaveTextContent("Próxima: dia 25 · R$ 180,00");
+
+      const luz = rowOf("Luz");
+      expect(luz).toHaveTextContent("Luz · valor ajustado");
+      expect(luz).not.toHaveTextContent("valor variável");
+      expect(luz).not.toHaveTextContent("≈");
+    });
+
+    it("strikes a skipped month through, says so, and leaves no way to pay it", async () => {
+      show([SKIPPED_RENT, ADJUSTED_LUZ]);
+      await loaded();
+
+      const row = rowOf(rent);
+      expect(within(row).getAllByText("pulada em novembro")).toHaveLength(2);
+      expect(within(row).getByText(rent)).toHaveClass("line-through", "text-muted-foreground");
+      expect(within(row).getByText("R$ 2.259,56")).toHaveClass("line-through");
+      expect(within(row).queryByRole("button", { name: `Marcar ${rent} como paga` })).not.toBeInTheDocument();
+      expect(within(row).queryByRole("button", { name: `Pagar ${rent}` })).not.toBeInTheDocument();
+      expect(within(row).getByRole("button", { name: `Abrir ${rent} de novembro` })).toBeInTheDocument();
+    });
+
+    it("counts the rest as all paid", async () => {
+      show([SKIPPED_RENT, { ...ADJUSTED_LUZ, paid: true, adjusted: false, transaction_id: "t-paid" }]);
+      await loaded();
+
+      expect(card()).toHaveTextContent("Contas a pagar1 de 1 paga");
+      expect(card()).toHaveTextContent("Todas as contas do mês pagas");
+    });
+
+    it("says a skipped parcela is skipped", async () => {
+      show([{ ...SKIPPED_RENT, installment: 3, installments: 10 }]);
+      await loaded();
+
+      expect(rowOf(rent)).toHaveTextContent("Parcela 3/10 · pulada");
+    });
+  });
 });
 
 describe("Contas a pagar collapses (SOL-158)", () => {
