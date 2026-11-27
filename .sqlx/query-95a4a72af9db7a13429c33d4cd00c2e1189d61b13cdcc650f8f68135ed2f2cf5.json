@@ -1,0 +1,66 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT bill_id, month, amount, skipped FROM bill_months\n         WHERE user_id = $1 AND month BETWEEN $2 AND $3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "bill_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "bill_months",
+            "name": "bill_id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "month",
+        "type_info": "Date",
+        "origin": {
+          "Table": {
+            "table": "bill_months",
+            "name": "month"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "amount",
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "bill_months",
+            "name": "amount"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "skipped",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "bill_months",
+            "name": "skipped"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Date",
+        "Date"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "95a4a72af9db7a13429c33d4cd00c2e1189d61b13cdcc650f8f68135ed2f2cf5"
+}

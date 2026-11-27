@@ -98,6 +98,10 @@ pub struct BillOfMonth {
     /// The conta fixa's amount is an estimate (D44); false on a card. D55: a fixed-amount conta
     /// fixa is paid on its due day with no tap; a variable one stays manual.
     pub variable: bool,
+    /// D56: this unpaid month has its own amount; `amount` is it.
+    pub adjusted: bool,
+    /// D56: this month is skipped: no `lands_on`, never overdue or auto-paid, counted nowhere.
+    pub skipped: bool,
 }
 
 /// SOL-119: a card's fatura due in `month`, what fills it, and the next six months' committed totals.

@@ -380,12 +380,16 @@ pub async fn auto_pay(pool: &PgPool, user: &CurrentUser, today: NaiveDate) -> Re
         return Ok(());
     }
     let behind: std::collections::HashMap<Uuid, NaiveDate> = read.iter().copied().collect();
+    let overrides = months::domain::bill_months(
+        months::repo::bill_months(&mut tx, user.id, months::domain::first_of(opening), today)
+            .await?,
+    );
     let mut due: Vec<(NaiveDate, Uuid)> = months::repo::bills(&mut tx, user.id)
         .await?
         .iter()
         .filter_map(|bill| behind.get(&bill.id).map(|after| (bill, *after)))
         .flat_map(|(bill, after)| {
-            months::domain::auto_paid(bill, after, opening, today)
+            months::domain::auto_paid(bill, &overrides, after, opening, today)
                 .into_iter()
                 .map(|date| (date, bill.id))
         })

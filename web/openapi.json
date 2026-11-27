@@ -2740,9 +2740,15 @@
           "paid",
           "overdue",
           "is_card",
-          "variable"
+          "variable",
+          "adjusted",
+          "skipped"
         ],
         "properties": {
+          "adjusted": {
+            "type": "boolean",
+            "description": "D56: this unpaid month has its own amount; `amount` is it."
+          },
           "amount": {
             "type": "string"
           },
@@ -2799,6 +2805,10 @@
           "paid": {
             "type": "boolean",
             "description": "D55: a fixed-amount conta fixa is paid on its due day with no tap; a variable one stays\nmanual."
+          },
+          "skipped": {
+            "type": "boolean",
+            "description": "D56: this month is skipped: no `lands_on`, never overdue or auto-paid, counted nowhere."
           },
           "transaction_id": {
             "type": [

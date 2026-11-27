@@ -29,6 +29,7 @@ pub async fn get(pool: &PgPool, user: &CurrentUser, month: &str) -> Result<Month
     .await?;
     let bills = repo::bills(&mut conn, user.id).await?;
     let payments = repo::payments(&mut conn, user.id, domain::first_of(opening), end).await?;
+    let bill_months = repo::bill_months(&mut conn, user.id, domain::first_of(opening), end).await?;
     let spending = reports::domain::spending(
         &reports::repo::category_sums(&mut conn, user.id, month.max(opening), end).await?,
     );
@@ -37,6 +38,7 @@ pub async fn get(pool: &PgPool, user: &CurrentUser, month: &str) -> Result<Month
         settings,
         sums,
         bills,
+        bill_months,
         payments,
         spending,
         today,
@@ -89,7 +91,7 @@ pub async fn fatura(
     ))
 }
 
-/// D16: 4 queries whatever the horizon, after D36 growth (1 more, writes only when behind).
+/// D16: 5 queries whatever the horizon, after D36 growth (1 more, writes only when behind).
 pub async fn forecast(pool: &PgPool, user: &CurrentUser) -> Result<Forecast, AppError> {
     let today = crate::today_sao_paulo();
     let until = transactions::domain::open_until(today, domain::horizon_end(today));
@@ -101,10 +103,12 @@ pub async fn forecast(pool: &PgPool, user: &CurrentUser) -> Result<Forecast, App
     let sums = repo::day_sums(&mut conn, user.id, opening, to, domain::cards_from(opening)).await?;
     let bills = repo::bills(&mut conn, user.id).await?;
     let payments = repo::payments(&mut conn, user.id, domain::first_of(opening), to).await?;
+    let bill_months = repo::bill_months(&mut conn, user.id, domain::first_of(opening), to).await?;
     Ok(domain::forecast(domain::ForecastInput {
         settings,
         sums,
         bills,
+        bill_months,
         payments,
         today,
     }))

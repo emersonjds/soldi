@@ -4,7 +4,7 @@ use soldi_types::categories::CategoryKind;
 use sqlx::PgConnection;
 use uuid::Uuid;
 
-use super::domain::{DaySum, MonthBill, Payment};
+use super::domain::{BillMonth, DaySum, MonthBill, Payment};
 
 /// Entries dated `from` to `to`, and a card's spends from `cards_from` (D28).
 pub async fn day_sums(
@@ -83,6 +83,25 @@ pub async fn payments(
         r#"SELECT recurring_bill_id AS "bill_id!", id AS transaction_id, amount, date
            FROM transactions
            WHERE user_id = $1 AND recurring_bill_id IS NOT NULL AND date BETWEEN $2 AND $3"#,
+        user_id,
+        from,
+        to
+    )
+    .fetch_all(&mut *conn)
+    .await
+}
+
+/// D56: the user's month overrides from `from` to `to` (first days).
+pub async fn bill_months(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    from: NaiveDate,
+    to: NaiveDate,
+) -> Result<Vec<BillMonth>, sqlx::Error> {
+    sqlx::query_as!(
+        BillMonth,
+        "SELECT bill_id, month, amount, skipped FROM bill_months
+         WHERE user_id = $1 AND month BETWEEN $2 AND $3",
         user_id,
         from,
         to

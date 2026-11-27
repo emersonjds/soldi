@@ -49,6 +49,23 @@ pub struct Payment {
     pub date: NaiveDate,
 }
 
+/// D56: one month of a conta fixa or parcelada set apart: its own amount, or skipped.
+pub struct BillMonth {
+    pub bill_id: Uuid,
+    pub month: NaiveDate,
+    pub amount: Option<Decimal>,
+    pub skipped: bool,
+}
+
+/// (bill id, first day of the month) → that month's override (D56).
+pub type BillMonths = HashMap<(Uuid, NaiveDate), BillMonth>;
+
+pub fn bill_months(rows: Vec<BillMonth>) -> BillMonths {
+    rows.into_iter()
+        .map(|row| ((row.bill_id, row.month), row))
+        .collect()
+}
+
 /// `month` is its first day; `sums` cover `opening_date` to the month's end (a card's spends
 /// from `cards_from(opening_date)`), `payments` the
 /// opening date's month to the month's end;
@@ -58,6 +75,8 @@ pub struct MonthInput {
     pub settings: Settings,
     pub sums: Vec<DaySum>,
     pub bills: Vec<MonthBill>,
+    /// The overrides from the opening date's month to the end (D56).
+    pub bill_months: Vec<BillMonth>,
     pub payments: Vec<Payment>,
     pub spending: Spending,
     pub today: NaiveDate,
@@ -215,10 +234,24 @@ pub fn card_fatura(
     }
 }
 
-/// What `bill` owes in `month`: its amount, or a card's fatura.
-fn amount_in(bill: &MonthBill, faturas: &Faturas, month: NaiveDate) -> Decimal {
-    bill.amount
+/// What `bill` owes in `month`: its own amount that month (D56), its amount, or a card's fatura.
+fn amount_in(
+    bill: &MonthBill,
+    faturas: &Faturas,
+    overrides: &BillMonths,
+    month: NaiveDate,
+) -> Decimal {
+    overrides
+        .get(&(bill.id, month))
+        .and_then(|set| set.amount)
+        .or(bill.amount)
         .unwrap_or_else(|| faturas.get(&(bill.id, month)).copied().unwrap_or_default())
+}
+
+fn skipped(overrides: &BillMonths, bill: &MonthBill, month: NaiveDate) -> bool {
+    overrides
+        .get(&(bill.id, month))
+        .is_some_and(|set| set.skipped)
 }
 
 /// D35: whether `month` (its first day) is inside the bill's run: up to `last_month`, from parcela 1.
@@ -239,14 +272,21 @@ fn installment_in(bill: &MonthBill, due: NaiveDate) -> Option<i16> {
 
 /// D17: a month of `bill` is owed when its due date is on or after the opening date and the
 /// bill's `active_since`, inside its run (D35); a card's (D28) when its fatura is above zero,
-/// whenever it was registered.
-fn owed(bill: &MonthBill, amount: Decimal, due: NaiveDate, opening: NaiveDate) -> bool {
+/// whenever it was registered; never a skipped month (D56).
+fn owed(
+    bill: &MonthBill,
+    amount: Decimal,
+    due: NaiveDate,
+    opening: NaiveDate,
+    overrides: &BillMonths,
+) -> bool {
     due >= opening
         && match bill.closing_day {
             Some(_) => amount > Decimal::ZERO,
             None => due >= bill.active_since,
         }
         && runs_in(bill, first_of(due))
+        && !skipped(overrides, bill, first_of(due))
 }
 
 /// D17: each owed, unpaid month of `bills` from the opening date's month to `to`'s, oldest
@@ -254,6 +294,7 @@ fn owed(bill: &MonthBill, amount: Decimal, due: NaiveDate, opening: NaiveDate) -
 pub fn unpaid<'a>(
     bills: &'a [MonthBill],
     faturas: &Faturas,
+    overrides: &BillMonths,
     payments: &[Payment],
     opening: NaiveDate,
     today: NaiveDate,
@@ -271,8 +312,8 @@ pub fn unpaid<'a>(
     for month in months {
         for bill in bills {
             let due = due_date(month, bill.due_day);
-            let amount = amount_in(bill, faturas, month);
-            if owed(bill, amount, due, opening) && !paid.contains(&(bill.id, month)) {
+            let amount = amount_in(bill, faturas, overrides, month);
+            if owed(bill, amount, due, opening, overrides) && !paid.contains(&(bill.id, month)) {
                 found.push(Unpaid {
                     bill,
                     amount,
@@ -288,6 +329,7 @@ pub fn unpaid<'a>(
 /// D55: the due dates in `(after, today]` of a fixed-amount conta fixa; never a card or a variable one.
 pub fn auto_paid(
     bill: &MonthBill,
+    overrides: &BillMonths,
     after: NaiveDate,
     opening: NaiveDate,
     today: NaiveDate,
@@ -303,7 +345,7 @@ pub fn auto_paid(
     })
     .take_while(|month| *month <= today)
     .map(|month| due_date(month, bill.due_day))
-    .filter(|due| after < *due && *due <= today && owed(bill, amount, *due, opening))
+    .filter(|due| after < *due && *due <= today && owed(bill, amount, *due, opening, overrides))
     .collect()
 }
 
@@ -401,10 +443,12 @@ pub fn month_view(input: MonthInput) -> MonthView {
         settings,
         sums,
         bills,
+        bill_months: rows,
         payments,
         spending,
         today,
     } = input;
+    let overrides = bill_months(rows);
     let faturas = faturas(&bills, &sums, &payments);
     let flows = flows_by_day(sums, &bills, settings.opening_date);
     let end = month_end(month);
@@ -417,6 +461,7 @@ pub fn month_view(input: MonthInput) -> MonthView {
     let unpaid_months = unpaid(
         &bills,
         &faturas,
+        &overrides,
         &payments,
         settings.opening_date,
         today,
@@ -441,6 +486,10 @@ pub fn month_view(input: MonthInput) -> MonthView {
             installment: installment_in(late.bill, late.due_date),
             installments: late.bill.installments,
             variable: late.bill.variable,
+            adjusted: overrides
+                .get(&(late.bill.id, first_of(late.due_date)))
+                .is_some_and(|set| set.amount.is_some()),
+            skipped: false,
         });
     let own = bills.iter().filter_map(|bill| {
         let payment = payments
@@ -450,12 +499,16 @@ pub fn month_view(input: MonthInput) -> MonthView {
             return None;
         }
         let due_date = due_date(month, bill.due_day);
-        let amount = amount_in(bill, &faturas, month);
+        let amount = amount_in(bill, &faturas, &overrides, month);
         let is_card = bill.closing_day.is_some();
         if is_card && payment.is_none() && amount == Decimal::ZERO {
             return None;
         }
-        let open = payment.is_none() && owed(bill, amount, due_date, settings.opening_date);
+        let open =
+            payment.is_none() && owed(bill, amount, due_date, settings.opening_date, &overrides);
+        let set = overrides
+            .get(&(bill.id, month))
+            .filter(|_| payment.is_none());
         Some(BillOfMonth {
             bill_id: bill.id,
             name: bill.name.clone(),
@@ -473,6 +526,8 @@ pub fn month_view(input: MonthInput) -> MonthView {
             installment: installment_in(bill, due_date),
             installments: bill.installments,
             variable: bill.variable,
+            adjusted: set.is_some_and(|set| set.amount.is_some()),
+            skipped: set.is_some_and(|set| set.skipped),
         })
     });
     let bills_of_month: Vec<BillOfMonth> = carried.chain(own).collect();
@@ -540,6 +595,8 @@ pub struct ForecastInput {
     pub settings: Settings,
     pub sums: Vec<DaySum>,
     pub bills: Vec<MonthBill>,
+    /// The overrides from the opening date's month to the end (D56).
+    pub bill_months: Vec<BillMonth>,
     pub payments: Vec<Payment>,
     pub today: NaiveDate,
 }
@@ -557,9 +614,11 @@ pub fn forecast(input: ForecastInput) -> Forecast {
         settings,
         sums,
         bills,
+        bill_months: rows,
         payments,
         today,
     } = input;
+    let overrides = bill_months(rows);
     let faturas = faturas(&bills, &sums, &payments);
     let flows = flows_by_day(sums, &bills, settings.opening_date);
     let from = today.max(settings.opening_date);
@@ -567,6 +626,7 @@ pub fn forecast(input: ForecastInput) -> Forecast {
     let unpaid_months = unpaid(
         &bills,
         &faturas,
+        &overrides,
         &payments,
         settings.opening_date,
         today,
@@ -728,10 +788,49 @@ mod tests {
             settings,
             sums,
             bills,
+            bill_months: vec![],
             payments,
             spending: Spending::default(),
             today: date(today),
         })
+    }
+
+    fn with_months(
+        month: &str,
+        settings: Settings,
+        bills: Vec<MonthBill>,
+        bill_months: Vec<BillMonth>,
+        payments: Vec<Payment>,
+        today: &str,
+    ) -> MonthView {
+        month_view(MonthInput {
+            month: date(&format!("{month}-01")),
+            settings,
+            sums: vec![],
+            bills,
+            bill_months,
+            payments,
+            spending: Spending::default(),
+            today: date(today),
+        })
+    }
+
+    fn adjusted(bill: u128, month: &str, amount: &str) -> BillMonth {
+        BillMonth {
+            bill_id: uuid::Uuid::from_u128(bill),
+            month: date(month),
+            amount: Some(money(amount)),
+            skipped: false,
+        }
+    }
+
+    fn skipped(bill: u128, month: &str) -> BillMonth {
+        BillMonth {
+            bill_id: uuid::Uuid::from_u128(bill),
+            month: date(month),
+            amount: None,
+            skipped: true,
+        }
     }
 
     fn bill(id: u128, name: &str, amount: &str, due_day: i16) -> MonthBill {
@@ -1030,6 +1129,8 @@ mod tests {
                 installment: None,
                 installments: None,
                 variable: false,
+                adjusted: false,
+                skipped: false,
             }]
         );
     }
@@ -1083,7 +1184,173 @@ mod tests {
     }
 
     fn auto(bill: &MonthBill, after: &str, today: &str) -> Vec<NaiveDate> {
-        auto_paid(bill, date(after), date("2026-01-01"), date(today))
+        auto_paid(
+            bill,
+            &BillMonths::new(),
+            date(after),
+            date("2026-01-01"),
+            date(today),
+        )
+    }
+
+    #[test]
+    fn d56_a_months_own_amount_is_what_it_owes_and_other_months_keep_the_bills() {
+        let rent = || bill(1, "Aluguel", "1045.26", 24);
+        let december = with_months(
+            "2026-12",
+            settings("1000", "2026-11-01"),
+            vec![rent()],
+            vec![adjusted(1, "2026-12-01", "1100.00")],
+            vec![],
+            "2026-11-27",
+        );
+        let row = &december.bills_of_month[0];
+        assert_eq!(
+            (row.amount, row.adjusted, row.skipped),
+            (money("1100.00"), true, false)
+        );
+        assert_eq!(
+            december.projected_balance,
+            money("-100.00") - money("1045.26")
+        );
+
+        let january = with_months(
+            "2027-01",
+            settings("1000", "2026-11-01"),
+            vec![rent()],
+            vec![adjusted(1, "2026-12-01", "1100.00")],
+            vec![],
+            "2026-11-27",
+        );
+        assert_eq!(
+            (
+                january.bills_of_month[0].amount,
+                january.bills_of_month[0].adjusted
+            ),
+            (money("1045.26"), false)
+        );
+    }
+
+    #[test]
+    fn d56_a_skipped_month_stays_listed_and_counts_nowhere() {
+        let view = with_months(
+            "2026-11",
+            settings("1000", "2026-11-01"),
+            vec![bill(1, "Aluguel", "1045.26", 24)],
+            vec![skipped(1, "2026-11-01")],
+            vec![],
+            "2026-11-27",
+        );
+        let row = &view.bills_of_month[0];
+        assert_eq!(
+            (row.skipped, row.overdue, row.lands_on, row.paid),
+            (true, false, None, false)
+        );
+        assert_eq!(row.amount, money("1045.26"));
+        assert_eq!(view.projected_balance, money("1000"));
+        assert!(
+            view.days
+                .iter()
+                .all(|day| day.projected_balance == money("1000"))
+        );
+
+        let next = with_months(
+            "2026-12",
+            settings("1000", "2026-11-01"),
+            vec![bill(1, "Aluguel", "1045.26", 24)],
+            vec![skipped(1, "2026-11-01")],
+            vec![],
+            "2026-12-02",
+        );
+        assert!(
+            next.bills_of_month
+                .iter()
+                .all(|row| row.due_date != date("2026-11-24")),
+            "never carried"
+        );
+    }
+
+    #[test]
+    fn d56_a_payment_wins_over_the_override() {
+        let view = with_months(
+            "2026-11",
+            settings("1000", "2026-11-01"),
+            vec![bill(1, "Aluguel", "1045.26", 24)],
+            vec![BillMonth {
+                amount: Some(money("1100.00")),
+                ..skipped(1, "2026-11-01")
+            }],
+            vec![payment(1, 9, "1050.00", "2026-11-24")],
+            "2026-11-27",
+        );
+        let row = &view.bills_of_month[0];
+        assert_eq!(
+            (row.paid, row.amount, row.adjusted, row.skipped),
+            (true, money("1050.00"), false, false)
+        );
+    }
+
+    #[test]
+    fn d56_skipping_a_parcela_keeps_the_other_numbers() {
+        // Parcela 10 in July 2027: December is 3/10, January 4/10.
+        let fies = MonthBill {
+            last_month: Some(date("2027-07-01")),
+            installments: Some(10),
+            ..bill(1, "FIES", "300", 10)
+        };
+        let january = with_months(
+            "2027-01",
+            settings("1000", "2026-11-01"),
+            vec![fies],
+            vec![skipped(1, "2026-12-01")],
+            vec![],
+            "2026-11-27",
+        );
+        assert_eq!(january.bills_of_month[0].installment, Some(4));
+    }
+
+    #[test]
+    fn d56_the_forecast_lands_the_override_and_never_a_skipped_month() {
+        // Due on the 28th: November lands on 28 Nov (after today), December on 28 Dec.
+        let run = |bill_months| {
+            forecast(ForecastInput {
+                settings: settings("1000", "2026-11-01"),
+                sums: vec![],
+                bills: vec![bill(1, "Aluguel", "1000", 28)],
+                bill_months,
+                payments: vec![],
+                today: date("2026-11-27"),
+            })
+        };
+        let on = |forecast: &Forecast, day: &str| {
+            forecast
+                .days
+                .iter()
+                .find(|each| each.date == date(day))
+                .unwrap()
+                .projected_balance
+        };
+        let adjusted_run = run(vec![adjusted(1, "2026-12-01", "400")]);
+        assert_eq!(on(&adjusted_run, "2026-12-28"), money("-400"));
+        let skipped_run = run(vec![skipped(1, "2026-12-01")]);
+        assert_eq!(on(&skipped_run, "2026-12-28"), money("0"));
+        assert_eq!(on(&skipped_run, "2027-01-28"), money("-1000"));
+    }
+
+    #[test]
+    fn d56_auto_pay_never_pays_a_skipped_month() {
+        let rent = bill(1, "Aluguel", "1500", 10);
+        let overrides = bill_months(vec![skipped(1, "2026-10-01")]);
+        assert_eq!(
+            auto_paid(
+                &rent,
+                &overrides,
+                date("2026-09-20"),
+                date("2026-01-01"),
+                date("2026-11-25")
+            ),
+            [date("2026-11-10")]
+        );
     }
 
     #[test]
@@ -1121,6 +1388,7 @@ mod tests {
         let rent = || bill(1, "Aluguel", "1500", 10);
         let opened = auto_paid(
             &rent(),
+            &BillMonths::new(),
             date("2026-08-01"),
             date("2026-10-01"),
             date("2026-11-25"),
@@ -1753,6 +2021,7 @@ mod tests {
                 settings: settings("0", "2026-11-01"),
                 sums: vec![],
                 bills: vec![],
+                bill_months: vec![],
                 payments: vec![],
                 spending: Spending {
                     income: money(income),
@@ -1794,6 +2063,7 @@ mod tests {
                 resgate("2026-11-10", "50"),
             ],
             bills: vec![],
+            bill_months: vec![],
             payments: vec![],
             spending: Spending::default(),
             today: date("2026-11-20"),
@@ -1957,6 +2227,7 @@ mod tests {
             settings: settings("1000", "2026-11-01"),
             sums: vec![],
             bills: vec![],
+            bill_months: vec![],
             payments: vec![],
             spending: Spending {
                 income: money("0"),
@@ -2019,6 +2290,7 @@ mod tests {
             settings,
             sums,
             bills,
+            bill_months: vec![],
             payments: vec![],
             today: date(today),
         })
@@ -2141,6 +2413,7 @@ mod tests {
                 settings: declared(settings),
                 sums,
                 bills,
+                bill_months: vec![],
                 payments,
                 today: date(today),
             });
