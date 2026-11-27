@@ -1,5 +1,5 @@
 use chrono::NaiveDate;
-use soldi_types::bills::{Bill, CreateBill, PayBill, UpdateBill};
+use soldi_types::bills::{Bill, CreateBill, PayBill, SetBillMonth, UpdateBill};
 use soldi_types::categories::CategoryKind;
 use soldi_types::transactions::{CreateTransaction, Transaction};
 use sqlx::{PgConnection, PgPool};
@@ -421,6 +421,54 @@ pub async fn unpay(
         true => Ok(()),
         false => Err(AppError::NotFound),
     }
+}
+
+/// D56: `month`'s own amount or skip; never a card, outside the run or on a paid month.
+pub async fn set_month(
+    pool: &PgPool,
+    user: &CurrentUser,
+    id: Uuid,
+    month: &str,
+    input: SetBillMonth,
+) -> Result<(), AppError> {
+    let month = parse_month(month)?;
+    let input = domain::check_month(input)?;
+    let mut tx = pool.begin().await?;
+    // D55's order is settings → entries → bill rows; a catch-up or a Pagar sees this month before or after.
+    transactions::repo::lock_entries(&mut tx, user.id).await?;
+    let bills = months::repo::bills(&mut tx, user.id).await?;
+    let bill = bills
+        .iter()
+        .find(|bill| bill.id == id)
+        .ok_or(AppError::NotFound)?;
+    domain::check_occurrence(bill, month)?;
+    if repo::paid_in(&mut tx, user.id, id, &[month]).await? {
+        return Err(AppError::conflict(
+            "bill-already-paid",
+            "This bill is already paid this month.",
+        ));
+    }
+    repo::set_month(&mut tx, user.id, id, month, &input).await?;
+    tx.commit().await?;
+    Ok(())
+}
+
+/// D56: `month` follows the bill again; nothing to remove is fine.
+pub async fn restore_month(
+    pool: &PgPool,
+    user: &CurrentUser,
+    id: Uuid,
+    month: &str,
+) -> Result<(), AppError> {
+    let month = parse_month(month)?;
+    let mut tx = pool.begin().await?;
+    transactions::repo::lock_entries(&mut tx, user.id).await?;
+    repo::find(&mut tx, user.id, id)
+        .await?
+        .ok_or(AppError::NotFound)?;
+    repo::delete_month(&mut tx, user.id, id, month).await?;
+    tx.commit().await?;
+    Ok(())
 }
 
 /// Checks and inserts the onboarding bills; errors name `bills[i].<field>`.

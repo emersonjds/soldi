@@ -1,4 +1,4 @@
-use soldi_types::bills::{Bill, CreateBill};
+use soldi_types::bills::{Bill, CreateBill, SetBillMonth};
 use sqlx::PgConnection;
 use uuid::Uuid;
 
@@ -273,6 +273,47 @@ pub async fn paid_in(
     )
     .fetch_one(&mut *conn)
     .await
+}
+
+/// D56: stores `month`'s own amount or skip of the user's bill.
+pub async fn set_month(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    bill_id: Uuid,
+    month: chrono::NaiveDate,
+    input: &SetBillMonth,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        "INSERT INTO bill_months (user_id, bill_id, month, amount, skipped) VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (user_id, bill_id, month)
+         DO UPDATE SET amount = EXCLUDED.amount, skipped = EXCLUDED.skipped, updated_at = now()",
+        user_id,
+        bill_id,
+        month,
+        input.amount,
+        input.skipped
+    )
+    .execute(&mut *conn)
+    .await?;
+    Ok(())
+}
+
+/// D56: `month` of the user's bill follows the bill again.
+pub async fn delete_month(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    bill_id: Uuid,
+    month: chrono::NaiveDate,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        "DELETE FROM bill_months WHERE user_id = $1 AND bill_id = $2 AND month = $3",
+        user_id,
+        bill_id,
+        month
+    )
+    .execute(&mut *conn)
+    .await?;
+    Ok(())
 }
 
 /// Whether the bill has an entry dated `from` or later.

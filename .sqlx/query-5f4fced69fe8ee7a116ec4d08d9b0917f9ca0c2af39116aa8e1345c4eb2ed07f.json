@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO bill_months (user_id, bill_id, month, amount, skipped) VALUES ($1, $2, $3, $4, $5)\n         ON CONFLICT (user_id, bill_id, month)\n         DO UPDATE SET amount = EXCLUDED.amount, skipped = EXCLUDED.skipped, updated_at = now()",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Date",
+        "Numeric",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5f4fced69fe8ee7a116ec4d08d9b0917f9ca0c2af39116aa8e1345c4eb2ed07f"
+}

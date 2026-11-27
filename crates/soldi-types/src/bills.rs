@@ -106,3 +106,14 @@ pub struct PayBill {
     #[schema(value_type = Option<String>)]
     pub amount: Option<Decimal>,
 }
+
+/// D56: one month's own amount, or a skip; `amount` null needs `skipped`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct SetBillMonth {
+    /// Greater than zero, up to two decimal places; kept under a skip.
+    #[serde(default, with = "rust_decimal::serde::str_option")]
+    #[schema(value_type = Option<String>)]
+    pub amount: Option<Decimal>,
+    pub skipped: bool,
+}
