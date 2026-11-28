@@ -257,6 +257,21 @@ describe("Contas a pagar", () => {
     );
   });
 
+  it("says its own words when paying fails on a rule another screen words differently (SOL-173)", async () => {
+    show(BILLS_OF_MONTH, {
+      [`POST /api/bills/${BILL_ALUGUEL.id}/pay`]: {
+        status: 429,
+        body: { ...problem(429, "Texto do servidor."), type: "urn:soldi:error:rate-limited" },
+      },
+    });
+    await loaded();
+
+    await userEvent.click(within(rowOf("Aluguel Residencial")).getByRole("button", { name: /^Marcar/ }));
+
+    expect(await screen.findByText("Não foi possível marcar como paga.")).toBeInTheDocument();
+    expect(screen.queryByText(/Muitas alterações seguidas/)).not.toBeInTheDocument();
+  });
+
   it("undoes a payment from the round check and says so", async () => {
     const { requests, serverHas } = show([BILLS_OF_MONTH[0], PAID_RENT], {
       [`DELETE /api/bills/${BILL_ALUGUEL.id}/pay`]: { status: 204 },

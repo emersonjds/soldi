@@ -397,7 +397,7 @@ export const BillsOfMonth = ({ view, className }: { view: Schemas["MonthView"]; 
     setSheetOpen(true);
   };
 
-  const payFailed = (error: unknown) => toast.error(problemMessage(error) ?? "Não foi possível marcar como paga.");
+  const payFailed = () => toast.error("Não foi possível marcar como paga.");
 
   // A fatura and a variable bill are paid only through the sheet (D28, D44).
   const payNow = (bill: BillOfMonth) => {
