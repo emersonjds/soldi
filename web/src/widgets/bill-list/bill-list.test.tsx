@@ -244,6 +244,17 @@ describe("Contas fixas", () => {
       expect(within(card).queryByText("Vencida")).not.toBeInTheDocument();
     });
 
+    it("skips a skipped month (D56)", async () => {
+      withRows([
+        { ...luz, overdue: false, skipped: true, lands_on: null, due_date: "2026-11-06" },
+        { ...aluguel, due_date: "2026-11-07" },
+      ]);
+
+      const card = await nextDue();
+      expect(within(card).getByText("Aluguel Residencial")).toBeInTheDocument();
+      expect(within(card).queryByText("Luz (Enel)")).not.toBeInTheDocument();
+    });
+
     it.each([
       ["2026-11-05", "Hoje"],
       ["2026-11-06", "Amanhã"],

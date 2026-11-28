@@ -117,7 +117,7 @@ export const usePayBill = () => {
     onMutate: (payment) =>
       patchRow(client, payment, (row) => {
         if (row.is_card) faturas.set(faturaKey(payment), row.amount);
-        return { paid: true, overdue: false, amount: payment.amount ?? row.amount };
+        return { paid: true, overdue: false, lands_on: null, amount: payment.amount ?? row.amount };
       }),
     onError: (_error, _payment, rollback) => rollback?.(),
     onSettled: () => refresh(client),
@@ -137,6 +137,37 @@ export const useUnpayBill = () => {
         amount: (row.is_card && faturas.get(faturaKey(payment))) || row.amount,
       })),
     onError: (_error, _payment, rollback) => rollback?.(),
+    onSettled: () => refresh(client),
+  });
+};
+
+/** D56: what one month of a conta holds of its own; `{ amount: null, skipped: false }` is the bill's normal month. */
+export type MonthState = { amount: string | null; skipped: boolean };
+
+export const monthStateOf = (bill: BillOfMonth): MonthState => ({
+  amount: bill.adjusted ? bill.amount : null,
+  skipped: bill.skipped,
+});
+
+/** `normal`: the bill's amount, shown at once when the month goes back to it. */
+export type MonthChange = Payment & MonthState & { normal?: string };
+
+export const useSetBillMonth = () => {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ billId, month, amount, skipped }: MonthChange) => {
+      const params = { path: { id: billId, month } };
+      if (amount === null && !skipped) return okOrThrow(await api.DELETE("/api/bills/{id}/months/{month}", { params }));
+      return okOrThrow(await api.PUT("/api/bills/{id}/months/{month}", { params, body: { amount, skipped } }));
+    },
+    onMutate: (change) =>
+      patchRow(client, change, (row) => ({
+        amount: change.amount ?? change.normal ?? row.amount,
+        adjusted: change.amount !== null,
+        skipped: change.skipped,
+        ...(change.skipped && { lands_on: null, overdue: false }),
+      })),
+    onError: (_error, _change, rollback) => rollback?.(),
     onSettled: () => refresh(client),
   });
 };

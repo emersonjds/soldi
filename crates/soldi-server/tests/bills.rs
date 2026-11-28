@@ -2643,3 +2643,265 @@ async fn d55_retomar_and_variable_off_restart_from_yesterday(pool: PgPool) {
         yesterday_in_db(&pool).await
     );
 }
+
+fn next_month() -> chrono::NaiveDate {
+    this_month() + chrono::Months::new(1)
+}
+
+fn month_uri(bill: &serde_json::Value, month: chrono::NaiveDate) -> String {
+    format!("{}/months/{}", bill_uri(bill), month_text(month))
+}
+
+/// Ana opened this month with the R$ 2.259,56 rent (due on the 5th, owing from today).
+async fn ana_with_rent(pool: PgPool) -> (TestApp, serde_json::Value) {
+    let ana = TestApp::signed_in(pool, "ana@example.com").await;
+    ana.open_at("1000", &this_month().to_string()).await;
+    let created = create(&ana, rent(category_id(&ana, "Aluguel").await)).await;
+    (ana, created)
+}
+
+/// The month view's first row (Ana has one bill) and the view.
+async fn first_row(
+    app: &TestApp,
+    month: chrono::NaiveDate,
+) -> (serde_json::Value, serde_json::Value) {
+    let (_, view) = app.get(&format!("/api/months/{}", month_text(month))).await;
+    (view["bills_of_month"][0].clone(), view)
+}
+
+fn refused_as(status: StatusCode, problem: &serde_json::Value, slug: &str) {
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+    assert_eq!(
+        problem["type"],
+        format!("urn:soldi:error:{slug}"),
+        "{problem}"
+    );
+}
+
+#[sqlx::test]
+async fn d56_a_months_own_amount_and_skip_show_in_that_month_only(pool: PgPool) {
+    let (ana, rent) = ana_with_rent(pool).await;
+
+    let own = json!({ "amount": "2300.00", "skipped": false });
+    let (status, body) = ana.put(&month_uri(&rent, next_month()), own).await;
+    assert_eq!(status, StatusCode::NO_CONTENT, "{body}");
+    let (row, _) = first_row(&ana, next_month()).await;
+    assert_eq!(
+        (row["amount"].clone(), row["adjusted"].clone()),
+        (json!("2300.00"), json!(true))
+    );
+    let (later, _) = first_row(&ana, next_month() + chrono::Months::new(1)).await;
+    assert_eq!(
+        (later["amount"].clone(), later["adjusted"].clone()),
+        (json!("2259.56"), json!(false))
+    );
+
+    let skip = json!({ "amount": "2300.00", "skipped": true });
+    let (status, body) = ana.put(&month_uri(&rent, next_month()), skip).await;
+    assert_eq!(status, StatusCode::NO_CONTENT, "{body}");
+    let (row, view) = first_row(&ana, next_month()).await;
+    assert_eq!(
+        (row["skipped"].clone(), row["lands_on"].clone()),
+        (json!(true), serde_json::Value::Null)
+    );
+    assert_eq!(view["projected_balance"], "1000.00");
+
+    let uri = month_uri(&rent, next_month());
+    assert_eq!(ana.delete(&uri).await.0, StatusCode::NO_CONTENT);
+    assert_eq!(
+        ana.delete(&uri).await.0,
+        StatusCode::NO_CONTENT,
+        "idempotent"
+    );
+    let (row, _) = first_row(&ana, next_month()).await;
+    assert_eq!(
+        (row["amount"].clone(), row["skipped"].clone()),
+        (json!("2259.56"), json!(false))
+    );
+}
+
+#[sqlx::test]
+async fn d56_a_month_override_is_refused_on_cards_outside_the_run_paid_months_and_bad_bodies(
+    pool: PgPool,
+) {
+    let (ana, rent) = ana_with_rent(pool).await;
+    let skip = || json!({ "skipped": true });
+
+    let before = month_uri(&rent, this_month() - chrono::Months::new(1));
+    let (status, problem) = ana.put(&before, skip()).await;
+    refused_as(status, &problem, "month-outside-bill");
+    for body in [
+        json!({ "skipped": false }),
+        json!({ "amount": "0", "skipped": false }),
+        json!({ "amount": "1.001", "skipped": false }),
+    ] {
+        let (status, problem) = ana.put(&month_uri(&rent, next_month()), body.clone()).await;
+        refused_as(status, &problem, "validation");
+    }
+    let bad_month = format!("{}/months/2026-13", bill_uri(&rent));
+    let (status, problem) = ana.put(&bad_month, skip()).await;
+    refused_as(status, &problem, "validation");
+    let (status, problem) = ana.delete(&bad_month).await;
+    refused_as(status, &problem, "validation");
+
+    let pay = format!("{}?month={}", pay_uri(&rent), month_text(next_month()));
+    let (status, paid) = ana
+        .post(&pay, json!({ "date": next_month().to_string() }))
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{paid}");
+    let (status, problem) = ana.put(&month_uri(&rent, next_month()), skip()).await;
+    assert_eq!(status, StatusCode::CONFLICT, "{problem}");
+    assert_eq!(problem["type"], "urn:soldi:error:bill-already-paid");
+
+    let card = create(&ana, porto(&ana.category_id("Cartão").await)).await;
+    let (status, problem) = ana.put(&month_uri(&card, next_month()), skip()).await;
+    refused_as(status, &problem, "card-month");
+}
+
+#[sqlx::test]
+async fn d56_another_users_or_an_archived_bill_takes_no_month_override(pool: PgPool) {
+    let (ana, rent) = ana_with_rent(pool.clone()).await;
+    let bob = ana.another_user("bob@example.com").await;
+
+    let uri = month_uri(&rent, next_month());
+    assert_eq!(
+        bob.put(&uri, json!({ "skipped": true })).await.0,
+        StatusCode::NOT_FOUND
+    );
+    assert_eq!(bob.delete(&uri).await.0, StatusCode::NOT_FOUND);
+    let rows: i64 = sqlx::query_scalar("SELECT count(*) FROM bill_months")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(rows, 0);
+
+    assert_eq!(ana.delete(&bill_uri(&rent)).await.0, StatusCode::NO_CONTENT);
+    assert_eq!(
+        ana.put(&uri, json!({ "skipped": true })).await.0,
+        StatusCode::NOT_FOUND
+    );
+    assert_eq!(ana.delete(&uri).await.0, StatusCode::NOT_FOUND);
+
+    let card = create(&ana, porto(&ana.category_id("Cartão").await)).await;
+    assert_eq!(ana.delete(&bill_uri(&card)).await.0, StatusCode::NO_CONTENT);
+    let card_month = month_uri(&card, next_month());
+    assert_eq!(
+        ana.put(&card_month, json!({ "skipped": true })).await.0,
+        StatusCode::NOT_FOUND
+    );
+}
+
+#[sqlx::test]
+async fn d56_pagar_on_a_skipped_month_books_the_bills_amount_and_wins(pool: PgPool) {
+    let (ana, rent) = ana_with_rent(pool).await;
+    ana.put(&month_uri(&rent, next_month()), json!({ "skipped": true }))
+        .await;
+
+    let pay = format!("{}?month={}", pay_uri(&rent), month_text(next_month()));
+    let (status, paid) = ana
+        .post(&pay, json!({ "date": next_month().to_string() }))
+        .await;
+
+    assert_eq!(status, StatusCode::CREATED, "{paid}");
+    assert_eq!(paid["amount"], rent["amount"]);
+}
+
+#[sqlx::test]
+async fn d56_a_month_override_waits_for_the_entry_lock(pool: PgPool) {
+    let (ana, rent) = ana_with_rent(pool.clone()).await;
+    let id = user_id(&ana).await;
+    set_auto_paid_through(&pool, today()).await;
+    let mut lock = pool.begin().await.unwrap();
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended('entries:' || $1::text, 0))")
+        .bind(id.to_string())
+        .execute(&mut *lock)
+        .await
+        .unwrap();
+
+    let uri = month_uri(&rent, next_month());
+    let put = ana.put(&uri, json!({ "skipped": true }));
+    let (status, body) = behind(&pool, lock, 1, put).await;
+
+    assert_eq!(status, StatusCode::NO_CONTENT, "{body}");
+}
+
+#[sqlx::test]
+async fn d56_pagar_without_an_amount_books_the_months_own_amount(pool: PgPool) {
+    let (ana, rent) = ana_with_rent(pool).await;
+    let own = json!({ "amount": "2300.00", "skipped": false });
+    ana.put(&month_uri(&rent, next_month()), own).await;
+
+    let pay = format!("{}?month={}", pay_uri(&rent), month_text(next_month()));
+    let (status, paid) = ana
+        .post(&pay, json!({ "date": next_month().to_string() }))
+        .await;
+
+    assert_eq!(status, StatusCode::CREATED, "{paid}");
+    assert_eq!(paid["amount"], "2300.00");
+}
+
+/// Writes a month override straight to the table: any HTTP request would run the catch-up first.
+async fn set_month_row(
+    pool: &PgPool,
+    bill: &serde_json::Value,
+    month: chrono::NaiveDate,
+    amount: Option<&str>,
+    skipped: bool,
+) {
+    sqlx::query(
+        "INSERT INTO bill_months (user_id, bill_id, month, amount, skipped)
+         SELECT user_id, id, $2, $3::numeric, $4 FROM recurring_bills WHERE id = $1::uuid",
+    )
+    .bind(bill["id"].as_str().unwrap())
+    .bind(month)
+    .bind(amount.map(str::to_owned))
+    .bind(skipped)
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+#[sqlx::test]
+async fn d56_the_catch_up_pays_the_months_own_amount_and_never_a_skipped_month(pool: PgPool) {
+    let ana = TestApp::signed_in(pool.clone(), "ana@example.com").await;
+    let rent = rent_behind(&pool, &ana).await;
+    set_month_row(&pool, &rent, previous_month(), None, true).await;
+    set_month_row(&pool, &rent, this_month(), Some("1600.00"), false).await;
+
+    auto_pay_on(&pool, &ana, today()).await;
+
+    assert_eq!(
+        payments_of(&pool, &rent).await,
+        paid_on(&[this_month()], "1600.00")
+    );
+    let carried = row_due(&ana, this_month(), previous_month()).await;
+    assert_eq!(
+        carried,
+        serde_json::Value::Null,
+        "a skipped month is never carried"
+    );
+    let own = row_due(&ana, previous_month(), previous_month()).await;
+    assert_eq!(
+        (
+            own["paid"].clone(),
+            own["overdue"].clone(),
+            own["skipped"].clone()
+        ),
+        (json!(false), json!(false), json!(true))
+    );
+}
+
+#[sqlx::test]
+async fn d56_a_variable_conta_with_its_own_amount_stays_manual(pool: PgPool) {
+    let ana = TestApp::signed_in(pool.clone(), "ana@example.com").await;
+    ana.open_at("1000", &two_months_back().to_string()).await;
+    let body = json!({ "name": "Luz", "amount": "200", "due_day": 1, "variable": true,
+                       "category_id": category_id(&ana, "Aluguel").await });
+    let light = create(&ana, body).await;
+    owing_since(&pool, previous_month()).await;
+    set_month_row(&pool, &light, this_month(), Some("180.00"), false).await;
+
+    auto_pay_on(&pool, &ana, today()).await;
+
+    assert!(payments_of(&pool, &light).await.is_empty());
+}

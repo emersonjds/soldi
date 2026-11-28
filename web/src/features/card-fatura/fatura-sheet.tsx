@@ -135,11 +135,13 @@ export const FaturaSheet = ({
   open,
   onOpenChange,
   entrySheet,
+  onCloseAutoFocus,
 }: {
   bill: BillOfMonth | undefined;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   entrySheet: EntrySheet;
+  onCloseAutoFocus?: (event: Event) => void;
 }) => {
   const [entry, setEntry] = useState<Transaction>();
   const [editing, setEditing] = useState(false);
@@ -149,6 +151,7 @@ export const FaturaSheet = ({
       onOpenChange={onOpenChange}
       title={bill ? billTitle(bill) : "Fatura"}
       description="O que pesa nesta fatura e o que já está comprometido nos próximos meses."
+      onCloseAutoFocus={onCloseAutoFocus}
     >
       {bill && (
         <Body
