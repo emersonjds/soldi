@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useId } from "react";
+import { type ReactNode, useId, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { ChevronRight, CreditCard } from "lucide-react";
@@ -11,6 +11,10 @@ import { categoriesQuery, categoryLabel } from "@/entities/category/categories-q
 import { billKey, previstoKey } from "@/entities/month/forecast-alert";
 import { OPEN_LABEL } from "@/entities/transaction/series-step";
 import type { Transaction } from "@/entities/transaction/transaction-queries";
+import { TransactionSheet } from "@/features/add-transaction/transaction-sheet";
+import { FaturaSheet } from "@/features/card-fatura/fatura-sheet";
+import { EditBillSheet } from "@/features/edit-bill/edit-bill-sheet";
+import { PayBillSheet } from "@/features/pay-bill/pay-bill-sheet";
 import { cn } from "@/lib/utils";
 import type { Schemas } from "@/shared/api/client";
 import { type Currency, useCurrency } from "@/shared/lib/currency";
@@ -92,7 +96,7 @@ const groupByDay = (days: Day[], transactions: Transaction[], bills: Due[]) =>
       date: day.date,
       day,
       entries: transactions.filter((transaction) => transaction.date === day.date),
-      due: bills.filter((bill) => bill.lands_on === day.date),
+      due: bills.filter((bill) => bill.lands_on === day.date || (bill.skipped && bill.due_date === day.date)),
     }))
     .filter(({ entries, due }) => entries.length > 0 || due.length > 0)
     .reverse();
@@ -120,25 +124,52 @@ const dueStatus = (bill: Due, month: string) => {
   return bill.overdue ? `venceu dia ${dayMonth(bill.due_date)}` : "a pagar";
 };
 
-export const dueCaption = (bill: Due, month: string) =>
-  `${billKind(bill)} · ${dueStatus(bill, month)}${bill.variable ? " · valor variável" : ""}`;
+const amountNote = (bill: Due) => {
+  if (bill.adjusted) return " · valor ajustado";
+  return bill.variable ? " · valor variável" : "";
+};
 
-const DueRow = ({ bill, month, cause }: { bill: Due; month: string; cause: boolean }) => (
-  <li
-    aria-label={bill.due_date.startsWith(month) ? bill.name : `${bill.name} de ${monthName(bill.due_date, month)}`}
-    className="flex min-h-16 items-center gap-3 px-2 py-2"
-  >
-    <CategoryIcon icon={bill.icon} color={bill.color} />
-    <span className="flex min-w-0 flex-1 flex-col">
-      <span className="line-clamp-2 text-base font-medium break-words">{bill.name}</span>
-      <span className={cn("text-xs", bill.overdue ? "text-expense" : "text-muted-foreground")}>
-        {dueCaption(bill, month)}
+export const dueCaption = (bill: Due, month: string) => {
+  if (bill.skipped)
+    return bill.installment
+      ? `Parcela ${bill.installment}/${bill.installments} · pulada`
+      : `pulada em ${monthName(bill.due_date, month)}`;
+  return `${billKind(bill)} · ${dueStatus(bill, month)}${amountNote(bill)}`;
+};
+
+/** "Abrir Aluguel de novembro" / "Ver fatura Porto de novembro" (SOL-173 §8). */
+export const openLabel = (bill: Due) => {
+  const month = monthName(bill.due_date, bill.due_date);
+  return bill.is_card ? `Ver fatura ${bill.name} de ${month}` : `Abrir ${bill.name} de ${month}`;
+};
+
+const STRUCK = "text-muted-foreground line-through";
+
+type DueRowProps = { bill: Due; month: string; cause: boolean; onOpen: () => void };
+
+const DueRow = ({ bill, month, cause, onOpen }: DueRowProps) => (
+  <li aria-label={bill.due_date.startsWith(month) ? bill.name : `${bill.name} de ${monthName(bill.due_date, month)}`}>
+    <button
+      type="button"
+      aria-label={openLabel(bill)}
+      onClick={onOpen}
+      className="hover:bg-muted focus-visible:outline-ring flex min-h-16 w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition-colors focus-visible:outline-2"
+    >
+      <CategoryIcon icon={bill.icon} color={bill.color} />
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className={cn("line-clamp-2 text-base font-medium break-words", bill.skipped && STRUCK)}>
+          {bill.name}
+        </span>
+        <span className={cn("text-xs", bill.overdue ? "text-expense" : "text-muted-foreground")}>
+          {dueCaption(bill, month)}
+        </span>
       </span>
-    </span>
-    <span className="flex flex-col items-end gap-0.5">
-      <Money amount={bill.amount} outflow className="text-base font-bold" />
-      {cause && <Cause />}
-    </span>
+      <span className="flex flex-col items-end gap-0.5">
+        <Money amount={bill.amount} outflow className={cn("text-base font-bold", bill.skipped && STRUCK)} />
+        {cause && <Cause />}
+      </span>
+      <ChevronRight aria-hidden className="text-muted-foreground size-4 shrink-0" />
+    </button>
   </li>
 );
 
@@ -297,6 +328,22 @@ export const Ledger = ({
     card: cards?.find(({ id }) => id === transaction.card_id)?.name,
   });
   const { open, actions } = useEntryActions();
+  const [occurrence, setOccurrence] = useState<Due>();
+  const [occurrenceOpen, setOccurrenceOpen] = useState(false);
+  const [fatura, setFatura] = useState<Due>();
+  const [faturaOpen, setFaturaOpen] = useState(false);
+  const [editing, setEditing] = useState<Schemas["Bill"]>();
+  const [editOpen, setEditOpen] = useState(false);
+  const openDue = (bill: Due) => {
+    if (bill.is_card) {
+      setFatura(bill);
+      setFaturaOpen(true);
+      return;
+    }
+    setOccurrence(bill);
+    setOccurrenceOpen(true);
+  };
+  const series = bills?.find(({ id }) => id === occurrence?.bill_id);
   const any = groupByDay(view.days, transactions, view.bills_of_month).length > 0;
   const shown = (kind: LedgerFilter | null) => filter === "all" || kind === filter;
   const groups = groupByDay(
@@ -398,7 +445,13 @@ export const Ledger = ({
                   />
                 ))}
                 {due.map((bill) => (
-                  <DueRow key={billKey(bill)} bill={bill} month={view.month} cause={causes.has(billKey(bill))} />
+                  <DueRow
+                    key={billKey(bill)}
+                    bill={bill}
+                    month={view.month}
+                    cause={causes.has(billKey(bill))}
+                    onOpen={() => openDue(bill)}
+                  />
                 ))}
                 {estimate && shown("daily") && cents(day.previsto) > 0 && (
                   <EstimateLine day={day} estimate={estimate} cause={causes.has(previstoKey(day.date))} />
@@ -410,6 +463,26 @@ export const Ledger = ({
       )}
 
       {actions}
+      <PayBillSheet
+        month={occurrence?.due_date.slice(0, 7) ?? view.month}
+        bill={occurrence}
+        open={occurrenceOpen}
+        onOpenChange={setOccurrenceOpen}
+        onEditBill={
+          series &&
+          (() => {
+            setEditing(series);
+            setEditOpen(true);
+          })
+        }
+      />
+      <EditBillSheet open={editOpen} onOpenChange={setEditOpen} bill={editing} />
+      <FaturaSheet
+        bill={fatura}
+        open={faturaOpen}
+        onOpenChange={setFaturaOpen}
+        entrySheet={(props) => <TransactionSheet {...props} />}
+      />
     </section>
   );
 };
