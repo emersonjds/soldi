@@ -124,7 +124,7 @@ const groups = (detail: HTMLElement) =>
       text(within(group).getByRole("heading")),
       ...within(group)
         .getAllByRole("listitem")
-        .map((item) => [...(item.firstElementChild?.children ?? [])].map(text).join(" | ")),
+        .map((item) => [...(item.firstElementChild?.children ?? [])].map(text).filter(Boolean).join(" | ")),
     ]);
 
 describe("Planilha day detail", () => {
@@ -319,10 +319,6 @@ describe("Planilha cell actions (SOL-171)", () => {
     expect(await screen.findByRole("dialog")).toHaveAccessibleName("2 nov");
     await userEvent.click(screen.getByRole("button", { name: "Close" }));
 
-    await userEvent.click((await row("Quinta-feira, 5 de novembro, hoje")).cells[2]);
-    expect(await screen.findByRole("dialog")).toHaveAccessibleName("Hoje, 5 nov");
-    await userEvent.click(screen.getByRole("button", { name: "Close" }));
-
     await userEvent.click((await row("Domingo, 1 de novembro")).cells[3]);
     expect(await screen.findByRole("dialog")).toHaveAccessibleName("1 nov");
   });
@@ -350,7 +346,11 @@ describe("Planilha cell actions (SOL-171)", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "Segunda-feira, 2 de novembro" })).toHaveFocus());
 
     const today = await tap("Quinta-feira, 5 de novembro, hoje");
-    await userEvent.click(within(today).getByRole("button", { name: /Internet/ }));
+    await userEvent.click(within(today).getByRole("button", { name: "Abrir Internet de novembro" }));
+    const month = await screen.findByRole("dialog", { name: "Internet · novembro" });
+    const edit = within(month).getByRole("button", { name: "Editar conta" });
+    await waitFor(() => expect(edit).toBeEnabled());
+    await userEvent.click(edit);
     expect(await screen.findByRole("dialog", { name: /Editar conta/ })).toBeInTheDocument();
     await userEvent.keyboard("{Escape}");
 
@@ -393,6 +393,99 @@ const ESTIMATED: Record<string, Reply> = {
   "GET /api/transactions": { status: 200, body: AHEAD },
   "GET /api/bills": { status: 200, body: [CARD] },
 };
+
+describe("Planilha opens a conta's month or a fatura (SOL-173)", () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 10, 5, 12));
+  });
+  afterEach(() => vi.useRealTimers());
+
+  const due = (rest: Partial<Schemas["BillOfMonth"]>): Schemas["BillOfMonth"] => ({
+    ...PLANILHA_MONTH.bills_of_month[2],
+    due_date: "2026-11-24",
+    lands_on: "2026-11-24",
+    ...rest,
+  });
+  const CAIXA = due({ bill_id: "b-caixa", name: "Caixa Habitação", amount: "1045.26" });
+  const PORTO = due({ bill_id: CARD.id, name: "Porto Black", amount: "101.47", is_card: true });
+  const ACADEMIA = due({ bill_id: "b-academia", name: "Academia", amount: "99.00", skipped: true, lands_on: null });
+  const NUBANK = due({ bill_id: "b-nubank", name: "Nubank", amount: "60.00", is_card: true, lands_on: "2026-11-20" });
+  const CLUBE = due({ bill_id: "b-clube", name: "Clube", amount: "40.00", skipped: true, due_date: "2026-11-25" });
+  const MONTH_24: Schemas["MonthView"] = {
+    ...ESTIMATE_MONTH,
+    bills_of_month: [...ESTIMATE_MONTH.bills_of_month, CAIXA, PORTO, ACADEMIA, NUBANK, { ...CLUBE, lands_on: null }],
+  };
+  const DAY_24 = "Terça-feira, 24 de novembro";
+  const open24 = async () => {
+    const { client } = show(
+      {
+        "GET /api/months/2026-11": { status: 200, body: MONTH_24 },
+        "GET /api/bills": { status: 200, body: [CARD, { ...BILL_ALUGUEL, id: CAIXA.bill_id, name: CAIXA.name }] },
+      },
+      "2026-03-10",
+      "50.00",
+    );
+    await ready(client);
+  };
+
+  it("lists the day's conta and fatura with a chevron each, the skipped one struck and out of the Saída total", async () => {
+    await open24();
+    const { cells } = await row(DAY_24);
+    const detail = await tap(DAY_24);
+
+    expect(groups(detail)[0]).toEqual([
+      "Saída",
+      "Saída R$ 1.146,73",
+      "Caixa Habitação | - R$ 1.045,26 | Conta fixa · a pagar",
+      "Porto Black | - R$ 101,47 | Fatura · a pagar",
+      "Academia | - R$ 99,00 | pulada em novembro",
+    ]);
+    expect(text(cells[2])).toBe("1.146,73 inclui conta a pagar");
+    for (const name of ["Abrir Caixa Habitação de novembro", "Ver fatura Porto Black de novembro"])
+      expect(within(detail).getByRole("button", { name }).querySelector(".lucide-chevron-right")).not.toBeNull();
+    expect(within(detail).getByText("Academia")).toHaveClass("line-through");
+    expect(within(detail).getByRole("button", { name: "Abrir Academia de novembro" })).toBeInTheDocument();
+    const previsto = within(detail).getByText("Diário previsto");
+    expect(previsto.closest("button")).toBeNull();
+    expect(previsto.parentElement?.querySelector(".lucide-chevron-right")).toBeNull();
+  });
+
+  it("opens the conta's month and gives focus back to the day; the fatura item opens its fatura", async () => {
+    await open24();
+
+    await userEvent.click(within(await tap(DAY_24)).getByRole("button", { name: "Abrir Caixa Habitação de novembro" }));
+    expect(await screen.findByRole("dialog", { name: "Caixa Habitação · novembro" })).toBeInTheDocument();
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => expect(screen.getByRole("button", { name: DAY_24 })).toHaveFocus());
+
+    await userEvent.click(
+      within(await tap(DAY_24)).getByRole("button", { name: "Ver fatura Porto Black de novembro" }),
+    );
+    expect(await screen.findByRole("dialog", { name: "Fatura Porto Black" })).toBeInTheDocument();
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => expect(screen.getByRole("button", { name: DAY_24 })).toHaveFocus());
+  });
+
+  it("a Saída cell of one unpaid conta or one fatura opens it; two items or a skipped one open the detail", async () => {
+    await open24();
+
+    await userEvent.click((await row("Quinta-feira, 5 de novembro, hoje")).cells[2]);
+    expect(await screen.findByRole("dialog", { name: "Internet · novembro" })).toBeInTheDocument();
+    await userEvent.keyboard("{Escape}");
+
+    await userEvent.click((await row("Sexta-feira, 20 de novembro")).cells[2]);
+    expect(await screen.findByRole("dialog", { name: "Fatura Nubank" })).toBeInTheDocument();
+    await userEvent.keyboard("{Escape}");
+
+    await userEvent.click((await row(DAY_24)).cells[2]);
+    expect(await screen.findByRole("dialog")).toHaveAccessibleName("Previsto · 24 nov");
+    await userEvent.click(screen.getByRole("button", { name: "Close" }));
+
+    await userEvent.click((await row("Quarta-feira, 25 de novembro")).cells[2]);
+    expect(await screen.findByRole("dialog")).toHaveAccessibleName("Previsto · 25 nov");
+  });
+});
 
 describe("Planilha Diário previsto (SOL-164)", () => {
   const media = window.matchMedia;

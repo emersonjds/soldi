@@ -162,10 +162,11 @@ type PayBillSheetProps = {
   onOpenChange: (open: boolean) => void;
   /** Today's Editar conta for the whole series; undefined while the bills load. */
   onEditBill?: () => void;
+  onCloseAutoFocus?: (event: Event) => void;
 };
 
 /** D56: one month of a conta — Pagar, its own amount, Pular or Voltar a cobrar; a card's fatura keeps Pagar only. */
-export const PayBillSheet = ({ month, bill, open, onOpenChange, onEditBill }: PayBillSheetProps) => {
+export const PayBillSheet = ({ month, bill, open, onOpenChange, onEditBill, onCloseAutoFocus }: PayBillSheetProps) => {
   const pay = usePayBill();
   const setMonth = useSetBillMonth();
   const normal = useBills({ includeInactive: true }).data?.find(({ id }) => id === bill?.bill_id)?.amount ?? undefined;
@@ -228,6 +229,7 @@ export const PayBillSheet = ({ month, bill, open, onOpenChange, onEditBill }: Pa
       onOpenChange={onOpenChange}
       title={`${bill.name} · ${mes}`}
       description={lines.join(" ")}
+      onCloseAutoFocus={onCloseAutoFocus}
     >
       <div aria-hidden className="text-muted-foreground -mt-4 flex flex-col gap-1 text-sm">
         {lines.map((line) => (

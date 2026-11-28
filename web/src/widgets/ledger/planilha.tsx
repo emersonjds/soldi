@@ -12,7 +12,7 @@ import {
 } from "react";
 
 import { useQuery } from "@tanstack/react-query";
-import { CalendarCheck, Plus, TriangleAlert } from "lucide-react";
+import { CalendarCheck, ChevronRight, Plus, TriangleAlert } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
@@ -26,7 +26,9 @@ import { activeEstimate } from "@/entities/settings/daily-estimate";
 import { useSettings } from "@/entities/settings/settings-query";
 import { type Transaction, useTransactions } from "@/entities/transaction/transaction-queries";
 import { TransactionSheet } from "@/features/add-transaction/transaction-sheet";
+import { FaturaSheet } from "@/features/card-fatura/fatura-sheet";
 import { EditBillSheet } from "@/features/edit-bill/edit-bill-sheet";
+import { PayBillSheet } from "@/features/pay-bill/pay-bill-sheet";
 import { cn } from "@/lib/utils";
 import { hasProblem, type Schemas } from "@/shared/api/client";
 import { type Currency, useCurrency } from "@/shared/lib/currency";
@@ -42,7 +44,7 @@ import { PageError } from "@/shared/ui/page-state";
 import { TierPill } from "@/shared/ui/tier-pill";
 
 import { type Entry, titleOf, useEntryActions } from "./entry-actions";
-import { DayBalance, dayLabel, dueCaption, entryOf, estimateCaption, isForecast } from "./ledger";
+import { DayBalance, dayLabel, dueCaption, entryOf, estimateCaption, isForecast, openLabel } from "./ledger";
 import { type PlanilhaRow, planilhaMonths, planilhaRows, sum } from "./planilha-rows";
 
 const COLUMNS = ["Data", "Entrada", "Saída", "Diário", "Saldo"];
@@ -161,7 +163,7 @@ const groupsOf = (
   const total = (items: Item[]) => (items.length > 0 ? sum(items.map(({ amount }) => amount)) : null);
   const outflows: Item[] = [
     ...ofKind("bill").map(item),
-    ...row.landed.map((bill) => ({
+    ...[...row.landed, ...row.skipped].map((bill) => ({
       key: billKey(bill),
       title: bill.name,
       caption: dueCaption(bill, view.month),
@@ -172,7 +174,7 @@ const groupsOf = (
   const incomes = ofKind("income").map(item);
   return [
     { name: "Entrada", income: true, items: incomes, total: total(incomes) },
-    { name: "Saída", income: false, items: outflows, total: total(outflows) },
+    { name: "Saída", income: false, items: outflows, total: total(outflows.filter(({ due }) => !due?.skipped)) },
     {
       name: "Diário",
       income: false,
@@ -200,12 +202,11 @@ const DayDetail = ({
   const groups = groupsOf(row, view, entries.data, estimate, act.lookup).filter(({ items }) => items.length > 0);
   const previsto = groups.some(({ items }) => items.some((item) => item.estimate));
   const day = `${Number(row.date.slice(8))} de ${monthName(row.date, row.date).toLowerCase()}`;
-  /** P4: a lançamento opens Lista's sheet, an unpaid conta its Editar conta; faturas, the previsto and a pending save stay text. */
+  /** P4 + SOL-173: a lançamento opens Lista's sheet, a conta its month, a fatura its sheet; the previsto and a pending save stay text. */
   const actionOf = ({ transaction, entry, due }: Item) => {
+    if (due) return dueAction(due, row.date, act);
     if (transaction && entry && !transaction.id.startsWith("optimistic-"))
       return () => act.entry(transaction, entry, row.date);
-    const bill = due && !due.is_card && act.lookup.bills?.find(({ id }) => id === due.bill_id);
-    if (bill) return () => act.bill(bill, row.date);
     return undefined;
   };
 
@@ -220,12 +221,18 @@ const DayDetail = ({
           <ul className="flex flex-col gap-2">
             {items.map((item) => {
               const action = actionOf(item);
+              const struck = item.due?.skipped && "text-muted-foreground line-through";
               const cells = (
                 <>
-                  <span className={cn("text-base font-medium break-words", item.estimate && "italic")}>
+                  <span className={cn("text-base font-medium break-words", item.estimate && "italic", struck)}>
                     {item.title}
                   </span>
-                  <Money amount={item.amount} income={income} outflow={!income} className="row-span-2 font-semibold" />
+                  <Money
+                    amount={item.amount}
+                    income={income}
+                    outflow={!income}
+                    className={cn("row-span-2 font-semibold", struck)}
+                  />
                   <span className="text-muted-foreground text-xs">{item.caption}</span>
                 </>
               );
@@ -235,9 +242,14 @@ const DayDetail = ({
                     <button
                       type="button"
                       onClick={action}
-                      className="hover:bg-muted focus-visible:outline-ring -mx-2 grid min-h-11 w-[calc(100%+1rem)] grid-cols-[1fr_auto] gap-x-3 rounded-md px-2 py-1 text-left focus-visible:outline-2"
+                      aria-label={item.due && openLabel(item.due)}
+                      className="hover:bg-muted focus-visible:outline-ring -mx-2 grid min-h-11 w-[calc(100%+1rem)] grid-cols-[1fr_auto_auto] gap-x-3 rounded-md px-2 py-1 text-left focus-visible:outline-2"
                     >
                       {cells}
+                      <ChevronRight
+                        aria-hidden
+                        className="text-muted-foreground col-start-3 row-span-2 row-start-1 size-4 self-center"
+                      />
                     </button>
                   ) : (
                     <div className="grid grid-cols-[1fr_auto] gap-x-3">{cells}</div>
@@ -314,7 +326,13 @@ type Act = {
   create: (kind: Schemas["CategoryKind"], date: string) => void;
   entry: (transaction: Transaction, entry: Entry, date: string) => void;
   bill: (bill: Schemas["Bill"], date: string) => void;
+  occurrence: (bill: Schemas["BillOfMonth"], date: string) => void;
+  fatura: (bill: Schemas["BillOfMonth"], date: string) => void;
 };
+
+/** SOL-173: an unpaid or skipped conta opens its month, a card its fatura. */
+const dueAction = (due: Schemas["BillOfMonth"], date: string, act: Act) =>
+  due.is_card ? () => act.fatura(due, date) : () => act.occurrence(due, date);
 
 /** P2: a cell's own action, or none when it opens the detail. */
 const cellAction = (
@@ -338,9 +356,9 @@ const cellAction = (
     Saída: row.outflow,
     Diário: cents(day.previsto) > 0 && estimate ? row.daily : day.daily,
   }[column];
-  if (items.length > 1 || !only.transaction || !only.entry || only.transaction.id.startsWith("optimistic-"))
-    return undefined;
-  if (cents(only.amount) !== cents(shown)) return undefined;
+  if (items.length > 1 || cents(only.amount) !== cents(shown)) return undefined;
+  if (only.due) return dueAction(only.due, date, act);
+  if (!only.transaction || !only.entry || only.transaction.id.startsWith("optimistic-")) return undefined;
   const { transaction, entry } = only;
   return () => act.entry(transaction, entry, date);
 };
@@ -440,6 +458,14 @@ const Row = ({ act, row, today, view, entries, stop, onFocus, ringed, flashing, 
     bill: (...args) => {
       handOff();
       act.bill(...args);
+    },
+    occurrence: (...args) => {
+      handOff();
+      act.occurrence(...args);
+    },
+    fatura: (...args) => {
+      handOff();
+      act.fatura(...args);
     },
   };
   const autoFocus = (event: Event, container: HTMLElement | null) => {
@@ -787,6 +813,10 @@ export const Planilha = ({
   const [draft, setDraft] = useState<{ kind: Schemas["CategoryKind"]; date: string }>({ kind: "daily", date: today });
   const [editingBill, setEditingBill] = useState<Schemas["Bill"]>();
   const [billOpen, setBillOpen] = useState(false);
+  const [occurrence, setOccurrence] = useState<Schemas["BillOfMonth"]>();
+  const [occurrenceOpen, setOccurrenceOpen] = useState(false);
+  const [fatura, setFatura] = useState<Schemas["BillOfMonth"]>();
+  const [faturaOpen, setFaturaOpen] = useState(false);
   const act: Act = {
     lookup: useLookup(),
     create: (kind, date) => {
@@ -803,6 +833,21 @@ export const Planilha = ({
       setEditingBill(bill);
       setBillOpen(true);
     },
+    occurrence: (bill, date) => {
+      back.current = date;
+      setOccurrence(bill);
+      setOccurrenceOpen(true);
+    },
+    fatura: (bill, date) => {
+      back.current = date;
+      setFatura(bill);
+      setFaturaOpen(true);
+    },
+  };
+  const series = act.lookup.bills?.find(({ id }) => id === occurrence?.bill_id);
+  const focusBack = (event: Event) => {
+    event.preventDefault();
+    giveBack();
   };
 
   const jump = useEffectEvent((date: string) => {
@@ -882,14 +927,27 @@ export const Planilha = ({
           giveBack();
         }}
       />
-      <EditBillSheet
-        open={billOpen}
-        onOpenChange={setBillOpen}
-        bill={editingBill}
-        onCloseAutoFocus={(event) => {
-          event.preventDefault();
-          giveBack();
-        }}
+      <EditBillSheet open={billOpen} onOpenChange={setBillOpen} bill={editingBill} onCloseAutoFocus={focusBack} />
+      <PayBillSheet
+        month={occurrence?.due_date.slice(0, 7) ?? month}
+        bill={occurrence}
+        open={occurrenceOpen}
+        onOpenChange={setOccurrenceOpen}
+        onEditBill={
+          series &&
+          (() => {
+            setEditingBill(series);
+            setBillOpen(true);
+          })
+        }
+        onCloseAutoFocus={focusBack}
+      />
+      <FaturaSheet
+        bill={fatura}
+        open={faturaOpen}
+        onOpenChange={setFaturaOpen}
+        entrySheet={(props) => <TransactionSheet {...props} />}
+        onCloseAutoFocus={focusBack}
       />
     </div>
   );

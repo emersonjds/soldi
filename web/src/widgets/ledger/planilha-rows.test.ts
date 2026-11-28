@@ -63,6 +63,39 @@ describe("planilhaRows", () => {
     }
   });
 
+  it("SOL-173: lists a skipped conta on its due day and never in Saída; an adjusted one counts its own amount", () => {
+    const base = PLANILHA_MONTH.bills_of_month[2];
+    const view = {
+      ...PLANILHA_MONTH,
+      bills_of_month: [
+        {
+          ...base,
+          bill_id: "skip",
+          name: "Academia",
+          amount: "99.00",
+          due_date: "2026-11-24",
+          lands_on: null,
+          skipped: true,
+        },
+        {
+          ...base,
+          bill_id: "adj",
+          name: "Água",
+          amount: "80.50",
+          due_date: "2026-11-24",
+          lands_on: "2026-11-24",
+          adjusted: true,
+        },
+      ],
+    };
+    const day = planilhaRows(view, "2026-03-10")[23];
+
+    expect(day.skipped.map((bill) => bill.name)).toEqual(["Academia"]);
+    expect(day.landed.map((bill) => bill.name)).toEqual(["Água"]);
+    expect(day.outflow).toBe("80.50");
+    expect(row(10).skipped).toEqual([]);
+  });
+
   it("SOL-164 S8: puts the Diário previsto in a future day's Diário, the larger of typed and estimate", () => {
     const ahead = planilhaRows(ESTIMATE_MONTH, "2026-03-10");
 
@@ -99,6 +132,7 @@ describe("planilhaRows", () => {
       outflow: "0.00",
       daily: "0.00",
       landed: [],
+      skipped: [],
     });
     expect(opening[1].day).toBeNull();
     expect(opening[2].day?.date).toBe("2026-11-03");
