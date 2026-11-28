@@ -47,3 +47,11 @@ export const planilhaRows = (view: Schemas["MonthView"], openingDate: string): P
       skipped,
     };
   });
+
+/** SOL-188: the month's total row, the exact sum of the cells above it; `last` carries the month's closing Saldo. */
+export const planilhaTotals = (rows: PlanilhaRow[], estimate: string | null | undefined) => ({
+  income: sum(rows.map((row) => row.income)),
+  outflow: sum(rows.map((row) => row.outflow)),
+  daily: sum(rows.map((row) => (estimate ? row.daily : (row.day?.daily ?? "0.00")))),
+  last: rows.filter((row) => row.day).at(-1)?.day ?? null,
+});
