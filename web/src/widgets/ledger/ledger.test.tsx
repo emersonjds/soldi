@@ -1,4 +1,4 @@
-import { cleanup, screen, within } from "@testing-library/react";
+import { cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -256,6 +256,67 @@ describe("Ledger captions (SOL-159)", () => {
       "break-words",
     );
     expect(screen.getByText("Parcela 3/12 · paga")).toHaveClass("flex-wrap");
+  });
+});
+
+describe("Ledger opens a conta's month (SOL-173)", () => {
+  const ALUGUEL_BILL: Schemas["Bill"] = { ...BILL_ALUGUEL, id: "bill-Aluguel", name: "Aluguel" };
+
+  it("opens an unpaid row's month from the whole row, with a chevron, and Editar conta from there", async () => {
+    show({ billsOfMonth: [due("Aluguel")], bills: [ALUGUEL_BILL] });
+
+    const open = screen.getByRole("button", { name: /^Abrir\s*Aluguel/ });
+    expect(open.querySelector(".lucide-chevron-right")).not.toBeNull();
+    await userEvent.click(open);
+    const sheet = await screen.findByRole("dialog", { name: "Aluguel · novembro" });
+    const edit = within(sheet).getByRole("button", { name: "Editar conta" });
+    await waitFor(() => expect(edit).toBeEnabled());
+    await userEvent.click(edit);
+    expect(await screen.findByRole("dialog", { name: "Editar conta" })).toBeInTheDocument();
+  });
+
+  it("opens a carried row's own month", async () => {
+    show({ billsOfMonth: [{ ...CARRIED_ALUGUEL, name: "Aluguel" }] });
+
+    await userEvent.click(screen.getByRole("button", { name: /^Abrir\s*Aluguel.*venceu em outubro/ }));
+    expect(await screen.findByRole("dialog", { name: "Aluguel · outubro" })).toBeInTheDocument();
+  });
+
+  it("opens a card row's fatura", async () => {
+    show({ billsOfMonth: [due("Porto", { is_card: true })] });
+
+    await userEvent.click(screen.getByRole("button", { name: /^Ver fatura\s*Porto/ }));
+    expect(await screen.findByRole("dialog", { name: "Fatura Porto" })).toBeInTheDocument();
+  });
+
+  it("lists a skipped month on its due day, struck through, and it still opens", async () => {
+    show({
+      billsOfMonth: [
+        due("Aluguel", { skipped: true, lands_on: null }),
+        due("Carro", { skipped: true, lands_on: null, installment: 3, installments: 12 }),
+      ],
+    });
+
+    expect(item("Aluguel")).toHaveTextContent("pulada em novembro");
+    expect(within(item("Aluguel")).getByText("Aluguel")).toHaveClass("line-through");
+    expect(item("Carro")).toHaveTextContent("Parcela 3/12 · pulada");
+    expect(screen.getByRole("heading", { level: 3 })).toHaveTextContent("10 nov");
+    await userEvent.click(screen.getByRole("button", { name: /^Abrir\s*Aluguel.*pulada em novembro/ }));
+    expect(await screen.findByRole("dialog", { name: "Aluguel · novembro" })).toBeInTheDocument();
+  });
+
+  it("says an adjusted month's amount is valor ajustado, never valor variável", () => {
+    show({ billsOfMonth: [due("Luz", { adjusted: true, variable: true })] });
+
+    expect(item("Luz")).toHaveTextContent("Conta fixa · a pagar · valor ajustado");
+    expect(item("Luz")).not.toHaveTextContent("valor variável");
+  });
+
+  it("keeps a paid conta's row on Editar / Excluir", async () => {
+    show({ transactions: [PAYMENT], billsOfMonth: [paidRow({ installment: 3, installments: 12 })] });
+
+    await userEvent.click(row(/Parcela 3\/12 · paga/));
+    expect(await screen.findByRole("button", { name: "Excluir" })).toBeInTheDocument();
   });
 });
 

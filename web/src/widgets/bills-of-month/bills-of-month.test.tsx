@@ -257,6 +257,21 @@ describe("Contas a pagar", () => {
     );
   });
 
+  it("says its own words when paying fails on a rule another screen words differently (SOL-173)", async () => {
+    show(BILLS_OF_MONTH, {
+      [`POST /api/bills/${BILL_ALUGUEL.id}/pay`]: {
+        status: 429,
+        body: { ...problem(429, "Texto do servidor."), type: "urn:soldi:error:rate-limited" },
+      },
+    });
+    await loaded();
+
+    await userEvent.click(within(rowOf("Aluguel Residencial")).getByRole("button", { name: /^Marcar/ }));
+
+    expect(await screen.findByText("Não foi possível marcar como paga.")).toBeInTheDocument();
+    expect(screen.queryByText(/Muitas alterações seguidas/)).not.toBeInTheDocument();
+  });
+
   it("undoes a payment from the round check and says so", async () => {
     const { requests, serverHas } = show([BILLS_OF_MONTH[0], PAID_RENT], {
       [`DELETE /api/bills/${BILL_ALUGUEL.id}/pay`]: { status: 204 },
@@ -417,18 +432,18 @@ describe("Contas a pagar", () => {
     await loaded();
 
     await userEvent.click(within(rowOf("Luz (Enel)")).getByRole("button", { name: /ajustar pagamento de Luz / }));
-    const sheet = await screen.findByRole("dialog", { name: "Pagar Luz (Enel)" });
-    const amount = within(sheet).getByLabelText("Valor");
+    const sheet = await screen.findByRole("dialog", { name: "Luz (Enel) · novembro" });
+    const amount = within(sheet).getByLabelText("Valor de novembro");
     expect(amount).toHaveValue("284,10");
     expect(within(sheet).getByRole("button", { name: "Hoje" })).toHaveAttribute("aria-pressed", "true");
 
     await userEvent.clear(amount);
-    await userEvent.click(within(sheet).getByRole("button", { name: "Confirmar" }));
+    await userEvent.click(within(sheet).getByRole("button", { name: "Pagar" }));
     expect(within(sheet).getByText("Informe um valor")).toBeInTheDocument();
 
     await userEvent.type(amount, "300,00");
     await userEvent.click(within(sheet).getByRole("button", { name: "Ontem" }));
-    await userEvent.click(within(sheet).getByRole("button", { name: "Confirmar" }));
+    await userEvent.click(within(sheet).getByRole("button", { name: "Pagar" }));
 
     await waitFor(() => expect(requests.some((request) => request.method === "POST")).toBe(true));
     const post = requests.find((request) => request.method === "POST");
@@ -500,7 +515,7 @@ describe("Contas a pagar", () => {
     await userEvent.click(
       within(rowOf("Aluguel Residencial de outubro")).getByRole("button", { name: /ajustar pagamento/ }),
     );
-    const sheet = await screen.findByRole("dialog", { name: "Pagar Aluguel Residencial" });
+    const sheet = await screen.findByRole("dialog", { name: "Aluguel Residencial · outubro" });
     expect(sheet).toHaveTextContent("Conta de outubro: a data do pagamento fica em outubro.");
   });
 
@@ -535,7 +550,7 @@ describe("Contas a pagar", () => {
     await userEvent.click(
       within(rowOf("Aluguel Residencial de outubro")).getByRole("button", { name: /ajustar pagamento/ }),
     );
-    const sheet = await screen.findByRole("dialog", { name: "Pagar Aluguel Residencial" });
+    const sheet = await screen.findByRole("dialog", { name: "Aluguel Residencial · outubro" });
     expect(within(sheet).queryByRole("button", { name: "Hoje" })).not.toBeInTheDocument();
     expect(within(sheet).queryByRole("button", { name: "Ontem" })).not.toBeInTheDocument();
     await userEvent.click(within(sheet).getByRole("button", { name: "Outra data, 10/10/2026" }));
@@ -546,9 +561,9 @@ describe("Contas a pagar", () => {
     await userEvent.keyboard("{Escape}");
     await waitFor(() => expect(screen.queryByRole("grid")).not.toBeInTheDocument());
     expect(
-      within(sheet).getByRole("button", { name: "Confirmar" }).closest('[data-slot="responsive-sheet-footer"]'),
+      within(sheet).getByRole("button", { name: "Pagar" }).closest('[data-slot="responsive-sheet-footer"]'),
     ).not.toBeNull();
-    await userEvent.click(within(sheet).getByRole("button", { name: "Confirmar" }));
+    await userEvent.click(within(sheet).getByRole("button", { name: "Pagar" }));
 
     await waitFor(() => expect(requests.some((request) => request.method === "POST")).toBe(true));
     const post = requests.find((request) => request.method === "POST");
@@ -1027,13 +1042,13 @@ describe("Contas a pagar", () => {
       const [check, pill] = within(row).getAllByRole("button", { name: "Pagar Luz" });
       expect(pill).toBeDefined();
       await userEvent.click(check);
-      const sheet = await screen.findByRole("dialog", { name: "Pagar Luz" });
-      expect(within(sheet).getByLabelText("Valor")).toHaveValue("180,00");
+      const sheet = await screen.findByRole("dialog", { name: "Luz · novembro" });
+      expect(within(sheet).getByLabelText("Valor de novembro")).toHaveValue("180,00");
       await userEvent.click(within(sheet).getByRole("button", { name: "Fechar" }));
       await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
 
       await userEvent.click(within(rowOf("Luz")).getAllByRole("button", { name: "Pagar Luz" })[1]);
-      expect(await screen.findByRole("dialog", { name: "Pagar Luz" })).toBeInTheDocument();
+      expect(await screen.findByRole("dialog", { name: "Luz · novembro" })).toBeInTheDocument();
       expect(requests.some((request) => request.method === "POST")).toBe(false);
     });
 
@@ -1067,7 +1082,7 @@ describe("Contas a pagar", () => {
       expect(requests.some((request) => request.method === "POST")).toBe(false);
       expect(within(sheet).getByLabelText("Valor")).toHaveValue("450,00");
       expect(within(sheet).getByText("Confira com a fatura do banco.")).toBeInTheDocument();
-      await userEvent.click(within(sheet).getByRole("button", { name: "Confirmar" }));
+      await userEvent.click(within(sheet).getByRole("button", { name: "Pagar" }));
 
       await waitFor(() => expect(requests.some((request) => request.method === "POST")).toBe(true));
       const post = requests.find((request) => request.method === "POST");
@@ -1127,7 +1142,7 @@ describe("Contas a pagar", () => {
       await userEvent.click(within(rowOf("Fatura Porto")).getAllByRole("button", { name: "Pagar Fatura Porto" })[1]);
       const sheet = await screen.findByRole("dialog", { name: "Pagar Fatura Porto" });
       serverHas([{ ...FATURA, paid: true, transaction_id: "t-paid" }]);
-      await userEvent.click(within(sheet).getByRole("button", { name: "Confirmar" }));
+      await userEvent.click(within(sheet).getByRole("button", { name: "Pagar" }));
       await waitFor(() => expect(requests.some((request) => request.method === "POST")).toBe(true));
 
       await userEvent.click(await within(card()).findByRole("button", { name: "Desmarcar Fatura Porto" }));
@@ -1179,6 +1194,87 @@ describe("Contas a pagar", () => {
         "aria-pressed",
         "true",
       );
+    });
+  });
+
+  describe("a month of its own (D56)", () => {
+    const SKIPPED_RENT: Schemas["BillOfMonth"] = { ...BILLS_OF_MONTH[1], skipped: true, lands_on: null };
+    const ADJUSTED_LUZ: Schemas["BillOfMonth"] = {
+      ...BILLS_OF_MONTH[0],
+      name: "Luz",
+      amount: "180.00",
+      adjusted: true,
+      variable: true,
+      overdue: false,
+      due_date: "2026-11-25",
+    };
+    const rent = BILLS_OF_MONTH[1].name;
+
+    it("leaves a skipped month out of the counts and the total, and an adjusted one drops the estimate", async () => {
+      show([SKIPPED_RENT, ADJUSTED_LUZ]);
+      await loaded();
+
+      expect(card()).toHaveTextContent("Contas a pagar0 de 1 paga");
+      expect(screen.getByRole("button", { name: /^Valor variável/ })).toHaveTextContent(
+        "0 de 1 paga · falta R$ 180,00",
+      );
+      expect(card()).toHaveTextContent("Próxima: dia 25 · R$ 180,00");
+
+      const luz = rowOf("Luz");
+      expect(luz).toHaveTextContent("Luz · valor ajustado");
+      expect(luz).not.toHaveTextContent("valor variável");
+      expect(luz).not.toHaveTextContent("≈");
+    });
+
+    it("strikes a skipped month through, says so, and leaves no way to pay it", async () => {
+      show([SKIPPED_RENT, ADJUSTED_LUZ]);
+      await loaded();
+
+      const row = rowOf(rent);
+      expect(within(row).getAllByText("pulada em novembro")).toHaveLength(2);
+      expect(within(row).getByText(rent)).toHaveClass("line-through", "text-muted-foreground");
+      expect(within(row).getByText("R$ 2.259,56")).toHaveClass("line-through");
+      expect(within(row).queryByRole("button", { name: `Marcar ${rent} como paga` })).not.toBeInTheDocument();
+      expect(within(row).queryByRole("button", { name: `Pagar ${rent}` })).not.toBeInTheDocument();
+      expect(within(row).getByRole("button", { name: `Abrir ${rent} de novembro` })).toBeInTheDocument();
+    });
+
+    it("counts the rest as all paid", async () => {
+      show([SKIPPED_RENT, { ...ADJUSTED_LUZ, paid: true, adjusted: false, transaction_id: "t-paid" }]);
+      await loaded();
+
+      expect(card()).toHaveTextContent("Contas a pagar1 de 1 paga");
+      expect(card()).toHaveTextContent("Todas as contas do mês pagas");
+    });
+
+    it("never says every bill is paid when every month is skipped", async () => {
+      show([SKIPPED_RENT, { ...ADJUSTED_LUZ, skipped: true, lands_on: null }]);
+      await loaded();
+
+      expect(card()).not.toHaveTextContent("Todas as contas do mês pagas");
+    });
+
+    it("reads a skipped adjusted variable month only as skipped", async () => {
+      show([
+        { ...ADJUSTED_LUZ, skipped: true, lands_on: null },
+        { ...ADJUSTED_LUZ, name: "Gás", skipped: true, adjusted: false, lands_on: null },
+      ]);
+      await loaded();
+
+      for (const name of ["Luz", "Gás"]) {
+        const row = rowOf(name);
+        expect(row).toHaveTextContent("pulada em novembro");
+        expect(row).not.toHaveTextContent("valor ajustado");
+        expect(row).not.toHaveTextContent("valor variável");
+        expect(row).not.toHaveTextContent("≈");
+      }
+    });
+
+    it("says a skipped parcela is skipped", async () => {
+      show([{ ...SKIPPED_RENT, installment: 3, installments: 10 }]);
+      await loaded();
+
+      expect(rowOf(rent)).toHaveTextContent("Parcela 3/10 · pulada");
     });
   });
 });

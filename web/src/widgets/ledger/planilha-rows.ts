@@ -24,6 +24,8 @@ export type PlanilhaRow = {
   daily: string;
   /** The unpaid contas landed on the day. */
   landed: Schemas["BillOfMonth"][];
+  /** Skipped contas due on the day, listed, never summed (D56). */
+  skipped: Schemas["BillOfMonth"][];
 };
 
 export const sum = (amounts: string[]) => fromCents(amounts.reduce((total, amount) => total + cents(amount), 0));
@@ -32,8 +34,9 @@ export const planilhaRows = (view: Schemas["MonthView"], openingDate: string): P
   Array.from({ length: lastDay(view.month) }, (_, index) => {
     const date = `${view.month}-${String(index + 1).padStart(2, "0")}`;
     const day = date < openingDate ? undefined : view.days.find((each) => each.date === date);
-    if (!day) return { date, day: null, income: "0.00", outflow: "0.00", daily: "0.00", landed: [] };
+    if (!day) return { date, day: null, income: "0.00", outflow: "0.00", daily: "0.00", landed: [], skipped: [] };
     const landed = view.bills_of_month.filter((bill) => bill.lands_on === date);
+    const skipped = view.bills_of_month.filter((bill) => bill.skipped && bill.due_date === date);
     return {
       date,
       day,
@@ -41,5 +44,6 @@ export const planilhaRows = (view: Schemas["MonthView"], openingDate: string): P
       outflow: sum([day.bills, ...landed.map((bill) => bill.amount)]),
       daily: sum([day.daily, day.previsto]),
       landed,
+      skipped,
     };
   });

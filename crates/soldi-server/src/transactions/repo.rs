@@ -220,8 +220,9 @@ pub async fn insert(
     .await
 }
 
-/// D55: the user's bill `bill_ids[i]` paid on `dates[i]` with its amount and category; a month
-/// already paid, another user's bill or a category no longer `bill` writes nothing.
+/// D55: the user's bill `bill_ids[i]` paid on `dates[i]` with the month's own amount (D56), else
+/// its amount, and its category; a month already paid, another user's bill or a category no
+/// longer `bill` writes nothing.
 pub async fn insert_auto_payments(
     conn: &mut PgConnection,
     user_id: Uuid,
@@ -230,10 +231,13 @@ pub async fn insert_auto_payments(
 ) -> Result<u64, sqlx::Error> {
     let result = sqlx::query!(
         "INSERT INTO transactions (user_id, date, amount, kind, category_id, recurring_bill_id)
-         SELECT b.user_id, d.date, b.amount, 'bill', b.category_id, b.id
+         SELECT b.user_id, d.date, COALESCE(m.amount, b.amount), 'bill', b.category_id, b.id
          FROM UNNEST($2::uuid[], $3::date[]) AS d(bill_id, date)
          JOIN recurring_bills b ON b.user_id = $1 AND b.id = d.bill_id
          JOIN categories c ON c.user_id = b.user_id AND c.id = b.category_id AND c.kind = 'bill'
+         LEFT JOIN bill_months m ON m.user_id = b.user_id AND m.bill_id = b.id
+              AND m.month = date_trunc('month', d.date)::date
+         WHERE NOT COALESCE(m.skipped, false)
          ON CONFLICT DO NOTHING",
         user_id,
         bill_ids,

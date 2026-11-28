@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM bill_months WHERE user_id = $1 AND bill_id = $2 AND month = $3",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Date"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a8b4c6d10e0719d1812e28f3cbc5620a713dc27bbf9ff8ae465675920b8a59fd"
+}

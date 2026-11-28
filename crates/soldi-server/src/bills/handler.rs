@@ -3,7 +3,7 @@ use axum::extract::State;
 use axum::http::StatusCode;
 use serde::Deserialize;
 use soldi_types::Problem;
-use soldi_types::bills::{Bill, CreateBill, PayBill, UpdateBill};
+use soldi_types::bills::{Bill, CreateBill, PayBill, SetBillMonth, UpdateBill};
 use soldi_types::transactions::Transaction;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
@@ -19,6 +19,7 @@ pub fn router() -> OpenApiRouter<AppState> {
         .routes(routes!(list_bills, create_bill))
         .routes(routes!(update_bill, archive_bill))
         .routes(routes!(pay_bill, unpay_bill))
+        .routes(routes!(set_bill_month, restore_bill_month))
 }
 
 #[derive(Deserialize)]
@@ -145,5 +146,45 @@ pub async fn unpay_bill(
     QueryParams(query): QueryParams<MonthQuery>,
 ) -> Result<StatusCode, AppError> {
     service::unpay(&state.pool, &user, id, &query.month).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[utoipa::path(put, path = "/api/bills/{id}/months/{month}", tag = "bills", request_body = SetBillMonth,
+    params(
+        ("id" = Uuid, Path, description = "Bill id"),
+        ("month" = String, Path, description = "The month, `YYYY-MM`", example = "2026-12")),
+    responses(
+        (status = 204, description = "The month's own amount or skip is stored (D56); every other month keeps the bill's"),
+        (status = 400, body = Problem, content_type = "application/problem+json", description = "`id` is not a UUID"),
+        (status = 401, body = Problem, content_type = "application/problem+json"),
+        (status = 404, body = Problem, content_type = "application/problem+json", description = "Missing, archived or another user's"),
+        (status = 409, body = Problem, content_type = "application/problem+json", description = "The month is already paid (`bill-already-paid`): edit its payment"),
+        (status = 422, body = Problem, content_type = "application/problem+json", description = "`month` not `YYYY-MM` from 2000 to 2100, `amount` missing while `skipped` is false, not above zero or with more than two places (`validation`); `card-month` on a card; `month-outside-bill` before `active_since`'s month or outside the bill's run (D35)")))]
+pub async fn set_bill_month(
+    State(state): State<AppState>,
+    user: CurrentUser,
+    PathParams((id, month)): PathParams<(Uuid, String)>,
+    JsonBody(input): JsonBody<SetBillMonth>,
+) -> Result<StatusCode, AppError> {
+    service::set_month(&state.pool, &user, id, &month, input).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[utoipa::path(delete, path = "/api/bills/{id}/months/{month}", tag = "bills",
+    params(
+        ("id" = Uuid, Path, description = "Bill id"),
+        ("month" = String, Path, description = "The month, `YYYY-MM`", example = "2026-12")),
+    responses(
+        (status = 204, description = "The month follows the bill again, also when it had nothing of its own"),
+        (status = 400, body = Problem, content_type = "application/problem+json", description = "`id` is not a UUID"),
+        (status = 401, body = Problem, content_type = "application/problem+json"),
+        (status = 404, body = Problem, content_type = "application/problem+json", description = "Missing, archived or another user's"),
+        (status = 422, body = Problem, content_type = "application/problem+json", description = "`month` is not `YYYY-MM`")))]
+pub async fn restore_bill_month(
+    State(state): State<AppState>,
+    user: CurrentUser,
+    PathParams((id, month)): PathParams<(Uuid, String)>,
+) -> Result<StatusCode, AppError> {
+    service::restore_month(&state.pool, &user, id, &month).await?;
     Ok(StatusCode::NO_CONTENT)
 }

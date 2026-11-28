@@ -653,3 +653,70 @@ async fn auto_paid_through_starts_the_day_before_the_migration(pool: PgPool) {
         "{through}"
     );
 }
+
+#[sqlx::test]
+async fn sol173_bill_months_hold_an_amount_or_a_skip_of_the_users_own_bill(pool: PgPool) {
+    let ana = user(&pool, "ana@example.com").await;
+    let bob = user(&pool, "bob@example.com").await;
+    let bill: Uuid = sqlx::query_scalar(
+        "WITH cat AS (
+             INSERT INTO categories (user_id, name, kind, icon, color)
+             VALUES ($1, 'Casa', 'bill', 'home', 'cat-6') RETURNING id
+         )
+         INSERT INTO recurring_bills (user_id, category_id, name, amount, due_day)
+         SELECT $1, id, 'Aluguel', 1500, 5 FROM cat
+         RETURNING id",
+    )
+    .bind(ana)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let insert = |user: Uuid, month: &str, amount: Option<&str>, skipped: bool| {
+        sqlx::query(
+            "INSERT INTO bill_months (user_id, bill_id, month, amount, skipped)
+             VALUES ($1, $2, $3::date, $4::numeric, $5)",
+        )
+        .bind(user)
+        .bind(bill)
+        .bind(month.to_owned())
+        .bind(amount.map(str::to_owned))
+        .bind(skipped)
+        .execute(&pool)
+    };
+
+    insert(ana, "2026-12-01", Some("1100.00"), false)
+        .await
+        .unwrap();
+    insert(ana, "2027-01-01", None, true).await.unwrap();
+    assert!(
+        insert(ana, "2027-02-01", None, false).await.is_err(),
+        "neither amount nor skip"
+    );
+    assert!(
+        insert(ana, "2027-03-01", Some("0"), false).await.is_err(),
+        "amount above zero"
+    );
+    assert!(
+        insert(ana, "2027-04-15", Some("10"), false).await.is_err(),
+        "first of month"
+    );
+    assert!(
+        insert(bob, "2027-05-01", Some("10"), false).await.is_err(),
+        "another user's bill"
+    );
+    assert!(
+        insert(ana, "2026-12-01", Some("5"), false).await.is_err(),
+        "one row a month"
+    );
+
+    sqlx::query("DELETE FROM users WHERE id = $1")
+        .bind(ana)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let left: i64 = sqlx::query_scalar("SELECT count(*) FROM bill_months")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(left, 0);
+}

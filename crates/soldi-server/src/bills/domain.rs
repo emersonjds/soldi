@@ -1,8 +1,8 @@
 use chrono::{Datelike, Months, NaiveDate};
-use soldi_types::bills::CreateBill;
+use soldi_types::bills::{CreateBill, SetBillMonth};
 
 use crate::error::{AppError, reject_nul};
-use crate::months::domain::{first_of, month_index};
+use crate::months::domain::{MonthBill, first_of, month_index, runs_in};
 use crate::settings::domain::check_money;
 
 /// The bill with its name trimmed; error fields start with `prefix` (`"bills[2]."`). D28: a
@@ -176,6 +176,41 @@ pub fn stop_month(today: NaiveDate, last_paid: Option<NaiveDate>) -> NaiveDate {
 
 pub fn bill_ended() -> AppError {
     AppError::rule("bill-ended", "This bill ended before that month.")
+}
+
+/// D56: a month keeps its own amount, a skip, or both; neither is `DELETE`.
+pub fn check_month(input: SetBillMonth) -> Result<SetBillMonth, AppError> {
+    match input.amount {
+        None if !input.skipped => Err(AppError::invalid(
+            "amount",
+            "is required unless the month is skipped",
+        )),
+        Some(amount) if amount <= rust_decimal::Decimal::ZERO => {
+            Err(AppError::invalid("amount", "must be greater than zero"))
+        }
+        Some(amount) => Ok(SetBillMonth {
+            amount: Some(check_money("amount", amount)?),
+            ..input
+        }),
+        None => Ok(input),
+    }
+}
+
+/// D56: a conta fixa or parcelada owes `month` from `active_since`'s month, inside its run (D35).
+pub fn check_occurrence(bill: &MonthBill, month: NaiveDate) -> Result<(), AppError> {
+    if bill.closing_day.is_some() {
+        return Err(AppError::rule(
+            "card-month",
+            "A card's fatura has no amount of its own per month.",
+        ));
+    }
+    if month < first_of(bill.active_since) || !runs_in(bill, month) {
+        return Err(AppError::rule(
+            "month-outside-bill",
+            "This bill owes nothing that month.",
+        ));
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -411,5 +446,92 @@ mod tests {
                 "{installments:?} {last_month:?}"
             );
         }
+    }
+
+    fn month_bill(
+        closing_day: Option<i16>,
+        last_month: Option<NaiveDate>,
+        installments: Option<i16>,
+    ) -> MonthBill {
+        MonthBill {
+            id: Uuid::nil(),
+            name: "Aluguel".into(),
+            icon: "home".into(),
+            color: "cat-6".into(),
+            amount: closing_day
+                .is_none()
+                .then(|| rust_decimal::Decimal::new(150_000, 2)),
+            due_day: 24,
+            closing_day,
+            active_since: "2026-11-27".parse().unwrap(),
+            last_month,
+            installments,
+            variable: false,
+        }
+    }
+
+    fn slug(result: Result<(), AppError>) -> &'static str {
+        match result {
+            Err(AppError::Rule { slug, .. }) => slug,
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn d56_a_month_override_needs_an_amount_above_zero_or_a_skip() {
+        let set = |amount: Option<&str>, skipped| {
+            check_month(SetBillMonth {
+                amount: amount.map(|a| a.parse().unwrap()),
+                skipped,
+            })
+        };
+        assert!(set(Some("1100.00"), false).is_ok());
+        assert!(set(None, true).is_ok());
+        assert!(set(Some("1100.00"), true).is_ok());
+        for (amount, skipped) in [
+            (None, false),
+            (Some("0"), false),
+            (Some("-1"), true),
+            (Some("1.001"), false),
+            (Some("10000000000"), false),
+        ] {
+            assert!(
+                matches!(set(amount, skipped), Err(AppError::Validation(_))),
+                "{amount:?} {skipped}"
+            );
+        }
+    }
+
+    #[test]
+    fn d56_only_a_conta_inside_its_run_takes_a_month_override() {
+        let month = |text: &str| -> NaiveDate { text.parse().unwrap() };
+        let fixa = month_bill(None, None, None);
+        assert!(
+            check_occurrence(&fixa, month("2026-11-01")).is_ok(),
+            "active_since's month"
+        );
+        assert!(check_occurrence(&fixa, month("2027-06-01")).is_ok());
+        assert_eq!(
+            slug(check_occurrence(&fixa, month("2026-10-01"))),
+            "month-outside-bill"
+        );
+        let stopped = month_bill(None, Some(month("2026-12-01")), None);
+        assert_eq!(
+            slug(check_occurrence(&stopped, month("2027-01-01"))),
+            "month-outside-bill"
+        );
+        let parcelada = month_bill(None, Some(month("2027-02-01")), Some(4));
+        assert!(check_occurrence(&parcelada, month("2027-02-01")).is_ok());
+        assert_eq!(
+            slug(check_occurrence(&parcelada, month("2027-03-01"))),
+            "month-outside-bill"
+        );
+        assert_eq!(
+            slug(check_occurrence(
+                &month_bill(Some(3), None, None),
+                month("2026-12-01")
+            )),
+            "card-month"
+        );
     }
 }

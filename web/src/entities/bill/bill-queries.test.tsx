@@ -15,7 +15,16 @@ import {
   TRANSACTIONS,
 } from "@/test/stub-api";
 
-import { useArchiveBill, useBills, useCreateBill, usePayBill, useUnpayBill, useUpdateBill } from "./bill-queries";
+import {
+  monthStateOf,
+  useArchiveBill,
+  useBills,
+  useCreateBill,
+  usePayBill,
+  useSetBillMonth,
+  useUnpayBill,
+  useUpdateBill,
+} from "./bill-queries";
 
 const WITH_BILLS = { ...MONTH, bills_of_month: BILLS_OF_MONTH };
 const PAYMENT = { ...TRANSACTIONS[1], id: "t-paid", amount: "2259.56" };
@@ -27,6 +36,7 @@ const seeded = () => {
     archive: useArchiveBill(),
     pay: usePayBill(),
     unpay: useUnpayBill(),
+    setMonth: useSetBillMonth(),
   }));
   view.client.setQueryData(["month", "2026-11"], WITH_BILLS);
   view.client.setQueryData(["transactions", "2026-11"], TRANSACTIONS);
@@ -139,7 +149,9 @@ describe("usePayBill and useUnpayBill", () => {
       }),
     );
 
-    await waitFor(() => expect(rowOf(view, BILL_ALUGUEL.id)).toMatchObject({ paid: true, amount: "2300.00" }));
+    await waitFor(() =>
+      expect(rowOf(view, BILL_ALUGUEL.id)).toMatchObject({ paid: true, amount: "2300.00", lands_on: null }),
+    );
     expect(rowOf(view, BILL_LUZ.id)?.paid).toBe(false);
     release();
     await waitFor(() => expect(view.result.current.pay.isSuccess).toBe(true));
@@ -281,5 +293,104 @@ describe("usePayBill and useUnpayBill", () => {
       "Não encontrado.",
     );
     expect(rowOf(view, BILL_LUZ.id)?.paid).toBe(true);
+  });
+});
+
+describe("useSetBillMonth", () => {
+  const route = `/api/bills/${BILL_ALUGUEL.id}/months/2026-11`;
+
+  it("puts one month's own amount and shows it at once", async () => {
+    const requests = stubApi({ [`PUT ${route}`]: { status: 204 } });
+    const release = gated();
+    const view = seeded();
+
+    act(() =>
+      view.result.current.setMonth.mutate({
+        billId: BILL_ALUGUEL.id,
+        month: "2026-11",
+        amount: "1100.00",
+        skipped: false,
+      }),
+    );
+
+    await waitFor(() =>
+      expect(rowOf(view, BILL_ALUGUEL.id)).toMatchObject({ amount: "1100.00", adjusted: true, skipped: false }),
+    );
+    release();
+    await waitFor(() => expect(view.result.current.setMonth.isSuccess).toBe(true));
+    expect(requests[0].method).toBe("PUT");
+    expect(await requests[0].json()).toEqual({ amount: "1100.00", skipped: false });
+    expect(isStale(view, ["month", "2026-11"])).toBe(true);
+  });
+
+  it("skips a month: no landing day, never overdue", async () => {
+    const requests = stubApi({ [`PUT /api/bills/${BILL_LUZ.id}/months/2026-11`]: { status: 204 } });
+    const release = gated();
+    const view = seeded();
+
+    act(() =>
+      view.result.current.setMonth.mutate({ billId: BILL_LUZ.id, month: "2026-11", amount: null, skipped: true }),
+    );
+
+    await waitFor(() =>
+      expect(rowOf(view, BILL_LUZ.id)).toMatchObject({
+        amount: "284.10",
+        adjusted: false,
+        skipped: true,
+        lands_on: null,
+        overdue: false,
+      }),
+    );
+    release();
+    await waitFor(() => expect(view.result.current.setMonth.isSuccess).toBe(true));
+    expect(await requests[0].json()).toEqual({ amount: null, skipped: true });
+  });
+
+  it("deletes the month's own state to go back to normal, showing the normal amount", async () => {
+    const requests = stubApi({ [`DELETE ${route}`]: { status: 204 } });
+    const release = gated();
+    const view = seeded();
+    view.client.setQueryData(["month", "2026-11"], {
+      ...WITH_BILLS,
+      bills_of_month: [BILLS_OF_MONTH[0], { ...BILLS_OF_MONTH[1], amount: "1100.00", adjusted: true }],
+    });
+
+    act(() =>
+      view.result.current.setMonth.mutate({
+        billId: BILL_ALUGUEL.id,
+        month: "2026-11",
+        amount: null,
+        skipped: false,
+        normal: "2259.56",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(rowOf(view, BILL_ALUGUEL.id)).toMatchObject({ amount: "2259.56", adjusted: false, skipped: false }),
+    );
+    release();
+    await waitFor(() => expect(view.result.current.setMonth.isSuccess).toBe(true));
+    expect(requests[0].method).toBe("DELETE");
+  });
+
+  it("rolls the row back when the server fails", async () => {
+    stubApi({ [`PUT ${route}`]: { status: 500, body: problem(500, "Erro.") } });
+    const view = seeded();
+
+    await act(() =>
+      view.result.current.setMonth
+        .mutateAsync({ billId: BILL_ALUGUEL.id, month: "2026-11", amount: "1100.00", skipped: false })
+        .catch(() => undefined),
+    );
+
+    expect(rowOf(view, BILL_ALUGUEL.id)).toEqual(BILLS_OF_MONTH[1]);
+  });
+
+  it("reads a month's own state from its row", () => {
+    expect(monthStateOf({ ...BILLS_OF_MONTH[1], amount: "1100.00", adjusted: true })).toEqual({
+      amount: "1100.00",
+      skipped: false,
+    });
+    expect(monthStateOf(BILLS_OF_MONTH[1])).toEqual({ amount: null, skipped: false });
   });
 });

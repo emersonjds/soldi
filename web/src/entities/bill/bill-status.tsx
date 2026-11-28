@@ -59,6 +59,7 @@ export const BillStatus = ({
   onUnpay: () => void;
   busy: boolean;
 }) => {
+  if (bill.skipped) return null;
   if (bill.paid)
     return (
       <>

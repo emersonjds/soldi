@@ -20,14 +20,14 @@ import {
 } from "@/entities/bill/bill-queries";
 import { BillStatus } from "@/entities/bill/bill-status";
 import { billKey } from "@/entities/month/forecast-alert";
-import { ALL_BILLS_PAID, dueDays, nextDue } from "@/entities/month/schedule";
+import { ALL_BILLS_PAID, countedBills, dueDays, nextDue } from "@/entities/month/schedule";
 import { type Transaction, useTransactions } from "@/entities/transaction/transaction-queries";
 import { TransactionSheet } from "@/features/add-transaction/transaction-sheet";
 import { FaturaSheet } from "@/features/card-fatura/fatura-sheet";
 import { EditBillSheet, useArchiveLater } from "@/features/edit-bill/edit-bill-sheet";
 import { PayBillSheet } from "@/features/pay-bill/pay-bill-sheet";
 import { cn } from "@/lib/utils";
-import { problemMessage, type Schemas } from "@/shared/api/client";
+import type { Schemas } from "@/shared/api/client";
 import { type Currency, useCurrency } from "@/shared/lib/currency";
 import { addMonths, dayMonth, monthAbbrev, monthName, shortDay, todayISO } from "@/shared/lib/date";
 import { formatMoney } from "@/shared/lib/money";
@@ -68,9 +68,14 @@ const kindOf = (bill: BillOfMonth): Kind => {
   return bill.variable ? "variable" : "fixed";
 };
 
+/** D56: a month's own amount is no estimate. */
+const estimatedOf = (bill: BillOfMonth) => bill.variable && !bill.paid && !bill.adjusted && !bill.skipped;
+
 /** `2 de 3 pagas · falta R$ X · 1 vencida`, or a tick once every bill of the group is paid. */
 const Summary = ({ bills, currency }: { bills: BillOfMonth[]; currency: Currency }) => {
   const unpaid = bills.filter((bill) => !bill.paid);
+  // ponytail: a group of only skipped months has nothing to count.
+  if (bills.length === 0) return null;
   if (unpaid.length === 0)
     return (
       <span className="text-income-text flex items-center gap-1">
@@ -84,7 +89,7 @@ const Summary = ({ bills, currency }: { bills: BillOfMonth[]; currency: Currency
     <span className="text-muted-foreground flex flex-wrap items-center gap-x-1">
       <span className="whitespace-nowrap">{paidOf(bills)}</span>{" "}
       <span className="whitespace-nowrap">
-        · falta {unpaid.some((bill) => bill.variable) && "≈ "}
+        · falta {unpaid.some(estimatedOf) && "≈ "}
         {formatMoney(left, currency)}
       </span>
       {late > 0 && (
@@ -108,6 +113,15 @@ const carriedFrom = (bill: BillOfMonth, month: string) =>
 
 /** Spec 2026-11-11: desktop says since when a bill is late or whether it was paid on time; mobile keeps the date. */
 const Caption = ({ bill, paidOn }: { bill: BillOfMonth; paidOn?: string }) => {
+  if (bill.skipped && !bill.installments) {
+    const skipped = `pulada em ${monthName(bill.due_date, bill.due_date)}`;
+    return (
+      <>
+        <span className="text-muted-foreground hidden text-xs lg:flex">{skipped}</span>
+        <span className="text-muted-foreground flex text-xs whitespace-nowrap lg:hidden">{skipped}</span>
+      </>
+    );
+  }
   const day = bill.due_date.slice(8);
   const late = bill.overdue && !bill.paid;
   let desktop = `Vence dia ${day}`;
@@ -223,12 +237,13 @@ const Row = ({
   const late = carriedFrom(bill, month);
   const title = billTitle(bill);
   const label = late ? `${title} de ${late}` : title;
-  const estimated = bill.variable && !bill.paid;
-  const parcel =
+  const estimated = estimatedOf(bill);
+  let parcel =
     bill.installments &&
     (bill.installment === bill.installments
       ? "Última parcela"
       : `Parcela ${bill.installment}/${bill.installments} · termina em ${monthAbbrev(addMonths(bill.due_date.slice(0, 7), bill.installments - Number(bill.installment)))}`);
+  if (parcel && bill.skipped) parcel = `Parcela ${bill.installment}/${bill.installments} · pulada`;
   const amount = (
     <span className="whitespace-nowrap">
       {estimated && <span aria-hidden>≈ </span>}
@@ -236,8 +251,9 @@ const Row = ({
         amount={bill.amount}
         className={cn(
           "text-sm sm:text-base lg:text-lg",
-          bill.paid ? "text-muted-foreground" : "font-bold",
+          bill.paid || bill.skipped ? "text-muted-foreground" : "font-bold",
           bill.overdue && "text-expense",
+          bill.skipped && "line-through",
         )}
       />
     </span>
@@ -252,6 +268,7 @@ const Row = ({
             className={cn(
               "line-clamp-2 max-w-full text-base font-medium break-words",
               bill.paid && "lg:text-muted-foreground lg:line-through",
+              bill.skipped && "text-muted-foreground line-through",
             )}
           >
             {title}
@@ -270,6 +287,11 @@ const Row = ({
               <span className="hidden lg:inline"> ·</span> valor variável
             </span>
           )}
+          {bill.adjusted && !bill.paid && !bill.skipped && (
+            <span className="text-muted-foreground basis-full text-sm whitespace-nowrap lg:basis-auto">
+              <span className="hidden lg:inline"> ·</span> valor ajustado
+            </span>
+          )}
         </span>
         <Caption bill={bill} paidOn={paidOn} />
       </span>
@@ -283,7 +305,11 @@ const Row = ({
         bill.overdue && "bg-expense/10",
       )}
     >
-      <RoundCheck bill={bill} label={label} onToggle={bill.paid ? onUnpay : onPay} busy={busy} />
+      {bill.skipped ? (
+        <span aria-hidden className="-ml-2 hidden size-11 shrink-0 lg:block" />
+      ) : (
+        <RoundCheck bill={bill} label={label} onToggle={bill.paid ? onUnpay : onPay} busy={busy} />
+      )}
       <button
         type="button"
         aria-label={`${bill.is_card ? "Ver" : "Editar"} ${label}`}
@@ -310,7 +336,11 @@ const Row = ({
       {!bill.paid && (
         <button
           type="button"
-          aria-label={`${estimated ? "valor estimado " : ""}${formatMoney(bill.amount, currency)}: ajustar pagamento de ${label}`}
+          aria-label={
+            bill.skipped
+              ? `Abrir ${label} de ${monthName(bill.due_date, bill.due_date)}`
+              : `${estimated ? "valor estimado " : ""}${formatMoney(bill.amount, currency)}: ajustar pagamento de ${label}`
+          }
           onClick={onAdjust}
           className="hover:bg-muted focus-visible:outline-ring min-h-11 shrink-0 rounded-lg px-1 transition-colors focus-visible:outline-2"
         >
@@ -353,12 +383,13 @@ export const BillsOfMonth = ({ view, className }: { view: Schemas["MonthView"]; 
   const bills = view.bills_of_month.filter((bill) => !hidden.includes(bill.bill_id));
   const day = chosen?.month === view.month && bills.some((bill) => bill.due_date === chosen.date) ? chosen.date : null;
   const shown = bills.filter((bill) => day === null || bill.due_date === day);
-  const late = overdueOf(bills);
-  const next = nextDue(bills, todayISO());
+  const counted = countedBills(bills);
+  const late = overdueOf(counted);
+  const next = nextDue(counted, todayISO());
   let upcoming =
     next &&
-    `Próxima: dia ${next.due_date.slice(8)} · ${next.variable ? "≈ " : ""}${formatMoney(next.amount, currency)}`;
-  if (bills.every((bill) => bill.paid)) upcoming = ALL_BILLS_PAID;
+    `Próxima: dia ${next.due_date.slice(8)} · ${estimatedOf(next) ? "≈ " : ""}${formatMoney(next.amount, currency)}`;
+  if (counted.length > 0 && counted.every((bill) => bill.paid)) upcoming = ALL_BILLS_PAID;
   const grouped = new Set(bills.map(kindOf)).size > 1;
 
   const adjust = (bill: BillOfMonth) => {
@@ -366,7 +397,7 @@ export const BillsOfMonth = ({ view, className }: { view: Schemas["MonthView"]; 
     setSheetOpen(true);
   };
 
-  const payFailed = (error: unknown) => toast.error(problemMessage(error) ?? "Não foi possível marcar como paga.");
+  const payFailed = () => toast.error("Não foi possível marcar como paga.");
 
   // A fatura and a variable bill are paid only through the sheet (D28, D44).
   const payNow = (bill: BillOfMonth) => {
@@ -391,7 +422,7 @@ export const BillsOfMonth = ({ view, className }: { view: Schemas["MonthView"]; 
             "Pagamento desfeito",
             bill.is_card ? undefined : { duration: 5000, action: { label: "Desfazer", onClick: again } },
           ),
-        onError: (error) => toast.error(problemMessage(error) ?? "Não foi possível desfazer o pagamento."),
+        onError: () => toast.error("Não foi possível desfazer o pagamento."),
       },
     );
   };
@@ -456,7 +487,7 @@ export const BillsOfMonth = ({ view, className }: { view: Schemas["MonthView"]; 
           <span aria-hidden className="bg-primary h-4 w-1 rounded-full lg:hidden" />
           Contas a pagar
           <span className="bg-muted text-muted-foreground inline-flex rounded-full px-2 text-xs leading-5 font-medium">
-            {paidOf(bills)}
+            {paidOf(counted)}
           </span>
         </span>
       }
@@ -527,7 +558,7 @@ export const BillsOfMonth = ({ view, className }: { view: Schemas["MonthView"]; 
                               aria-hidden
                             />
                           </span>
-                          <Summary bills={bills.filter((bill) => kindOf(bill) === kind)} currency={currency} />
+                          <Summary bills={counted.filter((bill) => kindOf(bill) === kind)} currency={currency} />
                         </CollapsibleTrigger>
                       </h3>
                       <CollapsibleContent>{list(rows, name)}</CollapsibleContent>
@@ -550,6 +581,7 @@ export const BillsOfMonth = ({ view, className }: { view: Schemas["MonthView"]; 
         bill={adjusting}
         open={sheetOpen}
         onOpenChange={setSheetOpen}
+        onEditBill={adjusting && openName(adjusting)}
       />
       <EditBillSheet
         open={editOpen}
