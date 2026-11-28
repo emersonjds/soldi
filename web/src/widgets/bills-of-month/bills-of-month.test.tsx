@@ -417,18 +417,18 @@ describe("Contas a pagar", () => {
     await loaded();
 
     await userEvent.click(within(rowOf("Luz (Enel)")).getByRole("button", { name: /ajustar pagamento de Luz / }));
-    const sheet = await screen.findByRole("dialog", { name: "Pagar Luz (Enel)" });
-    const amount = within(sheet).getByLabelText("Valor");
+    const sheet = await screen.findByRole("dialog", { name: "Luz (Enel) · novembro" });
+    const amount = within(sheet).getByLabelText("Valor de novembro");
     expect(amount).toHaveValue("284,10");
     expect(within(sheet).getByRole("button", { name: "Hoje" })).toHaveAttribute("aria-pressed", "true");
 
     await userEvent.clear(amount);
-    await userEvent.click(within(sheet).getByRole("button", { name: "Confirmar" }));
+    await userEvent.click(within(sheet).getByRole("button", { name: "Pagar" }));
     expect(within(sheet).getByText("Informe um valor")).toBeInTheDocument();
 
     await userEvent.type(amount, "300,00");
     await userEvent.click(within(sheet).getByRole("button", { name: "Ontem" }));
-    await userEvent.click(within(sheet).getByRole("button", { name: "Confirmar" }));
+    await userEvent.click(within(sheet).getByRole("button", { name: "Pagar" }));
 
     await waitFor(() => expect(requests.some((request) => request.method === "POST")).toBe(true));
     const post = requests.find((request) => request.method === "POST");
@@ -500,7 +500,7 @@ describe("Contas a pagar", () => {
     await userEvent.click(
       within(rowOf("Aluguel Residencial de outubro")).getByRole("button", { name: /ajustar pagamento/ }),
     );
-    const sheet = await screen.findByRole("dialog", { name: "Pagar Aluguel Residencial" });
+    const sheet = await screen.findByRole("dialog", { name: "Aluguel Residencial · outubro" });
     expect(sheet).toHaveTextContent("Conta de outubro: a data do pagamento fica em outubro.");
   });
 
@@ -535,7 +535,7 @@ describe("Contas a pagar", () => {
     await userEvent.click(
       within(rowOf("Aluguel Residencial de outubro")).getByRole("button", { name: /ajustar pagamento/ }),
     );
-    const sheet = await screen.findByRole("dialog", { name: "Pagar Aluguel Residencial" });
+    const sheet = await screen.findByRole("dialog", { name: "Aluguel Residencial · outubro" });
     expect(within(sheet).queryByRole("button", { name: "Hoje" })).not.toBeInTheDocument();
     expect(within(sheet).queryByRole("button", { name: "Ontem" })).not.toBeInTheDocument();
     await userEvent.click(within(sheet).getByRole("button", { name: "Outra data, 10/10/2026" }));
@@ -546,9 +546,9 @@ describe("Contas a pagar", () => {
     await userEvent.keyboard("{Escape}");
     await waitFor(() => expect(screen.queryByRole("grid")).not.toBeInTheDocument());
     expect(
-      within(sheet).getByRole("button", { name: "Confirmar" }).closest('[data-slot="responsive-sheet-footer"]'),
+      within(sheet).getByRole("button", { name: "Pagar" }).closest('[data-slot="responsive-sheet-footer"]'),
     ).not.toBeNull();
-    await userEvent.click(within(sheet).getByRole("button", { name: "Confirmar" }));
+    await userEvent.click(within(sheet).getByRole("button", { name: "Pagar" }));
 
     await waitFor(() => expect(requests.some((request) => request.method === "POST")).toBe(true));
     const post = requests.find((request) => request.method === "POST");
@@ -1027,13 +1027,13 @@ describe("Contas a pagar", () => {
       const [check, pill] = within(row).getAllByRole("button", { name: "Pagar Luz" });
       expect(pill).toBeDefined();
       await userEvent.click(check);
-      const sheet = await screen.findByRole("dialog", { name: "Pagar Luz" });
-      expect(within(sheet).getByLabelText("Valor")).toHaveValue("180,00");
+      const sheet = await screen.findByRole("dialog", { name: "Luz · novembro" });
+      expect(within(sheet).getByLabelText("Valor de novembro")).toHaveValue("180,00");
       await userEvent.click(within(sheet).getByRole("button", { name: "Fechar" }));
       await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
 
       await userEvent.click(within(rowOf("Luz")).getAllByRole("button", { name: "Pagar Luz" })[1]);
-      expect(await screen.findByRole("dialog", { name: "Pagar Luz" })).toBeInTheDocument();
+      expect(await screen.findByRole("dialog", { name: "Luz · novembro" })).toBeInTheDocument();
       expect(requests.some((request) => request.method === "POST")).toBe(false);
     });
 
@@ -1067,7 +1067,7 @@ describe("Contas a pagar", () => {
       expect(requests.some((request) => request.method === "POST")).toBe(false);
       expect(within(sheet).getByLabelText("Valor")).toHaveValue("450,00");
       expect(within(sheet).getByText("Confira com a fatura do banco.")).toBeInTheDocument();
-      await userEvent.click(within(sheet).getByRole("button", { name: "Confirmar" }));
+      await userEvent.click(within(sheet).getByRole("button", { name: "Pagar" }));
 
       await waitFor(() => expect(requests.some((request) => request.method === "POST")).toBe(true));
       const post = requests.find((request) => request.method === "POST");
@@ -1127,7 +1127,7 @@ describe("Contas a pagar", () => {
       await userEvent.click(within(rowOf("Fatura Porto")).getAllByRole("button", { name: "Pagar Fatura Porto" })[1]);
       const sheet = await screen.findByRole("dialog", { name: "Pagar Fatura Porto" });
       serverHas([{ ...FATURA, paid: true, transaction_id: "t-paid" }]);
-      await userEvent.click(within(sheet).getByRole("button", { name: "Confirmar" }));
+      await userEvent.click(within(sheet).getByRole("button", { name: "Pagar" }));
       await waitFor(() => expect(requests.some((request) => request.method === "POST")).toBe(true));
 
       await userEvent.click(await within(card()).findByRole("button", { name: "Desmarcar Fatura Porto" }));

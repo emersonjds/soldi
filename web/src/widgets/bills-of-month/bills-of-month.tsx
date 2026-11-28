@@ -581,6 +581,7 @@ export const BillsOfMonth = ({ view, className }: { view: Schemas["MonthView"]; 
         bill={adjusting}
         open={sheetOpen}
         onOpenChange={setSheetOpen}
+        onEditBill={adjusting && openName(adjusting)}
       />
       <EditBillSheet
         open={editOpen}
