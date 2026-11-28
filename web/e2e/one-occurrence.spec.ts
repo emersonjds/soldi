@@ -20,7 +20,7 @@ const MONTHS = [
 
 /** A cell's figure in cents, its sign kept: `-1.045,26` → -104526. */
 const centsIn = async (cell: Locator) => {
-  const [figure = ""] = (await cell.innerText()).match(/[-−]?[\d.]+,\d{2}/) ?? [];
+  const [figure = ""] = ((await cell.textContent()) ?? "").match(/[-−]?[\d.]+,\d{2}/) ?? [];
   const value = Number(figure.replace(/\D/g, ""));
   return /^[-−]/.test(figure) ? -value : value;
 };
