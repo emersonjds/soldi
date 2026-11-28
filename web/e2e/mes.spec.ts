@@ -83,9 +83,9 @@ test("a bill from onboarding shows under Contas a pagar, pays from the round che
   await expect(hero).toContainText("R$ 1.000,00");
 
   await bill.getByRole("button", { name: /ajustar pagamento de Aluguel/ }).click();
-  const sheet = page.getByRole("dialog", { name: "Pagar Aluguel" });
-  await sheet.getByLabel("Valor").fill("350,00");
-  await sheet.getByRole("button", { name: "Confirmar" }).click();
+  const sheet = page.getByRole("dialog", { name: /^Aluguel · / });
+  await sheet.getByLabel(/^Valor de /).fill("350,00");
+  await sheet.getByRole("button", { name: "Pagar", exact: true }).click();
 
   await expect(bill.getByRole("button", { name: "Não paguei Aluguel" })).toHaveAttribute("aria-pressed", "true");
   await expect(hero).toContainText(/Projetado no fim do mês\s*R\$\s650,00/);
