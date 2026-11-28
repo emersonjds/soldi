@@ -27,7 +27,7 @@ import { FaturaSheet } from "@/features/card-fatura/fatura-sheet";
 import { EditBillSheet, useArchiveLater } from "@/features/edit-bill/edit-bill-sheet";
 import { PayBillSheet } from "@/features/pay-bill/pay-bill-sheet";
 import { cn } from "@/lib/utils";
-import { problemMessage, type Schemas } from "@/shared/api/client";
+import type { Schemas } from "@/shared/api/client";
 import { type Currency, useCurrency } from "@/shared/lib/currency";
 import { addMonths, dayMonth, monthAbbrev, monthName, shortDay, todayISO } from "@/shared/lib/date";
 import { formatMoney } from "@/shared/lib/money";
@@ -422,7 +422,7 @@ export const BillsOfMonth = ({ view, className }: { view: Schemas["MonthView"]; 
             "Pagamento desfeito",
             bill.is_card ? undefined : { duration: 5000, action: { label: "Desfazer", onClick: again } },
           ),
-        onError: (error) => toast.error(problemMessage(error) ?? "Não foi possível desfazer o pagamento."),
+        onError: () => toast.error("Não foi possível desfazer o pagamento."),
       },
     );
   };
