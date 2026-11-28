@@ -124,7 +124,13 @@ const groups = (detail: HTMLElement) =>
       text(within(group).getByRole("heading")),
       ...within(group)
         .getAllByRole("listitem")
-        .map((item) => [...(item.firstElementChild?.children ?? [])].map(text).filter(Boolean).join(" | ")),
+        .map((item) =>
+          [...(item.firstElementChild?.children ?? [])]
+            .filter((child) => !child.classList.contains("sr-only"))
+            .map(text)
+            .filter(Boolean)
+            .join(" | "),
+        ),
     ]);
 
 describe("Planilha day detail", () => {
@@ -346,7 +352,7 @@ describe("Planilha cell actions (SOL-171)", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "Segunda-feira, 2 de novembro" })).toHaveFocus());
 
     const today = await tap("Quinta-feira, 5 de novembro, hoje");
-    await userEvent.click(within(today).getByRole("button", { name: "Abrir Internet de novembro" }));
+    await userEvent.click(within(today).getByRole("button", { name: /^Abrir\s*Internet/ }));
     const month = await screen.findByRole("dialog", { name: "Internet · novembro" });
     const edit = within(month).getByRole("button", { name: "Editar conta" });
     await waitFor(() => expect(edit).toBeEnabled());
@@ -442,10 +448,10 @@ describe("Planilha opens a conta's month or a fatura (SOL-173)", () => {
       "Academia | - R$ 99,00 | pulada em novembro",
     ]);
     expect(text(cells[2])).toBe("1.146,73 inclui conta a pagar");
-    for (const name of ["Abrir Caixa Habitação de novembro", "Ver fatura Porto Black de novembro"])
+    for (const name of [/^Abrir\s*Caixa Habitação.*a pagar/, /^Ver fatura\s*Porto Black.*a pagar/])
       expect(within(detail).getByRole("button", { name }).querySelector(".lucide-chevron-right")).not.toBeNull();
     expect(within(detail).getByText("Academia")).toHaveClass("line-through");
-    expect(within(detail).getByRole("button", { name: "Abrir Academia de novembro" })).toBeInTheDocument();
+    expect(within(detail).getByRole("button", { name: /^Abrir\s*Academia.*pulada em novembro/ })).toBeInTheDocument();
     const previsto = within(detail).getByText("Diário previsto");
     expect(previsto.closest("button")).toBeNull();
     expect(previsto.parentElement?.querySelector(".lucide-chevron-right")).toBeNull();
@@ -454,20 +460,18 @@ describe("Planilha opens a conta's month or a fatura (SOL-173)", () => {
   it("opens the conta's month and gives focus back to the day; the fatura item opens its fatura", async () => {
     await open24();
 
-    await userEvent.click(within(await tap(DAY_24)).getByRole("button", { name: "Abrir Caixa Habitação de novembro" }));
+    await userEvent.click(within(await tap(DAY_24)).getByRole("button", { name: /^Abrir\s*Caixa Habitação/ }));
     expect(await screen.findByRole("dialog", { name: "Caixa Habitação · novembro" })).toBeInTheDocument();
     await userEvent.keyboard("{Escape}");
     await waitFor(() => expect(screen.getByRole("button", { name: DAY_24 })).toHaveFocus());
 
-    await userEvent.click(
-      within(await tap(DAY_24)).getByRole("button", { name: "Ver fatura Porto Black de novembro" }),
-    );
+    await userEvent.click(within(await tap(DAY_24)).getByRole("button", { name: /^Ver fatura\s*Porto Black/ }));
     expect(await screen.findByRole("dialog", { name: "Fatura Porto Black" })).toBeInTheDocument();
     await userEvent.keyboard("{Escape}");
     await waitFor(() => expect(screen.getByRole("button", { name: DAY_24 })).toHaveFocus());
   });
 
-  it("a Saída cell of one unpaid conta or one fatura opens it; two items or a skipped one open the detail", async () => {
+  it("a Saída cell of one unpaid conta or one fatura opens it; two items open the detail, a skipped-only one creates a Saída", async () => {
     await open24();
 
     await userEvent.click((await row("Quinta-feira, 5 de novembro, hoje")).cells[2]);
@@ -483,7 +487,13 @@ describe("Planilha opens a conta's month or a fatura (SOL-173)", () => {
     await userEvent.click(screen.getByRole("button", { name: "Close" }));
 
     await userEvent.click((await row("Quarta-feira, 25 de novembro")).cells[2]);
-    expect(await screen.findByRole("dialog")).toHaveAccessibleName("Previsto · 25 nov");
+    expect(
+      within(await screen.findByRole("dialog", { name: "Lançar" })).getByRole("radio", { name: "Conta" }),
+    ).toBeChecked();
+    await userEvent.keyboard("{Escape}");
+
+    const day25 = await tap("Quarta-feira, 25 de novembro");
+    expect(within(day25).getByRole("button", { name: /^Abrir\s*Clube.*pulada em novembro/ })).toBeInTheDocument();
   });
 });
 

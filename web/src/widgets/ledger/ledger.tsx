@@ -137,11 +137,10 @@ export const dueCaption = (bill: Due, month: string) => {
   return `${billKind(bill)} · ${dueStatus(bill, month)}${amountNote(bill)}`;
 };
 
-/** "Abrir Aluguel de novembro" / "Ver fatura Porto de novembro" (SOL-173 §8). */
-export const openLabel = (bill: Due) => {
-  const month = monthName(bill.due_date, bill.due_date);
-  return bill.is_card ? `Ver fatura ${bill.name} de ${month}` : `Abrir ${bill.name} de ${month}`;
-};
+/** SOL-173 §8: the action read before the row's own content, so the accessible name keeps both. */
+export const OpenPrefix = ({ bill }: { bill: Due }) => (
+  <span className="sr-only">{bill.is_card ? "Ver fatura " : "Abrir "}</span>
+);
 
 const STRUCK = "text-muted-foreground line-through";
 
@@ -151,10 +150,10 @@ const DueRow = ({ bill, month, cause, onOpen }: DueRowProps) => (
   <li aria-label={bill.due_date.startsWith(month) ? bill.name : `${bill.name} de ${monthName(bill.due_date, month)}`}>
     <button
       type="button"
-      aria-label={openLabel(bill)}
       onClick={onOpen}
       className="hover:bg-muted focus-visible:outline-ring flex min-h-16 w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition-colors focus-visible:outline-2"
     >
+      <OpenPrefix bill={bill} />
       <CategoryIcon icon={bill.icon} color={bill.color} />
       <span className="flex min-w-0 flex-1 flex-col">
         <span className={cn("line-clamp-2 text-base font-medium break-words", bill.skipped && STRUCK)}>

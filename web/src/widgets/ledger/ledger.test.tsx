@@ -265,7 +265,7 @@ describe("Ledger opens a conta's month (SOL-173)", () => {
   it("opens an unpaid row's month from the whole row, with a chevron, and Editar conta from there", async () => {
     show({ billsOfMonth: [due("Aluguel")], bills: [ALUGUEL_BILL] });
 
-    const open = screen.getByRole("button", { name: "Abrir Aluguel de novembro" });
+    const open = screen.getByRole("button", { name: /^Abrir\s*Aluguel/ });
     expect(open.querySelector(".lucide-chevron-right")).not.toBeNull();
     await userEvent.click(open);
     const sheet = await screen.findByRole("dialog", { name: "Aluguel · novembro" });
@@ -278,14 +278,14 @@ describe("Ledger opens a conta's month (SOL-173)", () => {
   it("opens a carried row's own month", async () => {
     show({ billsOfMonth: [{ ...CARRIED_ALUGUEL, name: "Aluguel" }] });
 
-    await userEvent.click(screen.getByRole("button", { name: "Abrir Aluguel de outubro" }));
+    await userEvent.click(screen.getByRole("button", { name: /^Abrir\s*Aluguel.*venceu em outubro/ }));
     expect(await screen.findByRole("dialog", { name: "Aluguel · outubro" })).toBeInTheDocument();
   });
 
   it("opens a card row's fatura", async () => {
     show({ billsOfMonth: [due("Porto", { is_card: true })] });
 
-    await userEvent.click(screen.getByRole("button", { name: "Ver fatura Porto de novembro" }));
+    await userEvent.click(screen.getByRole("button", { name: /^Ver fatura\s*Porto/ }));
     expect(await screen.findByRole("dialog", { name: "Fatura Porto" })).toBeInTheDocument();
   });
 
@@ -301,7 +301,7 @@ describe("Ledger opens a conta's month (SOL-173)", () => {
     expect(within(item("Aluguel")).getByText("Aluguel")).toHaveClass("line-through");
     expect(item("Carro")).toHaveTextContent("Parcela 3/12 · pulada");
     expect(screen.getByRole("heading", { level: 3 })).toHaveTextContent("10 nov");
-    await userEvent.click(screen.getByRole("button", { name: "Abrir Aluguel de novembro" }));
+    await userEvent.click(screen.getByRole("button", { name: /^Abrir\s*Aluguel.*pulada em novembro/ }));
     expect(await screen.findByRole("dialog", { name: "Aluguel · novembro" })).toBeInTheDocument();
   });
 

@@ -121,7 +121,7 @@ test("one month of a conta gets its own amount or is skipped, from Contas a paga
 
   // Lista: the conta's row opens its month; Salvar valor moves only this month's Saída and Saldo.
   await views.getByRole("radio", { name: "Lista" }).click();
-  await ledger.getByRole("button", { name: `Abrir Caixa Habitação de ${mes}` }).click();
+  await ledger.getByRole("button", { name: /^Abrir\s*Caixa Habitação/ }).click();
   await sheet.getByLabel(`Valor de ${mes}`).fill("1.100,00");
   await sheet.getByRole("button", { name: `Salvar valor de ${mes}` }).click();
   await expect(sheet).toBeHidden();
@@ -144,11 +144,16 @@ test("one month of a conta gets its own amount or is skipped, from Contas a paga
   await expect(bills.getByRole("listitem", { name: "Internet" })).toContainText(`pulada em ${mes}`);
   await widths(page);
 
-  // The skipped month reopens from the Planilha's day detail; Voltar a cobrar brings it back.
+  // A Saída cell holding only the skipped month creates a conta; the day detail reopens the month; Voltar a cobrar brings it back.
   await views.getByRole("radio", { name: "Planilha" }).click();
-  const detail = page.getByRole("dialog").filter({ has: page.getByRole("region", { name: "Saída" }) });
   await saida("08").click();
-  await detail.getByRole("button", { name: `Abrir Internet de ${mes}` }).click();
+  const create = page.getByRole("dialog", { name: "Lançar" });
+  await expect(create.getByRole("radio", { name: "Conta" })).toBeChecked();
+  await page.keyboard.press("Escape");
+  await expect(create).toBeHidden();
+  const detail = page.getByRole("dialog").filter({ has: page.getByRole("region", { name: "Saída" }) });
+  await row("08").locator(`[data-day="${month}-08"]`).click();
+  await detail.getByRole("button", { name: new RegExp(`^Abrir\\s*Internet.*pulada em ${mes}`) }).click();
   await internet.getByRole("button", { name: "Voltar a cobrar" }).click();
   await expect(internet).toBeHidden();
   await expect(page.getByText(`Internet volta a cobrar em ${mes}`)).toBeVisible();
@@ -156,8 +161,8 @@ test("one month of a conta gets its own amount or is skipped, from Contas a paga
 
   // The 12th holds two items: the conta opens its month, the fatura its sheet.
   await saida("12").click();
-  await expect(detail.getByRole("button", { name: `Abrir Caixa Habitação de ${mes}` })).toBeVisible();
-  await detail.getByRole("button", { name: `Ver fatura Porto de ${mes}` }).click();
+  await expect(detail.getByRole("button", { name: /^Abrir\s*Caixa Habitação/ })).toBeVisible();
+  await detail.getByRole("button", { name: /^Ver fatura\s*Porto/ }).click();
   const fatura = page.getByRole("dialog", { name: "Fatura Porto" });
   await expect(fatura).toContainText("R$ 300,00");
   await page.keyboard.press("Escape");
@@ -165,7 +170,7 @@ test("one month of a conta gets its own amount or is skipped, from Contas a paga
 
   // Lista: the card's row opens its fatura.
   await views.getByRole("radio", { name: "Lista" }).click();
-  await ledger.getByRole("button", { name: `Ver fatura Porto de ${mes}` }).click();
+  await ledger.getByRole("button", { name: /^Ver fatura\s*Porto/ }).click();
   await expect(fatura).toBeVisible();
   await page.keyboard.press("Escape");
 

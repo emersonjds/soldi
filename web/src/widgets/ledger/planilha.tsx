@@ -44,7 +44,7 @@ import { PageError } from "@/shared/ui/page-state";
 import { TierPill } from "@/shared/ui/tier-pill";
 
 import { type Entry, titleOf, useEntryActions } from "./entry-actions";
-import { DayBalance, dayLabel, dueCaption, entryOf, estimateCaption, isForecast, openLabel } from "./ledger";
+import { DayBalance, dayLabel, dueCaption, entryOf, estimateCaption, isForecast, OpenPrefix } from "./ledger";
 import { type PlanilhaRow, planilhaMonths, planilhaRows, sum } from "./planilha-rows";
 
 const COLUMNS = ["Data", "Entrada", "Saída", "Diário", "Saldo"];
@@ -242,9 +242,9 @@ const DayDetail = ({
                     <button
                       type="button"
                       onClick={action}
-                      aria-label={item.due && openLabel(item.due)}
                       className="hover:bg-muted focus-visible:outline-ring -mx-2 grid min-h-11 w-[calc(100%+1rem)] grid-cols-[1fr_auto_auto] gap-x-3 rounded-md px-2 py-1 text-left focus-visible:outline-2"
                     >
+                      {item.due && <OpenPrefix bill={item.due} />}
                       {cells}
                       <ChevronRight
                         aria-hidden
@@ -347,7 +347,7 @@ const cellAction = (
   if (!day || !entries.data || entries.isError) return undefined;
   const items = (
     groupsOf(row, view, entries.data, estimate, act.lookup).find(({ name }) => name === column)?.items ?? []
-  ).filter((item) => !item.estimate);
+  ).filter((item) => !item.estimate && !item.due?.skipped);
   const typed = { Entrada: row.income, Saída: row.outflow, Diário: day.daily }[column];
   if (items.length === 0) return cents(typed) === 0 ? () => act.create(KIND_OF[column], date) : undefined;
   const [only] = items;
