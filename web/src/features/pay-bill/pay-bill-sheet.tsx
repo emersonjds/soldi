@@ -17,6 +17,7 @@ import {
 } from "@/entities/bill/bill-queries";
 import { billKey } from "@/entities/month/forecast-alert";
 import { cn } from "@/lib/utils";
+import { hasProblem } from "@/shared/api/client";
 import { useCurrency } from "@/shared/lib/currency";
 import { dayMonth, monthName, todayISO } from "@/shared/lib/date";
 import { formatMoney, positiveAmount } from "@/shared/lib/money";
@@ -205,10 +206,15 @@ export const PayBillSheet = ({ month, bill, open, onOpenChange, onEditBill, onCl
             duration: 5000,
             action: {
               label: "Desfazer",
-              onClick: () => setMonth.mutate({ ...base, ...previous }, { onError: () => toast.error(failed) }),
+              onClick: () =>
+                setMonth.mutate(
+                  { ...base, ...previous },
+                  { onError: () => toast.error("Não foi possível desfazer. Tente de novo.") },
+                ),
             },
           }),
-        onError: () => toast.error(failed),
+        onError: (error) =>
+          toast.error(hasProblem(error, "month-outside-bill") ? "Este mês não tem esta conta." : failed),
       },
     );
   };

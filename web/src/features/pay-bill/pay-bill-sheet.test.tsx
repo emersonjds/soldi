@@ -176,12 +176,21 @@ describe("PayBillSheet", () => {
     expect(screen.queryByText("Erro interno do servidor")).not.toBeInTheDocument();
   });
 
-  it("fails an undo with the same fixed error", async () => {
+  it("fails an undo with its own fixed error", async () => {
     const requests = show({}, { [`DELETE ${MONTHS}`]: failing });
     await userEvent.click(within(await sheet()).getByRole("button", { name: "Pular novembro" }));
     await userEvent.click(await screen.findByRole("button", { name: "Desfazer" }));
-    expect(await screen.findByText("Não foi possível pular este mês. Tente de novo.")).toBeInTheDocument();
+    expect(await screen.findByText("Não foi possível desfazer. Tente de novo.")).toBeInTheDocument();
+    expect(screen.queryByText("Não foi possível pular este mês. Tente de novo.")).not.toBeInTheDocument();
     expect(sent(requests, "DELETE")).toHaveLength(1);
+  });
+
+  it("says the month has no such conta on a month-outside-bill refusal", async () => {
+    const outside = { ...problem(422, "Fora da conta"), type: "urn:soldi:error:month-outside-bill" };
+    show({}, { [`PUT ${MONTHS}`]: { status: 422, body: outside } });
+    await userEvent.click(within(await sheet()).getByRole("button", { name: "Pular novembro" }));
+    expect(await screen.findByText("Este mês não tem esta conta.")).toBeInTheDocument();
+    expect(screen.queryByText("Não foi possível pular este mês. Tente de novo.")).not.toBeInTheDocument();
   });
 
   it("pays with the typed amount and shows a fixed error on a refusal", async () => {
