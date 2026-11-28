@@ -60,7 +60,31 @@ describe("Planilha", () => {
     reveal("Novembro 2026");
     await screen.findByRole("button", { name: "Quinta-feira, 5 de novembro, hoje" });
     expect(months()).toEqual(["/api/months/2026-11"]);
-    expect(within(november).getAllByRole("row")).toHaveLength(32);
+    expect(within(november).getAllByRole("row")).toHaveLength(33);
+  });
+
+  it("closes a loaded month with its total row, never while it loads (SOL-188)", async () => {
+    show().reveal("Novembro 2026");
+    expect(within(screen.getByRole("table", { name: "Março 2026" })).queryByRole("rowheader")).not.toBeInTheDocument();
+
+    await row("Segunda-feira, 2 de novembro");
+    const november = screen.getByRole("table", { name: "Novembro 2026" });
+    const header = within(november).getByRole("rowheader", { name: "Total de Novembro 2026" });
+    const tr = header.closest("tr");
+    if (!tr) throw new Error("no total row");
+    const cells = within(tr).getAllByRole("cell");
+    expect(header).toHaveTextContent("Total");
+    expect(header).toHaveClass("sticky", "left-0", "bg-card");
+    expect(tr.parentElement?.tagName).toBe("TFOOT");
+    expect(tr).toHaveClass("font-semibold");
+    expect(tr).not.toHaveClass("cursor-pointer");
+    expect(cells.map((cell) => cell.textContent)).toEqual(["350,00", "2.450,00", "50,00", "-1.150,00 Crítico"]);
+    expect(cells[3]).toHaveClass(...TIER_STYLE.red.pill.split(" "));
+    expect(cells[3].querySelector("svg")).toBeInTheDocument();
+    expect(within(tr).queryByRole("button")).not.toBeInTheDocument();
+
+    await userEvent.click(header);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
   it("fills each cell from the month view, dashes a zero money cell and prints money without the symbol", async () => {
@@ -156,11 +180,13 @@ describe("Planilha", () => {
 
     const december = screen.getByRole("table", { name: "Dezembro 2026" });
     expect(await within(december).findByText("Não foi possível carregar Dezembro 2026.")).toBeInTheDocument();
+    expect(within(december).queryByRole("rowheader")).not.toBeInTheDocument();
     expect(await row("Quinta-feira, 5 de novembro, hoje")).toBeTruthy();
 
     stubApi({ "GET /api/months/2026-12": { status: 200, body: { ...PLANILHA_MONTH, month: "2026-12", days: [] } } });
     await userEvent.click(within(december).getByRole("button", { name: "Tentar de novo" }));
     expect(await within(december).findByRole("button", { name: "Quinta-feira, 31 de dezembro" })).toBeInTheDocument();
+    expect(within(december).queryByRole("rowheader")).not.toBeInTheDocument();
   });
 
   it("says a month before the opening has no data, without a retry", async () => {

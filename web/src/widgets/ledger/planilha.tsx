@@ -45,7 +45,7 @@ import { TierPill } from "@/shared/ui/tier-pill";
 
 import { type Entry, titleOf, useEntryActions } from "./entry-actions";
 import { DayBalance, dayLabel, dueCaption, entryOf, estimateCaption, isForecast, OpenPrefix } from "./ledger";
-import { type PlanilhaRow, planilhaMonths, planilhaRows, sum } from "./planilha-rows";
+import { type PlanilhaRow, planilhaMonths, planilhaRows, planilhaTotals, sum } from "./planilha-rows";
 
 const COLUMNS = ["Data", "Entrada", "Saída", "Diário", "Saldo"];
 
@@ -614,6 +614,28 @@ const SkeletonBody = ({ month }: { month: string }) => (
   </tbody>
 );
 
+/** SOL-188: the month's sums under its last day; not a day, so neither clickable nor a tab stop. */
+const TotalRow = ({ month, income, outflow, daily, last }: { month: string } & ReturnType<typeof planilhaTotals>) =>
+  last && (
+    <tfoot>
+      <tr className="font-semibold">
+        <th scope="row" className={cn(LINES, DATA_LINES, "bg-card sticky left-0 border-t-2 px-1.5 text-left")}>
+          Total <span className="sr-only">de {monthLabel(month)}</span>
+        </th>
+        <td className={cn(MONEY, "border-t-2")}>{cellOf(income)}</td>
+        <td className={cn(MONEY, "border-t-2")}>{cellOf(outflow)}</td>
+        <td className={cn(MONEY, "border-t-2")}>{cellOf(daily)}</td>
+        <td className={cn(MONEY, "border-t-2", TIER_STYLE[last.projected_tier].pill)}>
+          {(last.projected_tier === "red" || last.projected_tier === "light_red") && (
+            <TriangleAlert aria-hidden className="mr-1 inline size-[1em] align-[-0.125em]" />
+          )}
+          {toInput(last.projected_balance)}
+          <span className="sr-only"> {TIER_LABEL[last.projected_tier]}</span>
+        </td>
+      </tr>
+    </tfoot>
+  );
+
 type MonthProps = Pick<RowProps, "act" | "today" | "claim" | "estimate"> & {
   month: string;
   openingDate: string;
@@ -625,27 +647,32 @@ const MonthBody = ({ act, month, today, openingDate, highlight, flash, claim, es
   const view = useMonth(month);
   const entries = useTransactions(month);
   const [stop, setStop] = useState(today.startsWith(month) ? today : `${month}-01`);
-  if (view.isSuccess)
+  if (view.isSuccess) {
+    const rows = planilhaRows(view.data, openingDate);
     return (
-      <tbody>
-        {planilhaRows(view.data, openingDate).map((row) => (
-          <Row
-            key={row.date}
-            act={act}
-            row={row}
-            today={today}
-            view={view.data}
-            entries={entries}
-            stop={row.date === stop}
-            onFocus={() => setStop(row.date)}
-            ringed={row.date === highlight}
-            flashing={row.date === flash}
-            claim={claim}
-            estimate={estimate}
-          />
-        ))}
-      </tbody>
+      <>
+        <tbody>
+          {rows.map((row) => (
+            <Row
+              key={row.date}
+              act={act}
+              row={row}
+              today={today}
+              view={view.data}
+              entries={entries}
+              stop={row.date === stop}
+              onFocus={() => setStop(row.date)}
+              ringed={row.date === highlight}
+              flashing={row.date === flash}
+              claim={claim}
+              estimate={estimate}
+            />
+          ))}
+        </tbody>
+        <TotalRow month={month} {...planilhaTotals(rows, estimate)} />
+      </>
     );
+  }
   if (!view.isError) return <SkeletonBody month={month} />;
   return (
     <tbody>

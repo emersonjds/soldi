@@ -3,7 +3,57 @@ import { describe, expect, it } from "vitest";
 import { cents } from "@/shared/lib/tier";
 import { ESTIMATE_MONTH, MONTH, PLANILHA_MONTH } from "@/test/stub-api";
 
-import { planilhaMonths, planilhaRows } from "./planilha-rows";
+import { planilhaMonths, planilhaRows, planilhaTotals } from "./planilha-rows";
+
+describe("planilhaTotals (SOL-188)", () => {
+  it("sums Entrada, Saída and Diário as the cells show them, and keeps the last day for Saldo", () => {
+    const totals = planilhaTotals(planilhaRows(PLANILHA_MONTH, "2026-03-10"), null);
+
+    expect(totals).toMatchObject({ income: "350.00", outflow: "2450.00", daily: "50.00" });
+    expect(totals.last).toMatchObject({ date: "2026-11-30", projected_balance: "-1150.00", projected_tier: "red" });
+  });
+
+  it("counts a future-dated Entrada", () => {
+    const view = {
+      ...PLANILHA_MONTH,
+      days: PLANILHA_MONTH.days.map((day) => (day.date === "2026-11-27" ? { ...day, income: "700.00" } : day)),
+    };
+
+    expect(planilhaTotals(planilhaRows(view, "2026-03-10"), null).income).toBe("1050.00");
+  });
+
+  it("uses the Diário previsto exactly when a day's cell does", () => {
+    const rows = planilhaRows(ESTIMATE_MONTH, "2026-03-10");
+
+    expect(planilhaTotals(rows, "50.00").daily).toBe("1330.00");
+    expect(planilhaTotals(rows, null).daily).toBe("150.00");
+  });
+
+  it("adds zero for the days before the opening date", () => {
+    expect(planilhaTotals(planilhaRows(PLANILHA_MONTH, "2026-11-03"), null)).toMatchObject({
+      income: "0.00",
+      outflow: "2450.00",
+      daily: "50.00",
+    });
+  });
+
+  it("never counts a skipped conta", () => {
+    const skipped = {
+      ...PLANILHA_MONTH.bills_of_month[0],
+      bill_id: "skip",
+      amount: "99.00",
+      lands_on: null,
+      skipped: true,
+    };
+    const view = { ...PLANILHA_MONTH, bills_of_month: [...PLANILHA_MONTH.bills_of_month, skipped] };
+
+    expect(planilhaTotals(planilhaRows(view, "2026-03-10"), null).outflow).toBe("2450.00");
+  });
+
+  it("has no last day when no day is on or after the opening date", () => {
+    expect(planilhaTotals(planilhaRows({ ...MONTH, month: "2027-02", days: [] }, "2026-03-10"), null).last).toBeNull();
+  });
+});
 
 describe("planilhaMonths", () => {
   it("runs from the opening month when it is later than today's month − 12, to today's month + 11", () => {
