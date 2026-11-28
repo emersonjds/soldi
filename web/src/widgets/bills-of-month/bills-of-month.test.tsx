@@ -1247,6 +1247,29 @@ describe("Contas a pagar", () => {
       expect(card()).toHaveTextContent("Todas as contas do mês pagas");
     });
 
+    it("never says every bill is paid when every month is skipped", async () => {
+      show([SKIPPED_RENT, { ...ADJUSTED_LUZ, skipped: true, lands_on: null }]);
+      await loaded();
+
+      expect(card()).not.toHaveTextContent("Todas as contas do mês pagas");
+    });
+
+    it("reads a skipped adjusted variable month only as skipped", async () => {
+      show([
+        { ...ADJUSTED_LUZ, skipped: true, lands_on: null },
+        { ...ADJUSTED_LUZ, name: "Gás", skipped: true, adjusted: false, lands_on: null },
+      ]);
+      await loaded();
+
+      for (const name of ["Luz", "Gás"]) {
+        const row = rowOf(name);
+        expect(row).toHaveTextContent("pulada em novembro");
+        expect(row).not.toHaveTextContent("valor ajustado");
+        expect(row).not.toHaveTextContent("valor variável");
+        expect(row).not.toHaveTextContent("≈");
+      }
+    });
+
     it("says a skipped parcela is skipped", async () => {
       show([{ ...SKIPPED_RENT, installment: 3, installments: 10 }]);
       await loaded();

@@ -69,7 +69,7 @@ const kindOf = (bill: BillOfMonth): Kind => {
 };
 
 /** D56: a month's own amount is no estimate. */
-const estimatedOf = (bill: BillOfMonth) => bill.variable && !bill.paid && !bill.adjusted;
+const estimatedOf = (bill: BillOfMonth) => bill.variable && !bill.paid && !bill.adjusted && !bill.skipped;
 
 /** `2 de 3 pagas · falta R$ X · 1 vencida`, or a tick once every bill of the group is paid. */
 const Summary = ({ bills, currency }: { bills: BillOfMonth[]; currency: Currency }) => {
@@ -287,7 +287,7 @@ const Row = ({
               <span className="hidden lg:inline"> ·</span> valor variável
             </span>
           )}
-          {bill.adjusted && !bill.paid && (
+          {bill.adjusted && !bill.paid && !bill.skipped && (
             <span className="text-muted-foreground basis-full text-sm whitespace-nowrap lg:basis-auto">
               <span className="hidden lg:inline"> ·</span> valor ajustado
             </span>
@@ -389,7 +389,7 @@ export const BillsOfMonth = ({ view, className }: { view: Schemas["MonthView"]; 
   let upcoming =
     next &&
     `Próxima: dia ${next.due_date.slice(8)} · ${estimatedOf(next) ? "≈ " : ""}${formatMoney(next.amount, currency)}`;
-  if (counted.every((bill) => bill.paid)) upcoming = ALL_BILLS_PAID;
+  if (counted.length > 0 && counted.every((bill) => bill.paid)) upcoming = ALL_BILLS_PAID;
   const grouped = new Set(bills.map(kindOf)).size > 1;
 
   const adjust = (bill: BillOfMonth) => {

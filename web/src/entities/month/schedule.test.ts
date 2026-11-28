@@ -100,4 +100,8 @@ describe("a skipped month (D56)", () => {
   it("leaves every bill paid when the others are", () => {
     expect(subtitleOf([skipped, bill("Luz", "2026-11-02", { paid: true })], today)).toBe(ALL_BILLS_PAID);
   });
+
+  it("never says every bill is paid when every month is skipped", () => {
+    expect(subtitleOf([skipped], today)).not.toBe(ALL_BILLS_PAID);
+  });
 });
