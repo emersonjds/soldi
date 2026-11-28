@@ -1158,7 +1158,8 @@ describe("Mês", () => {
       "Ontem, 4 novSaldo ao final:R$ 1.142,10Confortável",
     ]);
     expect(within(ledger()).getByRole("listitem", { name: "Aluguel Residencial" })).toBeInTheDocument();
-    expect(within(ledger()).getByRole("button", { name: /Aluguel/ })).toBeInTheDocument();
+    expect(within(ledger()).getByRole("button", { name: /^Aluguel/ })).toBeInTheDocument();
+    expect(within(ledger()).getByRole("button", { name: "Abrir Aluguel Residencial de novembro" })).toBeInTheDocument();
     expect(within(ledger()).queryByText("+ R$ 500,00")).not.toBeInTheDocument();
 
     await userEvent.click(within(filter()).getByRole("radio", { name: "Todos" }));
