@@ -7,6 +7,13 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.79.0
+
+> Headline: each planilha month ends with a total
+
+### Web
+- Modo planilha: every month closes with a "Total" row: the sums of Entrada, Saída and Diário exactly as the cells above show them, and the month's end Saldo with its tier color. The last day no longer reads as a total (SOL-188).
+
 ## 0.78.0
 
 > Headline: review one month of a conta
