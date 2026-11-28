@@ -108,6 +108,15 @@ test("Lançamentos switches to the planilha, remembers it, shows a day's entries
   // One month in view and its neighbour on each side.
   expect(fetched.size).toBeLessThanOrEqual(3);
 
+  // SOL-188: today's month closes with its total row; it sums the cells and is neither a day nor a tab stop.
+  const total = ledger.locator(`table[data-month="${today.slice(0, 7)}"] tfoot tr`);
+  await expect(total.getByRole("rowheader", { name: /^Total de / })).toHaveText(/^Total/);
+  await expect(total.getByRole("cell").first()).toHaveText("123.456,78");
+  await expect(total.getByRole("cell").nth(2)).toContainText("48,90");
+  await expect(total.locator("[data-day], button")).toHaveCount(0);
+  await total.click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+
   const cardWidth: Record<number, number> = {};
   for (const [width, shown] of [
     [375, 1],
@@ -119,6 +128,8 @@ test("Lançamentos switches to the planilha, remembers it, shows a day's entries
   ]) {
     await page.setViewportSize({ width, height: 900 });
     expect(await page.evaluate(() => (document.scrollingElement?.scrollWidth ?? 0) <= window.innerWidth)).toBe(true);
+    await total.scrollIntoViewIfNeeded();
+    await expect(total).toBeInViewport();
     await expectNoClipped(page);
     await expect.poll(() => monthsInView(page)).toBe(shown);
     await expect.poll(() => partialMonths(page)).toBe(0);
