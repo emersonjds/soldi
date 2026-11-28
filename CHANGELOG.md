@@ -7,6 +7,21 @@ versions. This file covers the server and the web app together.
 
 ## [Unreleased]
 
+## 0.78.0
+
+> Headline: review one month of a conta
+
+### Web
+- Tapping an unpaid conta, in Contas a pagar, in Lista or in the Planilha day detail, opens "<Conta> · <mês>": Pagar, "Salvar valor de <mês>" (shown once the amount changes; only that month moves), "Pular <mês>", "Voltar a cobrar" and "Editar conta" for every month, with Desfazer for 5 s (SOL-173).
+- An adjusted month reads "valor ajustado"; a skipped month stays listed as "pulada em <mês>" and counts nowhere: not in Saída, the Saldo, the projection or "x de y pagas" (SOL-173).
+- Planilha: a Saída cell holding one unpaid conta or one fatura opens it directly, a fatura row opens the card's fatura, and every tappable item in the day detail shows a chevron (SOL-173).
+- Pagar, the one-tap check and their undo say fixed messages instead of the server's (SOL-173).
+
+### Server
+- `PUT /api/bills/{id}/months/{YYYY-MM}` sets one month's own amount or skip of a conta fixa or parcelada; `DELETE` restores it. Cards, months outside the bill's run and paid months are refused. `BillOfMonth` gains `adjusted` and `skipped` (D56, SOL-173).
+- The month view, forecast, carry, overdue and the D55 catch-up use a month's own amount and never charge a skipped month; Pagar without an amount books the month's own amount (D56, SOL-173).
+- Migration `0033_bill_months` adds the per-month table (SOL-173).
+
 ## 0.77.0
 
 > Headline: contas fixas pay themselves
