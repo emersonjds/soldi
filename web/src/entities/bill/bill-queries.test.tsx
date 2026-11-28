@@ -149,7 +149,9 @@ describe("usePayBill and useUnpayBill", () => {
       }),
     );
 
-    await waitFor(() => expect(rowOf(view, BILL_ALUGUEL.id)).toMatchObject({ paid: true, amount: "2300.00" }));
+    await waitFor(() =>
+      expect(rowOf(view, BILL_ALUGUEL.id)).toMatchObject({ paid: true, amount: "2300.00", lands_on: null }),
+    );
     expect(rowOf(view, BILL_LUZ.id)?.paid).toBe(false);
     release();
     await waitFor(() => expect(view.result.current.pay.isSuccess).toBe(true));

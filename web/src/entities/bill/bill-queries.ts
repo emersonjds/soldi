@@ -117,7 +117,7 @@ export const usePayBill = () => {
     onMutate: (payment) =>
       patchRow(client, payment, (row) => {
         if (row.is_card) faturas.set(faturaKey(payment), row.amount);
-        return { paid: true, overdue: false, amount: payment.amount ?? row.amount };
+        return { paid: true, overdue: false, lands_on: null, amount: payment.amount ?? row.amount };
       }),
     onError: (_error, _payment, rollback) => rollback?.(),
     onSettled: () => refresh(client),
